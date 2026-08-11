@@ -1,14 +1,8 @@
 import i18next, { type i18n, type Resource } from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/ui/components/select";
 import type { ReactNode } from "react";
 import { I18nextProvider, initReactI18next, useTranslation } from "react-i18next";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/select";
 
 export { useTranslation };
 export type { Resource };

@@ -1,4 +1,4 @@
-import { useTranslation } from "@repo/i18n";
+import { useTranslation } from "@repo/ui/i18n";
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Button } from "@repo/ui/components/button";
 import {

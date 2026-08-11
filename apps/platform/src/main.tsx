@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AppI18nProvider } from "@repo/i18n";
+import { AppI18nProvider } from "@repo/ui/i18n";
 import { Toaster } from "@repo/ui/components/sonner";
 import { ThemeProvider } from "@repo/ui/components/theme-selector";
 import { createRouter, RouterProvider } from "@tanstack/react-router";

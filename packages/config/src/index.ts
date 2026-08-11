@@ -1,5 +1,5 @@
 import type { StorageConfig } from "@repo/storage";
-import type { TelemetryConfig, TelemetryExporter } from "@repo/telemetry";
+import type { TelemetryConfig, TelemetryExporter } from "@repo/logger/telemetry";
 import { z } from "zod";
 
 export type RuntimeEnv = "development" | "test" | "production";

@@ -1,4 +1,4 @@
-import { LanguageSwitcher, useTranslation } from "@repo/i18n";
+import { LanguageSwitcher, useTranslation } from "@repo/ui/i18n";
 import { ThemeSelector } from "@repo/ui/components/theme-selector";
 
 export function HeaderControls() {

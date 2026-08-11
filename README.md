@@ -7,11 +7,9 @@ pnpm workspace with:
 - `apps/admin`: React + Vite + TanStack Router file routes + TanStack Query.
 - `packages/api-client`: typed Hono RPC client shared by the frontend apps.
 - `packages/config`: typed server-side environment config.
-- `packages/i18n`: i18next setup shared by the frontend apps.
-- `packages/logger`: Pino logger setup with OpenTelemetry-friendly trace fields.
+- `packages/logger`: Pino logging and OpenTelemetry setup for server applications.
 - `packages/storage`: S3-compatible object storage primitives.
-- `packages/telemetry`: OpenTelemetry Node SDK setup for API and worker services.
-- `packages/ui`: shadcn UI components shared by the apps.
+- `packages/ui`: shared shadcn components and frontend i18next setup.
 - `packages/worker`: Redis + BullMQ worker primitives.
 
 Packages are source-only: they export their `.ts`/`.tsx` files directly and do not have a build step.
@@ -101,7 +99,7 @@ Trace-aware helpers use OpenTelemetry-compatible `trace_id`, `span_id`, and `tra
 
 ## Telemetry
 
-`packages/telemetry` starts the OpenTelemetry Node SDK before API and worker modules load, so auto-instrumentation can patch supported Node libraries.
+`packages/logger/telemetry` starts the OpenTelemetry Node SDK before API and worker modules load, so auto-instrumentation can patch supported Node libraries.
 
 Telemetry is disabled by default. For local span output:
 

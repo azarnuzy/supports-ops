@@ -1,4 +1,4 @@
-import { useTranslation } from "@repo/i18n";
+import { useTranslation } from "@repo/ui/i18n";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Input } from "@repo/ui/components/input";
