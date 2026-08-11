@@ -134,25 +134,43 @@ openssl rand -base64 32
 docker compose up --build
 ```
 
-This full-stack Compose file starts Caddy, Postgres, Redis, API, and Worker. Caddy serves the built Platform and Admin frontend assets, reverse proxies the API, and is the only public service. API, Postgres, Redis, and Worker stay internal to the Compose network. The Docker services still use the single root `.env`; `DOCKER_DATABASE_URL` and `DOCKER_REDIS_URL` point containers at the Compose service names.
+The production Compose file builds only the API application and its Postgres database. The API is available at `http://localhost:8000` by default; override `API_HOST_PORT` when another host port is required.
 
 The API container runs Prisma migrations with `pnpm db:deploy` on startup. If you already created a local Compose database with the older `db:push` flow, reset the local volume or baseline the database before switching to migrations.
 
-The default local URLs are:
+For local development, `docker-compose.dev.yaml` still provides Postgres and Redis while the API, worker, and frontends run directly through pnpm:
 
-- Platform: `http://localhost`
-- Admin: `http://admin.localhost`
-- API health: `http://api.localhost/health`
+- API health: `http://localhost:8000/health`
 - Postgres with `docker-compose.dev.yaml`: `localhost:15432`
 - Redis with `docker-compose.dev.yaml`: `localhost:16379`
 
-For production, set the public addresses before building so the frontend bundle and auth settings point at the proxied API:
+## Cloudflare frontend deployment
+
+Admin and Platform deploy as separate Cloudflare Workers with static assets. Their Wrangler configurations enable SPA fallback routing and preserve the security and immutable asset-cache headers previously supplied by Caddy.
+
+Authenticate Wrangler once:
+
+```sh
+pnpm --filter @repo/platform exec wrangler login
+```
+
+Preview either production build through the local Workers runtime:
+
+```sh
+pnpm --filter @repo/platform preview:cloudflare
+pnpm --filter @repo/admin preview:cloudflare
+```
+
+Set the public API URL at build time and deploy each frontend:
+
+```sh
+VITE_API_URL="https://api.example.com" pnpm deploy:platform
+VITE_API_URL="https://api.example.com" pnpm deploy:admin
+```
+
+The deployments use the Worker names `monorepo-template-platform` and `monorepo-template-admin`. Configure their custom domains in Cloudflare, then allow those origins in the API environment:
 
 ```env
-PLATFORM_SITE_ADDRESS="app.example.com"
-ADMIN_SITE_ADDRESS="admin.example.com"
-API_SITE_ADDRESS="api.example.com"
-VITE_API_URL="https://api.example.com"
 BETTER_AUTH_URL="https://api.example.com"
 CLIENT_ORIGINS="https://app.example.com,https://admin.example.com"
 ```

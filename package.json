@@ -6,6 +6,8 @@
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "pnpm --parallel --filter './apps/*' dev",
+    "deploy:admin": "pnpm --filter @repo/admin deploy",
+    "deploy:platform": "pnpm --filter @repo/platform deploy",
     "build": "pnpm --filter './apps/*' build",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r typecheck",
