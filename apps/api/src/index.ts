@@ -1,5 +1,5 @@
 import { serve } from "@hono/node-server";
-import { apiConfig, loggerConfig } from "@repo/config";
+import { apiConfig, loggerConfig } from "./config";
 import { createLogger } from "@repo/logger";
 import { app } from "./app";
 

@@ -6,40 +6,21 @@ import {
   S3Client,
   type GetObjectCommandOutput,
   type HeadObjectCommandOutput,
-  type PutObjectCommandInput,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type {
+  GetSignedObjectUrlInput,
+  PutObjectInput,
+  PutSignedObjectUrlInput,
+  StorageConfig,
+} from "./types";
 
-export type StorageConfig = {
-  bucket: string;
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  endpoint?: string;
-  forcePathStyle: boolean;
-  publicBaseUrl?: string;
-};
-
-export type PutObjectInput = {
-  key: string;
-  body: PutObjectCommandInput["Body"];
-  contentType?: string;
-  cacheControl?: string;
-  metadata?: Record<string, string>;
-};
-
-export type GetSignedObjectUrlInput = {
-  key: string;
-  expiresIn?: number;
-  responseContentDisposition?: string;
-  responseContentType?: string;
-};
-
-export type PutSignedObjectUrlInput = {
-  key: string;
-  expiresIn?: number;
-  contentType?: string;
-};
+export type {
+  GetSignedObjectUrlInput,
+  PutObjectInput,
+  PutSignedObjectUrlInput,
+  StorageConfig,
+} from "./types";
 
 const defaultSignedUrlExpiresIn = 60 * 5;
 

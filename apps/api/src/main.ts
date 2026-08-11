@@ -1,4 +1,4 @@
-import { telemetryConfig } from "@repo/config";
+import { telemetryConfig } from "./config";
 import { startTelemetry } from "@repo/logger/telemetry";
 
 startTelemetry({

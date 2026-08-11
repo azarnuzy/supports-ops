@@ -15,7 +15,6 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/admin/package.json apps/admin/package.json
 COPY apps/platform/package.json apps/platform/package.json
 COPY packages/api-client/package.json packages/api-client/package.json
-COPY packages/config/package.json packages/config/package.json
 COPY packages/logger/package.json packages/logger/package.json
 COPY packages/storage/package.json packages/storage/package.json
 COPY packages/ui/package.json packages/ui/package.json

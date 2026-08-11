@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { appConfig, databaseConfig } from "@repo/config";
+import { appConfig, databaseConfig } from "../config";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;

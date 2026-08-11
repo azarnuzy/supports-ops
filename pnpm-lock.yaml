@@ -93,9 +93,6 @@ importers:
       '@prisma/client':
         specifier: 7.9.1
         version: 7.9.1(prisma@7.9.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2)
-      '@repo/config':
-        specifier: workspace:*
-        version: link:../../packages/config
       '@repo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -186,25 +183,6 @@ importers:
         specifier: ^4.13.1
         version: 4.13.1
     devDependencies:
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-
-  packages/config:
-    dependencies:
-      '@repo/logger':
-        specifier: workspace:*
-        version: link:../logger
-      '@repo/storage':
-        specifier: workspace:*
-        version: link:../storage
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^26.2.0
-        version: 26.2.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -358,15 +336,15 @@ importers:
 
   packages/worker:
     dependencies:
-      '@repo/config':
-        specifier: workspace:*
-        version: link:../config
       '@repo/logger':
         specifier: workspace:*
         version: link:../logger
       bullmq:
         specifier: ^6.0.11
         version: 6.0.11(ioredis@5.10.1)(pg@8.23.0)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^26.2.0

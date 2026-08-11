@@ -1,4 +1,3 @@
-import type { StorageConfig } from "@repo/storage";
 import type { TelemetryConfig, TelemetryExporter } from "@repo/logger/telemetry";
 import { z } from "zod";
 
@@ -39,7 +38,7 @@ const booleanSchema = z.preprocess((value) => {
   return value;
 }, z.boolean());
 
-const serverEnvSchema = z
+const apiEnvSchema = z
   .object({
     NODE_ENV: runtimeEnvSchema,
     API_PORT: z.coerce.number().int().positive().default(8000),
@@ -50,7 +49,6 @@ const serverEnvSchema = z
     DATABASE_URL: z.string().trim().min(1).default(defaultDatabaseUrl),
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LOG_LEVEL: logLevelSchema,
-    REDIS_URL: z.string().trim().min(1).default("redis://localhost:16379"),
     TELEMETRY_API_KEY: optionalStringSchema,
     TELEMETRY_API_KEY_HEADER: z.string().trim().min(1).default("authorization"),
     TELEMETRY_EXPORTER: telemetryExporterSchema,
@@ -81,21 +79,11 @@ const serverEnvSchema = z
     }
   });
 
-const storageEnvSchema = z.object({
-  S3_ACCESS_KEY_ID: z.string().trim().min(1),
-  S3_BUCKET: z.string().trim().min(1),
-  S3_ENDPOINT: optionalStringSchema,
-  S3_FORCE_PATH_STYLE: booleanSchema.default(true),
-  S3_PUBLIC_BASE_URL: optionalStringSchema,
-  S3_REGION: z.string().trim().min(1).default("auto"),
-  S3_SECRET_ACCESS_KEY: z.string().trim().min(1),
-});
-
-export function parseServerEnv(environment: NodeJS.ProcessEnv) {
-  return serverEnvSchema.parse(environment);
+export function parseApiEnv(environment: NodeJS.ProcessEnv) {
+  return apiEnvSchema.parse(environment);
 }
 
-export const env = parseServerEnv(process.env);
+export const env = parseApiEnv(process.env);
 
 export const appConfig = {
   nodeEnv: env.NODE_ENV,
@@ -117,10 +105,6 @@ export const databaseConfig = {
   url: env.DATABASE_URL,
 } as const;
 
-export const redisConfig = {
-  url: env.REDIS_URL,
-} as const;
-
 export const loggerConfig = {
   environment: env.NODE_ENV,
   level: env.LOG_LEVEL,
@@ -135,20 +119,6 @@ export const telemetryConfig = {
   otlpEndpoint: env.TELEMETRY_EXPORTER_OTLP_ENDPOINT,
   serviceNamespace: env.TELEMETRY_SERVICE_NAMESPACE,
 } satisfies TelemetryConfig;
-
-export function getStorageConfig(): StorageConfig {
-  const storageEnv = storageEnvSchema.parse(process.env);
-
-  return {
-    accessKeyId: storageEnv.S3_ACCESS_KEY_ID,
-    bucket: storageEnv.S3_BUCKET,
-    endpoint: storageEnv.S3_ENDPOINT,
-    forcePathStyle: storageEnv.S3_FORCE_PATH_STYLE,
-    publicBaseUrl: storageEnv.S3_PUBLIC_BASE_URL,
-    region: storageEnv.S3_REGION,
-    secretAccessKey: storageEnv.S3_SECRET_ACCESS_KEY,
-  };
-}
 
 function parseCsv(value: string) {
   return value

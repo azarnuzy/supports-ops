@@ -20,9 +20,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@repo/config": "workspace:*",
     "@repo/logger": "workspace:*",
-    "bullmq": "^6.0.11"
+    "bullmq": "^6.0.11",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

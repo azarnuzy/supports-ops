@@ -1,4 +1,4 @@
-import { apiConfig } from "@repo/config";
+import { apiConfig } from "./config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./modules/auth/auth";

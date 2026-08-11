@@ -6,13 +6,13 @@ pnpm workspace with:
 - `apps/platform`: React + Vite + TanStack Router file routes + TanStack Query.
 - `apps/admin`: React + Vite + TanStack Router file routes + TanStack Query.
 - `packages/api-client`: typed Hono RPC client shared by the frontend apps.
-- `packages/config`: typed server-side environment config.
 - `packages/logger`: Pino logging and OpenTelemetry setup for server applications.
 - `packages/storage`: S3-compatible object storage primitives.
 - `packages/ui`: shared shadcn components and frontend i18next setup.
 - `packages/worker`: Redis + BullMQ worker primitives.
 
 Packages are source-only: they export their `.ts`/`.tsx` files directly and do not have a build step.
+Runtime-specific environment validation lives with the API and worker that consume it.
 
 ## Setup
 
@@ -65,10 +65,15 @@ pnpm createsuperuser
 `packages/storage` exports S3-compatible helpers for AWS S3, MinIO, Cloudflare R2, DigitalOcean Spaces, and similar providers.
 
 ```ts
-import { getStorageConfig } from "@repo/config";
 import { createStorage } from "@repo/storage";
 
-const storage = createStorage(getStorageConfig());
+const storage = createStorage({
+  accessKeyId: "access-key",
+  bucket: "uploads",
+  forcePathStyle: false,
+  region: "ap-southeast-1",
+  secretAccessKey: "secret-key",
+});
 
 await storage.putObject({
   key: "uploads/example.txt",
@@ -84,8 +89,8 @@ Configure it with `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCES
 `packages/logger` exports Pino helpers for structured JSON logs.
 
 ```ts
-import { loggerConfig } from "@repo/config";
 import { createLogger } from "@repo/logger";
+import { loggerConfig } from "./config";
 
 const logger = createLogger({
   ...loggerConfig,

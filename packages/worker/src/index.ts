@@ -1,6 +1,9 @@
-import { loggerConfig, redisConfig } from "@repo/config";
+import { loggerConfig, redisConfig } from "./config";
 import { createLogger } from "@repo/logger";
 import { Queue, QueueEvents, Worker, type ConnectionOptions, type Job } from "bullmq";
+import type { ExampleJob } from "./types";
+
+export type { ExampleJob } from "./types";
 
 export const logger = createLogger({
   ...loggerConfig,
@@ -10,10 +13,6 @@ export const logger = createLogger({
 export const connection: ConnectionOptions = {
   url: redisConfig.url,
   maxRetriesPerRequest: null,
-};
-
-export type ExampleJob = {
-  message: string;
 };
 
 let exampleQueue: Queue<ExampleJob> | null = null;
