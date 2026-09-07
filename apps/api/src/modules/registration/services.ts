@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
-import { Prisma, prisma } from "../../utils/prisma";
+import { Prisma, unscopedPrisma } from "../../utils/prisma";
 import type { RegisterInput } from "./schema";
 
 export class EmailAlreadyInUseError extends Error {
@@ -11,7 +11,7 @@ export class EmailAlreadyInUseError extends Error {
 }
 
 export async function registerAdminWorkspace(input: RegisterInput) {
-  const existingUser = await prisma.user.findUnique({
+  const existingUser = await unscopedPrisma.user.findUnique({
     where: { email: input.email },
     select: { id: true },
   });
@@ -24,7 +24,7 @@ export async function registerAdminWorkspace(input: RegisterInput) {
   const now = new Date();
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await unscopedPrisma.$transaction(async (tx) => {
       const workspace = await tx.workspace.create({
         data: {
           id: randomUUID(),

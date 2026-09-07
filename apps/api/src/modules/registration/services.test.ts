@@ -19,7 +19,7 @@ class FakePrismaClientKnownRequestError extends Error {
 
 vi.mock("../../utils/prisma", () => ({
   Prisma: { PrismaClientKnownRequestError: FakePrismaClientKnownRequestError },
-  prisma: {
+  unscopedPrisma: {
     $transaction: mocks.transaction,
     user: { findUnique: mocks.findUnique },
   },

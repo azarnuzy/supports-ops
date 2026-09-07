@@ -355,6 +355,7 @@ function createAuthSession(role: "ADMIN" | "HUMAN_AGENT") {
       name: "Admin User",
       role,
       updatedAt: baseDate,
+      workspaceId: "workspace-1",
     },
   };
 }

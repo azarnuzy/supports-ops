@@ -2,7 +2,11 @@ import { apiConfig } from "./config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./modules/auth/auth";
-import { type AuthVariables, loadAuthSession } from "./modules/auth/middleware";
+import {
+  type AuthVariables,
+  loadAuthSession,
+  loadWorkspaceContext,
+} from "./modules/auth/middleware";
 import { profileRouter } from "./modules/profile/router";
 import { registrationRouter } from "./modules/registration/router";
 import { usersRouter } from "./modules/users/router";
@@ -18,6 +22,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
     }),
   )
   .use("*", loadAuthSession)
+  .use("*", loadWorkspaceContext)
   .get("/health", (c) => {
     return c.json({ ok: true, service: "api" }, 200);
   })
