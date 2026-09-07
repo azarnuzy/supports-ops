@@ -10,7 +10,7 @@ All seven acceptance criteria pass, but two of them pass through a fallback rath
 |---|---|---|
 | 1 | Discriminated structured output | **Fallback taken** — a Zod `discriminatedUnion` cannot be used as `outputSchema`; see below |
 | 2 | Agent stream served through the API framework | **Pass**, with one import-path correction |
-| 3 | pgvector adapter honours metadata filters per Workspace/Visibility/deletion | **Pass** for the filter mechanism; **fallback recommended** for how it attaches to the product's `Chunk` table |
+| 3 | pgvector adapter honours metadata filters per Workspace/Visibility/deletion | **Pass** for Workspace/Visibility filtering; **deletion filtering not exercised**; **fallback recommended** for how it attaches to the product's `Chunk` table |
 | 4 | `PrismaMemoryStore` wrapped for a caller transaction + extra columns | **Pass**, via a documented technique — see below |
 | 5 | Message written outside an agent run reads back correctly | **Pass** |
 | 6 | Exact OpenRouter model identifiers for fast/main/judge | **Pass** — recorded below |
@@ -70,7 +70,9 @@ Verified against a real Hono server (`@hono/node-server`) and a real OpenRouter 
 
 ## 3. pgvector adapter and metadata filters
 
-**The filter mechanism itself passes.** Seeded three chunks (two Workspaces, one Workspace with a Customer-Safe and an Internal-Only chunk) into `@anvia/pgvector`'s `PgVectorStore`, then searched with a filter of `and(eq(workspaceId), and(eq(visibility), eq(isPublished)))`. Result: exactly the one matching chunk, every time — no cross-Workspace or cross-visibility leakage across the trials run.
+**The filter mechanism itself passes for Workspace and Visibility.** Seeded three chunks (two Workspaces, one Workspace with a Customer-Safe and an Internal-Only chunk) into `@anvia/pgvector`'s `PgVectorStore`, then searched with a filter of `and(eq(workspaceId), and(eq(visibility), eq(isPublished)))`. Result: exactly the one matching chunk, every time — no cross-Workspace or cross-visibility leakage across the trials run.
+
+**Deletion filtering was not exercised.** No chunk carrying a soft-deleted `deletedAt` was seeded, and no trial filtered on it, so this spike does not confirm that a soft-deleted source's chunks are excluded from retrieval — only that Workspace and Visibility are. That dimension still needs a dedicated test, ideally against whichever store ends up owning `Chunk` (see the fallback below), since ADR-0003's whole premise is that deleting a source must make its chunks unretrievable immediately.
 
 **A larger assumption in ADR-0003 / data-model.md does not hold.** `PgVectorStore.ensure()` `CREATE TABLE IF NOT EXISTS`s and owns its **own** physical table — fixed columns `(id, document_id, document jsonb, metadata jsonb, embedding vector(N))`, written and read through raw `pg` queries. It does not read or write the Prisma-managed `Chunk` table data-model.md describes, and it can't be pointed at an existing table with extra typed columns the way `PrismaMemoryStore`'s `delegates` option allows.
 
