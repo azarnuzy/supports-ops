@@ -55,7 +55,7 @@ export async function listRecentUsers({
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role ?? "user",
+      role: user.role,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     })),

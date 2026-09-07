@@ -1,3 +1,5 @@
+import type { Role } from "../../utils/prisma";
+
 export type ProfileUser = {
   createdAt: Date;
   email: string;
@@ -5,7 +7,7 @@ export type ProfileUser = {
   id: string;
   image: string | null;
   name: string;
-  role: string | null;
+  role: Role;
   updatedAt: Date;
 };
 

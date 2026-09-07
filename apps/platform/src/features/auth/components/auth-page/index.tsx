@@ -69,6 +69,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 <Input
                   id="name"
                   autoComplete="name"
+                  required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                 />
@@ -80,6 +81,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 id="email"
                 type="email"
                 autoComplete="email"
+                required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -90,6 +92,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 id="password"
                 type="password"
                 autoComplete={isLogin ? "current-password" : "new-password"}
+                minLength={isLogin ? undefined : 8}
+                required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />

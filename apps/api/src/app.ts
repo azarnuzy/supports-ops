@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { auth } from "./modules/auth/auth";
 import { type AuthVariables, loadAuthSession } from "./modules/auth/middleware";
 import { profileRouter } from "./modules/profile/router";
+import { registrationRouter } from "./modules/registration/router";
 import { usersRouter } from "./modules/users/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
@@ -34,6 +35,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
     return auth.handler(c.req.raw);
   })
   .route("/profile", profileRouter)
+  .route("/register", registrationRouter)
   .route("/users", usersRouter);
 
 export type AppType = typeof app;
