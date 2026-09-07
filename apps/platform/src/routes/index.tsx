@@ -14,8 +14,10 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { PlatformAppShell } from "../modules/app-shell/app-shell";
 import { meQueryOptions, UnauthorizedError } from "../features/auth";
+import { pageMetadata } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
+  head: () => pageMetadata({ title: "Workspace dashboard", description: "Review your SupportOps Workspace dashboard.", path: "/", noIndex: true }),
   beforeLoad: async ({ context }) => {
     try {
       await context.queryClient.ensureQueryData(meQueryOptions);
