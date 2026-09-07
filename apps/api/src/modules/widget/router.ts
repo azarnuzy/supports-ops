@@ -5,6 +5,7 @@ import { zValidator } from "@hono/zod-validator";
 import { streamSSE } from "hono/streaming";
 import { customerMessageSchema, preChatSchema } from "./schema";
 import { publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
+import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import {
   createWebSession,
   getApprovedWidget,
@@ -81,6 +82,11 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
   .post("/messages", zValidator("json", customerMessageSchema), async (c) => {
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
+    const limit = await limitWidgetMessage(accessToken, clientAddress(c.req.raw.headers));
+    if (!limit.allowed) {
+      c.header("Retry-After", String(limit.retryAfterSeconds));
+      return c.json({ error: "rate_limited", retryAfterSeconds: limit.retryAfterSeconds }, 429);
+    }
     const result = await createCustomerMessage(accessToken, c.req.valid("json"));
     if (!result) return c.json({ error: "unauthorized" }, 401);
     if (result.created) {
