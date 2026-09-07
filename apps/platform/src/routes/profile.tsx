@@ -15,8 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { PlatformAppShell } from "../modules/app-shell/app-shell";
-import { meQueryOptions, useUpdateProfileMutation } from "../modules/auth/hooks/use-auth";
-import { UnauthorizedError } from "../modules/auth/services";
+import { meQueryOptions, UnauthorizedError, useUpdateProfileMutation } from "../features/auth";
 
 export const Route = createFileRoute("/profile")({
   beforeLoad: async ({ context }) => {

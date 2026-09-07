@@ -13,8 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { PlatformAppShell } from "../modules/app-shell/app-shell";
-import { meQueryOptions } from "../modules/auth/hooks/use-auth";
-import { UnauthorizedError } from "../modules/auth/services";
+import { meQueryOptions, UnauthorizedError } from "../features/auth";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async ({ context }) => {

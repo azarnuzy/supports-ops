@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AuthPage } from "../modules/auth/auth-page";
+import { LoginView } from "../features/auth";
 
 export const Route = createFileRoute("/login")({
-  component: () => <AuthPage mode="login" />,
+  component: LoginView,
 });
