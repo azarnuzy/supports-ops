@@ -8,20 +8,45 @@ RUN apk add --no-cache openssl \
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
-COPY apps/api/package.json apps/api/package.json
-COPY packages/logger/package.json packages/logger/package.json
+FROM base AS build
+
+COPY . .
 
 RUN pnpm install --frozen-lockfile
 
-COPY apps/api apps/api
-COPY packages/logger packages/logger
+RUN DATABASE_URL="postgresql://postgres:postgres@postgres:5432/supportops?schema=public" pnpm db:generate
 
-RUN DATABASE_URL="postgresql://postgres:postgres@postgres:5432/monorepo_template?schema=public" pnpm db:generate
-RUN pnpm --filter @repo/api build
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+
+RUN pnpm --filter @repo/platform build \
+  && pnpm --filter @repo/widget build
+
+FROM build AS api
 
 ENV NODE_ENV=production
+ENV API_PORT=8000
 
 EXPOSE 8000
 
-CMD ["pnpm", "--filter", "@repo/api", "start"]
+CMD ["pnpm", "--filter", "@repo/api", "exec", "tsx", "src/main.ts"]
+
+FROM build AS worker
+
+ENV NODE_ENV=production
+
+CMD ["pnpm", "--filter", "@repo/worker", "exec", "tsx", "src/main.ts"]
+
+FROM caddy:2-alpine AS platform
+
+COPY deploy/Caddyfile.platform /etc/caddy/Caddyfile
+COPY --from=build /app/apps/platform/dist /srv
+
+EXPOSE 80
+
+FROM caddy:2-alpine AS widget
+
+COPY deploy/Caddyfile.widget /etc/caddy/Caddyfile
+COPY --from=build /app/apps/widget/dist /srv
+
+EXPOSE 80
