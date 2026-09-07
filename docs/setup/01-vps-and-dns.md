@@ -47,7 +47,7 @@ The shared Caddy container must be connected to the external `proxy` network and
 GitHub Actions cannot use the local `tencent-lighthouse` SSH alias: that alias only exists on the developer's computer. Resolve its concrete hostname, user, and port first. Run this **on the local computer**, not on the VPS:
 
 ```bash
-ssh -G tencent-lighthouse | rg '^(hostname|user|port|identityfile) '
+ssh -G tencent-lighthouse | grep -E '^(hostname|user|port|identityfile) '
 ```
 
 The output is similar to this (do not copy these example values):
