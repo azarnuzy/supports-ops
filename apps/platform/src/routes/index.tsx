@@ -1,4 +1,3 @@
-import { useTranslation } from "@repo/ui/i18n";
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
@@ -33,7 +32,6 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
-  const { t } = useTranslation();
   const user = useQuery(meQueryOptions);
 
   if (!user.data) {
@@ -45,27 +43,27 @@ function DashboardPage() {
       <section className="grid gap-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <p className="text-sm font-medium text-muted-foreground">{t("dashboard.eyebrow")}</p>
-            <h1 className="text-3xl font-semibold text-balance">{t("dashboard.title")}</h1>
+            <p className="text-sm font-medium text-muted-foreground">Workspace overview</p>
+            <h1 className="text-3xl font-semibold text-balance">Workspace dashboard</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {t("dashboard.description")}
+              Review your Workspace status and keep your profile ready for support work.
             </p>
           </div>
           <Button asChild className="w-fit">
-            <Link to="/profile">{t("dashboard.editProfile")}</Link>
+            <Link to="/profile">Edit profile</Link>
           </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
           <Card>
             <CardHeader>
-              <CardTitle>{t("dashboard.profileCard.title")}</CardTitle>
-              <CardDescription>{t("dashboard.profileCard.description")}</CardDescription>
+              <CardTitle>Profile</CardTitle>
+              <CardDescription>This is the profile other product surfaces can use.</CardDescription>
               <CardAction>
                 <Badge variant={user.data.emailVerified ? "default" : "secondary"}>
                   {user.data.emailVerified
-                    ? t("dashboard.emailVerified")
-                    : t("dashboard.emailUnverified")}
+                    ? "Email verified"
+                    : "Email unverified"}
                 </Badge>
               </CardAction>
             </CardHeader>
@@ -85,7 +83,7 @@ function DashboardPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">{user.data.role ?? "user"}</Badge>
-                  <Badge variant="secondary">{t("dashboard.accountActive")}</Badge>
+                  <Badge variant="secondary">Active Workspace</Badge>
                 </div>
               </div>
             </CardContent>
@@ -93,16 +91,16 @@ function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>{t("dashboard.accountCard.title")}</CardTitle>
-              <CardDescription>{t("dashboard.accountCard.description")}</CardDescription>
+              <CardTitle>Workspace details</CardTitle>
+              <CardDescription>Basic metadata for this Workspace.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 text-sm">
-              <MetadataRow label={t("dashboard.joined")} value={formatDate(user.data.createdAt)} />
+              <MetadataRow label="Joined" value={formatDate(user.data.createdAt)} />
               <MetadataRow
-                label={t("dashboard.lastUpdated")}
+                label="Last updated"
                 value={formatDate(user.data.updatedAt)}
               />
-              <MetadataRow label={t("dashboard.userId")} value={user.data.id} />
+              <MetadataRow label="User ID" value={user.data.id} />
             </CardContent>
           </Card>
         </div>

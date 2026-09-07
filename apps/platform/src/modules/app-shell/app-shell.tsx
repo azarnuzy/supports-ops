@@ -1,4 +1,3 @@
-import { useTranslation } from "@repo/ui/i18n";
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -27,7 +26,6 @@ import { meQueryOptions, useLogoutMutation } from "../auth/hooks/use-auth";
 import { HeaderControls } from "./header-controls";
 
 export function PlatformAppShell({ children }: { children: ReactNode }) {
-  const { t } = useTranslation();
   const location = useLocation();
   const user = useQuery(meQueryOptions);
   const logoutMutation = useLogoutMutation();
@@ -35,7 +33,7 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
   function handleLogout() {
     logoutMutation.mutate(undefined, {
       onError: (error) => {
-        const message = error instanceof Error ? error.message : t("dashboard.logoutFallbackError");
+        const message = error instanceof Error ? error.message : "Failed to log out.";
         toast.error(message);
       },
     });
@@ -46,8 +44,8 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
   }
 
   const navItems = [
-    { icon: LayoutDashboardIcon, label: t("nav.dashboard"), to: "/" },
-    { icon: UserRoundIcon, label: t("nav.profile"), to: "/profile" },
+    { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
+    { icon: UserRoundIcon, label: "Edit profile", to: "/profile" },
   ] as const;
 
   return (
@@ -56,13 +54,13 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild tooltip={t("nav.brand")}>
+              <SidebarMenuButton size="lg" asChild tooltip="Platform">
                 <Link to="/">
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
                     <MonitorIcon className="size-4" />
                   </span>
                   <span className="font-semibold group-data-[collapsible=icon]:hidden">
-                    {t("nav.brand")}
+                    Platform
                   </span>
                 </Link>
               </SidebarMenuButton>
@@ -71,7 +69,7 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>{t("sidebar.workspace")}</SidebarGroupLabel>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => (
@@ -96,7 +94,7 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild size="lg" tooltip={t("nav.profile")}>
+              <SidebarMenuButton asChild size="lg" tooltip="Edit profile">
                 <Link to="/profile">
                   <Avatar className="shrink-0 rounded-md">
                     {user.data.image ? (
@@ -125,7 +123,7 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
           >
             <LogOutIcon className="size-4 shrink-0" />
             <span className="group-data-[collapsible=icon]:hidden">
-              {logoutMutation.isPending ? t("dashboard.logoutPending") : t("dashboard.logout")}
+              {logoutMutation.isPending ? "Logging out..." : "Logout"}
             </span>
           </Button>
         </SidebarFooter>
@@ -135,7 +133,7 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
             <SidebarTrigger />
-            <span className="text-sm font-medium text-muted-foreground">{t("nav.brand")}</span>
+            <span className="text-sm font-medium text-muted-foreground">Platform</span>
           </div>
           <HeaderControls />
         </header>

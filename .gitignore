@@ -8,3 +8,4 @@ build
 .env.*
 !.env.example
 coverage
+apps/platform/src/routeTree.gen.ts

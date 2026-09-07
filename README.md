@@ -1,15 +1,20 @@
-# Monorepo Template
+# SupportOps
 
 pnpm workspace with:
 
 - `apps/api`: Hono API on Node.js.
 - `apps/platform`: React + Vite + TanStack Router file routes + TanStack Query.
-- `apps/admin`: React + Vite + TanStack Router file routes + TanStack Query.
+- `apps/widget`: customer-facing Web Widget.
+- `apps/worker`: Redis + BullMQ deployable.
+- `packages/ai-agent`: AI Agent reasoning boundary.
 - `packages/api-client`: typed Hono RPC client shared by the frontend apps.
+- `packages/channels`: Channel Adapter boundary.
+- `packages/knowledge`: Knowledge retrieval boundary.
 - `packages/logger`: Pino logging and OpenTelemetry setup for server applications.
+- `packages/shared`: schemas shared across application boundaries.
 - `packages/storage`: S3-compatible object storage primitives.
-- `packages/ui`: shared shadcn components and frontend i18next setup.
-- `packages/worker`: Redis + BullMQ worker primitives.
+- `packages/tools`: Business Tool boundary.
+- `packages/ui`: shared shadcn components.
 
 Packages are source-only: they export their `.ts`/`.tsx` files directly and do not have a build step.
 Runtime-specific environment validation lives with the API and worker that consume it.
@@ -29,7 +34,6 @@ pnpm db:migrate
 ```sh
 pnpm --filter @repo/api dev
 pnpm --filter @repo/platform dev
-pnpm --filter @repo/admin dev
 pnpm --filter @repo/worker dev
 ```
 
@@ -39,7 +43,7 @@ pnpm --filter @repo/worker dev
 pnpm test
 ```
 
-This runs the base Vitest suites for API, Platform, Admin, and Worker.
+This runs the base Vitest suites for API, Platform, and Worker.
 
 ## Auth and API Client
 
@@ -143,34 +147,3 @@ For local development, `docker-compose.dev.yaml` still provides Postgres and Red
 - API health: `http://localhost:8000/health`
 - Postgres with `docker-compose.dev.yaml`: `localhost:15432`
 - Redis with `docker-compose.dev.yaml`: `localhost:16379`
-
-## Cloudflare frontend deployment
-
-Admin and Platform deploy as separate Cloudflare Workers with static assets. Their Wrangler configurations enable SPA fallback routing and preserve the security and immutable asset-cache headers previously supplied by Caddy.
-
-Authenticate Wrangler once:
-
-```sh
-pnpm --filter @repo/platform exec wrangler login
-```
-
-Preview either production build through the local Workers runtime:
-
-```sh
-pnpm --filter @repo/platform preview:cloudflare
-pnpm --filter @repo/admin preview:cloudflare
-```
-
-Set the public API URL at build time and deploy each frontend:
-
-```sh
-VITE_API_URL="https://api.example.com" pnpm deploy:platform
-VITE_API_URL="https://api.example.com" pnpm deploy:admin
-```
-
-The deployments use the Worker names `monorepo-template-platform` and `monorepo-template-admin`. Configure their custom domains in Cloudflare, then allow those origins in the API environment:
-
-```env
-BETTER_AUTH_URL="https://api.example.com"
-CLIENT_ORIGINS="https://app.example.com,https://admin.example.com"
-```

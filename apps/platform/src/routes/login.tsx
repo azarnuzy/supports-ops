@@ -1,4 +1,3 @@
-import { useTranslation } from "@repo/ui/i18n";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Input } from "@repo/ui/components/input";
@@ -15,7 +14,6 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const loginMutation = useLoginMutation();
@@ -26,7 +24,7 @@ function LoginPage() {
       { email, password },
       {
         onError: (error) => {
-          const message = error instanceof Error ? error.message : t("auth.login.fallbackError");
+          const message = error instanceof Error ? error.message : "Authentication failed.";
           toast.error(message);
         },
       },
@@ -37,19 +35,19 @@ function LoginPage() {
     <div className="flex min-h-screen flex-col bg-muted/30">
       <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
         <Link to="/" className="font-semibold">
-          {t("nav.brand")}
+          Platform
         </Link>
         <HeaderControls />
       </header>
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle>{t("auth.login.title")}</CardTitle>
+            <CardTitle>Platform login</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="grid gap-4" onSubmit={handleSubmit}>
               <div className="grid gap-2">
-                <Label htmlFor="email">{t("auth.login.email")}</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -59,7 +57,7 @@ function LoginPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="password">{t("auth.login.password")}</Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
@@ -69,10 +67,10 @@ function LoginPage() {
                 />
               </div>
               <Button type="submit" disabled={loginMutation.isPending}>
-                {loginMutation.isPending ? t("auth.login.pending") : t("auth.login.submit")}
+                {loginMutation.isPending ? "Logging in..." : "Login"}
               </Button>
               <Button asChild type="button" variant="link">
-                <Link to="/register">{t("auth.login.createAccount")}</Link>
+                <Link to="/register">Create a user account</Link>
               </Button>
             </form>
           </CardContent>

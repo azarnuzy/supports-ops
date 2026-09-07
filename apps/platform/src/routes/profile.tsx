@@ -1,4 +1,3 @@
-import { useTranslation } from "@repo/ui/i18n";
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -35,12 +34,11 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { t } = useTranslation();
   const user = useQuery(meQueryOptions);
   const updateProfileMutation = useUpdateProfileMutation();
   const [name, setName] = useState("");
   const [image, setImage] = useState("");
-  const validationError = useMemo(() => validateProfile(name, image, t), [name, image, t]);
+  const validationError = useMemo(() => validateProfile(name, image), [name, image]);
   const currentUser = user.data;
 
   useEffect(() => {
@@ -73,11 +71,11 @@ function ProfilePage() {
       },
       {
         onError: (error) => {
-          const message = error instanceof Error ? error.message : t("profile.form.fallbackError");
+          const message = error instanceof Error ? error.message : "Failed to save profile.";
           toast.error(message);
         },
         onSuccess: () => {
-          toast.success(t("profile.form.saved"));
+          toast.success("Profile saved.");
         },
       },
     );
@@ -92,21 +90,25 @@ function ProfilePage() {
     <PlatformAppShell>
       <section className="grid gap-8">
         <div className="max-w-2xl">
-          <p className="text-sm font-medium text-muted-foreground">{t("profile.eyebrow")}</p>
-          <h1 className="text-3xl font-semibold text-balance">{t("profile.title")}</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{t("profile.description")}</p>
+          <p className="text-sm font-medium text-muted-foreground">Profile settings</p>
+          <h1 className="text-3xl font-semibold text-balance">Edit profile</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Update the display details tied to your user account.
+          </p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
           <Card>
             <form onSubmit={handleSubmit}>
               <CardHeader>
-                <CardTitle>{t("profile.form.title")}</CardTitle>
-                <CardDescription>{t("profile.form.description")}</CardDescription>
+                <CardTitle>Edit profile</CardTitle>
+                <CardDescription>
+                  Name is required. Avatar image is optional and must be a public URL.
+                </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-5">
                 <Field>
-                  <FieldLabel htmlFor="profile-name">{t("profile.form.name")}</FieldLabel>
+                  <FieldLabel htmlFor="profile-name">Display name</FieldLabel>
                   <Input
                     id="profile-name"
                     autoComplete="name"
@@ -114,10 +116,10 @@ function ProfilePage() {
                     aria-invalid={Boolean(validationError)}
                     onChange={(event) => setName(event.target.value)}
                   />
-                  <FieldDescription>{t("profile.form.nameDescription")}</FieldDescription>
+                  <FieldDescription>Use the name people should recognize in the product.</FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="profile-image">{t("profile.form.image")}</FieldLabel>
+                  <FieldLabel htmlFor="profile-image">Avatar URL</FieldLabel>
                   <Input
                     id="profile-image"
                     inputMode="url"
@@ -126,7 +128,7 @@ function ProfilePage() {
                     aria-invalid={Boolean(validationError)}
                     onChange={(event) => setImage(event.target.value)}
                   />
-                  <FieldDescription>{t("profile.form.imageDescription")}</FieldDescription>
+                  <FieldDescription>Leave empty to remove the avatar image.</FieldDescription>
                 </Field>
                 <FieldError>{validationError}</FieldError>
               </CardContent>
@@ -136,11 +138,11 @@ function ProfilePage() {
                   disabled={!isDirty || Boolean(validationError) || updateProfileMutation.isPending}
                 >
                   {updateProfileMutation.isPending
-                    ? t("profile.form.saving")
-                    : t("profile.form.save")}
+                    ? "Saving..."
+                    : "Save profile"}
                 </Button>
                 <Button type="button" variant="outline" disabled={!isDirty} onClick={handleReset}>
-                  {t("profile.form.cancel")}
+                  Cancel
                 </Button>
               </CardFooter>
             </form>
@@ -148,8 +150,8 @@ function ProfilePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>{t("profile.preview.title")}</CardTitle>
-              <CardDescription>{t("profile.preview.description")}</CardDescription>
+              <CardTitle>Preview</CardTitle>
+              <CardDescription>A quick check before saving your changes.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-start gap-4">
               <Avatar className="size-20 rounded-xl">
@@ -172,16 +174,16 @@ function ProfilePage() {
   );
 }
 
-function validateProfile(name: string, image: string, t: (key: string) => string) {
+function validateProfile(name: string, image: string) {
   const trimmedName = name.trim();
   const trimmedImage = image.trim();
 
   if (!trimmedName) {
-    return t("profile.form.nameRequired");
+    return "Display name is required.";
   }
 
   if (trimmedName.length > 100) {
-    return t("profile.form.nameTooLong");
+    return "Display name must be 100 characters or fewer.";
   }
 
   if (trimmedImage) {
@@ -189,10 +191,10 @@ function validateProfile(name: string, image: string, t: (key: string) => string
       const url = new URL(trimmedImage);
 
       if (!["http:", "https:"].includes(url.protocol)) {
-        return t("profile.form.imageInvalid");
+        return "Enter a valid http or https image URL.";
       }
     } catch {
-      return t("profile.form.imageInvalid");
+      return "Enter a valid http or https image URL.";
     }
   }
 
