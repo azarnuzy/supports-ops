@@ -1,0 +1,7 @@
+# Monorepo app and package topology
+
+The repository started from a generic monorepo boilerplate with `apps/{api,platform,admin}` and `packages/{ui,api-client,logger,storage,worker}`. We reshaped it to `apps/{api,worker,platform,widget}` plus `packages/{ai-agent,channels,knowledge,tools,shared,ui,api-client,logger,storage}`.
+
+`apps/admin` was deleted: Admin and Human Agent look at the same Inbox and Ticket screens and differ only in which Tickets they may see, so two dashboards would mean porting the same chat UI twice. `packages/worker` was promoted to `apps/worker` because in this product it is a real deployable that owns Follow-Up timers, Ticket Knowledge indexing, Knowledge Source ingestion, and outbound email — not a library. `apps/widget` is a separate app rather than a route inside `apps/platform` because it is loaded from a third party's website by a script tag and must not carry the dashboard's router or auth client.
+
+`packages/ai-agent`, `packages/channels`, `packages/knowledge`, and `packages/tools` exist only because the PRD requires the AI reasoning layer to stay independent of message transport, so that adding WhatsApp means adding a Channel Adapter rather than rewriting support logic. Everything else stays in `apps/api/src/modules/<domain>/`. We deliberately did **not** create `packages/database`: it would add an indirection hop without isolating anything, so the Prisma schema stays in `apps/api`.
