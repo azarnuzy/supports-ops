@@ -20,12 +20,12 @@ import {
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
-import { LayoutDashboardIcon, LogOutIcon, MonitorIcon, UserRoundIcon } from "lucide-react";
+import { LayoutDashboardIcon, LogOutIcon, MessageSquareIcon, MonitorIcon, UserRoundIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth/hooks/use-auth";
 import { HeaderControls } from "./header-controls";
 
-export function PlatformAppShell({ children }: { children: ReactNode }) {
+export function PlatformAppShell({ children, fullBleed = false }: { children: ReactNode; fullBleed?: boolean }) {
   const location = useLocation();
   const user = useQuery(meQueryOptions);
   const logoutMutation = useLogoutMutation();
@@ -45,6 +45,7 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
 
   const navItems = [
     { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
+    { icon: MessageSquareIcon, label: "Inbox", to: "/chat" },
     { icon: UserRoundIcon, label: "Edit profile", to: "/profile" },
   ] as const;
 
@@ -137,7 +138,7 @@ export function PlatformAppShell({ children }: { children: ReactNode }) {
           </div>
           <HeaderControls />
         </header>
-        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-8 lg:px-8">
+        <div className={fullBleed ? "flex min-h-0 w-full flex-1 flex-col" : "mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-8 lg:px-8"}>
           {children}
         </div>
       </SidebarInset>

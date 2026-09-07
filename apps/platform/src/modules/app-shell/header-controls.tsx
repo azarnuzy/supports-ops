@@ -1,7 +1,7 @@
-import { ThemeSelector } from "@repo/ui/components/theme-selector";
+import { ThemePresetSelector, ThemeSelector } from "@repo/ui/components/theme-selector";
 
 export function HeaderControls() {
-  return (
+  return <div className="flex items-center gap-2">
     <ThemeSelector
       ariaLabel="Theme"
       labels={{
@@ -10,5 +10,6 @@ export function HeaderControls() {
         system: "System",
       }}
     />
-  );
+    <ThemePresetSelector className="hidden sm:block" />
+  </div>;
 }

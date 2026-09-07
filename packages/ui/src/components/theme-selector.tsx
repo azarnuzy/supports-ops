@@ -77,8 +77,21 @@ function ThemeSelector({ ariaLabel = "Theme", className, labels }: ThemeSelector
   );
 }
 
+const presetOptions = ["default", "tangerine", "soft-pop", "brutalist"] as const;
+type ThemePreset = (typeof presetOptions)[number];
+
+function ThemePresetSelector({ className }: { className?: string }) {
+  const [preset, setPreset] = React.useState<ThemePreset>(() => (typeof window === "undefined" ? "default" : (window.localStorage.getItem("theme-preset") as ThemePreset) || "default"));
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (preset === "default") root.removeAttribute("data-theme-preset"); else root.dataset.themePreset = preset;
+    window.localStorage.setItem("theme-preset", preset);
+  }, [preset]);
+  return <select aria-label="Theme preset" value={preset} onChange={(event) => setPreset(event.target.value as ThemePreset)} className={cn("h-8 rounded-md border border-border bg-background px-2 text-xs font-medium", className)}>{presetOptions.map((option) => <option key={option} value={option}>{option === "default" ? "Default" : option.replace("-", " ")}</option>)}</select>;
+}
+
 function getThemeValue(value: string | undefined): ThemeValue {
   return themeOptions.some((option) => option.value === value) ? (value as ThemeValue) : "system";
 }
 
-export { ThemeProvider, ThemeSelector };
+export { ThemePresetSelector, ThemeProvider, ThemeSelector };
