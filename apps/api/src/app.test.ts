@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
   findUnique: vi.fn(),
   getSession: vi.fn(),
+  registerAdminWorkspace: vi.fn(),
+  signInEmail: vi.fn(),
   update: vi.fn(),
 }));
 
@@ -13,10 +15,22 @@ vi.mock("./modules/auth/auth", () => ({
   auth: {
     api: {
       getSession: mocks.getSession,
+      signInEmail: mocks.signInEmail,
     },
     handler: mocks.authHandler,
   },
 }));
+
+vi.mock("./modules/registration/services", async () => {
+  const actual = await vi.importActual<typeof import("./modules/registration/services")>(
+    "./modules/registration/services",
+  );
+
+  return {
+    ...actual,
+    registerAdminWorkspace: mocks.registerAdminWorkspace,
+  };
+});
 
 vi.mock("./utils/prisma", () => ({
   prisma: {
@@ -36,12 +50,20 @@ describe("api app", () => {
     mocks.findMany.mockReset();
     mocks.findUnique.mockReset();
     mocks.getSession.mockReset();
+    mocks.registerAdminWorkspace.mockReset();
+    mocks.signInEmail.mockReset();
     mocks.update.mockReset();
 
     mocks.authHandler.mockResolvedValue(new Response(null, { status: 404 }));
     mocks.findMany.mockResolvedValue([]);
     mocks.findUnique.mockResolvedValue(null);
     mocks.getSession.mockResolvedValue(null);
+    mocks.signInEmail.mockResolvedValue(
+      new Response(JSON.stringify({ token: "session-token", user: { id: "new-admin" } }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
     mocks.update.mockImplementation(({ data, where }) =>
       Promise.resolve({
         createdAt: baseDate,
@@ -50,7 +72,7 @@ describe("api app", () => {
         id: where.id,
         image: data.image ?? "https://example.com/avatar.png",
         name: data.name,
-        role: "user",
+        role: "HUMAN_AGENT",
         updatedAt: baseDate,
       }),
     );
@@ -82,7 +104,7 @@ describe("api app", () => {
   });
 
   it("validates users list limits", async () => {
-    mocks.getSession.mockResolvedValue(createAuthSession("admin"));
+    mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
 
     const response = await app.request("/users?limit=0");
 
@@ -91,10 +113,10 @@ describe("api app", () => {
   });
 
   it("returns paginated users for admins", async () => {
-    mocks.getSession.mockResolvedValue(createAuthSession("admin"));
+    mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
     mocks.findMany.mockResolvedValue([
-      createUser({ id: "user-2", role: null }),
-      createUser({ id: "user-1", role: "admin" }),
+      createUser({ id: "user-2", role: "HUMAN_AGENT" }),
+      createUser({ id: "user-1", role: "ADMIN" }),
     ]);
 
     const response = await app.request("/users?limit=1");
@@ -107,7 +129,7 @@ describe("api app", () => {
           email: "user-2@example.com",
           id: "user-2",
           name: "User user-2",
-          role: "user",
+          role: "HUMAN_AGENT",
           updatedAt: baseDate.toISOString(),
         },
       ],
@@ -120,7 +142,7 @@ describe("api app", () => {
   });
 
   it("returns invalid_cursor for missing user cursors", async () => {
-    mocks.getSession.mockResolvedValue(createAuthSession("admin"));
+    mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
     mocks.findUnique.mockResolvedValue(null);
 
     const response = await app.request("/users?cursor=missing");
@@ -143,7 +165,7 @@ describe("api app", () => {
   });
 
   it("updates the current user's profile", async () => {
-    mocks.getSession.mockResolvedValue(createAuthSession("user"));
+    mocks.getSession.mockResolvedValue(createAuthSession("HUMAN_AGENT"));
 
     const response = await app.request("/profile", {
       body: JSON.stringify({
@@ -162,7 +184,7 @@ describe("api app", () => {
         id: "auth-user-id",
         image: "https://example.com/new-avatar.png",
         name: "Updated User",
-        role: "user",
+        role: "HUMAN_AGENT",
         updatedAt: baseDate.toISOString(),
       },
     });
@@ -187,7 +209,7 @@ describe("api app", () => {
   });
 
   it("converts an empty profile image to null", async () => {
-    mocks.getSession.mockResolvedValue(createAuthSession("user"));
+    mocks.getSession.mockResolvedValue(createAuthSession("HUMAN_AGENT"));
 
     const response = await app.request("/profile", {
       body: JSON.stringify({
@@ -206,7 +228,7 @@ describe("api app", () => {
   });
 
   it("rejects invalid profile input", async () => {
-    mocks.getSession.mockResolvedValue(createAuthSession("user"));
+    mocks.getSession.mockResolvedValue(createAuthSession("HUMAN_AGENT"));
 
     const response = await app.request("/profile", {
       body: JSON.stringify({
@@ -222,14 +244,14 @@ describe("api app", () => {
   });
 
   it("ignores profile fields users are not allowed to change", async () => {
-    mocks.getSession.mockResolvedValue(createAuthSession("user"));
+    mocks.getSession.mockResolvedValue(createAuthSession("HUMAN_AGENT"));
 
     const response = await app.request("/profile", {
       body: JSON.stringify({
         email: "takeover@example.com",
         image: null,
         name: "Updated User",
-        role: "admin",
+        role: "ADMIN",
       }),
       headers: { "Content-Type": "application/json" },
       method: "PATCH",
@@ -241,9 +263,80 @@ describe("api app", () => {
       name: "Updated User",
     });
   });
+
+  it("registers a Workspace Admin and signs them in", async () => {
+    mocks.registerAdminWorkspace.mockResolvedValue({
+      user: { id: "new-admin", role: "ADMIN", workspaceId: "workspace-1" },
+      workspace: { id: "workspace-1", name: "Ada's Workspace", slug: "ada-abc123" },
+    });
+
+    const response = await app.request("/register", {
+      body: JSON.stringify({
+        email: "ada@example.com",
+        name: "Ada",
+        password: "password123",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(mocks.registerAdminWorkspace).toHaveBeenCalledWith({
+      email: "ada@example.com",
+      name: "Ada",
+      password: "password123",
+    });
+    expect(mocks.signInEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asResponse: true,
+        body: { email: "ada@example.com", password: "password123" },
+      }),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      token: "session-token",
+      user: { id: "new-admin" },
+    });
+  });
+
+  it("rejects registration with an email already in use", async () => {
+    const { EmailAlreadyInUseError } = await import("./modules/registration/services");
+    mocks.registerAdminWorkspace.mockRejectedValue(new EmailAlreadyInUseError());
+
+    const response = await app.request("/register", {
+      body: JSON.stringify({
+        email: "ada@example.com",
+        name: "Ada",
+        password: "password123",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "email_in_use",
+      message: "An account with this email already exists.",
+    });
+    expect(mocks.signInEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejects registration with invalid input", async () => {
+    const response = await app.request("/register", {
+      body: JSON.stringify({
+        email: "not-an-email",
+        name: "",
+        password: "short",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.registerAdminWorkspace).not.toHaveBeenCalled();
+  });
 });
 
-function createAuthSession(role: string) {
+function createAuthSession(role: "ADMIN" | "HUMAN_AGENT") {
   return {
     session: {
       createdAt: baseDate,
@@ -275,12 +368,9 @@ function createUser({
   id: string;
   image?: string | null;
   name?: string;
-  role: string | null;
+  role: "ADMIN" | "HUMAN_AGENT";
 }) {
   return {
-    banned: null,
-    banExpires: null,
-    banReason: null,
     createdAt: baseDate,
     email: `${id}@example.com`,
     emailVerified: true,

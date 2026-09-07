@@ -1,9 +1,11 @@
+import type { Role } from "../../utils/prisma";
+
 export type UserListItem = {
   createdAt: Date;
   email: string;
   id: string;
   name: string;
-  role: string;
+  role: Role;
   updatedAt: Date;
 };
 

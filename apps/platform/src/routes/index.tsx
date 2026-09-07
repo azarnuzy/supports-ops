@@ -83,7 +83,7 @@ function DashboardPage() {
                   <p className="text-sm text-muted-foreground">{user.data.email}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">{user.data.role ?? "user"}</Badge>
+                  <Badge variant="outline">{user.data.role}</Badge>
                   <Badge variant="secondary">Active Workspace</Badge>
                 </div>
               </div>

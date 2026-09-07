@@ -1,0 +1,4 @@
+enum Role {
+  ADMIN
+  HUMAN_AGENT
+}

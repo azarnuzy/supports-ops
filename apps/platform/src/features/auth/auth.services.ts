@@ -1,6 +1,8 @@
 import {
   createApiClient,
+  EmailAlreadyInUseApiError,
   fetchSessionUser,
+  registerWorkspaceAdmin,
   UnauthorizedApiError,
   updateCurrentUserProfile,
 } from "@repo/api-client";
@@ -27,12 +29,16 @@ export async function login(input: LoginInput) {
   return getCurrentUser();
 }
 export async function register(input: RegisterInput) {
-  const { error } = await authClient.signUp.email({
-    email: input.email,
-    name: input.name?.trim() || input.email,
-    password: input.password,
-  });
-  if (error) throw new Error(error.message ?? "Registration failed.");
+  try {
+    await registerWorkspaceAdmin(apiClient, {
+      email: input.email,
+      name: input.name.trim(),
+      password: input.password,
+    });
+  } catch (error) {
+    if (error instanceof EmailAlreadyInUseApiError) throw new Error(error.message);
+    throw error;
+  }
   return getCurrentUser();
 }
 export async function logout() {
