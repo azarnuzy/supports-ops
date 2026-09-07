@@ -24,8 +24,10 @@ import { BotIcon, PaperclipIcon, SendIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { PlatformAppShell } from "../modules/app-shell/app-shell";
 import { meQueryOptions, UnauthorizedError } from "../features/auth";
+import { pageMetadata } from "../lib/seo";
 
 export const Route = createFileRoute("/chat")({
+  head: () => pageMetadata({ title: "Inbox", description: "Manage Customer conversations in your SupportOps Workspace.", path: "/chat", noIndex: true }),
   beforeLoad: async ({ context }) => {
     try {
       await context.queryClient.ensureQueryData(meQueryOptions);

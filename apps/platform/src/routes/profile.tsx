@@ -16,8 +16,10 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { PlatformAppShell } from "../modules/app-shell/app-shell";
 import { meQueryOptions, UnauthorizedError, useUpdateProfileMutation } from "../features/auth";
+import { pageMetadata } from "../lib/seo";
 
 export const Route = createFileRoute("/profile")({
+  head: () => pageMetadata({ title: "Profile settings", description: "Manage your SupportOps profile settings.", path: "/profile", noIndex: true }),
   beforeLoad: async ({ context }) => {
     try {
       await context.queryClient.ensureQueryData(meQueryOptions);
