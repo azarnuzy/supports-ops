@@ -9,6 +9,8 @@ model Workspace {
   users          User[]
   aiAgents       AiAgent[]
   channels       Channel[]
+  customerIdentities CustomerIdentity[]
+  webSessions    WebSession[]
 }
 
 model AiAgent {

@@ -17,3 +17,8 @@ enum ChannelStatus {
   ACTIVE
   INACTIVE
 }
+
+enum WebSessionStatus {
+  ACTIVE
+  CLOSED
+}

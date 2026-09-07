@@ -2,6 +2,7 @@ import { loggerConfig, redisConfig } from "./config";
 import { createLogger } from "@repo/logger";
 import { Queue, QueueEvents, Worker, type ConnectionOptions, type Job } from "bullmq";
 import type { ExampleJob } from "./types";
+import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
 
 export type { ExampleJob } from "./types";
 
@@ -44,8 +45,15 @@ export function startExampleWorker() {
   return new Worker<ExampleJob>("example", processExampleJob, { connection });
 }
 
+export function startSessionEmailWorker() {
+  return new Worker<SessionEmailJob>("session-email", async (job) => {
+    await sendSessionLinkEmail(job.data);
+  }, { connection });
+}
+
 export function runWorker() {
   const worker = startExampleWorker();
+  const sessionEmailWorker = startSessionEmailWorker();
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "Job completed");
@@ -54,8 +62,11 @@ export function runWorker() {
   worker.on("failed", (job, error) => {
     logger.error({ error, jobId: job?.id }, "Job failed");
   });
+  sessionEmailWorker.on("failed", (job, error) => {
+    logger.error({ error, jobId: job?.id }, "Session Link email failed");
+  });
 
-  return worker;
+  return { sessionEmailWorker, worker };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

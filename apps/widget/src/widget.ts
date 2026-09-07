@@ -33,6 +33,9 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   const panel = shadow.querySelector<HTMLElement>("[data-panel]");
   const close = shadow.querySelector<HTMLButtonElement>("[data-close]");
   const input = shadow.querySelector<HTMLInputElement>("[data-input]");
+  const preChat = shadow.querySelector<HTMLFormElement>("[data-pre-chat]");
+  const preChatError = shadow.querySelector<HTMLElement>("[data-pre-chat-error]");
+  const chat = shadow.querySelector<HTMLElement>("[data-chat]");
 
   const setOpen = (open: boolean) => {
     if (!launcher || !panel) return;
@@ -43,6 +46,38 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
 
   launcher?.addEventListener("click", () => setOpen(panel?.hidden ?? true));
   close?.addEventListener("click", () => setOpen(false));
+  preChat?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = new FormData(preChat);
+    const name = String(values.get("name") ?? "").trim();
+    const email = String(values.get("email") ?? "").trim();
+    if (!name || !email) return;
+
+    preChatError?.setAttribute("hidden", "");
+    try {
+      const session = await startSession(apiUrl, widgetKey, { email, name });
+      sessionStorage.setItem(`supportops:web-session:${widgetKey}`, session.accessToken);
+      preChat.hidden = true;
+      chat?.removeAttribute("hidden");
+      input?.focus();
+    } catch {
+      preChatError?.removeAttribute("hidden");
+    }
+  });
+}
+
+async function startSession(apiUrl: string, widgetKey: string, customer: { email: string; name: string }) {
+  const response = await fetch(
+    `${apiUrl.replace(/\/$/, "")}/widget/pre-chat?key=${encodeURIComponent(widgetKey)}`,
+    {
+      body: JSON.stringify({ ...customer, widgetKey }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) throw new Error("Unable to start a Web Session");
+  return (await response.json()) as { accessToken: string };
 }
 
 function renderWidget(config: WidgetConfig) {
@@ -59,14 +94,18 @@ function renderWidget(config: WidgetConfig) {
     .close { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 22px; line-height: 1; }
     .content { padding: 16px; }
     .message { width: fit-content; max-width: 90%; margin: 0; padding: 10px 12px; border-radius: 12px 12px 12px 3px; background: #f1f5f9; font-size: 14px; line-height: 1.45; }
-    .input { width: 100%; margin-top: 16px; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 9px; outline: none; color: inherit; background: white; font-size: 14px; }
+    .pre-chat { display: grid; gap: 12px; margin-top: 16px; font-size: 13px; font-weight: 600; }
+    .input { display: block; width: 100%; margin-top: 5px; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 9px; outline: none; color: inherit; background: white; font-size: 14px; font-weight: 400; }
     .input:focus { border-color: ${escapeCss(config.primaryColor)}; box-shadow: 0 0 0 3px color-mix(in srgb, ${escapeCss(config.primaryColor)} 22%, transparent); }
+    .start { padding: 11px 12px; border: 0; border-radius: 9px; background: ${escapeCss(config.primaryColor)}; color: white; cursor: pointer; font: inherit; font-weight: 650; }
+    .error { margin: 0; color: #b91c1c; font-size: 13px; font-weight: 400; }
+    .session-ready { margin: 16px 0 0; font-size: 14px; line-height: 1.45; }
     @media (max-width: 480px) { .root { right: 16px; bottom: 16px; } }
   </style>
   <div class="root">
     <section class="panel" data-panel hidden aria-label="${escapeHtml(config.botName)} support chat">
       <header class="header"><h2 class="title">${escapeHtml(config.botName)}</h2><button class="close" data-close aria-label="Close chat">×</button></header>
-      <div class="content"><p class="message">${escapeHtml(config.welcomeMessage)}</p><input class="input" data-input placeholder="Type your message…" aria-label="Message" /></div>
+      <div class="content"><p class="message">${escapeHtml(config.welcomeMessage)}</p><form class="pre-chat" data-pre-chat><label>Name<input class="input" name="name" autocomplete="name" required /></label><label>Email<input class="input" name="email" type="email" autocomplete="email" required /></label><p class="error" data-pre-chat-error hidden>We could not start your chat. Please try again.</p><button class="start" type="submit">Start chat</button></form><div data-chat hidden><p class="session-ready">You are connected. How can we help?</p><input class="input" data-input placeholder="Type your message…" aria-label="Message" /></div></div>
     </section>
     <button class="launcher" data-launcher aria-label="Open ${escapeHtml(config.botName)} support chat" aria-expanded="false"><svg viewBox="0 0 24 24" width="25" height="25" aria-hidden="true"><path fill="currentColor" d="M4 4.5A2.5 2.5 0 0 1 6.5 2h11A2.5 2.5 0 0 1 20 4.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4.4A2.5 2.5 0 0 1 4 12.5z"/></svg></button>
   </div>`;
