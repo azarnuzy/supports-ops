@@ -90,10 +90,7 @@ export async function listWorkspaceUsers(client: ApiClient) {
   return (await response.json()) as { nextCursor: string | null; users: WorkspaceUser[] };
 }
 
-export async function createWorkspaceHumanAgent(
-  client: ApiClient,
-  input: CreateHumanAgentInput,
-) {
+export async function createWorkspaceHumanAgent(client: ApiClient, input: CreateHumanAgentInput) {
   const response = await client.users.$post({ json: input });
 
   if (response.status === 401) {

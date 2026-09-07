@@ -10,10 +10,8 @@ import {
   listRecentUsers,
 } from "./services";
 
-export const usersRouter = new Hono<{ Variables: AuthVariables }>().get(
-  "/",
-  zValidator("query", usersQuerySchema),
-  async (c) => {
+export const usersRouter = new Hono<{ Variables: AuthVariables }>()
+  .get("/", zValidator("query", usersQuerySchema), async (c) => {
     const currentUser = requireAdmin(c);
 
     if (!currentUser) {
@@ -31,23 +29,23 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>().get(
 
       throw error;
     }
-  },
-).post("/", zValidator("json", createHumanAgentSchema), async (c) => {
-  const currentUser = requireAdmin(c);
+  })
+  .post("/", zValidator("json", createHumanAgentSchema), async (c) => {
+    const currentUser = requireAdmin(c);
 
-  if (!currentUser) {
-    return c.json({ error: "forbidden" }, 403);
-  }
-
-  try {
-    const result = await createHumanAgent(currentUser.workspaceId, c.req.valid("json"));
-
-    return c.json(result, 201);
-  } catch (error) {
-    if (error instanceof HumanAgentEmailAlreadyInUseError) {
-      return c.json({ error: "email_in_use", message: error.message }, 409);
+    if (!currentUser) {
+      return c.json({ error: "forbidden" }, 403);
     }
 
-    throw error;
-  }
-});
+    try {
+      const result = await createHumanAgent(currentUser.workspaceId, c.req.valid("json"));
+
+      return c.json(result, 201);
+    } catch (error) {
+      if (error instanceof HumanAgentEmailAlreadyInUseError) {
+        return c.json({ error: "email_in_use", message: error.message }, 409);
+      }
+
+      throw error;
+    }
+  });

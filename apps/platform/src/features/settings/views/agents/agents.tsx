@@ -98,10 +98,7 @@ const HumanAgentsView = () => {
                       : null}
                   </FieldError>
                 </Field>
-                <Button
-                  type="submit"
-                  disabled={createHumanAgent.isPending || password.length < 8}
-                >
+                <Button type="submit" disabled={createHumanAgent.isPending || password.length < 8}>
                   {createHumanAgent.isPending ? "Creating..." : "Create Human Agent"}
                 </Button>
               </form>

@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { withWorkspaceContext } from "./workspace-context";
 import { MissingWorkspaceContextError } from "./workspace-context";
-import {
-  executeWorkspaceQuery,
-  isWorkspaceScopedModel,
-} from "./workspace-isolation";
+import { executeWorkspaceQuery, isWorkspaceScopedModel } from "./workspace-isolation";
 
 describe("Workspace-isolated Prisma queries", () => {
   it.each(["ticket", "message", "knowledgeSource", "customerIdentity"])(
@@ -23,7 +20,8 @@ describe("Workspace-isolated Prisma queries", () => {
           args: { where: { workspaceId: "workspace-b" } },
           model,
           operation: "findMany",
-          query: ({ where }) => records.filter((record) => record.workspaceId === where?.workspaceId),
+          query: ({ where }) =>
+            records.filter((record) => record.workspaceId === where?.workspaceId),
         }),
       );
 
