@@ -1,5 +1,8 @@
-import { type Prisma, prisma } from "../../utils/prisma";
-import type { UsersResponse } from "./types";
+import { randomUUID } from "node:crypto";
+import { hashPassword } from "better-auth/crypto";
+import { type Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
+import type { CreateHumanAgentInput } from "./schema";
+import type { HumanAgentResponse, UsersResponse } from "./types";
 import { usersListDefaultLimit } from "./utils";
 
 export type ListRecentUsersInput = {
@@ -11,6 +14,67 @@ export class InvalidUsersCursorError extends Error {
   constructor() {
     super("Invalid users cursor.");
     this.name = "InvalidUsersCursorError";
+  }
+}
+
+export class HumanAgentEmailAlreadyInUseError extends Error {
+  constructor() {
+    super("An account with this email already exists.");
+    this.name = "HumanAgentEmailAlreadyInUseError";
+  }
+}
+
+export async function createHumanAgent(
+  workspaceId: string,
+  input: CreateHumanAgentInput,
+): Promise<HumanAgentResponse> {
+  const existingUser = await unscopedPrisma.user.findUnique({
+    where: { email: input.email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw new HumanAgentEmailAlreadyInUseError();
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const now = new Date();
+  const userId = randomUUID();
+
+  try {
+    const user = await unscopedPrisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: {
+          email: input.email,
+          id: userId,
+          name: input.name,
+          role: "HUMAN_AGENT",
+          workspaceId,
+        },
+      });
+
+      await tx.account.create({
+        data: {
+          accountId: userId,
+          createdAt: now,
+          id: randomUUID(),
+          password: passwordHash,
+          providerId: "credential",
+          updatedAt: now,
+          userId,
+        },
+      });
+
+      return createdUser;
+    });
+
+    return { user };
+  } catch (error) {
+    if (isEmailUniqueConstraintViolation(error)) {
+      throw new HumanAgentEmailAlreadyInUseError();
+    }
+
+    throw error;
   }
 }
 
@@ -60,4 +124,12 @@ export async function listRecentUsers({
       updatedAt: user.updatedAt,
     })),
   };
+}
+
+function isEmailUniqueConstraintViolation(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002" &&
+    (error.meta?.target as string[] | undefined)?.includes("email")
+  );
 }

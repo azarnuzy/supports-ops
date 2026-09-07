@@ -12,3 +12,4 @@ export type AuthUser = {
 export type LoginInput = { email: string; password: string };
 export type RegisterInput = { email: string; password: string; name: string };
 export type UpdateProfileInput = { image?: string | null; name: string };
+export type CreateHumanAgentInput = { email: string; name: string; password: string };
