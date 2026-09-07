@@ -1,11 +1,23 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { getCurrentUser, login, logout, register, updateProfile } from "./auth.services";
+import {
+  createHumanAgent,
+  getCurrentUser,
+  getWorkspaceUsers,
+  login,
+  logout,
+  register,
+  updateProfile,
+} from "./auth.services";
 export const authQueryKey = ["auth"] as const;
 export const meQueryOptions = queryOptions({
   queryKey: [...authQueryKey, "me"],
   queryFn: getCurrentUser,
   retry: false,
+});
+export const workspaceUsersQueryOptions = queryOptions({
+  queryKey: ["workspace", "users"],
+  queryFn: getWorkspaceUsers,
 });
 export function useLoginMutation() {
   const navigate = useNavigate();
@@ -48,5 +60,14 @@ export function useUpdateProfileMutation() {
       queryClient.setQueryData(meQueryOptions.queryKey, user);
       void queryClient.invalidateQueries({ queryKey: authQueryKey });
     },
+  });
+}
+
+export function useCreateHumanAgentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createHumanAgent,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace", "users"] }),
   });
 }

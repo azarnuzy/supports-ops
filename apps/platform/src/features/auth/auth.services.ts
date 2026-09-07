@@ -1,13 +1,21 @@
 import {
   createApiClient,
+  createWorkspaceHumanAgent,
   EmailAlreadyInUseApiError,
   fetchSessionUser,
+  listWorkspaceUsers,
   registerWorkspaceAdmin,
   UnauthorizedApiError,
   updateCurrentUserProfile,
 } from "@repo/api-client";
 import { createAuthClient } from "better-auth/react";
-import type { AuthUser, LoginInput, RegisterInput, UpdateProfileInput } from "./auth.types";
+import type {
+  AuthUser,
+  CreateHumanAgentInput,
+  LoginInput,
+  RegisterInput,
+  UpdateProfileInput,
+} from "./auth.types";
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const apiClient = createApiClient(apiBaseUrl);
 const authClient = createAuthClient({ baseURL: apiBaseUrl });
@@ -17,6 +25,17 @@ export async function getCurrentUser() {
 }
 export async function updateProfile(input: UpdateProfileInput) {
   return (await updateCurrentUserProfile(apiClient, input)) as AuthUser;
+}
+export async function getWorkspaceUsers() {
+  return listWorkspaceUsers(apiClient);
+}
+export async function createHumanAgent(input: CreateHumanAgentInput) {
+  try {
+    return await createWorkspaceHumanAgent(apiClient, input);
+  } catch (error) {
+    if (error instanceof EmailAlreadyInUseApiError) throw new Error(error.message);
+    throw error;
+  }
 }
 export async function login(input: LoginInput) {
   const { error } = await authClient.signIn.email(input);

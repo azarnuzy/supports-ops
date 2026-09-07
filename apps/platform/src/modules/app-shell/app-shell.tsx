@@ -22,9 +22,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   LayoutDashboardIcon,
+  LibraryBigIcon,
   LogOutIcon,
   MessageSquareIcon,
   MonitorIcon,
+  SettingsIcon,
+  TicketCheckIcon,
   UserRoundIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -55,11 +58,18 @@ export function PlatformAppShell({
     return null;
   }
 
-  const navItems = [
-    { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
-    { icon: MessageSquareIcon, label: "Inbox", to: "/chat" },
-    { icon: UserRoundIcon, label: "Edit profile", to: "/profile" },
-  ] as const;
+  const navItems =
+    user.data.role === "ADMIN"
+      ? [
+          { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
+          { icon: MessageSquareIcon, label: "All tickets", to: "/chat" },
+          { icon: LibraryBigIcon, label: "Knowledge", to: "/knowledge" },
+          { icon: SettingsIcon, label: "Settings", to: "/settings/agents" },
+        ]
+      : [
+          { icon: TicketCheckIcon, label: "Shared queue", to: "/chat" },
+          { icon: UserRoundIcon, label: "My tickets", to: "/tickets/mine" },
+        ];
 
   return (
     <SidebarProvider>

@@ -2,8 +2,13 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import type { AuthVariables } from "../auth/middleware";
 import { requireAdmin } from "../auth/middleware";
-import { usersQuerySchema } from "./schema";
-import { InvalidUsersCursorError, listRecentUsers } from "./services";
+import { createHumanAgentSchema, usersQuerySchema } from "./schema";
+import {
+  createHumanAgent,
+  HumanAgentEmailAlreadyInUseError,
+  InvalidUsersCursorError,
+  listRecentUsers,
+} from "./services";
 
 export const usersRouter = new Hono<{ Variables: AuthVariables }>().get(
   "/",
@@ -27,4 +32,22 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>().get(
       throw error;
     }
   },
-);
+).post("/", zValidator("json", createHumanAgentSchema), async (c) => {
+  const currentUser = requireAdmin(c);
+
+  if (!currentUser) {
+    return c.json({ error: "forbidden" }, 403);
+  }
+
+  try {
+    const result = await createHumanAgent(currentUser.workspaceId, c.req.valid("json"));
+
+    return c.json(result, 201);
+  } catch (error) {
+    if (error instanceof HumanAgentEmailAlreadyInUseError) {
+      return c.json({ error: "email_in_use", message: error.message }, 409);
+    }
+
+    throw error;
+  }
+});
