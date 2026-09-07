@@ -31,9 +31,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
         <div className="absolute bottom-10 grid w-full grid-cols-2 gap-6 px-10 text-sm text-primary-foreground">
           <div>
             <h2 className="font-medium">AI-first support</h2>
-            <p className="mt-1 opacity-80">
-              Grounded answers for every Customer.
-            </p>
+            <p className="mt-1 opacity-80">Grounded answers for every Customer.</p>
           </div>
           <div className="border-l border-primary-foreground/30 pl-6">
             <h2 className="font-medium">Human when needed</h2>
@@ -98,16 +96,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 onChange={(event) => setPassword(event.target.value)}
               />
             </div>
-            <Button
-              className="mt-2 w-full"
-              type="submit"
-              disabled={mutation.isPending}
-            >
-              {mutation.isPending
-                ? "Please wait..."
-                : isLogin
-                  ? "Login"
-                  : "Create account"}
+            <Button className="mt-2 w-full" type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "Please wait..." : isLogin ? "Login" : "Create account"}
             </Button>
           </form>
         </div>

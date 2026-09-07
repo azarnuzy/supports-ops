@@ -1,16 +1,6 @@
-import {
-  queryOptions,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  getCurrentUser,
-  login,
-  logout,
-  register,
-  updateProfile,
-} from "./auth.services";
+import { getCurrentUser, login, logout, register, updateProfile } from "./auth.services";
 export const authQueryKey = ["auth"] as const;
 export const meQueryOptions = queryOptions({
   queryKey: [...authQueryKey, "me"],

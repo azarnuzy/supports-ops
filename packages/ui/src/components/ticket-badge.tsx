@@ -8,9 +8,11 @@ type TicketPriority = "LOW" | "NORMAL" | "HIGH";
 
 const statusStyles: Record<TicketStatus, string> = {
   AI_HANDLING: "border-status-ai/30 bg-status-ai/10 text-[var(--status-ai-foreground)]",
-  ESCALATED: "border-status-escalated/30 bg-status-escalated/10 text-[var(--status-escalated-foreground)]",
+  ESCALATED:
+    "border-status-escalated/30 bg-status-escalated/10 text-[var(--status-escalated-foreground)]",
   HUMAN_HANDLING: "border-status-human/30 bg-status-human/10 text-[var(--status-human-foreground)]",
-  RESOLVED: "border-status-resolved/30 bg-status-resolved/10 text-[var(--status-resolved-foreground)]",
+  RESOLVED:
+    "border-status-resolved/30 bg-status-resolved/10 text-[var(--status-resolved-foreground)]",
 };
 
 const priorityStyles: Record<TicketPriority, string> = {
@@ -20,12 +22,23 @@ const priorityStyles: Record<TicketPriority, string> = {
 };
 
 function StatusBadge({ status, className }: { status: TicketStatus; className?: string }) {
-  const Icon = status === "AI_HANDLING" ? BotIcon : status === "HUMAN_HANDLING" ? UserRoundIcon : CircleIcon;
-  return <Badge variant="outline" className={cn(statusStyles[status], className)}><Icon />{status.replace("_", " ")}</Badge>;
+  const Icon =
+    status === "AI_HANDLING" ? BotIcon : status === "HUMAN_HANDLING" ? UserRoundIcon : CircleIcon;
+  return (
+    <Badge variant="outline" className={cn(statusStyles[status], className)}>
+      <Icon />
+      {status.replace("_", " ")}
+    </Badge>
+  );
 }
 
 function PriorityBadge({ priority, className }: { priority: TicketPriority; className?: string }) {
-  return <Badge variant="outline" className={cn(priorityStyles[priority], className)}><CircleIcon className="size-2" />{priority}</Badge>;
+  return (
+    <Badge variant="outline" className={cn(priorityStyles[priority], className)}>
+      <CircleIcon className="size-2" />
+      {priority}
+    </Badge>
+  );
 }
 
 export { PriorityBadge, StatusBadge, type TicketPriority, type TicketStatus };
