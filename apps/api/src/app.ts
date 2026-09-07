@@ -1,12 +1,9 @@
 import { apiConfig } from "./config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { auth } from "./modules/auth/auth";
-import {
-  type AuthVariables,
-  loadAuthSession,
-  loadWorkspaceContext,
-} from "./modules/auth/middleware";
+import { auth } from "./modules/auth/instance";
+import { loadAuthSession, loadWorkspaceContext } from "./modules/auth/middleware";
+import type { AuthVariables } from "./modules/auth/types";
 import { profileRouter } from "./modules/profile/router";
 import { registrationRouter } from "./modules/registration/router";
 import { usersRouter } from "./modules/users/router";

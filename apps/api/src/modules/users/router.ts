@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import type { AuthVariables } from "../auth/middleware";
-import { requireAdmin } from "../auth/middleware";
+import { requireAdmin } from "../auth/guards";
+import type { AuthVariables } from "../auth/types";
 import { createHumanAgentSchema, usersQuerySchema } from "./schema";
 import {
   createHumanAgent,

@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import type { AuthVariables } from "../auth/middleware";
+import type { AuthVariables } from "../auth/types";
 import { updateProfileSchema } from "./schema";
 import { updateProfile } from "./services";
 
