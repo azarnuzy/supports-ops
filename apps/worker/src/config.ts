@@ -10,6 +10,7 @@ const optionalStringSchema = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
   z.string().trim().optional(),
 );
+const emailFromSchema = z.string().trim().min(1).default("SupportOps <support@example.com>");
 const booleanSchema = z.preprocess((value) => {
   if (typeof value !== "string") {
     return value;
@@ -33,6 +34,9 @@ const workerEnvSchema = z.object({
   ENABLE_TELEMETRY: booleanSchema.default(false),
   LOG_LEVEL: logLevelSchema,
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:16379"),
+  EMAIL_FROM: emailFromSchema,
+  RESEND_API_KEY: optionalStringSchema,
+  SMTP_URL: optionalStringSchema,
   TELEMETRY_API_KEY: optionalStringSchema,
   TELEMETRY_API_KEY_HEADER: z.string().trim().min(1).default("authorization"),
   TELEMETRY_EXPORTER: telemetryExporterSchema,
@@ -48,6 +52,12 @@ export const env = parseWorkerEnv(process.env);
 
 export const redisConfig = {
   url: env.REDIS_URL,
+} as const;
+
+export const emailConfig = {
+  from: env.EMAIL_FROM,
+  resendApiKey: env.RESEND_API_KEY,
+  smtpUrl: env.SMTP_URL ?? (env.NODE_ENV === "production" ? undefined : "smtp://localhost:1025"),
 } as const;
 
 export const loggerConfig = {

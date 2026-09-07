@@ -19,6 +19,8 @@ x-api-service: &api-service
     BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
     BETTER_AUTH_URL: "https://api.support.azarnuzy.com"
     CLIENT_ORIGINS: "https://support.azarnuzy.com,https://widget.support.azarnuzy.com"
+    REDIS_URL: "redis://redis:6379"
+    SESSION_LINK_BASE_URL: "https://api.support.azarnuzy.com/widget/session"
 
 services:
   postgres:
@@ -85,6 +87,8 @@ services:
     environment:
       <<: *application-environment
       REDIS_URL: "redis://redis:6379"
+      EMAIL_FROM: "${EMAIL_FROM:?Set EMAIL_FROM in env.production}"
+      RESEND_API_KEY: "${RESEND_API_KEY:?Set RESEND_API_KEY in env.production}"
     depends_on:
       redis:
         condition: service_healthy

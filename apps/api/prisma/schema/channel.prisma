@@ -10,9 +10,43 @@ model Channel {
   workspace       Workspace        @relation(fields: [workspaceId], references: [id])
   aiAgent         AiAgent          @relation(fields: [aiAgentId], references: [id])
   webWidgetConfig WebWidgetConfig?
+  webSessions     WebSession[]
 
   @@unique([workspaceId, type])
   @@index([workspaceId])
+}
+
+model CustomerIdentity {
+  id                 String       @id
+  workspaceId        String
+  channelType        ChannelType
+  name               String
+  email              String
+  externalCustomerId String?
+  createdAt          DateTime     @default(now())
+  deletedAt          DateTime?
+  workspace          Workspace    @relation(fields: [workspaceId], references: [id])
+  webSessions        WebSession[]
+
+  @@index([workspaceId, channelType, email])
+}
+
+model WebSession {
+  id                 String           @id
+  workspaceId        String
+  channelId          String
+  customerIdentityId String
+  accessToken        String           @unique
+  status             WebSessionStatus @default(ACTIVE)
+  createdAt          DateTime         @default(now())
+  closedAt           DateTime?
+  workspace          Workspace        @relation(fields: [workspaceId], references: [id])
+  channel            Channel          @relation(fields: [channelId], references: [id])
+  customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
+
+  @@index([workspaceId])
+  @@index([channelId])
+  @@index([customerIdentityId])
 }
 
 model WebWidgetConfig {
