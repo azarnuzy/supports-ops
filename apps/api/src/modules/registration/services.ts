@@ -1,6 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { Prisma, unscopedPrisma } from "../../utils/prisma";
+import {
+  defaultBotName,
+  defaultPrimaryColor,
+  defaultWelcomeMessage,
+  generateWidgetKey,
+} from "../widget-config/utils";
 import type { RegisterInput } from "./schema";
 
 export class EmailAlreadyInUseError extends Error {
@@ -54,6 +60,39 @@ export async function registerAdminWorkspace(input: RegisterInput) {
           password: passwordHash,
           createdAt: now,
           updatedAt: now,
+        },
+      });
+
+      const aiAgent = await tx.aiAgent.create({
+        data: {
+          id: randomUUID(),
+          workspaceId: workspace.id,
+          name: "AI Agent",
+        },
+      });
+
+      const channelId = randomUUID();
+
+      await tx.channel.create({
+        data: {
+          id: channelId,
+          workspaceId: workspace.id,
+          aiAgentId: aiAgent.id,
+          type: "WEB",
+          name: "Web Widget",
+        },
+      });
+
+      await tx.webWidgetConfig.create({
+        data: {
+          id: randomUUID(),
+          workspaceId: workspace.id,
+          channelId,
+          widgetKey: generateWidgetKey(),
+          botName: defaultBotName,
+          welcomeMessage: defaultWelcomeMessage,
+          primaryColor: defaultPrimaryColor,
+          allowedDomains: [],
         },
       });
 
