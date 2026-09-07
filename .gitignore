@@ -8,4 +8,7 @@ build
 .env.*
 !.env.example
 coverage
+.candidate.env
+.release.env
+.deploy.lock
 apps/platform/src/routeTree.gen.ts

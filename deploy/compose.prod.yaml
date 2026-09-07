@@ -1,0 +1,129 @@
+name: supports-ops
+
+x-application-environment: &application-environment
+  NODE_ENV: production
+  LOG_LEVEL: "${LOG_LEVEL:-info}"
+  ENABLE_TELEMETRY: "${ENABLE_TELEMETRY:-false}"
+  TELEMETRY_EXPORTER: "${TELEMETRY_EXPORTER:-console}"
+  TELEMETRY_EXPORTER_OTLP_ENDPOINT: "${TELEMETRY_EXPORTER_OTLP_ENDPOINT:-}"
+  TELEMETRY_API_KEY: "${TELEMETRY_API_KEY:-}"
+  TELEMETRY_API_KEY_HEADER: "${TELEMETRY_API_KEY_HEADER:-authorization}"
+  TELEMETRY_SERVICE_NAMESPACE: "${TELEMETRY_SERVICE_NAMESPACE:-supportops}"
+
+x-api-service: &api-service
+  image: "ghcr.io/azarnuzy/supports-ops-api:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
+  environment:
+    <<: *application-environment
+    API_PORT: "8000"
+    DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=public"
+    BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
+    BETTER_AUTH_URL: "https://api.support.azarnuzy.com"
+    CLIENT_ORIGINS: "https://support.azarnuzy.com,https://widget.support.azarnuzy.com"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?Set POSTGRES_USER in env.production}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}"
+      POSTGRES_DB: "${POSTGRES_DB:?Set POSTGRES_DB in env.production}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks: [internal]
+
+  migrate:
+    <<: *api-service
+    restart: "no"
+    command: ["pnpm", "--filter", "@repo/api", "exec", "prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal]
+    profiles: [tools]
+
+  api:
+    <<: *api-service
+    restart: unless-stopped
+    expose: ["8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      proxy:
+        aliases: [supports-ops-api]
+      internal:
+
+  worker:
+    image: "ghcr.io/azarnuzy/supports-ops-worker:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
+    restart: unless-stopped
+    environment:
+      <<: *application-environment
+      REDIS_URL: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [internal]
+
+  platform:
+    image: "ghcr.io/azarnuzy/supports-ops-platform:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
+    restart: unless-stopped
+    expose: ["80"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    networks:
+      proxy:
+        aliases: [supports-ops-platform]
+
+  widget:
+    image: "ghcr.io/azarnuzy/supports-ops-widget:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
+    restart: unless-stopped
+    expose: ["80"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    networks:
+      proxy:
+        aliases: [supports-ops-widget]
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  proxy:
+    external: true
+  internal:
+    internal: true

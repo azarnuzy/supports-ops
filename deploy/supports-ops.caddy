@@ -1,0 +1,11 @@
+support.azarnuzy.com {
+	reverse_proxy supports-ops-platform:80
+}
+
+api.support.azarnuzy.com {
+	reverse_proxy supports-ops-api:8000
+}
+
+widget.support.azarnuzy.com {
+	reverse_proxy supports-ops-widget:80
+}
