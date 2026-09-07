@@ -133,8 +133,10 @@ Uploads go **through the API**, not by presigned upload straight to object stora
 
 ## Knowledge
 
-**KnowledgeSource** — `id`, `workspaceId`, `parentId`, `sourceType`, `title`, `sourceUrl`, `visibility`, `status`, `failureReason`, `createdAt`, `updatedAt`, `publishedAt`, `deletedAt`, `deletedBy`.
+**KnowledgeSource** — `id`, `workspaceId`, `parentId`, `sourceType`, `title`, `content`, `sourceUrl`, `visibility`, `status`, `failureReason`, `createdAt`, `updatedAt`, `publishedAt`, `deletedAt`, `deletedBy`.
 `parentId` self-references: a crawl produces one Knowledge Source per page under a parent, so pages can be published, hidden, or deleted individually. Only `PUBLISHED` sources are retrievable. Visibility is set per source; there is no chunk-level visibility.
+
+**`content` was added during ticket 13** (not in the original list above): the raw text a Manual FAQ Knowledge Source is chunked from. Without it, editing a draft or re-publishing an already-published source would have nothing to re-chunk from — chunks alone are lossy (a `maxChars` change, say, can't be replayed against them). PDF and URL sources (ticket 15) are expected to leave it null and re-derive text from `sourceUrl`/object storage on each (re-)publish instead.
 
 **Chunk** — the retrievable unit, covering both Knowledge Sources and Ticket Knowledge.
 

@@ -41,6 +41,9 @@ importers:
       '@prisma/client':
         specifier: 7.9.1
         version: 7.9.1(prisma@7.9.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2)
+      '@repo/knowledge':
+        specifier: workspace:*
+        version: link:../../packages/knowledge
       '@repo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -145,6 +148,15 @@ importers:
 
   apps/worker:
     dependencies:
+      '@prisma/adapter-pg':
+        specifier: ^7.9.1
+        version: 7.9.1
+      '@prisma/client':
+        specifier: 7.9.1
+        version: 7.9.1(prisma@7.9.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2)
+      '@repo/knowledge':
+        specifier: workspace:*
+        version: link:../../packages/knowledge
       '@repo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -188,10 +200,20 @@ importers:
         version: 7.0.2
 
   packages/knowledge:
+    dependencies:
+      '@anvia/core':
+        specifier: 1.1.2
+        version: 1.1.2(zod@4.4.3)
+      '@anvia/openai':
+        specifier: 1.1.2
+        version: 1.1.2(@anvia/core@1.1.2(zod@4.4.3))(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(zod@4.4.3)
     devDependencies:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/logger:
     dependencies:
@@ -344,6 +366,16 @@ importers:
         version: 7.0.2
 
 packages:
+
+  '@anvia/core@1.1.2':
+    resolution: {integrity: sha512-qVHqCMBAlzvy8KITxYnaD0/MfKdl1bjvGBK/fP9n8tQV/lG3nRHoLvlHLXTSPpVA/csaAz/aWpciAgHxwaS4jg==}
+    peerDependencies:
+      zod: ^4.4.0
+
+  '@anvia/openai@1.1.2':
+    resolution: {integrity: sha512-c72BO1KKN2mI8m9tuVApLaR81oETkyZWzkXylWMAG2uScTtNAubTVCpUyoIvxxCu8oNQJYDQyOBQwDLteQGWdw==}
+    peerDependencies:
+      '@anvia/core': 1.1.2
 
   '@aws-sdk/checksums@3.1000.26':
     resolution: {integrity: sha512-CGznePoL+1oWCSzqmkvlYMpWQEZohPR3LntjKXXfVH+oh6Kd8d+yHLkjpiAGwPIHAxFe4OAq3aKfRnv/wqWIyA==}
@@ -3818,6 +3850,30 @@ packages:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
     engines: {node: '>=14.0.0'}
 
+  openai@7.10.0:
+    resolution: {integrity: sha512-sn9t2Kls7O52PwuF9BUTYNu4Gk/r0lXJyrgaNht4TNRlZFb3dJIGO0RciSgjARGCBRtWjySubAQFJttlzUvGQQ==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   package-json-from-dist@1.0.1:
     resolution: {integrity: sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==}
 
@@ -4507,6 +4563,23 @@ packages:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
+
+  '@anvia/core@1.1.2(zod@4.4.3)':
+    dependencies:
+      yaml: 2.9.0
+      zod: 4.4.3
+
+  '@anvia/openai@1.1.2(@anvia/core@1.1.2(zod@4.4.3))(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(zod@4.4.3)':
+    dependencies:
+      '@anvia/core': 1.1.2(zod@4.4.3)
+      openai: 7.10.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(zod@4.4.3)
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - undici
+      - ws
+      - zod
 
   '@aws-sdk/checksums@3.1000.26':
     dependencies:
@@ -7993,6 +8066,12 @@ snapshots:
   ohash@2.0.11: {}
 
   on-exit-leak-free@2.1.2: {}
+
+  openai@7.10.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(zod@4.4.3):
+    optionalDependencies:
+      '@aws-sdk/credential-provider-node': 3.972.78
+      '@smithy/signature-v4': 5.6.12
+      zod: 4.4.3
 
   package-json-from-dist@1.0.1: {}
 

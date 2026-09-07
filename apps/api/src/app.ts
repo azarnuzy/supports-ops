@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { auth } from "./modules/auth/instance";
 import { loadAuthSession, loadWorkspaceContext } from "./modules/auth/middleware";
 import type { AuthVariables } from "./modules/auth/types";
+import { knowledgeRouter } from "./modules/knowledge/router";
 import { profileRouter } from "./modules/profile/router";
 import { registrationRouter } from "./modules/registration/router";
 import { usersRouter } from "./modules/users/router";
@@ -39,6 +40,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .on(["POST", "GET"], "/api/auth/*", (c) => {
     return auth.handler(c.req.raw);
   })
+  .route("/knowledge", knowledgeRouter)
   .route("/profile", profileRouter)
   .route("/register", registrationRouter)
   .route("/users", usersRouter)

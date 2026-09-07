@@ -1,14 +1,14 @@
 model Conversation {
-  id          String   @id
-  scopeKey    String   @unique
+  id          String    @id
+  scopeKey    String    @unique
   sessionId   String
   userId      String
   metadata    Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   workspaceId String
-  ticketId    String   @unique
-  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  ticketId    String    @unique
+  ticket      Ticket    @relation(fields: [ticketId], references: [id])
   messages    Message[]
 }
 

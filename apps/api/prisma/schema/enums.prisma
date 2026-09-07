@@ -56,3 +56,29 @@ enum MessageDeliveryStatus {
   SENT
   FAILED
 }
+
+enum KnowledgeSourceType {
+  MANUAL_FAQ
+  PDF
+  URL
+  HELP_CENTER
+  INTERNAL_SOP
+}
+
+enum KnowledgeVisibility {
+  CUSTOMER_SAFE
+  INTERNAL_ONLY
+}
+
+enum KnowledgeStatus {
+  DRAFT
+  PROCESSING
+  READY
+  PUBLISHED
+  FAILED
+}
+
+enum ChunkKind {
+  KNOWLEDGE
+  TICKET
+}
