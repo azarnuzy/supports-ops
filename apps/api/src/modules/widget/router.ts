@@ -2,10 +2,14 @@ import { Hono, type Context, type Next } from "hono";
 import { cors } from "hono/cors";
 import type { AuthVariables } from "../auth/types";
 import { zValidator } from "@hono/zod-validator";
-import { preChatSchema } from "./schema";
+import { streamSSE } from "hono/streaming";
+import { customerMessageSchema, preChatSchema } from "./schema";
+import { publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
 import {
   createWebSession,
   getApprovedWidget,
+  createCustomerMessage,
+  getMessagesAfter,
   getWebSession,
   toPublicWidgetConfig,
   UnapprovedWidgetOriginError,
@@ -62,12 +66,45 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       origin: (_, c) => c.get("origin") ?? null,
     }),
   )
+  .use(
+    "/messages",
+    cors({ allowHeaders: ["Content-Type"], allowMethods: ["POST", "OPTIONS"], credentials: false, origin: "*" }),
+  )
+  .use("/events", cors({ allowMethods: ["GET", "OPTIONS"], credentials: false, origin: "*" }))
   .get("/config", (c) => c.json(c.get("widgetConfig"), 200))
   .post("/pre-chat", zValidator("json", preChatSchema), async (c) => {
     const origin = c.get("origin");
     if (!origin) return c.json({ error: "forbidden" }, 403);
     const session = await createWebSession(c.req.valid("json"), origin);
     return c.json(session, 201);
+  })
+  .post("/messages", zValidator("json", customerMessageSchema), async (c) => {
+    const accessToken = c.req.query("token");
+    if (!accessToken) return c.json({ error: "unauthorized" }, 401);
+    const result = await createCustomerMessage(accessToken, c.req.valid("json"));
+    if (!result) return c.json({ error: "unauthorized" }, 401);
+    if (result.created) {
+      void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+    }
+    return c.json(result.message, result.created ? 201 : 200);
+  })
+  .get("/events", async (c) => {
+    const accessToken = c.req.query("token");
+    if (!accessToken) return c.json({ error: "unauthorized" }, 401);
+    const position = Number(c.req.header("Last-Event-ID") ?? "0");
+    const replay = await getMessagesAfter(accessToken, Number.isSafeInteger(position) && position >= 0 ? position : 0);
+    if (!replay) return c.json({ error: "unauthorized" }, 401);
+    return streamSSE(c, async (stream) => {
+      for (const message of replay.messages) {
+        await stream.writeSSE({ data: JSON.stringify(message), event: "message.created", id: String(message.position) });
+      }
+      const unsubscribe = await subscribeToWidgetEvents(replay.ticketId, async (event) => {
+        const data = event.data as { position?: number };
+        await stream.writeSSE({ data: JSON.stringify(event.data), event: event.type, id: data.position ? String(data.position) : undefined });
+      });
+      stream.onAbort(unsubscribe);
+      await new Promise<void>(() => undefined);
+    });
   })
   .get("/session", async (c) => {
     const accessToken = c.req.query("token");

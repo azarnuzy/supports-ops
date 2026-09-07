@@ -22,3 +22,37 @@ enum WebSessionStatus {
   ACTIVE
   CLOSED
 }
+
+enum TicketStatus {
+  AI_HANDLING
+  ESCALATED
+  HUMAN_HANDLING
+  RESOLVED
+}
+
+enum TicketCategory {
+  ACCOUNT
+  BILLING
+  SUBSCRIPTION
+  TECHNICAL
+  GENERAL
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum MessageSenderType {
+  CUSTOMER
+  AI_AGENT
+  HUMAN_AGENT
+  SYSTEM
+}
+
+enum MessageDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}

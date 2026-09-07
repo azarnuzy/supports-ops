@@ -11,6 +11,7 @@ model Workspace {
   channels       Channel[]
   customerIdentities CustomerIdentity[]
   webSessions    WebSession[]
+  tickets        Ticket[]
 }
 
 model AiAgent {

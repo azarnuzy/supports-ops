@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
-import type { PreChatInput } from "./schema";
+import type { CustomerMessageInput, PreChatInput } from "./schema";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -83,6 +83,70 @@ export async function getWebSession(accessToken: string) {
       channel: { select: { webWidgetConfig: { select: { botName: true, primaryColor: true, welcomeMessage: true } } } },
     },
   });
+}
+
+export async function createCustomerMessage(accessToken: string, input: CustomerMessageInput) {
+  const result = await unscopedPrisma.$transaction(async (tx) => {
+    const session = await tx.webSession.findUnique({
+      where: { accessToken },
+      include: { ticket: { include: { conversation: true } } },
+    });
+    if (!session || session.status !== "ACTIVE") return null;
+
+    const existing = await tx.message.findUnique({
+      where: { workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId: session.workspaceId } },
+    });
+    if (existing) return { created: false, message: existing };
+
+    let ticket = session.ticket;
+    let conversation = ticket?.conversation;
+    if (!ticket) {
+      const ticketId = randomUUID();
+      ticket = await tx.ticket.create({
+        data: {
+          channelId: session.channelId,
+          customerIdentityId: session.customerIdentityId,
+          id: ticketId,
+          messageSeq: 1,
+          title: input.content.slice(0, 120),
+          webSessionId: session.id,
+          workspaceId: session.workspaceId,
+        },
+      });
+      conversation = await tx.conversation.create({
+        data: {
+          id: randomUUID(), metadata: {}, scopeKey: `ticket:${ticketId}`, sessionId: ticketId,
+          ticketId, userId: session.customerIdentityId, workspaceId: session.workspaceId,
+        },
+      });
+    } else {
+      ticket = await tx.ticket.update({
+        where: { id: ticket.id }, data: { messageSeq: { increment: 1 } },
+      });
+    }
+
+    const message = await tx.message.create({
+      data: {
+        content: input.content, externalMessageId: input.idempotencyKey, id: randomUUID(),
+        memorySessionId: conversation!.id, message: { content: input.content }, position: ticket.messageSeq,
+        role: "user", runId: randomUUID(), senderType: "CUSTOMER", ticketId: ticket.id,
+        turn: ticket.messageSeq, workspaceId: session.workspaceId,
+      },
+    });
+    return { created: true, message };
+  });
+  return result;
+}
+
+export async function getMessagesAfter(accessToken: string, afterPosition: number) {
+  const session = await unscopedPrisma.webSession.findUnique({
+    where: { accessToken }, select: { ticket: { select: { id: true } } },
+  });
+  if (!session?.ticket) return null;
+  const messages = await unscopedPrisma.message.findMany({
+    where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } }, orderBy: { position: "asc" },
+  });
+  return { messages, ticketId: session.ticket.id };
 }
 
 export function toPublicWidgetConfig(config: PublicWidgetConfig): PublicWidgetConfig {
