@@ -31,8 +31,9 @@ import {
   UserRoundIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { meQueryOptions, useLogoutMutation } from "../../features/auth";
-import { HeaderControls } from "./header-controls";
+import { meQueryOptions, useLogoutMutation } from "../auth";
+import { getInitials } from "../../lib/utils";
+import { HeaderControls } from "./components/header-controls";
 
 export function PlatformAppShell({
   children,
@@ -172,13 +173,4 @@ export function PlatformAppShell({
       </SidebarInset>
     </SidebarProvider>
   );
-}
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 }

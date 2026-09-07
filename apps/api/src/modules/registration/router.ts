@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { auth } from "../auth/auth";
-import type { AuthVariables } from "../auth/middleware";
+import { auth } from "../auth/instance";
+import type { AuthVariables } from "../auth/types";
 import { EmailAlreadyInUseError, registerAdminWorkspace } from "./services";
 import { registerSchema } from "./schema";
 

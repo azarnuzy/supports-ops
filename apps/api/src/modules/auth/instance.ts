@@ -33,6 +33,3 @@ export const auth = betterAuth({
   secret: betterAuthConfig.secret,
   trustedOrigins: betterAuthConfig.trustedOrigins,
 });
-
-export type AuthSession = typeof auth.$Infer.Session.session;
-export type AuthUser = typeof auth.$Infer.Session.user;

@@ -1,16 +1,7 @@
 import type { Context, Next } from "hono";
-import { auth, type AuthSession, type AuthUser } from "./auth";
+import { auth } from "./instance";
+import type { AuthVariables } from "./types";
 import { withWorkspaceContext } from "../../utils/workspace-context";
-
-export type ResolvedWebSession = {
-  workspaceId: string;
-};
-
-export type AuthVariables = {
-  session: AuthSession | null;
-  user: AuthUser | null;
-  webSession: ResolvedWebSession | null;
-};
 
 export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, next: Next) {
   const session = await auth.api.getSession({
@@ -40,14 +31,4 @@ export async function loadWorkspaceContext(
   }
 
   await withWorkspaceContext(workspaceId, next);
-}
-
-export function requireAdmin(c: Context<{ Variables: AuthVariables }>) {
-  const user = c.get("user");
-
-  if (user?.role !== "ADMIN") {
-    return null;
-  }
-
-  return user;
 }

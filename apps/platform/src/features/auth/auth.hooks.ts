@@ -1,5 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { queryKeys } from "../../lib/query-keys";
 import {
   createHumanAgent,
   getCurrentUser,
@@ -9,14 +10,13 @@ import {
   register,
   updateProfile,
 } from "./auth.services";
-export const authQueryKey = ["auth"] as const;
 export const meQueryOptions = queryOptions({
-  queryKey: [...authQueryKey, "me"],
+  queryKey: queryKeys.auth.me,
   queryFn: getCurrentUser,
   retry: false,
 });
 export const workspaceUsersQueryOptions = queryOptions({
-  queryKey: ["workspace", "users"],
+  queryKey: queryKeys.workspace.users,
   queryFn: getWorkspaceUsers,
 });
 export function useLoginMutation() {
@@ -25,7 +25,7 @@ export function useLoginMutation() {
   return useMutation({
     mutationFn: login,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: authQueryKey });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.all });
       await navigate({ to: "/" });
     },
   });
@@ -36,7 +36,7 @@ export function useRegisterMutation() {
   return useMutation({
     mutationFn: register,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: authQueryKey });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.all });
       await navigate({ to: "/" });
     },
   });
@@ -47,7 +47,7 @@ export function useLogoutMutation() {
   return useMutation({
     mutationFn: logout,
     onSuccess: async () => {
-      queryClient.removeQueries({ queryKey: authQueryKey });
+      queryClient.removeQueries({ queryKey: queryKeys.auth.all });
       await navigate({ to: "/login" });
     },
   });
@@ -58,7 +58,7 @@ export function useUpdateProfileMutation() {
     mutationFn: updateProfile,
     onSuccess: (user) => {
       queryClient.setQueryData(meQueryOptions.queryKey, user);
-      void queryClient.invalidateQueries({ queryKey: authQueryKey });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.all });
     },
   });
 }
@@ -68,6 +68,6 @@ export function useCreateHumanAgentMutation() {
 
   return useMutation({
     mutationFn: createHumanAgent,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace", "users"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workspace.users }),
   });
 }

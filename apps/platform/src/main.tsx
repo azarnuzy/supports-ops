@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@repo/ui/components/sonner";
 import { ThemeProvider } from "@repo/ui/components/theme-selector";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
@@ -6,6 +6,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@repo/ui/styles.css";
 import "./styles.css";
+import { queryClient } from "./lib/query-client";
 import { routeTree } from "./routeTree.gen";
 
 const rootElement = document.getElementById("root");
@@ -13,8 +14,6 @@ const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element not found");
 }
-
-const queryClient = new QueryClient();
 
 const router = createRouter({
   routeTree,
