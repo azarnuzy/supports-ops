@@ -19,6 +19,9 @@ RUN DATABASE_URL="postgresql://postgres:postgres@postgres:5432/supportops?schema
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
 
+ARG VITE_WIDGET_URL
+ENV VITE_WIDGET_URL=${VITE_WIDGET_URL}
+
 RUN pnpm --filter @repo/platform build \
   && pnpm --filter @repo/widget build
 

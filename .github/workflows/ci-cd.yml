@@ -99,6 +99,7 @@ jobs:
           push: true
           build-args: |
             VITE_API_URL=https://api.support.azarnuzy.com
+            VITE_WIDGET_URL=https://widget.support.azarnuzy.com
           tags: |
             ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:${{ github.sha }}
           labels: |

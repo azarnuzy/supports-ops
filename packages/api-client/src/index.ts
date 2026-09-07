@@ -113,6 +113,60 @@ export async function createWorkspaceHumanAgent(client: ApiClient, input: Create
   return (await response.json()) as { user: WorkspaceUser };
 }
 
+export type WebWidgetConfig = {
+  id: string;
+  widgetKey: string;
+  botName: string;
+  welcomeMessage: string;
+  primaryColor: string;
+  allowedDomains: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UpdateWebWidgetConfigInput = {
+  botName: string;
+  welcomeMessage: string;
+  primaryColor: string;
+  allowedDomains: string[];
+};
+
+export async function fetchWebWidgetConfig(client: ApiClient) {
+  const response = await client["widget-config"].$get();
+
+  if (response.status === 401) {
+    throw new UnauthorizedApiError();
+  }
+
+  if (response.status === 403) {
+    throw new Error("You do not have permission to view the Web Widget configuration.");
+  }
+
+  if (!response.ok) {
+    throw new Error("Failed to load the Web Widget configuration.");
+  }
+
+  return (await response.json()) as { webWidgetConfig: WebWidgetConfig };
+}
+
+export async function updateWebWidgetConfig(client: ApiClient, input: UpdateWebWidgetConfigInput) {
+  const response = await client["widget-config"].$patch({ json: input });
+
+  if (response.status === 401) {
+    throw new UnauthorizedApiError();
+  }
+
+  if (response.status === 403) {
+    throw new Error("You do not have permission to update the Web Widget configuration.");
+  }
+
+  if (!response.ok) {
+    throw new Error("Failed to save the Web Widget configuration.");
+  }
+
+  return (await response.json()) as { webWidgetConfig: WebWidgetConfig };
+}
+
 export type RegisterWorkspaceAdminInput = {
   email: string;
   name: string;
