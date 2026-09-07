@@ -1,22 +1,24 @@
 import { Prisma } from "@prisma/client";
 import { requireWorkspaceId } from "./workspace-context";
 
+// Prisma's query extension passes the schema's PascalCase model name here
+// (e.g. "WebWidgetConfig"), not the camelCase client delegate ("webWidgetConfig").
 const workspaceScopedModels = new Set([
-  "user",
-  "aiAgent",
-  "aiSettings",
-  "channel",
-  "webWidgetConfig",
-  "customerIdentity",
-  "webSession",
-  "ticket",
-  "aiActivity",
-  "conversation",
-  "message",
-  "conversationError",
-  "attachment",
-  "knowledgeSource",
-  "chunk",
+  "User",
+  "AiAgent",
+  "AiSettings",
+  "Channel",
+  "WebWidgetConfig",
+  "CustomerIdentity",
+  "WebSession",
+  "Ticket",
+  "AiActivity",
+  "Conversation",
+  "Message",
+  "ConversationError",
+  "Attachment",
+  "KnowledgeSource",
+  "Chunk",
 ]);
 
 type QueryArguments = {

@@ -4,14 +4,21 @@ import { MissingWorkspaceContextError } from "./workspace-context";
 import { executeWorkspaceQuery, isWorkspaceScopedModel } from "./workspace-isolation";
 
 describe("Workspace-isolated Prisma queries", () => {
-  it.each(["ticket", "message", "knowledgeSource", "customerIdentity"])(
+  it.each(["Ticket", "Message", "KnowledgeSource", "CustomerIdentity"])(
     "treats %s records as Workspace-scoped",
     (model) => {
       expect(isWorkspaceScopedModel(model)).toBe(true);
     },
   );
 
-  it.each(["ticket", "message", "knowledgeSource", "customerIdentity"])(
+  it("does not match the camelCase client delegate name Prisma never passes", () => {
+    // Prisma's query extension passes the schema's PascalCase model name
+    // ("Ticket"), never the camelCase client delegate ("ticket"). A Set keyed
+    // by the wrong casing silently scopes nothing.
+    expect(isWorkspaceScopedModel("ticket")).toBe(false);
+  });
+
+  it.each(["Ticket", "Message", "KnowledgeSource", "CustomerIdentity"])(
     "returns none of Workspace B's %s records to a Workspace A request",
     (model) => {
       const records = [{ id: "workspace-b-record", workspaceId: "workspace-b" }];
@@ -33,7 +40,7 @@ describe("Workspace-isolated Prisma queries", () => {
     const query = withWorkspaceContext("workspace-a", () =>
       executeWorkspaceQuery({
         args: { data: { title: "Need help", workspaceId: "workspace-b" } },
-        model: "ticket",
+        model: "Ticket",
         operation: "create",
         query: ({ data }) => data,
       }),
@@ -46,7 +53,7 @@ describe("Workspace-isolated Prisma queries", () => {
     const query = vi.fn();
 
     expect(() =>
-      executeWorkspaceQuery({ args: {}, model: "ticket", operation: "findMany", query }),
+      executeWorkspaceQuery({ args: {}, model: "Ticket", operation: "findMany", query }),
     ).toThrow(MissingWorkspaceContextError);
     expect(query).not.toHaveBeenCalled();
   });
