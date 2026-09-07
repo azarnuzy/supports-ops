@@ -19,7 +19,13 @@ import { meQueryOptions, UnauthorizedError, useUpdateProfileMutation } from "../
 import { pageMetadata } from "../lib/seo";
 
 export const Route = createFileRoute("/profile")({
-  head: () => pageMetadata({ title: "Profile settings", description: "Manage your SupportOps profile settings.", path: "/profile", noIndex: true }),
+  head: () =>
+    pageMetadata({
+      title: "Profile settings",
+      description: "Manage your SupportOps profile settings.",
+      path: "/profile",
+      noIndex: true,
+    }),
   beforeLoad: async ({ context }) => {
     try {
       await context.queryClient.ensureQueryData(meQueryOptions);
@@ -117,7 +123,9 @@ function ProfilePage() {
                     aria-invalid={Boolean(validationError)}
                     onChange={(event) => setName(event.target.value)}
                   />
-                  <FieldDescription>Use the name people should recognize in the product.</FieldDescription>
+                  <FieldDescription>
+                    Use the name people should recognize in the product.
+                  </FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="profile-image">Avatar URL</FieldLabel>
@@ -138,9 +146,7 @@ function ProfilePage() {
                   type="submit"
                   disabled={!isDirty || Boolean(validationError) || updateProfileMutation.isPending}
                 >
-                  {updateProfileMutation.isPending
-                    ? "Saving..."
-                    : "Save profile"}
+                  {updateProfileMutation.isPending ? "Saving..." : "Save profile"}
                 </Button>
                 <Button type="button" variant="outline" disabled={!isDirty} onClick={handleReset}>
                   Cancel

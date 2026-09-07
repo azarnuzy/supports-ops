@@ -178,6 +178,18 @@
   --border: oklch(0 0 0);
 }
 
-.dark:root[data-theme-preset="tangerine"] { --primary: oklch(0.64 0.17 36.44); --background: oklch(0.26 0.03 262.67); --sidebar: oklch(0.31 0.03 267.74); }
-.dark:root[data-theme-preset="soft-pop"] { --primary: oklch(0.6801 0.1583 276.9349); --background: oklch(0 0 0); --border: oklch(0.4459 0 0); }
-.dark:root[data-theme-preset="brutalist"] { --primary: oklch(0.7044 0.1872 23.1858); --background: oklch(0 0 0); --border: oklch(1 0 0); }
+.dark:root[data-theme-preset="tangerine"] {
+  --primary: oklch(0.64 0.17 36.44);
+  --background: oklch(0.26 0.03 262.67);
+  --sidebar: oklch(0.31 0.03 267.74);
+}
+.dark:root[data-theme-preset="soft-pop"] {
+  --primary: oklch(0.6801 0.1583 276.9349);
+  --background: oklch(0 0 0);
+  --border: oklch(0.4459 0 0);
+}
+.dark:root[data-theme-preset="brutalist"] {
+  --primary: oklch(0.7044 0.1872 23.1858);
+  --background: oklch(0 0 0);
+  --border: oklch(1 0 0);
+}

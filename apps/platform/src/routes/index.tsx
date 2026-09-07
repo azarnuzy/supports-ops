@@ -17,7 +17,13 @@ import { meQueryOptions, UnauthorizedError } from "../features/auth";
 import { pageMetadata } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
-  head: () => pageMetadata({ title: "Workspace dashboard", description: "Review your SupportOps Workspace dashboard.", path: "/", noIndex: true }),
+  head: () =>
+    pageMetadata({
+      title: "Workspace dashboard",
+      description: "Review your SupportOps Workspace dashboard.",
+      path: "/",
+      noIndex: true,
+    }),
   beforeLoad: async ({ context }) => {
     try {
       await context.queryClient.ensureQueryData(meQueryOptions);
@@ -62,9 +68,7 @@ function DashboardPage() {
               <CardDescription>This is the profile other product surfaces can use.</CardDescription>
               <CardAction>
                 <Badge variant={user.data.emailVerified ? "default" : "secondary"}>
-                  {user.data.emailVerified
-                    ? "Email verified"
-                    : "Email unverified"}
+                  {user.data.emailVerified ? "Email verified" : "Email unverified"}
                 </Badge>
               </CardAction>
             </CardHeader>
@@ -97,10 +101,7 @@ function DashboardPage() {
             </CardHeader>
             <CardContent className="grid gap-4 text-sm">
               <MetadataRow label="Joined" value={formatDate(user.data.createdAt)} />
-              <MetadataRow
-                label="Last updated"
-                value={formatDate(user.data.updatedAt)}
-              />
+              <MetadataRow label="Last updated" value={formatDate(user.data.updatedAt)} />
               <MetadataRow label="User ID" value={user.data.id} />
             </CardContent>
           </Card>

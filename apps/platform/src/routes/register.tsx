@@ -3,6 +3,12 @@ import { RegisterView } from "../features/auth";
 import { pageMetadata } from "../lib/seo";
 
 export const Route = createFileRoute("/register")({
-  head: () => pageMetadata({ title: "Create a Workspace", description: "Create your SupportOps Workspace account.", path: "/register", noIndex: true }),
+  head: () =>
+    pageMetadata({
+      title: "Create a Workspace",
+      description: "Create your SupportOps Workspace account.",
+      path: "/register",
+      noIndex: true,
+    }),
   component: RegisterView,
 });

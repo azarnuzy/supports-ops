@@ -3,7 +3,13 @@ import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { pageMetadata } from "../lib/seo";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => pageMetadata({ title: "AI-first customer support", description: "SupportOps helps Workspaces resolve customer support with an AI Agent and Human Agents.", path: "/" }),
+  head: () =>
+    pageMetadata({
+      title: "AI-first customer support",
+      description:
+        "SupportOps helps Workspaces resolve customer support with an AI Agent and Human Agents.",
+      path: "/",
+    }),
   component: RootLayout,
 });
 

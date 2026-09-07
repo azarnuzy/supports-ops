@@ -1,7 +1,4 @@
-import {
-  ThemePresetSelector,
-  ThemeSelector,
-} from "@repo/ui/components/theme-selector";
+import { ThemePresetSelector, ThemeSelector } from "@repo/ui/components/theme-selector";
 
 export function HeaderControls() {
   return (

@@ -14,10 +14,7 @@ import {
   MessageFooter,
   MessageHeader,
 } from "@repo/ui/components/message";
-import {
-  MessageScroller,
-  MessageScrollerContent,
-} from "@repo/ui/components/message-scroller";
+import { MessageScroller, MessageScrollerContent } from "@repo/ui/components/message-scroller";
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { BotIcon, PaperclipIcon, SendIcon } from "lucide-react";
@@ -27,7 +24,13 @@ import { meQueryOptions, UnauthorizedError } from "../features/auth";
 import { pageMetadata } from "../lib/seo";
 
 export const Route = createFileRoute("/chat")({
-  head: () => pageMetadata({ title: "Inbox", description: "Manage Customer conversations in your SupportOps Workspace.", path: "/chat", noIndex: true }),
+  head: () =>
+    pageMetadata({
+      title: "Inbox",
+      description: "Manage Customer conversations in your SupportOps Workspace.",
+      path: "/chat",
+      noIndex: true,
+    }),
   beforeLoad: async ({ context }) => {
     try {
       await context.queryClient.ensureQueryData(meQueryOptions);
@@ -66,9 +69,7 @@ function ChatPage() {
         <aside className="min-h-0 border-r">
           <div className="border-b p-4">
             <p className="text-lg font-semibold">Inbox</p>
-            <p className="text-xs text-muted-foreground">
-              All customer conversations
-            </p>
+            <p className="text-xs text-muted-foreground">All customer conversations</p>
           </div>
           <div className="overflow-y-auto p-2">
             {conversations.map((conversation, index) => (
@@ -107,9 +108,7 @@ function ChatPage() {
           <header className="flex items-center justify-between border-b p-4">
             <div>
               <p className="font-semibold">Olivia Rhye</p>
-              <p className="font-mono text-xs text-muted-foreground">
-                TKT-000241
-              </p>
+              <p className="font-mono text-xs text-muted-foreground">TKT-000241</p>
             </div>
             <div className="flex gap-2">
               <StatusBadge status="AI_HANDLING" />
@@ -122,12 +121,12 @@ function ChatPage() {
                 <MarkerContent>Today, 10:24 AM</MarkerContent>
               </Marker>
               <ChatMessage kind="customer" name="Olivia Rhye" time="10:24 AM">
-                We're seeing 502s on staging right after the latest build. We
-                rolled back, but the health checks are still red.
+                We're seeing 502s on staging right after the latest build. We rolled back, but the
+                health checks are still red.
               </ChatMessage>
               <ChatMessage kind="ai" name="SupportOps AI" time="10:25 AM">
-                I’m checking the deploy context and the workspace knowledge now.
-                I’ll escalate if I can’t verify a safe fix.
+                I’m checking the deploy context and the workspace knowledge now. I’ll escalate if I
+                can’t verify a safe fix.
                 <span className="ml-1 inline-block size-1.5 animate-pulse rounded-full bg-status-ai" />
               </ChatMessage>
               <Marker>
@@ -135,10 +134,7 @@ function ChatPage() {
               </Marker>
             </MessageScrollerContent>
           </MessageScroller>
-          <form
-            className="border-t p-3"
-            onSubmit={(event) => event.preventDefault()}
-          >
+          <form className="border-t p-3" onSubmit={(event) => event.preventDefault()}>
             <InputGroup>
               <InputGroupTextarea placeholder="Reply to Olivia..." />
               <InputGroupAddon align="block-end">
