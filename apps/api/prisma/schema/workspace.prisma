@@ -7,4 +7,19 @@ model Workspace {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
   users          User[]
+  aiAgents       AiAgent[]
+  channels       Channel[]
+}
+
+model AiAgent {
+  id          String        @id
+  workspaceId String
+  name        String
+  status      AiAgentStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+  channels    Channel[]
+
+  @@index([workspaceId])
 }
