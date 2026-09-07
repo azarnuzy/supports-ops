@@ -1,19 +1,19 @@
 model Ticket {
-  id                 String         @id
+  id                 String           @id
   workspaceId        String
   channelId          String
-  webSessionId       String         @unique
+  webSessionId       String           @unique
   customerIdentityId String
   title              String
-  category           TicketCategory @default(GENERAL)
-  priority           TicketPriority @default(NORMAL)
-  status             TicketStatus   @default(AI_HANDLING)
-  messageSeq         Int            @default(0)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
-  workspace          Workspace      @relation(fields: [workspaceId], references: [id])
-  channel            Channel        @relation(fields: [channelId], references: [id])
-  webSession         WebSession     @relation(fields: [webSessionId], references: [id])
+  category           TicketCategory   @default(GENERAL)
+  priority           TicketPriority   @default(NORMAL)
+  status             TicketStatus     @default(AI_HANDLING)
+  messageSeq         Int              @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  workspace          Workspace        @relation(fields: [workspaceId], references: [id])
+  channel            Channel          @relation(fields: [channelId], references: [id])
+  webSession         WebSession       @relation(fields: [webSessionId], references: [id])
   customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
   conversation       Conversation?
   messages           Message[]

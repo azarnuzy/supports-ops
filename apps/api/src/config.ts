@@ -10,6 +10,8 @@ const defaultDatabaseUrl =
 const defaultBetterAuthUrl = "http://localhost:8000";
 const defaultBetterAuthSecret = "dev-change-me";
 const productionSecretMinimumLength = 32;
+const defaultEmbeddingModel = "openai/text-embedding-3-small";
+export const modelGatewayBaseUrl = "https://openrouter.ai/api/v1";
 
 const runtimeEnvSchema = z.enum(["development", "test", "production"]).default("development");
 const logLevelSchema = z
@@ -47,8 +49,10 @@ const apiEnvSchema = z
     BETTER_AUTH_URL: z.string().trim().url().default(defaultBetterAuthUrl),
     CLIENT_ORIGINS: z.string().trim().min(1).default(defaultClientOrigins),
     DATABASE_URL: z.string().trim().min(1).default(defaultDatabaseUrl),
+    EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LOG_LEVEL: logLevelSchema,
+    OPENROUTER_API_KEY: optionalStringSchema,
     TELEMETRY_API_KEY: optionalStringSchema,
     TELEMETRY_API_KEY_HEADER: z.string().trim().min(1).default("authorization"),
     TELEMETRY_EXPORTER: telemetryExporterSchema,
@@ -103,6 +107,12 @@ export const betterAuthConfig = {
 
 export const databaseConfig = {
   url: env.DATABASE_URL,
+} as const;
+
+export const embeddingConfig = {
+  apiKey: env.OPENROUTER_API_KEY,
+  baseUrl: modelGatewayBaseUrl,
+  modelId: env.EMBEDDING_MODEL,
 } as const;
 
 export const loggerConfig = {

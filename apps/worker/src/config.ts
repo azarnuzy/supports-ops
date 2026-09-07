@@ -11,6 +11,10 @@ const optionalStringSchema = z.preprocess(
   z.string().trim().optional(),
 );
 const emailFromSchema = z.string().trim().min(1).default("SupportOps <support@example.com>");
+const defaultDatabaseUrl =
+  "postgresql://postgres:postgres@localhost:15432/supportops?schema=public";
+const defaultEmbeddingModel = "openai/text-embedding-3-small";
+export const modelGatewayBaseUrl = "https://openrouter.ai/api/v1";
 const booleanSchema = z.preprocess((value) => {
   if (typeof value !== "string") {
     return value;
@@ -31,8 +35,11 @@ const booleanSchema = z.preprocess((value) => {
 
 const workerEnvSchema = z.object({
   NODE_ENV: runtimeEnvSchema,
+  DATABASE_URL: z.string().trim().min(1).default(defaultDatabaseUrl),
+  EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
   ENABLE_TELEMETRY: booleanSchema.default(false),
   LOG_LEVEL: logLevelSchema,
+  OPENROUTER_API_KEY: optionalStringSchema,
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:16379"),
   EMAIL_FROM: emailFromSchema,
   RESEND_API_KEY: optionalStringSchema,
@@ -52,6 +59,16 @@ export const env = parseWorkerEnv(process.env);
 
 export const redisConfig = {
   url: env.REDIS_URL,
+} as const;
+
+export const databaseConfig = {
+  url: env.DATABASE_URL,
+} as const;
+
+export const embeddingConfig = {
+  apiKey: env.OPENROUTER_API_KEY,
+  baseUrl: modelGatewayBaseUrl,
+  modelId: env.EMBEDDING_MODEL,
 } as const;
 
 export const emailConfig = {

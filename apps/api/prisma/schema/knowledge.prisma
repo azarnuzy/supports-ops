@@ -1,0 +1,51 @@
+model KnowledgeSource {
+  id            String              @id
+  workspaceId   String
+  parentId      String?
+  sourceType    KnowledgeSourceType
+  title         String
+  content       String?
+  sourceUrl     String?
+  visibility    KnowledgeVisibility
+  status        KnowledgeStatus     @default(DRAFT)
+  failureReason String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  publishedAt   DateTime?
+  deletedAt     DateTime?
+  deletedBy     String?
+  workspace     Workspace           @relation(fields: [workspaceId], references: [id])
+  parent        KnowledgeSource?    @relation("KnowledgeSourceChildren", fields: [parentId], references: [id])
+  children      KnowledgeSource[]   @relation("KnowledgeSourceChildren")
+  chunks        Chunk[]
+
+  @@index([workspaceId, status])
+  @@index([parentId])
+}
+
+/// The retrievable unit for both Knowledge Sources and Ticket Knowledge.
+/// `embedding` is a pgvector column (1536 dimensions); Prisma cannot write or
+/// read it through the query builder, so every column here that a search or
+/// publish must touch is read through raw SQL in `packages/knowledge` — see
+/// ADR-0003 and docs/planning/spike-anvia.md.
+model Chunk {
+  id                 String                       @id
+  workspaceId        String
+  kind               ChunkKind                    @default(KNOWLEDGE)
+  knowledgeSourceId  String?
+  ticketId           String?
+  customerIdentityId String?
+  channelType        ChannelType?
+  content            String
+  embedding          Unsupported("vector(1536)")?
+  position           Int
+  visibility         KnowledgeVisibility?
+  isPublished        Boolean                      @default(false)
+  deletedAt          DateTime?
+  createdAt          DateTime                     @default(now())
+  workspace          Workspace                    @relation(fields: [workspaceId], references: [id])
+  knowledgeSource    KnowledgeSource?             @relation(fields: [knowledgeSourceId], references: [id])
+
+  @@index([workspaceId, kind, isPublished, visibility])
+  @@index([knowledgeSourceId])
+}

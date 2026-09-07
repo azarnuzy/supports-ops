@@ -1,6 +1,7 @@
 import { loggerConfig, redisConfig } from "./config";
 import { createLogger } from "@repo/logger";
 import { Queue, QueueEvents, Worker, type ConnectionOptions, type Job } from "bullmq";
+import { processKnowledgeIngestJob, type KnowledgeIngestJob } from "./knowledge-ingest";
 import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
 
@@ -46,14 +47,25 @@ export function startExampleWorker() {
 }
 
 export function startSessionEmailWorker() {
-  return new Worker<SessionEmailJob>("session-email", async (job) => {
-    await sendSessionLinkEmail(job.data);
-  }, { connection });
+  return new Worker<SessionEmailJob>(
+    "session-email",
+    async (job) => {
+      await sendSessionLinkEmail(job.data);
+    },
+    { connection },
+  );
+}
+
+export function startKnowledgeIngestWorker() {
+  return new Worker<KnowledgeIngestJob>("knowledge-ingest", processKnowledgeIngestJob, {
+    connection,
+  });
 }
 
 export function runWorker() {
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
+  const knowledgeIngestWorker = startKnowledgeIngestWorker();
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "Job completed");
@@ -65,8 +77,11 @@ export function runWorker() {
   sessionEmailWorker.on("failed", (job, error) => {
     logger.error({ error, jobId: job?.id }, "Session Link email failed");
   });
+  knowledgeIngestWorker.on("failed", (job, error) => {
+    logger.error({ error, jobId: job?.id }, "Knowledge ingest failed");
+  });
 
-  return { sessionEmailWorker, worker };
+  return { knowledgeIngestWorker, sessionEmailWorker, worker };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

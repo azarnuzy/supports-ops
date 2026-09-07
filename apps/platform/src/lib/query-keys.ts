@@ -9,6 +9,7 @@ export const queryKeys = {
     me: ["auth", "me"] as const,
   },
   workspace: {
+    knowledgeSources: ["workspace", "knowledge-sources"] as const,
     users: ["workspace", "users"] as const,
     widgetConfig: ["workspace", "widget-config"] as const,
   },
