@@ -10,7 +10,7 @@ describe("loadWorkspaceContext", () => {
     await loadWorkspaceContext({ get } as never, async () => {
       expect(requireWorkspaceId()).toBe("workspace-user");
 
-      for (const model of ["ticket", "message", "knowledgeSource", "customerIdentity"]) {
+      for (const model of ["Ticket", "Message", "KnowledgeSource", "CustomerIdentity"]) {
         const records = [{ id: "workspace-other-record", workspaceId: "workspace-other" }];
         const visibleRecords = executeWorkspaceQuery({
           args: { where: { workspaceId: "workspace-other" } },
