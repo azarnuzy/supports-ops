@@ -1,7 +1,7 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { auth } from "../apps/api/src/modules/auth/auth";
-import { prisma } from "../apps/api/src/utils/prisma";
+import { unscopedPrisma as prisma } from "../apps/api/src/utils/prisma";
 
 const rl = createInterface({ input, output });
 

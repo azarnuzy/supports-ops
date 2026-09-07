@@ -1,12 +1,12 @@
 import { betterAuthConfig } from "../../config";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { prisma } from "../../utils/prisma";
+import { unscopedPrisma } from "../../utils/prisma";
 
 export const auth = betterAuth({
   appName: "SupportOps",
   baseURL: betterAuthConfig.url,
-  database: prismaAdapter(prisma, {
+  database: prismaAdapter(unscopedPrisma, {
     provider: "postgresql",
   }),
   emailAndPassword: {
