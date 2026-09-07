@@ -7,6 +7,7 @@ import type { AuthVariables } from "./modules/auth/types";
 import { profileRouter } from "./modules/profile/router";
 import { registrationRouter } from "./modules/registration/router";
 import { usersRouter } from "./modules/users/router";
+import { widgetConfigRouter } from "./modules/widget-config/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   .use(
@@ -38,6 +39,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   })
   .route("/profile", profileRouter)
   .route("/register", registrationRouter)
-  .route("/users", usersRouter);
+  .route("/users", usersRouter)
+  .route("/widget-config", widgetConfigRouter);
 
 export type AppType = typeof app;

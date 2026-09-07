@@ -56,7 +56,14 @@ describe("registerAdminWorkspace", () => {
   it("creates a Workspace, an Admin, and its credential Account in one transaction", async () => {
     mocks.findUnique.mockResolvedValue(null);
 
-    const created: { account?: unknown; user?: unknown; workspace?: unknown } = {};
+    const created: {
+      account?: unknown;
+      user?: unknown;
+      workspace?: unknown;
+      aiAgent?: unknown;
+      channel?: unknown;
+      webWidgetConfig?: unknown;
+    } = {};
 
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => {
       const tx = {
@@ -75,6 +82,24 @@ describe("registerAdminWorkspace", () => {
         workspace: {
           create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
             created.workspace = data;
+            return data;
+          }),
+        },
+        aiAgent: {
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            created.aiAgent = data;
+            return data;
+          }),
+        },
+        channel: {
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            created.channel = data;
+            return data;
+          }),
+        },
+        webWidgetConfig: {
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            created.webWidgetConfig = data;
             return data;
           }),
         },
@@ -114,6 +139,26 @@ describe("registerAdminWorkspace", () => {
 
     expect(result.workspace).toEqual(workspace);
     expect(result.user).toEqual(user);
+
+    const aiAgent = created.aiAgent as Record<string, unknown>;
+    const channel = created.channel as Record<string, unknown>;
+    const webWidgetConfig = created.webWidgetConfig as Record<string, unknown>;
+
+    expect(aiAgent).toMatchObject({ name: "AI Agent", workspaceId: workspace.id });
+
+    expect(channel).toMatchObject({
+      aiAgentId: aiAgent.id,
+      type: "WEB",
+      workspaceId: workspace.id,
+    });
+
+    expect(webWidgetConfig).toMatchObject({
+      allowedDomains: [],
+      channelId: channel.id,
+      workspaceId: workspace.id,
+    });
+    expect(typeof webWidgetConfig.widgetKey).toBe("string");
+    expect((webWidgetConfig.widgetKey as string).startsWith("widget_")).toBe(true);
   });
 
   it("converts a race-condition unique email violation into a clear error", async () => {
