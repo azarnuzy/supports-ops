@@ -22,7 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { LayoutDashboardIcon, LogOutIcon, MessageSquareIcon, MonitorIcon, UserRoundIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { meQueryOptions, useLogoutMutation } from "../auth/hooks/use-auth";
+import { meQueryOptions, useLogoutMutation } from "../../features/auth";
 import { HeaderControls } from "./header-controls";
 
 export function PlatformAppShell({ children, fullBleed = false }: { children: ReactNode; fullBleed?: boolean }) {
