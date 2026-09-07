@@ -18,12 +18,17 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@repo/api": ["./apps/api/src/app.ts"],
+      "@repo/ai-agent": ["./packages/ai-agent/src/index.ts"],
       "@repo/api-client": ["./packages/api-client/src/index.ts"],
+      "@repo/channels": ["./packages/channels/src/index.ts"],
+      "@repo/knowledge": ["./packages/knowledge/src/index.ts"],
       "@repo/logger": ["./packages/logger/src/index.ts"],
       "@repo/logger/telemetry": ["./packages/logger/src/telemetry.ts"],
+      "@repo/shared": ["./packages/shared/src/index.ts"],
       "@repo/storage": ["./packages/storage/src/index.ts"],
+      "@repo/tools": ["./packages/tools/src/index.ts"],
       "@repo/ui/*": ["./packages/ui/src/*"],
-      "@repo/worker": ["./packages/worker/src/index.ts"]
+      "@repo/worker": ["./apps/worker/src/index.ts"]
     }
   }
 }
