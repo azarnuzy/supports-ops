@@ -11,6 +11,7 @@ model Channel {
   aiAgent         AiAgent          @relation(fields: [aiAgentId], references: [id])
   webWidgetConfig WebWidgetConfig?
   webSessions     WebSession[]
+  tickets         Ticket[]
 
   @@unique([workspaceId, type])
   @@index([workspaceId])
@@ -27,6 +28,7 @@ model CustomerIdentity {
   deletedAt          DateTime?
   workspace          Workspace    @relation(fields: [workspaceId], references: [id])
   webSessions        WebSession[]
+  tickets            Ticket[]
 
   @@index([workspaceId, channelType, email])
 }
@@ -43,6 +45,7 @@ model WebSession {
   workspace          Workspace        @relation(fields: [workspaceId], references: [id])
   channel            Channel          @relation(fields: [channelId], references: [id])
   customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
+  ticket             Ticket?
 
   @@index([workspaceId])
   @@index([channelId])

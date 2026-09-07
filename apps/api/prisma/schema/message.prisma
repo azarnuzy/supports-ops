@@ -1,0 +1,41 @@
+model Conversation {
+  id          String   @id
+  scopeKey    String   @unique
+  sessionId   String
+  userId      String
+  metadata    Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspaceId String
+  ticketId    String   @unique
+  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  messages    Message[]
+}
+
+model Message {
+  id                String                @id
+  memorySessionId   String
+  runId             String
+  turn              Int
+  position          Int
+  role              String
+  message           Json
+  createdAt         DateTime              @default(now())
+  workspaceId       String
+  ticketId          String
+  senderType        MessageSenderType
+  senderUserId      String?
+  content           String
+  externalMessageId String
+  deliveryStatus    MessageDeliveryStatus @default(SENT)
+  deliveryAttempts  Int                   @default(0)
+  deletedAt         DateTime?
+  deletedBy         String?
+  conversation      Conversation          @relation(fields: [memorySessionId], references: [id])
+  ticket            Ticket                @relation(fields: [ticketId], references: [id])
+
+  @@unique([memorySessionId, position])
+  @@unique([workspaceId, externalMessageId])
+  @@index([ticketId, position])
+  @@index([runId])
+}
