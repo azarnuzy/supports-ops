@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
+    "generate:routes": "node scripts/generate-route-tree.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "pretypecheck": "pnpm generate:routes",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/router-generator": "^1.167.27",
     "@tanstack/router-plugin": "^1.168.29",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
