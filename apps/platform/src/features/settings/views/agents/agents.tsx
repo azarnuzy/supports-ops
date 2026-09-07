@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { useCreateHumanAgentMutation, workspaceUsersQueryOptions } from "../../../auth";
+import { SettingsNav } from "../../components/settings-nav";
 
 const HumanAgentsView = () => {
   const users = useQuery(workspaceUsersQueryOptions);
@@ -51,6 +52,8 @@ const HumanAgentsView = () => {
             Create a Human Agent with credentials they can use to sign in immediately.
           </p>
         </div>
+
+        <SettingsNav />
 
         <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
           <Card>

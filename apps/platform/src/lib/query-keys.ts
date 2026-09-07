@@ -10,5 +10,6 @@ export const queryKeys = {
   },
   workspace: {
     users: ["workspace", "users"] as const,
+    widgetConfig: ["workspace", "widget-config"] as const,
   },
 } as const;
