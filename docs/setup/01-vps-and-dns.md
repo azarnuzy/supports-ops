@@ -21,17 +21,24 @@ Install Docker Engine with the Compose plugin, then create the shared Caddy netw
 ```bash
 docker network create proxy
 sudo install -d -m 700 -o "$USER" -g "$USER" /srv/apps/supports-ops
-cd /srv/apps/supports-ops
 ```
 
-Copy `deploy/env.production.example` from this repository to `/srv/apps/supports-ops/env.production`, set permissions to `600`, and replace every placeholder. This file remains only on the server.
+From a local checkout of this repository, copy the initial non-secret deployment configuration to the VPS. Adjust `VPS_USER` and `VPS_HOST` first:
 
 ```bash
+scp deploy/compose.prod.yaml deploy/deploy.sh deploy/env.production.example \
+  "$VPS_USER@$VPS_HOST:/srv/apps/supports-ops/"
+```
+
+On the VPS, turn the example into the production environment file, set permissions to `600`, and replace every placeholder. This file remains only on the server.
+
+```bash
+cd /srv/apps/supports-ops
 cp env.production.example env.production
 chmod 600 env.production
 ```
 
-The shared Caddy container must be connected to the external `proxy` network and be the only container that publishes ports `80` and `443`. Copy `deploy/supports-ops.caddy` into the shared Caddy configuration directory, then validate and reload Caddy using that installation's normal commands. Caddy obtains and renews certificates automatically once all three DNS records resolve to the VPS.
+The shared Caddy container must be connected to the external `proxy` network and be the only container that publishes ports `80` and `443`. From the local checkout, copy `deploy/supports-ops.caddy` into the shared Caddy configuration directory, then validate and reload Caddy using that installation's normal commands. Caddy obtains and renews certificates automatically once all three DNS records resolve to the VPS.
 
 ## GitHub environment
 
