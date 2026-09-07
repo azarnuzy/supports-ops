@@ -39,14 +39,14 @@ CMD ["pnpm", "--filter", "@repo/worker", "exec", "tsx", "src/main.ts"]
 
 FROM caddy:2-alpine AS platform
 
-COPY deploy/Caddyfile.platform /etc/caddy/Caddyfile
+COPY deploy/Caddyfile.static /etc/caddy/Caddyfile
 COPY --from=build /app/apps/platform/dist /srv
 
 EXPOSE 80
 
 FROM caddy:2-alpine AS widget
 
-COPY deploy/Caddyfile.widget /etc/caddy/Caddyfile
+COPY deploy/Caddyfile.static /etc/caddy/Caddyfile
 COPY --from=build /app/apps/widget/dist /srv
 
 EXPOSE 80
