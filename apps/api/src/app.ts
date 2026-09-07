@@ -7,9 +7,11 @@ import type { AuthVariables } from "./modules/auth/types";
 import { profileRouter } from "./modules/profile/router";
 import { registrationRouter } from "./modules/registration/router";
 import { usersRouter } from "./modules/users/router";
+import { widgetRouter } from "./modules/widget/router";
 import { widgetConfigRouter } from "./modules/widget-config/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
+  .route("/widget", widgetRouter)
   .use(
     "*",
     cors({
