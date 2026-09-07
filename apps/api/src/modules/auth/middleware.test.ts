@@ -5,9 +5,7 @@ import { loadWorkspaceContext } from "./middleware";
 
 describe("loadWorkspaceContext", () => {
   it("filters another Workspace's records when context comes from the authenticated user", async () => {
-    const get = vi.fn((key: string) =>
-      key === "user" ? { workspaceId: "workspace-user" } : null,
-    );
+    const get = vi.fn((key: string) => (key === "user" ? { workspaceId: "workspace-user" } : null));
 
     await loadWorkspaceContext({ get } as never, async () => {
       expect(requireWorkspaceId()).toBe("workspace-user");
@@ -18,7 +16,8 @@ describe("loadWorkspaceContext", () => {
           args: { where: { workspaceId: "workspace-other" } },
           model,
           operation: "findMany",
-          query: ({ where }) => records.filter((record) => record.workspaceId === where?.workspaceId),
+          query: ({ where }) =>
+            records.filter((record) => record.workspaceId === where?.workspaceId),
         });
 
         expect(visibleRecords).toEqual([]);

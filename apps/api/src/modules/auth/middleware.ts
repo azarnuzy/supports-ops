@@ -19,10 +19,7 @@ export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, 
  * Adds the authenticated user's Workspace, or a Web Session resolved by a
  * Channel Adapter, to the data-layer request context.
  */
-export async function loadWorkspaceContext(
-  c: Context<{ Variables: AuthVariables }>,
-  next: Next,
-) {
+export async function loadWorkspaceContext(c: Context<{ Variables: AuthVariables }>, next: Next) {
   const workspaceId = c.get("user")?.workspaceId ?? c.get("webSession")?.workspaceId;
 
   if (!workspaceId) {
