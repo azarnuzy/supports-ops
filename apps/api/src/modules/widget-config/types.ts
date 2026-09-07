@@ -11,4 +11,5 @@ export type WebWidgetConfigDto = {
 
 export type WebWidgetConfigResponse = {
   webWidgetConfig: WebWidgetConfigDto;
+  closingMessage: string | null;
 };

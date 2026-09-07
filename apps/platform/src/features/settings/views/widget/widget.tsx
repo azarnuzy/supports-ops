@@ -38,11 +38,13 @@ const WebWidgetSettingsView = () => {
   const [botName, setBotName] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
+  const [closingMessage, setClosingMessage] = useState("");
   const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
   const [domainDraft, setDomainDraft] = useState("");
   const [domainError, setDomainError] = useState<string | null>(null);
 
-  const current = config.data;
+  const current = config.data?.webWidgetConfig;
+  const currentClosingMessage = config.data?.closingMessage ?? "";
 
   useEffect(() => {
     if (current) {
@@ -50,12 +52,13 @@ const WebWidgetSettingsView = () => {
       setWelcomeMessage(current.welcomeMessage);
       setPrimaryColor(current.primaryColor);
       setAllowedDomains(current.allowedDomains);
+      setClosingMessage(currentClosingMessage);
     }
-  }, [current]);
+  }, [current, currentClosingMessage]);
 
   const validationError = useMemo(
-    () => validateWidgetConfig(botName, welcomeMessage, primaryColor),
-    [botName, welcomeMessage, primaryColor],
+    () => validateWidgetConfig(botName, welcomeMessage, primaryColor, closingMessage),
+    [botName, welcomeMessage, primaryColor, closingMessage],
   );
 
   const isDirty =
@@ -63,6 +66,7 @@ const WebWidgetSettingsView = () => {
     (botName !== current.botName ||
       welcomeMessage !== current.welcomeMessage ||
       primaryColor !== current.primaryColor ||
+      closingMessage !== currentClosingMessage ||
       !domainsAreEqual(allowedDomains, current.allowedDomains));
 
   const embedSnippet = current
@@ -113,6 +117,7 @@ const WebWidgetSettingsView = () => {
       {
         allowedDomains,
         botName: botName.trim(),
+        closingMessage: closingMessage.trim() || null,
         primaryColor,
         welcomeMessage: welcomeMessage.trim(),
       },
@@ -136,6 +141,7 @@ const WebWidgetSettingsView = () => {
     setWelcomeMessage(current.welcomeMessage);
     setPrimaryColor(current.primaryColor);
     setAllowedDomains(current.allowedDomains);
+    setClosingMessage(currentClosingMessage);
     setDomainDraft("");
     setDomainError(null);
   }
@@ -213,6 +219,17 @@ const WebWidgetSettingsView = () => {
                       />
                     </div>
                     <FieldDescription>Shown on the launcher and header.</FieldDescription>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="widget-closing-message">Closing message</FieldLabel>
+                    <Textarea
+                      id="widget-closing-message"
+                      rows={2}
+                      placeholder="Glad we could help! Reach out anytime."
+                      value={closingMessage}
+                      onChange={(event) => setClosingMessage(event.target.value)}
+                    />
+                    <FieldDescription>Sent when a Ticket is resolved.</FieldDescription>
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="widget-allowed-domain">Allowed domains</FieldLabel>
@@ -324,7 +341,12 @@ const WebWidgetSettingsView = () => {
   );
 };
 
-function validateWidgetConfig(botName: string, welcomeMessage: string, primaryColor: string) {
+function validateWidgetConfig(
+  botName: string,
+  welcomeMessage: string,
+  primaryColor: string,
+  closingMessage: string,
+) {
   if (!botName.trim()) {
     return "Bot name is required.";
   }
@@ -343,6 +365,10 @@ function validateWidgetConfig(botName: string, welcomeMessage: string, primaryCo
 
   if (!hexColorPattern.test(primaryColor)) {
     return "Enter a hex colour, e.g. #2563eb.";
+  }
+
+  if (closingMessage.trim().length > 1000) {
+    return "Closing message must be 1000 characters or fewer.";
   }
 
   return null;

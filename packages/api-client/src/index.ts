@@ -128,7 +128,13 @@ export type UpdateWebWidgetConfigInput = {
   botName: string;
   welcomeMessage: string;
   primaryColor: string;
+  closingMessage: string | null;
   allowedDomains: string[];
+};
+
+export type WebWidgetConfigResult = {
+  webWidgetConfig: WebWidgetConfig;
+  closingMessage: string | null;
 };
 
 export async function fetchWebWidgetConfig(client: ApiClient) {
@@ -146,7 +152,7 @@ export async function fetchWebWidgetConfig(client: ApiClient) {
     throw new Error("Failed to load the Web Widget configuration.");
   }
 
-  return (await response.json()) as { webWidgetConfig: WebWidgetConfig };
+  return (await response.json()) as WebWidgetConfigResult;
 }
 
 export async function updateWebWidgetConfig(client: ApiClient, input: UpdateWebWidgetConfigInput) {
@@ -164,7 +170,7 @@ export async function updateWebWidgetConfig(client: ApiClient, input: UpdateWebW
     throw new Error("Failed to save the Web Widget configuration.");
   }
 
-  return (await response.json()) as { webWidgetConfig: WebWidgetConfig };
+  return (await response.json()) as WebWidgetConfigResult;
 }
 
 export type RegisterWorkspaceAdminInput = {
