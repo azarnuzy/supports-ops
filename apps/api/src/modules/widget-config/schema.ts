@@ -13,6 +13,14 @@ const domainSchema = z
     message: "Enter a valid domain, e.g. example.com.",
   });
 
+const closingMessageSchema = z.preprocess((value) => {
+  if (typeof value === "string" && value.trim() === "") {
+    return null;
+  }
+
+  return value;
+}, z.string().trim().max(1000).nullable());
+
 export const updateWebWidgetConfigSchema = z.object({
   botName: z.string().trim().min(1).max(60),
   welcomeMessage: z.string().trim().min(1).max(500),
@@ -20,6 +28,7 @@ export const updateWebWidgetConfigSchema = z.object({
     .string()
     .trim()
     .regex(/^#[0-9a-f]{6}$/i, "Enter a hex color, e.g. #2563eb."),
+  closingMessage: closingMessageSchema,
   allowedDomains: z
     .array(domainSchema)
     .max(20)
