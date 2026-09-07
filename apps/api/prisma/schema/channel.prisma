@@ -1,0 +1,32 @@
+model Channel {
+  id              String           @id
+  workspaceId     String
+  aiAgentId       String
+  type            ChannelType
+  name            String
+  status          ChannelStatus    @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  deletedAt       DateTime?
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id])
+  aiAgent         AiAgent          @relation(fields: [aiAgentId], references: [id])
+  webWidgetConfig WebWidgetConfig?
+
+  @@unique([workspaceId, type])
+  @@index([workspaceId])
+}
+
+model WebWidgetConfig {
+  id             String   @id
+  workspaceId    String
+  channelId      String   @unique
+  widgetKey      String   @unique
+  botName        String
+  welcomeMessage String
+  primaryColor   String
+  allowedDomains String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  channel        Channel  @relation(fields: [channelId], references: [id])
+
+  @@index([workspaceId])
+}
