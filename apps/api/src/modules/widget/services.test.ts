@@ -201,8 +201,8 @@ describe("createCustomerMessage", () => {
     });
     expect(mocks.aiActivityCreateMany).toHaveBeenCalledWith({
       data: [
-        expect.objectContaining({ eventType: "CLASSIFIED", ticketId: "ticket-1" }),
         expect.objectContaining({ eventType: "TICKET_CREATED", ticketId: "ticket-1" }),
+        expect.objectContaining({ eventType: "CLASSIFIED", ticketId: "ticket-1" }),
       ],
     });
     expect(result).toEqual({

@@ -812,11 +812,10 @@ async function createTicketAndFirstMessage(
     await tx.aiActivity.createMany({
       data: [
         {
-          eventType: "CLASSIFIED",
+          eventType: "TICKET_CREATED",
           id: randomUUID(),
           metadata: {
             category: decision.category,
-            isSupportRequest: true,
             priority: decision.priority,
             title: decision.title,
           },
@@ -824,10 +823,11 @@ async function createTicketAndFirstMessage(
           workspaceId: session.workspaceId,
         },
         {
-          eventType: "TICKET_CREATED",
+          eventType: "CLASSIFIED",
           id: randomUUID(),
           metadata: {
             category: decision.category,
+            isSupportRequest: true,
             priority: decision.priority,
             title: decision.title,
           },
