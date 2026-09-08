@@ -56,6 +56,7 @@ const apiEnvSchema = z
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
     LLM_MODEL_MAIN: z.string().trim().min(1).default(defaultMainModel),
+    INTERNAL_WORKER_TOKEN: optionalStringSchema,
     LOG_LEVEL: logLevelSchema,
     OPENROUTER_API_KEY: optionalStringSchema,
     S3_ACCESS_KEY_ID: optionalStringSchema,
@@ -108,6 +109,7 @@ export const appConfig = {
 
 export const apiConfig = {
   businessSystemUrl: env.BUSINESS_SYSTEM_URL,
+  internalWorkerToken: env.INTERNAL_WORKER_TOKEN,
   port: env.API_PORT,
   clientOrigins: parseCsv(env.CLIENT_ORIGINS),
 } as const;

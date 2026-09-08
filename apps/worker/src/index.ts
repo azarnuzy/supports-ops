@@ -2,6 +2,7 @@ import { loggerConfig, redisConfig } from "./config";
 import { createLogger } from "@repo/logger";
 import { Queue, QueueEvents, Worker, type ConnectionOptions, type Job } from "bullmq";
 import { processKnowledgeIngestJob, type KnowledgeIngestJob } from "./knowledge-ingest";
+import { processAttachmentJob, type AttachmentProcessJob } from "./attachment-process";
 import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
 
@@ -62,10 +63,15 @@ export function startKnowledgeIngestWorker() {
   });
 }
 
+export function startAttachmentProcessWorker() {
+  return new Worker<AttachmentProcessJob>("attachment-process", processAttachmentJob, { connection });
+}
+
 export function runWorker() {
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
   const knowledgeIngestWorker = startKnowledgeIngestWorker();
+  const attachmentProcessWorker = startAttachmentProcessWorker();
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "Job completed");
@@ -80,8 +86,11 @@ export function runWorker() {
   knowledgeIngestWorker.on("failed", (job, error) => {
     logger.error({ error, jobId: job?.id }, "Knowledge ingest failed");
   });
+  attachmentProcessWorker.on("failed", (job, error) => {
+    logger.error({ error, jobId: job?.id }, "Attachment processing failed");
+  });
 
-  return { knowledgeIngestWorker, sessionEmailWorker, worker };
+  return { attachmentProcessWorker, knowledgeIngestWorker, sessionEmailWorker, worker };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

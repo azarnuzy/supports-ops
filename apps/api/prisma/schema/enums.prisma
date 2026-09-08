@@ -57,6 +57,12 @@ enum MessageDeliveryStatus {
   FAILED
 }
 
+enum AttachmentProcessingStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
 enum KnowledgeSourceType {
   MANUAL_FAQ
   PDF

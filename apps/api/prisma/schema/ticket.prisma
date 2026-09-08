@@ -17,10 +17,34 @@ model Ticket {
   customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
   conversation       Conversation?
   messages           Message[]
+  attachments        Attachment[]
   aiActivities       AiActivity[]
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, customerIdentityId])
+}
+
+model Attachment {
+  id               String                     @id
+  workspaceId      String
+  ticketId         String
+  messageId        String
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  storageKey       String
+  processingStatus AttachmentProcessingStatus @default(PROCESSING)
+  extractedText    String?
+  failureReason    String?
+  createdAt        DateTime                   @default(now())
+  deletedAt        DateTime?
+  deletedBy        String?
+  workspace        Workspace                  @relation(fields: [workspaceId], references: [id])
+  ticket           Ticket                     @relation(fields: [ticketId], references: [id])
+  message          Message                    @relation(fields: [messageId], references: [id])
+
+  @@index([ticketId, processingStatus])
+  @@index([messageId])
 }
 
 model AiActivity {

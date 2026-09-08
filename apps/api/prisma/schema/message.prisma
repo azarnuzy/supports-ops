@@ -33,6 +33,7 @@ model Message {
   deletedBy         String?
   conversation      Conversation          @relation(fields: [memorySessionId], references: [id])
   ticket            Ticket                @relation(fields: [ticketId], references: [id])
+  attachments       Attachment[]
 
   @@unique([memorySessionId, position])
   @@unique([workspaceId, externalMessageId])

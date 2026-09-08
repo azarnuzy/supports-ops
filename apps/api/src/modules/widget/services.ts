@@ -9,11 +9,13 @@ import {
 } from "@repo/ai-agent";
 import { createOpenAiEmbeddingClient as createEmbeddingClient, searchChunks as findKnowledgeChunks } from "@repo/knowledge";
 import { BusinessToolError, createBusinessTools } from "@repo/tools";
-import { aiAgentConfig, apiConfig, classificationConfig, embeddingConfig } from "../../config";
+import { createStorage } from "@repo/storage";
+import { aiAgentConfig, apiConfig, classificationConfig, embeddingConfig, storageConfig } from "../../config";
 import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
 import { publishWidgetEvent, setTicketGenerating } from "./realtime";
+import { enqueueAttachmentProcess } from "./attachment-queue";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -39,6 +41,11 @@ export class ReplyNotConfiguredError extends Error {
     this.name = "ReplyNotConfiguredError";
   }
 }
+
+export class InvalidAttachmentError extends Error {}
+
+const attachmentTypes = new Set(["application/pdf", "image/jpeg", "image/png", "text/plain"]);
+const maxAttachmentSizeBytes = 10 * 1024 * 1024;
 
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }
@@ -165,6 +172,44 @@ export async function createCustomerMessage(
   }
 }
 
+export async function createCustomerAttachment(accessToken: string, input: { content?: string; file: File }) {
+  if (!attachmentTypes.has(input.file.type)) {
+    throw new InvalidAttachmentError("Attach a PDF, plain text, JPEG, or PNG file.");
+  }
+  if (input.file.size === 0 || input.file.size > maxAttachmentSizeBytes) {
+    throw new InvalidAttachmentError("Attachment must be between 1 byte and 10 MB.");
+  }
+
+  const content = input.content?.trim() || `I need help with the attached file: ${input.file.name}`;
+  const result = await createCustomerMessage(accessToken, { content, idempotencyKey: randomUUID() });
+  if (!result) return null;
+  if (result.kind === "reply") {
+    throw new InvalidAttachmentError("Please describe the support problem with the attachment.");
+  }
+
+  const id = randomUUID();
+  const storageKey = `attachments/${result.message.workspaceId}/${result.message.ticketId}/${id}`;
+  await createStorage(storageConfig).putObject({
+    body: Buffer.from(await input.file.arrayBuffer()),
+    contentType: input.file.type,
+    key: storageKey,
+  });
+  const attachment = await unscopedPrisma.attachment.create({
+    data: {
+      fileName: input.file.name,
+      id,
+      messageId: result.message.id,
+      mimeType: input.file.type,
+      sizeBytes: input.file.size,
+      storageKey,
+      ticketId: result.message.ticketId,
+      workspaceId: result.message.workspaceId,
+    },
+  });
+  await enqueueAttachmentProcess({ attachmentId: id, ticketId: attachment.ticketId, workspaceId: attachment.workspaceId });
+  return { attachment, message: result.message };
+}
+
 async function appendMessage(ticketId: string, workspaceId: string, input: CustomerMessageInput) {
   return unscopedPrisma.$transaction(async (tx) => {
     const existing = await tx.message.findUnique({
@@ -213,6 +258,10 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
     const sources = embedding
       ? await findKnowledgeChunks(unscopedPrisma, { embedding, workspaceId, retrievalMode: "CUSTOMER" })
       : [];
+    const attachments = await unscopedPrisma.attachment.findMany({
+      select: { extractedText: true, id: true },
+      where: { deletedAt: null, extractedText: { not: null }, processingStatus: "READY", ticketId },
+    });
 
     await unscopedPrisma.aiActivity.create({
       data: {
@@ -239,7 +288,12 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
           model,
           onDelta: (delta) => publishWidgetEvent(ticketId, { type: "message.delta", data: { delta, provisionalId } }),
           businessData,
-          sources: sources.map((source) => ({ id: source.chunkId, content: source.content })),
+          sources: [
+            ...sources.map((source) => ({ id: source.chunkId, content: source.content })),
+            ...attachments.flatMap((attachment) => attachment.extractedText
+              ? [{ id: `attachment:${attachment.id}`, content: attachment.extractedText }]
+              : []),
+          ],
         });
         break;
       } catch (error) {
