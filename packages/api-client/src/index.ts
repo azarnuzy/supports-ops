@@ -24,7 +24,6 @@ export type AiSettings = {
 
 export async function fetchAiSettings(client: ApiClient) {
   const response = await client["ai-settings"].$get();
-  if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only an Admin can manage AI settings.");
   if (!response.ok) throw new Error("Failed to load AI settings.");
   return (await response.json()) as { aiSettings: AiSettings };
@@ -34,6 +33,39 @@ export async function updateAiSettings(client: ApiClient, input: AiSettings) {
   const response = await client["ai-settings"].$patch({ json: input });
   if (!response.ok) throw new Error("Failed to save AI settings.");
   return (await response.json()) as { aiSettings: AiSettings };
+}
+
+export type ResolutionFigure = { count: number; rate: number | null };
+export type AnalyticsStatusCount = { status: TicketStatus; count: number };
+export type ChannelType = "WEB" | "WHATSAPP";
+export type AnalyticsChannelCount = {
+  channelId: string;
+  channelName: string;
+  channelType: ChannelType;
+  ticketCount: number;
+};
+export type AnalyticsAgentLoad = {
+  humanAgentId: string;
+  humanAgentName: string;
+  activeTicketCount: number;
+};
+export type AnalyticsOverview = {
+  totalTickets: number;
+  aiResolution: {
+    customerConfirmed: ResolutionFigure;
+    customerInactive: ResolutionFigure;
+  };
+  humanEscalation: ResolutionFigure;
+  statusCounts: AnalyticsStatusCount[];
+  channelCounts: AnalyticsChannelCount[];
+  activeTicketsPerHumanAgent: AnalyticsAgentLoad[];
+};
+
+export async function fetchAnalyticsOverview(client: ApiClient) {
+  const response = await client.analytics.overview.$get();
+  if (response.status === 403) throw new Error("Only an Admin can view Workspace analytics.");
+  if (!response.ok) throw new Error("Failed to load analytics.");
+  return (await response.json()) as { analytics: AnalyticsOverview };
 }
 
 export type WorkspaceUser = {
@@ -182,7 +214,6 @@ export async function listMyTickets(client: ApiClient) {
 
 export async function listLiveAiTickets(client: ApiClient) {
   const response = await client.tickets.live.$get();
-  if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only an Admin can view live AI-handled Tickets.");
   if (!response.ok) throw new Error("Failed to load live Tickets.");
   return (await response.json()) as { tickets: SupportTicket[] };
@@ -190,7 +221,6 @@ export async function listLiveAiTickets(client: ApiClient) {
 
 export async function takeOverTicket(client: ApiClient, id: string) {
   const response = await client.tickets[":id"].takeover.$post({ param: { id } });
-  if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only an Admin can take over Tickets.");
   if (response.status === 409) throw new Error("This Ticket is no longer handled by the AI Agent.");
   if (!response.ok) throw new Error("Failed to take over the Ticket.");
@@ -214,7 +244,6 @@ export async function reassignTicket(client: ApiClient, id: string, humanAgentId
     param: { id },
     json: { humanAgentId },
   });
-  if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only an Admin can reassign Tickets.");
   if (response.status === 422) throw new Error("Choose an active Human Agent in this Workspace.");
   if (!response.ok) throw new Error("Failed to reassign the Ticket.");
@@ -296,10 +325,6 @@ export async function updateCurrentUserProfile(client: ApiClient, input: UpdateP
 export async function listWorkspaceUsers(client: ApiClient) {
   const response = await client.users.$get({ query: {} });
 
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
-
   if (response.status === 403) {
     throw new Error("You do not have permission to view Human Agents.");
   }
@@ -313,10 +338,6 @@ export async function listWorkspaceUsers(client: ApiClient) {
 
 export async function createWorkspaceHumanAgent(client: ApiClient, input: CreateHumanAgentInput) {
   const response = await client.users.$post({ json: input });
-
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
 
   if (response.status === 403) {
     throw new Error("You do not have permission to create Human Agents.");
@@ -361,10 +382,6 @@ export type WebWidgetConfigResult = {
 export async function fetchWebWidgetConfig(client: ApiClient) {
   const response = await client["widget-config"].$get();
 
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
-
   if (response.status === 403) {
     throw new Error("You do not have permission to view the Web Widget configuration.");
   }
@@ -378,10 +395,6 @@ export async function fetchWebWidgetConfig(client: ApiClient) {
 
 export async function updateWebWidgetConfig(client: ApiClient, input: UpdateWebWidgetConfigInput) {
   const response = await client["widget-config"].$patch({ json: input });
-
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
 
   if (response.status === 403) {
     throw new Error("You do not have permission to update the Web Widget configuration.");
@@ -483,10 +496,6 @@ export class EmbeddingNotConfiguredApiError extends Error {
 export async function listKnowledgeSources(client: ApiClient) {
   const response = await client.knowledge.$get();
 
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
-
   if (response.status === 403) {
     throw new Error("You do not have permission to view Knowledge Sources.");
   }
@@ -500,10 +509,6 @@ export async function listKnowledgeSources(client: ApiClient) {
 
 export async function createManualFaq(client: ApiClient, input: ManualFaqInput) {
   const response = await client.knowledge.$post({ json: input });
-
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
 
   if (!response.ok) {
     throw new Error("Failed to create the Knowledge Source.");
@@ -534,10 +539,6 @@ export async function createPdfKnowledgeSource(
 export async function updateManualFaq(client: ApiClient, id: string, input: ManualFaqInput) {
   const response = await client.knowledge[":id"].$patch({ json: input, param: { id } });
 
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
-
   if (response.status === 404) {
     throw new KnowledgeSourceNotFoundApiError();
   }
@@ -556,10 +557,6 @@ export async function updateManualFaq(client: ApiClient, id: string, input: Manu
 
 export async function publishKnowledgeSource(client: ApiClient, id: string) {
   const response = await client.knowledge[":id"].publish.$post({ param: { id } });
-
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
 
   if (response.status === 404) {
     throw new KnowledgeSourceNotFoundApiError();
@@ -580,10 +577,6 @@ export async function publishKnowledgeSource(client: ApiClient, id: string) {
 export async function deleteKnowledgeSource(client: ApiClient, id: string) {
   const response = await client.knowledge[":id"].$delete({ param: { id } });
 
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
-
   if (response.status === 404) {
     throw new KnowledgeSourceNotFoundApiError();
   }
@@ -592,13 +585,8 @@ export async function deleteKnowledgeSource(client: ApiClient, id: string) {
     throw new Error("Failed to delete the Knowledge Source.");
   }
 }
-
 export async function testKnowledgeRetrieval(client: ApiClient, query: string) {
   const response = await client.knowledge["retrieval-test"].$post({ json: { query } });
-
-  if (response.status === 401) {
-    throw new UnauthorizedApiError();
-  }
 
   if (response.status === 503) {
     const data = (await response.json()) as { message: string };
