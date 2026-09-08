@@ -4,11 +4,13 @@ import { queryKeys } from "../../lib/query-keys";
 import {
   claimTicket,
   generateSuggestedReply,
+  getLiveAiTickets,
   getMyTickets,
   getSharedHumanQueue,
   reassignTicket,
   resolveHumanTicket,
   sendHumanReply,
+  takeOverTicket,
   subscribeToSharedHumanQueue,
 } from "./tickets.services";
 
@@ -22,12 +24,18 @@ export const myTicketsQueryOptions = queryOptions({
   queryKey: queryKeys.workspace.myTickets,
 });
 
+export const liveAiTicketsQueryOptions = queryOptions({
+  queryFn: getLiveAiTickets,
+  queryKey: queryKeys.workspace.liveAiTickets,
+});
+
 function useTicketInvalidation() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.sharedHumanQueue }),
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.myTickets }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.liveAiTickets }),
     ]);
 }
 
@@ -48,6 +56,11 @@ export function useClaimTicketMutation() {
 export function useReassignTicketMutation() {
   const invalidate = useTicketInvalidation();
   return useMutation({ mutationFn: reassignTicket, onSuccess: invalidate });
+}
+
+export function useTakeOverTicketMutation() {
+  const invalidate = useTicketInvalidation();
+  return useMutation({ mutationFn: takeOverTicket, onSuccess: invalidate });
 }
 
 export function useSendHumanReplyMutation() {

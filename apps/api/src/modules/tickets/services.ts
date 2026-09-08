@@ -11,7 +11,11 @@ import {
 import { BusinessToolError, createBusinessTools } from "@repo/tools";
 import { aiAgentConfig, apiConfig, embeddingConfig } from "../../config";
 import { prisma, unscopedPrisma } from "../../utils/prisma";
-import { publishTicketQueueEvent, publishWidgetEvent } from "../widget/realtime";
+import {
+  cancelTicketGeneration,
+  publishTicketQueueEvent,
+  publishWidgetEvent,
+} from "../widget/realtime";
 
 const ticketSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
@@ -44,6 +48,7 @@ export class TicketAlreadyClaimedError extends Error {
 export class HumanAgentNotFoundError extends Error {}
 export class TicketNotOwnedError extends Error {}
 export class SuggestedReplyNotConfiguredError extends Error {}
+export class TicketNotAvailableForTakeoverError extends Error {}
 
 export function listSharedHumanQueue() {
   return prisma.ticket.findMany({
@@ -59,6 +64,59 @@ export function listMyTickets(humanAgentId: string) {
     select: ticketSelect,
     where: { assignedHumanAgentId: humanAgentId, status: "HUMAN_HANDLING" },
   });
+}
+
+export function listAiHandlingTickets(workspaceId: string) {
+  return prisma.ticket.findMany({
+    orderBy: { updatedAt: "desc" },
+    select: ticketSelect,
+    where: { status: "AI_HANDLING", workspaceId },
+  });
+}
+
+/** The conditional transition makes Takeover safe against a concurrent AI
+ * completion. Cancelling first prevents any provisional stream from becoming
+ * a finished AI message while the transaction is in progress. */
+export async function takeOverTicket(ticketId: string, adminId: string, workspaceId: string) {
+  cancelTicketGeneration(ticketId);
+  const result = await unscopedPrisma.$transaction(async (tx) => {
+    const transition = await tx.ticket.updateMany({
+      data: { assignedHumanAgentId: adminId, messageSeq: { increment: 1 }, status: "HUMAN_HANDLING" },
+      where: { id: ticketId, status: "AI_HANDLING", workspaceId },
+    });
+    if (!transition.count) throw new TicketNotAvailableForTakeoverError();
+    const [ticket, conversation] = await Promise.all([
+      tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: { messageSeq: true } }),
+      tx.conversation.findUniqueOrThrow({ where: { ticketId } }),
+    ]);
+    const admin = await tx.user.findUniqueOrThrow({ where: { id: adminId }, select: { name: true } });
+    const content = `Hello, I’m ${admin.name} from the support team. I’ve taken over and will continue helping you.`;
+    const message = await tx.message.create({
+      data: {
+        content,
+        deliveryStatus: "PENDING",
+        externalMessageId: `takeover:${randomUUID()}`,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content },
+        position: ticket.messageSeq,
+        role: "system",
+        runId: randomUUID(),
+        senderType: "SYSTEM",
+        ticketId,
+        turn: ticket.messageSeq,
+        workspaceId,
+      },
+    });
+    await tx.aiActivity.create({
+      data: { eventType: "TAKEN_OVER", id: randomUUID(), metadata: { adminId }, ticketId, workspaceId },
+    });
+    return { message, ticket: await tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: ticketSelect }) };
+  });
+  await publishWidgetEvent(ticketId, { type: "message.created", data: result.message });
+  await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "ready" } });
+  await publishTicketQueueEvent(workspaceId);
+  return result.ticket;
 }
 
 /** The status predicate is the concurrency guard: exactly one UPDATE can
