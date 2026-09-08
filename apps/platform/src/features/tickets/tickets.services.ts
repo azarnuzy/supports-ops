@@ -2,6 +2,7 @@ import {
   claimTicket as claimTicketRequest,
   createApiClient,
   generateSuggestedReply as generateSuggestedReplyRequest,
+  getAttachmentDownloadUrl,
   getTicketDetail as getTicketDetailRequest,
   listLiveAiTickets as listLiveAiTicketsRequest,
   listMyTickets as listMyTicketsRequest,
@@ -27,6 +28,12 @@ export function getTickets(filters: ListTicketsFilters) {
 
 export function getTicketDetail(id: string) {
   return getTicketDetailRequest(apiClient, id);
+}
+
+/** Opens the attachment in a new tab via its signed download URL. */
+export async function openAttachment(id: string) {
+  const { url } = await getAttachmentDownloadUrl(apiClient, id);
+  window.open(url, "_blank", "noopener");
 }
 
 export function getMyTickets() {
