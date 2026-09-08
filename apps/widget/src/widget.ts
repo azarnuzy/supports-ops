@@ -49,6 +49,15 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     messages?.append(bubble);
   };
 
+  // Used before a Ticket exists — nothing is persisted yet, so these render
+  // locally with no `data-position` to dedupe against.
+  const appendEphemeral = (content: string, senderType: "CUSTOMER" | "AI_AGENT") => {
+    const bubble = document.createElement("p");
+    bubble.className = `message ${senderType === "CUSTOMER" ? "message-customer" : ""}`;
+    bubble.textContent = content;
+    messages?.append(bubble);
+  };
+
   const connect = (accessToken: string) => {
     eventSource?.close();
     eventSource = new EventSource(`${apiUrl.replace(/\/$/, "")}/widget/events?token=${encodeURIComponent(accessToken)}`);
@@ -91,9 +100,14 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     if (!accessToken || !content) return;
     input.disabled = true;
     try {
-      const message = await sendMessage(apiUrl, accessToken, content);
-      appendMessage(message);
-      connect(accessToken);
+      const result = await sendMessage(apiUrl, accessToken, content);
+      if ("reply" in result) {
+        appendEphemeral(content, "CUSTOMER");
+        appendEphemeral(result.reply, "AI_AGENT");
+      } else {
+        appendMessage(result);
+        connect(accessToken);
+      }
       input.value = "";
     } finally {
       input.disabled = false;
@@ -129,7 +143,9 @@ async function sendMessage(apiUrl: string, accessToken: string, content: string)
     headers: { "Content-Type": "application/json" }, method: "POST",
   });
   if (!response.ok) throw new Error("Unable to send message");
-  return (await response.json()) as { content: string; position: number; senderType: string };
+  return (await response.json()) as
+    | { content: string; position: number; senderType: string }
+    | { reply: string };
 }
 
 function renderWidget(config: WidgetConfig) {
