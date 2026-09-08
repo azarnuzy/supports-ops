@@ -5,6 +5,9 @@ import {
   type EvalTarget,
   type RunEvalSuiteOptions,
 } from "@anvia/core/evals";
+import { detectLanguage, type SupportedLanguage } from "../language";
+
+export type EvalLanguage = SupportedLanguage;
 
 /**
  * Always fails, regardless of the target's output. Every category includes
@@ -112,29 +115,6 @@ export function neverContainsMetric<Input, Output, Expected = unknown>(
         : EvalOutcome.pass(true);
     },
   });
-}
-
-/**
- * A rough, deterministic language check: counts common stopwords for each
- * language and requires the expected language to have the most hits. Not a
- * real language detector, but stable, free, and enough to catch the AI Agent
- * answering in the wrong language.
- */
-const stopwords = {
-  en: ["the", "is", "are", "you", "your", "please", "thanks", "thank", "help", "and"],
-  id: ["yang", "adalah", "anda", "kamu", "tolong", "terima", "kasih", "bantu", "dan", "sudah"],
-} as const;
-
-export type EvalLanguage = keyof typeof stopwords;
-
-export function detectLanguage(text: string): EvalLanguage | "unknown" {
-  const lower = text.toLocaleLowerCase();
-  const scores = Object.entries(stopwords).map(([language, words]) => ({
-    language: language as EvalLanguage,
-    score: words.filter((word) => new RegExp(`\\b${word}\\b`, "u").test(lower)).length,
-  }));
-  const best = scores.reduce((a, b) => (b.score > a.score ? b : a));
-  return best.score > 0 ? best.language : "unknown";
 }
 
 export function languageMatchesMetric<Input, Output, Expected = unknown>(

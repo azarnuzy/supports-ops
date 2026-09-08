@@ -13,9 +13,11 @@ import {
 } from "./categories/escalation-required";
 import { buildGroundingNegativeControlSuite, buildGroundingSuite } from "./categories/grounding";
 import {
+  buildLanguageEscalationSummarySuite,
   buildLanguageIndonesianSuite,
   buildLanguageNegativeControlSuite,
   buildLanguageResolveHasNoContentSuite,
+  buildLanguageSuggestedReplySuite,
   buildLanguageSuite,
 } from "./categories/language";
 import {
@@ -23,7 +25,10 @@ import {
   buildResolutionDetectionNegativeControlSuite,
   buildResolutionDetectionSuite,
 } from "./categories/resolution-detection";
-import { buildToolCallingNegativeControlSuite, buildToolCallingSuite } from "./categories/tool-calling";
+import {
+  buildToolCallingNegativeControlSuite,
+  buildToolCallingSuite,
+} from "./categories/tool-calling";
 import {
   buildVisibilitySafetyNegativeControlSuite,
   buildVisibilitySafetySuite,
@@ -76,6 +81,8 @@ export const evalCategories = {
     buildLanguageSuite(models),
     buildLanguageIndonesianSuite(models),
     buildLanguageResolveHasNoContentSuite(models),
+    buildLanguageSuggestedReplySuite(models),
+    buildLanguageEscalationSummarySuite(models),
     buildLanguageNegativeControlSuite(models),
   ]) satisfies EvalSuiteBuilder as EvalSuiteBuilder,
 } satisfies Record<string, EvalSuiteBuilder>;
