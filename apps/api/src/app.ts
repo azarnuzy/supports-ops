@@ -12,6 +12,7 @@ import { widgetRouter } from "./modules/widget/router";
 import { widgetConfigRouter } from "./modules/widget-config/router";
 import { generateAiReply } from "./modules/widget/services";
 import { attachmentRouter } from "./modules/attachments/router";
+import { ticketsRouter } from "./modules/tickets/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   .post("/internal/tickets/:ticketId/generate", async (c) => {
@@ -59,3 +60,4 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/widget-config", widgetConfigRouter);
 
 export type AppType = typeof app;
+  .route("/tickets", ticketsRouter)

@@ -31,6 +31,59 @@ export type CreateHumanAgentInput = {
   password: string;
 };
 
+export type TicketPriority = "LOW" | "NORMAL" | "HIGH";
+
+export type SupportTicket = {
+  assignedHumanAgent: { id: string; name: string } | null;
+  createdAt: string;
+  escalatedAt: string | null;
+  id: string;
+  priority: TicketPriority;
+  title: string;
+  customerIdentity: { name: string };
+};
+
+export class TicketAlreadyClaimedApiError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+export async function listSharedHumanQueue(client: ApiClient) {
+  const response = await client.tickets.queue.$get();
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (!response.ok) throw new Error("Failed to load the Shared Human Queue.");
+  return (await response.json()) as { tickets: SupportTicket[] };
+}
+
+export async function listMyTickets(client: ApiClient) {
+  const response = await client.tickets.mine.$get();
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (!response.ok) throw new Error("Failed to load your Tickets.");
+  return (await response.json()) as { tickets: SupportTicket[] };
+}
+
+export async function claimTicket(client: ApiClient, id: string) {
+  const response = await client.tickets[":id"].claim.$post({ param: { id } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only Human Agents can claim Tickets.");
+  if (response.status === 409) {
+    const data = (await response.json()) as { message: string };
+    throw new TicketAlreadyClaimedApiError(data.message);
+  }
+  if (!response.ok) throw new Error("Failed to claim the Ticket.");
+  return (await response.json()) as { ticket: SupportTicket };
+}
+
+export async function reassignTicket(client: ApiClient, id: string, humanAgentId: string) {
+  const response = await client.tickets[":id"].assignee.$patch({ param: { id }, json: { humanAgentId } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only an Admin can reassign Tickets.");
+  if (response.status === 422) throw new Error("Choose an active Human Agent in this Workspace.");
+  if (!response.ok) throw new Error("Failed to reassign the Ticket.");
+  return (await response.json()) as { ticket: SupportTicket };
+}
+
 export class UnauthorizedApiError extends Error {
   constructor() {
     super("Unauthorized");
