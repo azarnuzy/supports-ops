@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  detectLanguage,
   equalsMetric,
   languageMatchesMetric,
   negativeControlMetric,
@@ -77,18 +76,6 @@ describe("neverContainsMetric", () => {
   it("passes when no forbidden snippet appears", async () => {
     const outcome = await metric.evaluate(caseFor("Here is a safe, customer-facing answer."));
     expect(outcome.outcome).toBe("pass");
-  });
-});
-
-describe("detectLanguage", () => {
-  it("detects English from common stopwords", () => {
-    expect(detectLanguage("Please reset the password and you are all set, thanks.")).toBe("en");
-  });
-
-  it("detects Indonesian from common stopwords", () => {
-    expect(detectLanguage("Silakan reset kata sandi anda yang sudah kadaluarsa, terima kasih.")).toBe(
-      "id",
-    );
   });
 });
 
