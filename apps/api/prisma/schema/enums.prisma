@@ -78,6 +78,7 @@ enum MessageDeliveryStatus {
 enum ResolutionReason {
   HUMAN_RESOLVED
   CUSTOMER_CONFIRMED
+  CUSTOMER_INACTIVE
 }
 
 enum AttachmentProcessingStatus {

@@ -41,6 +41,10 @@ export async function registerAdminWorkspace(input: RegisterInput) {
 
       const userId = randomUUID();
 
+      await tx.aiSettings.create({
+        data: { id: randomUUID(), workspaceId: workspace.id },
+      });
+
       const user = await tx.user.create({
         data: {
           id: userId,

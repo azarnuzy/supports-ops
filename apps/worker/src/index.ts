@@ -5,6 +5,8 @@ import { processKnowledgeIngestJob, type KnowledgeIngestJob } from "./knowledge-
 import { processAttachmentJob, type AttachmentProcessJob } from "./attachment-process";
 import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
+import { processAutoResolveJob, processFollowUpJob } from "./follow-up";
+import type { AutoResolveJob, FollowUpJob } from "./follow-up";
 
 export type { ExampleJob } from "./types";
 
@@ -69,11 +71,19 @@ export function startAttachmentProcessWorker() {
   });
 }
 
+export function startFollowUpWorker() {
+  return new Worker<FollowUpJob | AutoResolveJob>("ticket-follow-up", async (job) => {
+    if (job.name === "follow-up") return processFollowUpJob({ data: job.data as FollowUpJob });
+    return processAutoResolveJob({ data: job.data as AutoResolveJob });
+  }, { connection });
+}
+
 export function runWorker() {
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
   const knowledgeIngestWorker = startKnowledgeIngestWorker();
   const attachmentProcessWorker = startAttachmentProcessWorker();
+  const followUpWorker = startFollowUpWorker();
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "Job completed");
@@ -91,8 +101,11 @@ export function runWorker() {
   attachmentProcessWorker.on("failed", (job, error) => {
     logger.error({ error, jobId: job?.id }, "Attachment processing failed");
   });
+  followUpWorker.on("failed", (job, error) => {
+    logger.error({ error, jobId: job?.id }, "Ticket Follow-Up failed");
+  });
 
-  return { attachmentProcessWorker, knowledgeIngestWorker, sessionEmailWorker, worker };
+  return { attachmentProcessWorker, followUpWorker, knowledgeIngestWorker, sessionEmailWorker, worker };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

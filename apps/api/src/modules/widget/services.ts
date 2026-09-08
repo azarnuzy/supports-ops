@@ -30,6 +30,7 @@ import {
   setTicketGenerating,
 } from "./realtime";
 import { enqueueAttachmentProcess } from "./attachment-queue";
+import { cancelFollowUpTimers, scheduleFollowUp } from "../follow-up/queue";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -187,6 +188,7 @@ export async function createCustomerMessage(
 
   if (session.ticket) {
     const message = await appendMessage(session.ticket.id, session.workspaceId, input);
+    if (message.created) void cancelFollowUpTimers(session.ticket.id);
     return { created: message.created, kind: "message", message: message.message };
   }
 
@@ -432,6 +434,11 @@ export async function generateAiReply(
       },
     });
     await publishWidgetEvent(ticketId, { type: "message.created", data: message });
+    const settings = await unscopedPrisma.aiSettings.findUnique({ where: { workspaceId } });
+    await scheduleFollowUp(
+      { aiMessageId: message.id, ticketId, workspaceId },
+      settings?.followUpAfterSeconds ?? 900,
+    );
     await publishTicketQueueEvent(workspaceId);
   } catch (error) {
     await escalate(
@@ -607,6 +614,7 @@ export async function escalate(
     return acknowledgementMessage;
   });
   if (!result) return;
+  await cancelFollowUpTimers(ticketId);
   await publishWidgetEvent(ticketId, { type: "message.created", data: result });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "escalated" } });
   await publishTicketQueueEvent(workspaceId);
@@ -660,6 +668,7 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
     return closingMessage;
   });
   if (!closing) return;
+  await cancelFollowUpTimers(ticketId);
   await publishWidgetEvent(ticketId, { type: "message.created", data: closing });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "resolved" } });
   await publishTicketQueueEvent(workspaceId);
