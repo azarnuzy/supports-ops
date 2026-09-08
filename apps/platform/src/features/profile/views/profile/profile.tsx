@@ -10,64 +10,27 @@ import {
 } from "@repo/ui/components/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import { toast } from "@repo/ui/components/sonner";
-import { useQuery } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
-import { meQueryOptions, useUpdateProfileMutation } from "../../../auth";
 import { getInitials } from "../../../../lib/utils";
+import { useProfileForm } from "./profile.hooks";
 
 const ProfileView = () => {
-  const user = useQuery(meQueryOptions);
-  const updateProfileMutation = useUpdateProfileMutation();
-  const [name, setName] = useState("");
-  const [image, setImage] = useState("");
-  const validationError = useMemo(() => validateProfile(name, image), [name, image]);
-  const currentUser = user.data;
-
-  useEffect(() => {
-    if (currentUser) {
-      setName(currentUser.name);
-      setImage(currentUser.image ?? "");
-    }
-  }, [currentUser]);
+  const {
+    currentUser,
+    handleReset,
+    handleSubmit,
+    image,
+    isDirty,
+    name,
+    normalizedImage,
+    setImage,
+    setName,
+    updateProfileMutation,
+    validationError,
+  } = useProfileForm();
 
   if (!currentUser) {
     return null;
-  }
-
-  const normalizedImage = image.trim() || null;
-  const isDirty = name !== currentUser.name || normalizedImage !== (currentUser.image ?? null);
-  const resetName = currentUser.name;
-  const resetImage = currentUser.image ?? "";
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (validationError) {
-      return;
-    }
-
-    updateProfileMutation.mutate(
-      {
-        image: normalizedImage,
-        name: name.trim(),
-      },
-      {
-        onError: (error) => {
-          const message = error instanceof Error ? error.message : "Failed to save profile.";
-          toast.error(message);
-        },
-        onSuccess: () => {
-          toast.success("Profile saved.");
-        },
-      },
-    );
-  }
-
-  function handleReset() {
-    setName(resetName);
-    setImage(resetImage);
   }
 
   return (
@@ -157,32 +120,5 @@ const ProfileView = () => {
     </PlatformAppShell>
   );
 };
-
-function validateProfile(name: string, image: string) {
-  const trimmedName = name.trim();
-  const trimmedImage = image.trim();
-
-  if (!trimmedName) {
-    return "Display name is required.";
-  }
-
-  if (trimmedName.length > 100) {
-    return "Display name must be 100 characters or fewer.";
-  }
-
-  if (trimmedImage) {
-    try {
-      const url = new URL(trimmedImage);
-
-      if (!["http:", "https:"].includes(url.protocol)) {
-        return "Enter a valid http or https image URL.";
-      }
-    } catch {
-      return "Enter a valid http or https image URL.";
-    }
-  }
-
-  return null;
-}
 
 export default ProfileView;
