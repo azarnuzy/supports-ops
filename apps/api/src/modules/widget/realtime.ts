@@ -5,6 +5,17 @@ export type WidgetEvent = {
   data: unknown;
 };
 
+const generatingTickets = new Set<string>();
+
+export function setTicketGenerating(ticketId: string, generating: boolean) {
+  if (generating) generatingTickets.add(ticketId);
+  else generatingTickets.delete(ticketId);
+}
+
+export function isTicketGenerating(ticketId: string) {
+  return generatingTickets.has(ticketId);
+}
+
 const redisUrl = process.env.REDIS_URL ?? "redis://localhost:16379";
 let publisher: Redis | undefined;
 

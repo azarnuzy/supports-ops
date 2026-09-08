@@ -4,7 +4,7 @@ import type { AuthVariables } from "../auth/types";
 import { zValidator } from "@hono/zod-validator";
 import { streamSSE } from "hono/streaming";
 import { customerMessageSchema, preChatSchema } from "./schema";
-import { publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
+import { isTicketGenerating, publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
 import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import {
   ClassificationFailedError,
@@ -12,6 +12,7 @@ import {
   createWebSession,
   getApprovedWidget,
   createCustomerMessage,
+  generateAiReply,
   getMessagesAfter,
   getWebSession,
   toPublicWidgetConfig,
@@ -97,6 +98,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       }
       if (result.created) {
         void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+        void generateAiReply(result.message.ticketId, result.message.workspaceId, result.message.content);
       }
       return c.json(result.message, result.created ? 201 : 200);
     } catch (error) {
@@ -122,6 +124,10 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       const unsubscribe = await subscribeToWidgetEvents(replay.ticketId, async (event) => {
         const data = event.data as { position?: number };
         await stream.writeSSE({ data: JSON.stringify(event.data), event: event.type, id: data.position ? String(data.position) : undefined });
+      });
+      await stream.writeSSE({
+        data: JSON.stringify({ status: isTicketGenerating(replay.ticketId) ? "generating" : "ready" }),
+        event: "ticket.status",
       });
       stream.onAbort(unsubscribe);
       await new Promise<void>(() => undefined);
