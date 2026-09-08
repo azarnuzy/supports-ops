@@ -41,6 +41,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   const chat = shadow.querySelector<HTMLElement>("[data-chat]");
   const messageForm = shadow.querySelector<HTMLFormElement>("[data-message-form]");
   const messages = shadow.querySelector<HTMLElement>("[data-messages]");
+  const sessionEnded = shadow.querySelector<HTMLElement>("[data-session-ended]");
+  const startNew = shadow.querySelector<HTMLButtonElement>("[data-start-new]");
   let eventSource: EventSource | undefined;
 
   const appendMessage = (message: { content: string; position: number; senderType: string }) => {
@@ -93,7 +95,11 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     });
     eventSource.addEventListener("ticket.status", (event) => {
       const status = JSON.parse((event as MessageEvent<string>).data) as { status: string };
-      if (input) input.disabled = status.status === "generating";
+      if (input) input.disabled = status.status === "generating" || status.status === "resolved";
+      if (status.status === "resolved") {
+        sessionEnded?.removeAttribute("hidden");
+        startNew?.removeAttribute("hidden");
+      }
     });
     eventSource.addEventListener("attachment.updated", (event) => {
       const update = JSON.parse((event as MessageEvent<string>).data) as {
@@ -129,10 +135,21 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       sessionStorage.setItem(`supportops:web-session:${widgetKey}`, session.accessToken);
       preChat.hidden = true;
       chat?.removeAttribute("hidden");
+      sessionEnded?.setAttribute("hidden", "");
       input?.focus();
     } catch {
       preChatError?.removeAttribute("hidden");
     }
+  });
+  startNew?.addEventListener("click", () => {
+    eventSource?.close();
+    eventSource = undefined;
+    sessionStorage.removeItem(`supportops:web-session:${widgetKey}`);
+    messages?.replaceChildren();
+    sessionEnded?.setAttribute("hidden", "");
+    startNew?.setAttribute("hidden", "");
+    chat?.setAttribute("hidden", "");
+    preChat?.removeAttribute("hidden");
   });
   messageForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -256,7 +273,7 @@ function renderWidget(config: WidgetConfig) {
   <div class="root">
     <section class="panel" data-panel hidden aria-label="${escapeHtml(config.botName)} support chat">
       <header class="header"><h2 class="title">${escapeHtml(config.botName)}</h2><button class="close" data-close aria-label="Close chat">×</button></header>
-      <div class="content"><p class="message">${escapeHtml(config.welcomeMessage)}</p><form class="pre-chat" data-pre-chat><label>Name<input class="input" name="name" autocomplete="name" required /></label><label>Email<input class="input" name="email" type="email" autocomplete="email" required /></label><p class="error" data-pre-chat-error hidden>We could not start your chat. Please try again.</p><button class="start" type="submit">Start chat</button></form><div data-chat hidden><div data-messages></div><form data-message-form><input class="input" data-input placeholder="Type your message…" aria-label="Message" /><input class="input" data-attachment-input type="file" accept="application/pdf,text/plain,image/jpeg,image/png" aria-label="Attachment" /></form></div></div>
+      <div class="content"><p class="message">${escapeHtml(config.welcomeMessage)}</p><form class="pre-chat" data-pre-chat><label>Name<input class="input" name="name" autocomplete="name" required /></label><label>Email<input class="input" name="email" type="email" autocomplete="email" required /></label><p class="error" data-pre-chat-error hidden>We could not start your chat. Please try again.</p><button class="start" type="submit">Start chat</button></form><div data-chat hidden><div data-messages></div><p class="session-ready" data-session-ended hidden>This conversation is resolved and is now read-only.</p><button class="start" data-start-new type="button" hidden>Start a new conversation</button><form data-message-form><input class="input" data-input placeholder="Type your message…" aria-label="Message" /><input class="input" data-attachment-input type="file" accept="application/pdf,text/plain,image/jpeg,image/png" aria-label="Attachment" /></form></div></div>
     </section>
     <button class="launcher" data-launcher aria-label="Open ${escapeHtml(config.botName)} support chat" aria-expanded="false"><svg viewBox="0 0 24 24" width="25" height="25" aria-hidden="true"><path fill="currentColor" d="M4 4.5A2.5 2.5 0 0 1 6.5 2h11A2.5 2.5 0 0 1 20 4.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4.4A2.5 2.5 0 0 1 4 12.5z"/></svg></button>
   </div>`;

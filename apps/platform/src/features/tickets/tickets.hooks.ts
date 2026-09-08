@@ -6,6 +6,8 @@ import {
   getMyTickets,
   getSharedHumanQueue,
   reassignTicket,
+  resolveHumanTicket,
+  sendHumanReply,
   subscribeToSharedHumanQueue,
 } from "./tickets.services";
 
@@ -45,4 +47,14 @@ export function useClaimTicketMutation() {
 export function useReassignTicketMutation() {
   const invalidate = useTicketInvalidation();
   return useMutation({ mutationFn: reassignTicket, onSuccess: invalidate });
+}
+
+export function useSendHumanReplyMutation() {
+  const invalidate = useTicketInvalidation();
+  return useMutation({ mutationFn: sendHumanReply, onSuccess: invalidate });
+}
+
+export function useResolveHumanTicketMutation() {
+  const invalidate = useTicketInvalidation();
+  return useMutation({ mutationFn: resolveHumanTicket, onSuccess: invalidate });
 }

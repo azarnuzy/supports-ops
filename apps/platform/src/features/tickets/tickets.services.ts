@@ -4,6 +4,8 @@ import {
   listMyTickets as listMyTicketsRequest,
   listSharedHumanQueue as listSharedHumanQueueRequest,
   reassignTicket as reassignTicketRequest,
+  resolveHumanTicket as resolveHumanTicketRequest,
+  sendHumanReply as sendHumanReplyRequest,
 } from "@repo/api-client";
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -23,6 +25,14 @@ export function claimTicket(id: string) {
 
 export function reassignTicket(input: { id: string; humanAgentId: string }) {
   return reassignTicketRequest(apiClient, input.id, input.humanAgentId);
+}
+
+export function sendHumanReply(input: { id: string; content: string }) {
+  return sendHumanReplyRequest(apiClient, input.id, input.content);
+}
+
+export function resolveHumanTicket(id: string) {
+  return resolveHumanTicketRequest(apiClient, id);
 }
 
 export function subscribeToSharedHumanQueue(onChange: () => void) {

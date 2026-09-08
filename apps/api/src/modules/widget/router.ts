@@ -4,7 +4,12 @@ import type { AuthVariables } from "../auth/types";
 import { zValidator } from "@hono/zod-validator";
 import { streamSSE } from "hono/streaming";
 import { customerAttachmentSchema, customerMessageSchema, preChatSchema } from "./schema";
-import { isTicketGenerating, publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
+import {
+  isTicketGenerating,
+  publishTicketQueueEvent,
+  publishWidgetEvent,
+  subscribeToWidgetEvents,
+} from "./realtime";
 import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import {
   ClassificationFailedError,
@@ -119,6 +124,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
           type: "message.created",
           data: result.message,
         });
+        void publishTicketQueueEvent(result.message.workspaceId);
         if (customerRequestedHuman(result.message.content)) {
           void escalate(
             result.message.ticketId,
@@ -198,7 +204,12 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       });
       await stream.writeSSE({
         data: JSON.stringify({
-          status: isTicketGenerating(replay.ticketId) ? "generating" : "ready",
+          status:
+            replay.sessionStatus === "CLOSED" || replay.ticketStatus === "RESOLVED"
+              ? "resolved"
+              : isTicketGenerating(replay.ticketId)
+                ? "generating"
+                : "ready",
         }),
         event: "ticket.status",
       });
