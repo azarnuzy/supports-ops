@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
-import { type Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
+import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
 import type { CreateHumanAgentInput } from "./schema";
 import type { HumanAgentResponse, UsersResponse } from "./types";
 import { usersListDefaultLimit } from "./utils";
