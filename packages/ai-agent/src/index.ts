@@ -5,9 +5,11 @@ export {
   ticketCategorySchema,
   ticketPrioritySchema,
 } from "./classification";
+export { createReplyModel, ReplyGenerationFailedError, streamReply } from "./reply";
 export type {
   ClassificationDecision,
   ClassificationModel,
   TicketCategory,
   TicketPriority,
 } from "./classification";
+export type { ReplyDecision, ReplyModel } from "./reply";

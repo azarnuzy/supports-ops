@@ -1,0 +1,61 @@
+# Feature Tracking
+
+Status fitur dan halaman yang dapat dicoba pada SupportOps. Perbarui dokumen
+ini pada saat GitHub issue yang mengubah status fitur ditutup.
+
+Status yang dipakai:
+
+- **Siap dicoba** — alur utama sudah terhubung dan dapat digunakan di lingkungan lokal dengan prasyaratnya.
+- **Sebagian siap** — UI atau fondasi sudah ada, tetapi alur produk belum lengkap.
+- **Belum tersedia** — belum dapat dipakai sebagai fitur produk.
+
+## Prasyarat lokal
+
+| Kebutuhan | Dipakai untuk |
+| --- | --- |
+| Postgres | Seluruh data aplikasi |
+| Redis dan Worker | Publish Knowledge Source serta pengiriman email Session Link |
+| `OPENROUTER_API_KEY` | Embedding saat publish Knowledge Source dan Retrieval test |
+| Domain pada allowlist Web Widget | Memuat widget dari website tersebut |
+
+## Halaman Platform
+
+| Halaman | Akses | Status | Yang dapat dicoba | Batasan saat ini |
+| --- | --- | --- | --- | --- |
+| `/register`, `/login` | Publik | Siap dicoba | Membuat akun Workspace, masuk, dan keluar. | — |
+| `/` | Pengguna masuk | Siap dicoba | Melihat ringkasan profil dan metadata Workspace. | Bukan dashboard metrik Ticket. |
+| `/profile` | Pengguna masuk | Siap dicoba | Mengubah nama tampilan dan URL avatar. | — |
+| `/settings/agents` | Admin | Siap dicoba | Membuat Human Agent dan melihat daftar Human Agent dalam Workspace. | Belum ada pengelolaan lanjutan seperti edit/nonaktifkan akun. |
+| `/settings/widget` | Admin | Siap dicoba | Mengatur nama AI, pesan sambutan/penutup, warna, domain yang diizinkan, preview, dan embed snippet. | Pesan penutup belum dipicu karena Resolution belum tersedia. |
+| `/knowledge` | Admin | Siap dicoba | Membuat, mengubah, menghapus, dan publish Manual FAQ; memilih Customer-Safe atau Internal-Only; menjalankan Retrieval test. | Hanya Manual FAQ. Sumber yang dipublish Customer-Safe dipakai oleh AI Agent di Web Widget; Internal-Only tidak pernah dipakai untuk balasan Customer. |
+| `/chat` | Pengguna masuk | Sebagian siap | Menjelajahi tampilan inbox, pencarian/filter tampilan, dan panel detail percakapan contoh. | Semua percakapan dan tindakan masih data/UI contoh; belum membaca atau mengelola Ticket nyata. |
+| `/tickets/mine` | Human Agent | Sebagian siap | Melihat halaman My tickets. | Claim dan daftar Ticket milik Human Agent belum terhubung. |
+| `/gallery` | Pengguna masuk | Siap dicoba | Melihat komponen visual dan status Ticket untuk referensi desain. | Hanya galeri komponen, bukan fitur operasional. |
+
+## Web Widget
+
+| Kemampuan | Status | Yang dapat dicoba | Batasan saat ini |
+| --- | --- | --- | --- |
+| Memuat widget dari embed snippet | Siap dicoba | Pasang snippet pada domain yang diizinkan, lalu buka launcher. | Widget ditolak dari domain di luar allowlist. |
+| Pre-Chat dan Web Session | Siap dicoba | Customer mengisi nama dan email untuk memulai Web Session. | Email Session Link membutuhkan Redis, Worker, dan konfigurasi layanan email. |
+| Mengirim pesan Customer dan balasan AI Agent | Siap dicoba | Pesan pertama membuat Ticket; AI Agent mengambil Knowledge Source Customer-Safe yang sudah dipublish lalu membalas dalam bahasa Customer. Balasan muncul bertahap melalui SSE dan input terkunci selama generasi. | Jika tidak ada sumber yang mendukung jawaban, generasi gagal dua kali, atau permintaan tetap ambigu setelah dua klarifikasi, Ticket dieskalasi; belum ada UI Human Agent untuk menanganinya. Membutuhkan `OPENROUTER_API_KEY`, Postgres, Redis, Worker, dan Knowledge Source Customer-Safe yang dipublish. |
+
+## Alur support yang belum tersedia
+
+| Fitur | Status |
+| --- | --- |
+| AI Agent menjawab dari Customer-Safe Knowledge | Siap dicoba di Web Widget; lihat prasyarat dan batasan di atas. |
+| Escalation, Shared Human Queue, Claim, dan Takeover | Belum tersedia |
+| Human Agent membalas dan melakukan Resolution | Belum tersedia |
+| AI Copilot dan Suggested Reply | Belum tersedia |
+| Activity Timeline, AI Activity, Follow-Up, dan Auto-Resolution | Belum tersedia |
+| Attachment, WhatsApp, email sebagai Channel support, dan Business Tools | Belum tersedia |
+
+## Aturan pembaruan
+
+Saat menutup GitHub issue yang menambah, menghapus, atau mengubah kesiapan fitur:
+
+1. Perbarui baris atau bagian terkait di dokumen ini pada perubahan yang sama.
+2. Jelaskan kemampuan yang benar-benar dapat dicoba dan prasyaratnya.
+3. Catat batasan yang masih tersisa; pindahkan fitur ke **Siap dicoba** hanya bila alur utamanya terhubung.
+4. Sertakan `docs/feature-tracking.md` dalam ringkasan penutupan issue bila status tracking berubah.

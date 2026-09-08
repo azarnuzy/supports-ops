@@ -62,7 +62,24 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     eventSource?.close();
     eventSource = new EventSource(`${apiUrl.replace(/\/$/, "")}/widget/events?token=${encodeURIComponent(accessToken)}`);
     eventSource.addEventListener("message.created", (event) => {
-      appendMessage(JSON.parse((event as MessageEvent<string>).data) as { content: string; position: number; senderType: string });
+      const message = JSON.parse((event as MessageEvent<string>).data) as { content: string; position: number; senderType: string };
+      messages?.querySelector(`[data-provisional-id]`)?.remove();
+      appendMessage(message);
+    });
+    eventSource.addEventListener("message.delta", (event) => {
+      const delta = JSON.parse((event as MessageEvent<string>).data) as { delta: string; provisionalId: string };
+      let bubble = messages?.querySelector<HTMLElement>(`[data-provisional-id="${delta.provisionalId}"]`);
+      if (!bubble) {
+        bubble = document.createElement("p");
+        bubble.className = "message";
+        bubble.dataset.provisionalId = delta.provisionalId;
+        messages?.append(bubble);
+      }
+      bubble.textContent += delta.delta;
+    });
+    eventSource.addEventListener("ticket.status", (event) => {
+      const status = JSON.parse((event as MessageEvent<string>).data) as { status: string };
+      if (input) input.disabled = status.status === "generating";
     });
   };
 
@@ -110,8 +127,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       }
       input.value = "";
     } finally {
-      input.disabled = false;
-      input.focus();
+      if (!eventSource) input.disabled = false;
+      if (!input.disabled) input.focus();
     }
   });
 

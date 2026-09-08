@@ -1,9 +1,18 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { ClassificationFailedError, classifyMessage, createClassificationModel } from "@repo/ai-agent";
-import { classificationConfig } from "../../config";
+import {
+  ClassificationFailedError,
+  classifyMessage,
+  createClassificationModel,
+  createReplyModel,
+  ReplyGenerationFailedError,
+  streamReply,
+} from "@repo/ai-agent";
+import { createOpenAiEmbeddingClient as createEmbeddingClient, searchChunks as findKnowledgeChunks } from "@repo/knowledge";
+import { aiAgentConfig, classificationConfig, embeddingConfig } from "../../config";
 import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
+import { publishWidgetEvent, setTicketGenerating } from "./realtime";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -22,6 +31,13 @@ export class ClassificationNotConfiguredError extends Error {
 }
 
 export { ClassificationFailedError };
+
+export class ReplyNotConfiguredError extends Error {
+  constructor() {
+    super("Configure OPENROUTER_API_KEY to generate AI Agent replies.");
+    this.name = "ReplyNotConfiguredError";
+  }
+}
 
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }
@@ -168,6 +184,105 @@ async function appendMessage(ticketId: string, workspaceId: string, input: Custo
     });
     return { created: true, message };
   });
+}
+
+/** Starts after the Customer message has been committed. Streaming fragments
+ * never acquire a Message position; only the completed AI Agent reply does. */
+export async function generateAiReply(ticketId: string, workspaceId: string, customerMessage: string) {
+  const ticket = await unscopedPrisma.ticket.findUnique({ select: { status: true }, where: { id: ticketId } });
+  if (!ticket || ticket.status !== "AI_HANDLING") return;
+  if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey) {
+    await escalate(ticketId, workspaceId, "reply_not_configured");
+    return;
+  }
+
+  const provisionalId = randomUUID();
+  setTicketGenerating(ticketId, true);
+  await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "generating" } });
+
+  try {
+    const embeddingClient = createEmbeddingClient({ ...embeddingConfig, apiKey: embeddingConfig.apiKey });
+    const [embedding] = await embeddingClient.embed([customerMessage]);
+    const sources = embedding
+      ? await findKnowledgeChunks(unscopedPrisma, { embedding, workspaceId, retrievalMode: "CUSTOMER" })
+      : [];
+
+    await unscopedPrisma.aiActivity.create({
+      data: {
+        eventType: "KNOWLEDGE_RETRIEVED",
+        id: randomUUID(),
+        metadata: { chunkIds: sources.map((source) => source.chunkId), knowledgeSourceIds: sources.map((source) => source.knowledgeSourceId) },
+        ticketId,
+        workspaceId,
+      },
+    });
+
+    const clarificationCount = await unscopedPrisma.aiActivity.count({
+      where: { eventType: "CLARIFICATION_ASKED", ticketId },
+    });
+    const model = createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey });
+    let decision: Awaited<ReturnType<typeof streamReply>> | undefined;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        decision = await streamReply({
+          clarificationCount,
+          customerMessage,
+          model,
+          onDelta: (delta) => publishWidgetEvent(ticketId, { type: "message.delta", data: { delta, provisionalId } }),
+          sources: sources.map((source) => ({ id: source.chunkId, content: source.content })),
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!decision) throw lastError ?? new ReplyGenerationFailedError();
+
+    if (decision.decision === "ESCALATE" || (decision.decision === "CLARIFY" && clarificationCount >= 2)) {
+      await escalate(ticketId, workspaceId, decision.decision === "CLARIFY" ? "clarification_limit" : "no_grounded_answer");
+      return;
+    }
+    if (!decision.content) throw new ReplyGenerationFailedError();
+
+    const message = await appendAiMessage(ticketId, workspaceId, decision.content);
+    await unscopedPrisma.aiActivity.create({
+      data: {
+        eventType: decision.decision === "CLARIFY" ? "CLARIFICATION_ASKED" : "AI_REPLIED",
+        id: randomUUID(), metadata: { provisionalId }, ticketId, workspaceId,
+      },
+    });
+    await publishWidgetEvent(ticketId, { type: "message.created", data: message });
+  } catch {
+    await escalate(ticketId, workspaceId, "generation_failed");
+  } finally {
+    setTicketGenerating(ticketId, false);
+    await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "ready" } });
+  }
+}
+
+async function appendAiMessage(ticketId: string, workspaceId: string, content: string) {
+  return unscopedPrisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.update({ data: { messageSeq: { increment: 1 } }, where: { id: ticketId } });
+    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
+    return tx.message.create({
+      data: {
+        content, externalMessageId: `ai:${randomUUID()}`, id: randomUUID(), memorySessionId: conversation.id,
+        message: { content }, position: ticket.messageSeq, role: "assistant", runId: randomUUID(),
+        senderType: "AI_AGENT", ticketId, turn: ticket.messageSeq, workspaceId,
+      },
+    });
+  });
+}
+
+async function escalate(ticketId: string, workspaceId: string, reason: string) {
+  await unscopedPrisma.$transaction(async (tx) => {
+    await tx.ticket.update({ data: { status: "ESCALATED" }, where: { id: ticketId } });
+    await tx.aiActivity.create({
+      data: { eventType: "ESCALATED", id: randomUUID(), metadata: { reason }, ticketId, workspaceId },
+    });
+  });
+  await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "escalated" } });
 }
 
 async function createTicketAndFirstMessage(

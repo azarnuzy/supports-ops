@@ -12,6 +12,7 @@ const defaultBetterAuthSecret = "dev-change-me";
 const productionSecretMinimumLength = 32;
 const defaultEmbeddingModel = "openai/text-embedding-3-small";
 const defaultFastModel = "openai/gpt-4.1-nano";
+const defaultMainModel = "openai/gpt-4o-mini";
 export const modelGatewayBaseUrl = "https://openrouter.ai/api/v1";
 
 const runtimeEnvSchema = z.enum(["development", "test", "production"]).default("development");
@@ -53,6 +54,7 @@ const apiEnvSchema = z
     EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
+    LLM_MODEL_MAIN: z.string().trim().min(1).default(defaultMainModel),
     LOG_LEVEL: logLevelSchema,
     OPENROUTER_API_KEY: optionalStringSchema,
     S3_ACCESS_KEY_ID: optionalStringSchema,
@@ -128,6 +130,12 @@ export const classificationConfig = {
   apiKey: env.OPENROUTER_API_KEY,
   baseUrl: modelGatewayBaseUrl,
   modelId: env.LLM_MODEL_FAST,
+} as const;
+
+export const aiAgentConfig = {
+  apiKey: env.OPENROUTER_API_KEY,
+  baseUrl: modelGatewayBaseUrl,
+  modelId: env.LLM_MODEL_MAIN,
 } as const;
 
 export const storageConfig = {
