@@ -21,6 +21,19 @@ export type ClassificationDecision =
   | { qualifies: true; title: string; category: TicketCategory; priority: TicketPriority }
   | { qualifies: false; reply: string };
 
+/**
+ * The model provider rejected the call outright (bad/revoked API key, rate
+ * limit, transport failure) or kept returning output that failed schema
+ * validation across every retry. Distinct from a missing API key, which the
+ * caller can detect before ever reaching the provider.
+ */
+export class ClassificationFailedError extends Error {
+  constructor(options?: { cause?: unknown }) {
+    super("The AI Agent could not classify this message.", options);
+    this.name = "ClassificationFailedError";
+  }
+}
+
 const classificationOutputSchema = z.object({
   isSupportRequest: z.boolean(),
   title: z.string().trim().min(1).max(120).nullable(),
@@ -60,13 +73,19 @@ export async function classifyMessage(params: {
   model: ClassificationModel;
   content: string;
 }): Promise<ClassificationDecision> {
-  const { output } = await extract({
-    instructions,
-    model: params.model,
-    outputSchema: classificationOutputSchema,
-    retries: { maxAttempts: 2 },
-    text: params.content,
-  });
+  let output: z.infer<typeof classificationOutputSchema>;
+
+  try {
+    ({ output } = await extract({
+      instructions,
+      model: params.model,
+      outputSchema: classificationOutputSchema,
+      retries: { maxAttempts: 2 },
+      text: params.content,
+    }));
+  } catch (error) {
+    throw new ClassificationFailedError({ cause: error });
+  }
 
   return narrowClassification(output, params.content);
 }

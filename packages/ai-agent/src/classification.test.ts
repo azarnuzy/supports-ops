@@ -15,7 +15,9 @@ const { extractMock, OpenAIClientMock, completionModel } = vi.hoisted(() => {
 vi.mock("@anvia/core/extractor", () => ({ extract: extractMock }));
 vi.mock("@anvia/openai", () => ({ OpenAIClient: OpenAIClientMock }));
 
-const { classifyMessage, createClassificationModel } = await import("./classification");
+const { ClassificationFailedError, classifyMessage, createClassificationModel } = await import(
+  "./classification"
+);
 
 describe("createClassificationModel", () => {
   beforeEach(() => {
@@ -122,5 +124,15 @@ describe("classifyMessage", () => {
     if (!decision.qualifies) {
       expect(decision.reply.length).toBeGreaterThan(0);
     }
+  });
+
+  it("wraps a provider failure (e.g. a revoked API key) in ClassificationFailedError", async () => {
+    const providerError = new Error("401 User not found.");
+    extractMock.mockRejectedValue(providerError);
+
+    const rejection = classifyMessage({ content: "hello", model: { id: "fake-model" } as never });
+
+    await expect(rejection).rejects.toBeInstanceOf(ClassificationFailedError);
+    await expect(rejection).rejects.toMatchObject({ cause: providerError });
   });
 });

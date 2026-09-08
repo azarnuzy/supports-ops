@@ -7,6 +7,7 @@ import { customerMessageSchema, preChatSchema } from "./schema";
 import { publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
 import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import {
+  ClassificationFailedError,
   ClassificationNotConfiguredError,
   createWebSession,
   getApprovedWidget,
@@ -101,6 +102,9 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     } catch (error) {
       if (error instanceof ClassificationNotConfiguredError) {
         return c.json({ error: "classification_not_configured", message: error.message }, 503);
+      }
+      if (error instanceof ClassificationFailedError) {
+        return c.json({ error: "classification_failed", message: error.message }, 502);
       }
       throw error;
     }

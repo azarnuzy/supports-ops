@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { classifyMessage, createClassificationModel } from "@repo/ai-agent";
+import { ClassificationFailedError, classifyMessage, createClassificationModel } from "@repo/ai-agent";
 import { classificationConfig } from "../../config";
 import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
@@ -20,6 +20,8 @@ export class ClassificationNotConfiguredError extends Error {
     this.name = "ClassificationNotConfiguredError";
   }
 }
+
+export { ClassificationFailedError };
 
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }

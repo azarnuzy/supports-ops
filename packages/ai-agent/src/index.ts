@@ -1,4 +1,5 @@
 export {
+  ClassificationFailedError,
   classifyMessage,
   createClassificationModel,
   ticketCategorySchema,
