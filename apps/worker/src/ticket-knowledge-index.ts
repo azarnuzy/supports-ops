@@ -116,7 +116,9 @@ function buildTicketKnowledgeContent(ticket: {
   const sections: string[] = [`Ticket: ${ticket.title} (${ticket.category})`];
 
   const conversation = ticket.messages
-    .map((message) => `${senderLabel[message.senderType] ?? message.senderType}: ${message.content}`)
+    .map(
+      (message) => `${senderLabel[message.senderType] ?? message.senderType}: ${message.content}`,
+    )
     .join("\n");
   if (conversation) sections.push(conversation);
 
