@@ -1,6 +1,6 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
-import { auth } from "../apps/api/src/modules/auth/auth";
+import { registerAdminWorkspace } from "../apps/api/src/modules/registration/services";
 import { unscopedPrisma as prisma } from "../apps/api/src/utils/prisma";
 
 const rl = createInterface({ input, output });
@@ -30,19 +30,16 @@ try {
       where: { id: existingUser.id },
       data: {
         ...(name ? { name } : {}),
-        role: "admin",
+        role: "ADMIN",
       },
     });
 
     output.write(`Admin user ready: ${user.email}. Existing password was not changed.\n`);
   } else {
-    const { user } = await auth.api.createUser({
-      body: {
-        email,
-        name: name ?? email,
-        password,
-        role: "admin",
-      },
+    const { user } = await registerAdminWorkspace({
+      email,
+      name: name ?? email,
+      password,
     });
 
     output.write(`Admin user ready: ${user.email}\n`);
