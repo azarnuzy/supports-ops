@@ -51,6 +51,7 @@ export class HumanAgentNotFoundError extends Error {}
 export class TicketNotOwnedError extends Error {}
 export class SuggestedReplyNotConfiguredError extends Error {}
 export class TicketNotAvailableForTakeoverError extends Error {}
+export class TicketNotFoundError extends Error {}
 
 export function listSharedHumanQueue() {
   return prisma.ticket.findMany({
@@ -496,6 +497,32 @@ export async function resolveTicket(ticketId: string, humanAgentId: string) {
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "resolved" } });
   await publishTicketQueueEvent(closing.workspaceId);
   return delivered;
+}
+
+/**
+ * Soft-deletes a Ticket and, in the same transaction, its indexed Ticket
+ * Knowledge chunks — so the retrieval a returning Customer relies on stops
+ * seeing this Ticket's content immediately, not on the next re-index.
+ */
+export async function deleteTicket(ticketId: string, adminId: string, workspaceId: string) {
+  await unscopedPrisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findFirst({
+      select: { id: true },
+      where: { deletedAt: null, id: ticketId, status: "RESOLVED", workspaceId },
+    });
+    if (!ticket) throw new TicketNotFoundError();
+
+    await tx.ticket.update({
+      data: { deletedAt: new Date(), deletedBy: adminId },
+      where: { id: ticketId },
+    });
+    await tx.chunk.updateMany({
+      data: { deletedAt: new Date() },
+      where: { deletedAt: null, kind: "TICKET", ticketId, workspaceId },
+    });
+  });
+  await cancelFollowUpTimers(ticketId);
+  await publishTicketQueueEvent(workspaceId);
 }
 
 async function deliverMessage(message: Awaited<ReturnType<typeof unscopedPrisma.message.create>>) {

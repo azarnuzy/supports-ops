@@ -8,6 +8,7 @@ import { humanReplySchema, reassignTicketSchema } from "./schema";
 import {
   claimTicket,
   completeHandoff,
+  deleteTicket,
   HumanAgentNotFoundError,
   listMyTickets,
   listAiHandlingTickets,
@@ -16,6 +17,7 @@ import {
   suggestReply,
   SuggestedReplyNotConfiguredError,
   TicketAlreadyClaimedError,
+  TicketNotFoundError,
   TicketNotOwnedError,
   TicketNotAvailableForTakeoverError,
   takeOverTicket,
@@ -126,6 +128,17 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     } catch (error) {
       if (error instanceof HumanAgentNotFoundError)
         return c.json({ error: "human_agent_not_found" }, 422);
+      throw error;
+    }
+  })
+  .delete("/:id", async (c) => {
+    const user = requireAdmin(c);
+    if (!user) return c.json({ error: "forbidden" }, 403);
+    try {
+      await deleteTicket(c.req.param("id"), user.id, user.workspaceId);
+      return c.body(null, 204);
+    } catch (error) {
+      if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
       throw error;
     }
   });
