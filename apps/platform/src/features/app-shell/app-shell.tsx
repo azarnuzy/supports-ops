@@ -10,6 +10,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -21,19 +22,57 @@ import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
+  AlarmClockIcon,
+  AtSignIcon,
+  CameraIcon,
+  InboxIcon,
   LayoutDashboardIcon,
   LibraryBigIcon,
   LogOutIcon,
+  MailIcon,
+  MessageCircleIcon,
+  MessageSquareHeartIcon,
   MessageSquareIcon,
+  MessagesSquareIcon,
   MonitorIcon,
+  PackageIcon,
+  PhoneIcon,
+  SendIcon,
   SettingsIcon,
+  Share2Icon,
+  StarIcon,
   TicketCheckIcon,
   UserRoundIcon,
+  UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth";
 import { getInitials } from "../../lib/utils";
 import { HeaderControls } from "./components/header-controls";
+
+const inboxShortcuts = [
+  { icon: InboxIcon, label: "Inbox", count: 24, active: true },
+  { icon: AtSignIcon, label: "Mentions", count: 3 },
+  { icon: AlarmClockIcon, label: "Snoozed", count: 2 },
+  { icon: SendIcon, label: "Sent" },
+  { icon: MessagesSquareIcon, label: "All conversations" },
+  { icon: UsersIcon, label: "Unassigned", count: 7 },
+];
+
+const channelShortcuts = [
+  { icon: MailIcon, label: "Email", count: 18 },
+  { icon: MessagesSquareIcon, label: "Chat", count: 5 },
+  { icon: MessageCircleIcon, label: "WhatsApp", count: 1 },
+  { icon: CameraIcon, label: "Instagram", count: 0 },
+  { icon: Share2Icon, label: "Facebook", count: 0 },
+  { icon: PhoneIcon, label: "Phone", count: 0 },
+];
+
+const viewShortcuts = [
+  { icon: StarIcon, label: "VIP Customers", count: 8 },
+  { icon: PackageIcon, label: "Orders & Returns", count: 6 },
+  { icon: MessageSquareHeartIcon, label: "Product Feedback", count: 2 },
+];
 
 export function PlatformAppShell({
   children,
@@ -58,6 +97,8 @@ export function PlatformAppShell({
   if (!user.data) {
     return null;
   }
+
+  const isChatPage = location.pathname.startsWith("/chat");
 
   const navItems =
     user.data.role === "ADMIN"
@@ -113,6 +154,62 @@ export function PlatformAppShell({
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          {isChatPage ? (
+            <>
+              <SidebarSeparator />
+              <SidebarGroup>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {inboxShortcuts.map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <SidebarMenuButton
+                          type="button"
+                          isActive={item.active}
+                          tooltip={item.label}
+                        >
+                          <item.icon className="size-4 shrink-0" />
+                          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                        </SidebarMenuButton>
+                        {item.count ? <SidebarMenuBadge>{item.count}</SidebarMenuBadge> : null}
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+              <SidebarGroup>
+                <SidebarGroupLabel>Channels</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {channelShortcuts.map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <SidebarMenuButton type="button" tooltip={item.label}>
+                          <item.icon className="size-4 shrink-0" />
+                          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                        </SidebarMenuButton>
+                        {item.count ? <SidebarMenuBadge>{item.count}</SidebarMenuBadge> : null}
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+              <SidebarGroup>
+                <SidebarGroupLabel>Views</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {viewShortcuts.map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <SidebarMenuButton type="button" tooltip={item.label}>
+                          <item.icon className="size-4 shrink-0" />
+                          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                        </SidebarMenuButton>
+                        {item.count ? <SidebarMenuBadge>{item.count}</SidebarMenuBadge> : null}
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </>
+          ) : null}
         </SidebarContent>
         <SidebarSeparator />
         <SidebarFooter>
