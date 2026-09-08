@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ResolutionReason" ADD VALUE 'CUSTOMER_CONFIRMED';
