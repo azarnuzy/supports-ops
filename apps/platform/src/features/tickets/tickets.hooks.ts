@@ -1,3 +1,4 @@
+import type { ListTicketsFilters } from "@repo/api-client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { queryKeys } from "../../lib/query-keys";
@@ -7,6 +8,8 @@ import {
   getLiveAiTickets,
   getMyTickets,
   getSharedHumanQueue,
+  getTicketDetail,
+  getTickets,
   reassignTicket,
   resolveHumanTicket,
   sendHumanReply,
@@ -29,6 +32,20 @@ export const liveAiTicketsQueryOptions = queryOptions({
   queryKey: queryKeys.workspace.liveAiTickets,
 });
 
+export function ticketsQueryOptions(filters: ListTicketsFilters) {
+  return queryOptions({
+    queryFn: () => getTickets(filters),
+    queryKey: [...queryKeys.workspace.tickets, filters] as const,
+  });
+}
+
+export function ticketDetailQueryOptions(id: string) {
+  return queryOptions({
+    queryFn: () => getTicketDetail(id),
+    queryKey: queryKeys.workspace.ticket(id),
+  });
+}
+
 function useTicketInvalidation() {
   const queryClient = useQueryClient();
   return () =>
@@ -36,6 +53,7 @@ function useTicketInvalidation() {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.sharedHumanQueue }),
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.myTickets }),
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.liveAiTickets }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.tickets }),
     ]);
 }
 
