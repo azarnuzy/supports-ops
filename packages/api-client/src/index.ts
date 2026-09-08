@@ -233,9 +233,11 @@ export async function sendHumanReply(client: ApiClient, id: string, content: str
 export async function generateSuggestedReply(client: ApiClient, id: string) {
   const response = await client.tickets[":id"]["suggested-reply"].$post({ param: { id } });
   if (response.status === 401) throw new UnauthorizedApiError();
-  if (response.status === 403) throw new Error("Only the assigned Human Agent can request a Suggested Reply.");
+  if (response.status === 403)
+    throw new Error("Only the assigned Human Agent can request a Suggested Reply.");
   if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
-  if (response.status === 503) throw new Error("Configure OPENROUTER_API_KEY to use the AI Copilot.");
+  if (response.status === 503)
+    throw new Error("Configure OPENROUTER_API_KEY to use the AI Copilot.");
   if (!response.ok) throw new Error("Failed to generate the Suggested Reply.");
   return (await response.json()) as { suggestedReply: { content: string } };
 }
@@ -243,7 +245,8 @@ export async function generateSuggestedReply(client: ApiClient, id: string) {
 export async function resolveHumanTicket(client: ApiClient, id: string) {
   const response = await client.tickets[":id"].resolve.$post({ param: { id } });
   if (response.status === 401) throw new UnauthorizedApiError();
-  if (response.status === 403) throw new Error("Only the assigned Human Agent can resolve this Ticket.");
+  if (response.status === 403)
+    throw new Error("Only the assigned Human Agent can resolve this Ticket.");
   if (response.status === 409) throw new Error("This Ticket is already resolved.");
   if (!response.ok) throw new Error("Failed to resolve the Ticket.");
   return response.json();

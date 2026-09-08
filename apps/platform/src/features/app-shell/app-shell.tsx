@@ -104,12 +104,14 @@ export function PlatformAppShell({
     user.data.role === "ADMIN"
       ? [
           { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
+          { icon: InboxIcon, label: "Inbox", to: "/tickets" },
           { icon: MessageSquareIcon, label: "Live tickets", to: "/tickets/queue" },
           { icon: UserRoundIcon, label: "My tickets", to: "/tickets/mine" },
           { icon: LibraryBigIcon, label: "Knowledge", to: "/knowledge" },
           { icon: SettingsIcon, label: "Settings", to: "/settings/agents" },
         ]
       : [
+          { icon: InboxIcon, label: "Inbox", to: "/tickets" },
           { icon: TicketCheckIcon, label: "Shared queue", to: "/tickets/queue" },
           { icon: UserRoundIcon, label: "My tickets", to: "/tickets/mine" },
         ];
