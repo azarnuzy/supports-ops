@@ -131,6 +131,18 @@ TELEMETRY_API_KEY_HEADER="authorization"
 
 If `TELEMETRY_API_KEY_HEADER` is `authorization`, the exporter sends `Authorization: Bearer <key>`. Other header names send the raw key value, which fits providers that expect headers such as `x-honeycomb-team`.
 
+## AI Agent Evals
+
+`packages/ai-agent/src/evals` runs Eval Cases against a fixed, in-memory corpus — never against a live Workspace — to judge whether a change to the AI Agent made things better or worse. Run by hand, not in CI (ADR-0010):
+
+```sh
+OPENROUTER_API_KEY=... pnpm eval:ai-agent
+pnpm eval:ai-agent -- --category grounding
+pnpm eval:ai-agent -- --category grounding --case password-reset-answered-from-source
+```
+
+Eight categories defend one requirement each: visibility safety, grounding, escalation that must happen, escalation that must not happen, tool calling, classification, resolution detection, and language. Every category includes a negative-control case that always fails, so a broken evaluator can't quietly mark everything as passing. Results print to the console and report through the OTel eval reporter alongside agent telemetry.
+
 ## Docker
 
 ```sh
