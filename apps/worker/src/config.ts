@@ -43,6 +43,8 @@ const workerEnvSchema = z.object({
   MISTRAL_API_KEY: optionalStringSchema,
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:16379"),
   EMAIL_FROM: emailFromSchema,
+  API_INTERNAL_URL: z.string().trim().url().default("http://localhost:8000"),
+  INTERNAL_WORKER_TOKEN: optionalStringSchema,
   RESEND_API_KEY: optionalStringSchema,
   S3_ACCESS_KEY_ID: optionalStringSchema,
   S3_BUCKET: z.string().trim().min(1).default("supportops"),
@@ -99,6 +101,11 @@ export const emailConfig = {
   from: env.EMAIL_FROM,
   resendApiKey: env.RESEND_API_KEY,
   smtpUrl: env.SMTP_URL ?? (env.NODE_ENV === "production" ? undefined : "smtp://localhost:1025"),
+} as const;
+
+export const apiConfig = {
+  internalUrl: env.API_INTERNAL_URL,
+  workerToken: env.INTERNAL_WORKER_TOKEN,
 } as const;
 
 export const loggerConfig = {

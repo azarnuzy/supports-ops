@@ -16,6 +16,7 @@ Status yang dipakai:
 | Postgres | Seluruh data aplikasi |
 | Redis dan Worker | Publish Knowledge Source serta pengiriman email Session Link |
 | `OPENROUTER_API_KEY` | Embedding saat publish Knowledge Source dan Retrieval test |
+| S3-compatible object storage, `MISTRAL_API_KEY`, dan `INTERNAL_WORKER_TOKEN` | Mengunggah dan membaca Attachment dari Web Widget |
 | Domain pada allowlist Web Widget | Memuat widget dari website tersebut |
 
 ## Halaman Platform
@@ -50,7 +51,8 @@ Status yang dipakai:
 | AI Copilot dan Suggested Reply | Belum tersedia |
 | Activity Timeline, AI Activity, Follow-Up, dan Auto-Resolution | Belum tersedia |
 | Business Tools | Sebagian siap — AI Agent dapat membaca Customer, Subscription, dan Invoice dari Business System terpisah; kegagalan tool serta permintaan perubahan langganan/refund dieskalasi. Jalankan Postgres dan Business System (`docker compose -f docker-compose.dev.yaml up -d`) serta gunakan Customer demo `budi@example.com` atau `siti@example.com`. Belum ada UI Admin untuk melihat AI Activity atau mengelola data Business System. |
-| Attachment, WhatsApp, dan email sebagai Channel support | Belum tersedia |
+| Attachment | Siap dicoba di Web Widget — kirim PDF, plain text, JPEG, atau PNG (maks. 10 MB) bersama konteks singkat; status processing terlihat dan teks hasil ekstraksi menjadi konteks Ticket untuk balasan AI. Attachment dapat dibuka dari permukaan Ticket terautentikasi melalui URL bertanda-tangan singkat. Membutuhkan object storage, Worker, `MISTRAL_API_KEY` (kecuali plain text), `INTERNAL_WORKER_TOKEN`, dan konfigurasi AI Agent. Belum ada Ticket UI Human Agent; endpoint pembukaan siap untuk dihubungkan saat alur tersebut tersedia. |
+| WhatsApp dan email sebagai Channel support | Belum tersedia |
 
 ## Aturan pembaruan
 

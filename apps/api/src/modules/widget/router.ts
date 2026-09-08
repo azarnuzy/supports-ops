@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import type { AuthVariables } from "../auth/types";
 import { zValidator } from "@hono/zod-validator";
 import { streamSSE } from "hono/streaming";
-import { customerMessageSchema, preChatSchema } from "./schema";
+import { customerAttachmentSchema, customerMessageSchema, preChatSchema } from "./schema";
 import { isTicketGenerating, publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
 import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import {
@@ -12,12 +12,14 @@ import {
   createWebSession,
   getApprovedWidget,
   createCustomerMessage,
+  createCustomerAttachment,
   generateAiReply,
   getMessagesAfter,
   getWebSession,
   toPublicWidgetConfig,
   UnapprovedWidgetOriginError,
   WidgetNotFoundError,
+  InvalidAttachmentError,
 } from "./services";
 import type { PublicWidgetConfig } from "./services";
 
@@ -74,6 +76,10 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     "/messages",
     cors({ allowHeaders: ["Content-Type"], allowMethods: ["POST", "OPTIONS"], credentials: false, origin: "*" }),
   )
+  .use(
+    "/attachments",
+    cors({ allowHeaders: ["Content-Type"], allowMethods: ["POST", "OPTIONS"], credentials: false, origin: "*" }),
+  )
   .use("/events", cors({ allowMethods: ["GET", "OPTIONS"], credentials: false, origin: "*" }))
   .get("/config", (c) => c.json(c.get("widgetConfig"), 200))
   .post("/pre-chat", zValidator("json", preChatSchema), async (c) => {
@@ -107,6 +113,21 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       }
       if (error instanceof ClassificationFailedError) {
         return c.json({ error: "classification_failed", message: error.message }, 502);
+      }
+      throw error;
+    }
+  })
+  .post("/attachments", zValidator("form", customerAttachmentSchema), async (c) => {
+    const accessToken = c.req.query("token");
+    if (!accessToken) return c.json({ error: "unauthorized" }, 401);
+    try {
+      const result = await createCustomerAttachment(accessToken, c.req.valid("form"));
+      if (!result) return c.json({ error: "unauthorized" }, 401);
+      void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+      return c.json(result, 201);
+    } catch (error) {
+      if (error instanceof InvalidAttachmentError) {
+        return c.json({ error: "invalid_attachment", message: error.message }, 422);
       }
       throw error;
     }

@@ -1,7 +1,7 @@
 import Redis from "ioredis";
 
 export type WidgetEvent = {
-  type: "message.created" | "message.delta" | "message.updated" | "ticket.status";
+  type: "attachment.updated" | "message.created" | "message.delta" | "message.updated" | "ticket.status";
   data: unknown;
 };
 

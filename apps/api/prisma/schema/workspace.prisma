@@ -12,6 +12,7 @@ model Workspace {
   customerIdentities CustomerIdentity[]
   webSessions        WebSession[]
   tickets            Ticket[]
+  attachments        Attachment[]
   knowledgeSources   KnowledgeSource[]
   chunks             Chunk[]
 }
