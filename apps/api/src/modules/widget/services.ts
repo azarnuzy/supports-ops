@@ -44,12 +44,30 @@ export class ReplyNotConfiguredError extends Error {
 
 export class InvalidAttachmentError extends Error {}
 
+const escalationReasons = [
+  "LOW_KNOWLEDGE_CONFIDENCE",
+  "NO_RELEVANT_KNOWLEDGE",
+  "CUSTOMER_REQUESTED_HUMAN",
+  "AI_FAILED_ATTEMPTS",
+  "INTERNAL_ACTION_REQUIRED",
+  "BUSINESS_TOOL_FAILURE",
+  "CONFLICTING_KNOWLEDGE",
+  "AI_GENERATION_FAILED",
+  "AI_TIMEOUT",
+] as const;
+
+type EscalationReason = (typeof escalationReasons)[number];
+
 const attachmentTypes = new Set(["application/pdf", "image/jpeg", "image/png", "text/plain"]);
 const maxAttachmentSizeBytes = 10 * 1024 * 1024;
 
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }
   | { kind: "reply"; reply: string };
+
+export function customerRequestedHuman(content: string) {
+  return /\b(?:human|real (?:person|agent)|live (?:agent|person)|customer service|representative|(?:speak|talk) (?:to|with) (?:a )?(?:human|person|someone|agent)|connect (?:me )?to (?:a )?(?:human|person|agent)|(?:bicara|ngobrol) (?:dengan|sama) (?:human|manusia|orang|cs|customer service)|hubungkan (?:saya|aku) (?:ke|dengan) (?:human|manusia|orang|cs|customer service)|orangnya|cs)\b/i.test(content);
+}
 
 export async function getApprovedWidget(widgetKey: string, origin: string) {
   const config = await unscopedPrisma.webWidgetConfig.findUnique({
@@ -244,7 +262,7 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
   });
   if (!ticket || ticket.status !== "AI_HANDLING") return;
   if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey) {
-    await escalate(ticketId, workspaceId, "reply_not_configured");
+    await escalate(ticketId, workspaceId, "AI_GENERATION_FAILED", customerMessage);
     return;
   }
 
@@ -277,6 +295,10 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
       where: { eventType: "CLARIFICATION_ASKED", ticketId },
     });
     const businessData = await getBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
+    if (!sources.length && !businessData) {
+      await escalate(ticketId, workspaceId, "NO_RELEVANT_KNOWLEDGE", customerMessage);
+      return;
+    }
     const model = createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey });
     let decision: Awaited<ReturnType<typeof streamReply>> | undefined;
     let lastError: unknown;
@@ -303,7 +325,12 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
     if (!decision) throw lastError ?? new ReplyGenerationFailedError();
 
     if (decision.decision === "ESCALATE" || (decision.decision === "CLARIFY" && clarificationCount >= 2)) {
-      await escalate(ticketId, workspaceId, decision.decision === "CLARIFY" ? "clarification_limit" : "no_grounded_answer");
+      await escalate(
+        ticketId,
+        workspaceId,
+        decision.decision === "CLARIFY" ? "AI_FAILED_ATTEMPTS" : decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE",
+        customerMessage,
+      );
       return;
     }
     if (!decision.content) throw new ReplyGenerationFailedError();
@@ -317,7 +344,12 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
     });
     await publishWidgetEvent(ticketId, { type: "message.created", data: message });
   } catch (error) {
-    await escalate(ticketId, workspaceId, error instanceof BusinessToolError ? "business_tool_failed" : "generation_failed");
+    await escalate(
+      ticketId,
+      workspaceId,
+      error instanceof BusinessToolError ? "BUSINESS_TOOL_FAILURE" : "AI_GENERATION_FAILED",
+      customerMessage,
+    );
   } finally {
     setTicketGenerating(ticketId, false);
     const finalTicket = await unscopedPrisma.ticket.findUnique({ select: { status: true }, where: { id: ticketId } });
@@ -393,14 +425,38 @@ async function appendAiMessage(ticketId: string, workspaceId: string, content: s
   });
 }
 
-async function escalate(ticketId: string, workspaceId: string, reason: string) {
-  await unscopedPrisma.$transaction(async (tx) => {
-    await tx.ticket.update({ data: { status: "ESCALATED" }, where: { id: ticketId } });
+export async function escalate(ticketId: string, workspaceId: string, reason: EscalationReason, customerMessage: string) {
+  const acknowledgement = acknowledgementFor(customerMessage);
+  const result = await unscopedPrisma.$transaction(async (tx) => {
+    const transition = await tx.ticket.updateMany({
+      data: { escalatedAt: new Date(), escalationReason: reason, messageSeq: { increment: 1 }, status: "ESCALATED" },
+      where: { id: ticketId, status: "AI_HANDLING" },
+    });
+    if (!transition.count) return null;
+    const ticket = await tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: { messageSeq: true } });
+    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
+    const acknowledgementMessage = await tx.message.create({
+      data: {
+        content: acknowledgement, externalMessageId: `escalation:${randomUUID()}`, id: randomUUID(),
+        memorySessionId: conversation.id, message: { content: acknowledgement }, position: ticket.messageSeq,
+        role: "system", runId: randomUUID(), senderType: "SYSTEM", ticketId, turn: ticket.messageSeq, workspaceId,
+      },
+    });
     await tx.aiActivity.create({
       data: { eventType: "ESCALATED", id: randomUUID(), metadata: { reason }, ticketId, workspaceId },
     });
+    return acknowledgementMessage;
   });
+  if (!result) return;
+  await publishWidgetEvent(ticketId, { type: "message.created", data: result });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "escalated" } });
+}
+
+function acknowledgementFor(customerMessage: string) {
+  const indonesian = /\b(?:saya|aku|mau|tolong|dengan|bicara|hubungkan|masalah|langganan|tagihan)\b/i.test(customerMessage);
+  return indonesian
+    ? "Percakapan Anda sudah diteruskan kepada tim kami. Human Agent akan membantu Anda secepatnya."
+    : "Your conversation has been passed to our team. A Human Agent will help you as soon as possible.";
 }
 
 async function createTicketAndFirstMessage(
