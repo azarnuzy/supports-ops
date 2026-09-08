@@ -11,149 +11,41 @@ import {
 } from "@repo/ui/components/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import { toast } from "@repo/ui/components/sonner";
 import { Textarea } from "@repo/ui/components/textarea";
-import { useQuery } from "@tanstack/react-query";
 import { CopyIcon, MessageCircleIcon, XIcon } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsNav } from "../../components/settings-nav";
-import {
-  useUpdateWebWidgetConfigMutation,
-  webWidgetConfigQueryOptions,
-} from "../../widget-config.hooks";
-
-const widgetScriptUrl = (import.meta.env.VITE_WIDGET_URL ?? "http://localhost:3001").replace(
-  /\/$/,
-  "",
-);
-const domainPattern =
-  /^(?:localhost|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})(?::\d{1,5})?$/i;
-const hexColorPattern = /^#[0-9a-f]{6}$/i;
+import { useWidgetSettingsForm } from "./widget.hooks";
+import { hexColorPattern } from "./widget.services";
 
 const WebWidgetSettingsView = () => {
-  const config = useQuery(webWidgetConfigQueryOptions);
-  const updateConfig = useUpdateWebWidgetConfigMutation();
-
-  const [botName, setBotName] = useState("");
-  const [welcomeMessage, setWelcomeMessage] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("#2563eb");
-  const [closingMessage, setClosingMessage] = useState("");
-  const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
-  const [domainDraft, setDomainDraft] = useState("");
-  const [domainError, setDomainError] = useState<string | null>(null);
-
-  const current = config.data?.webWidgetConfig;
-  const currentClosingMessage = config.data?.closingMessage ?? "";
-
-  useEffect(() => {
-    if (current) {
-      setBotName(current.botName);
-      setWelcomeMessage(current.welcomeMessage);
-      setPrimaryColor(current.primaryColor);
-      setAllowedDomains(current.allowedDomains);
-      setClosingMessage(currentClosingMessage);
-    }
-  }, [current, currentClosingMessage]);
-
-  const validationError = useMemo(
-    () => validateWidgetConfig(botName, welcomeMessage, primaryColor, closingMessage),
-    [botName, welcomeMessage, primaryColor, closingMessage],
-  );
-
-  const isDirty =
-    !!current &&
-    (botName !== current.botName ||
-      welcomeMessage !== current.welcomeMessage ||
-      primaryColor !== current.primaryColor ||
-      closingMessage !== currentClosingMessage ||
-      !domainsAreEqual(allowedDomains, current.allowedDomains));
-
-  const embedSnippet = current
-    ? `<script\n  src="${widgetScriptUrl}/widget.js"\n  data-widget-key="${current.widgetKey}">\n</script>`
-    : "";
-
-  function addDomain() {
-    const normalized = domainDraft.trim().toLowerCase();
-
-    if (!normalized) {
-      return;
-    }
-
-    if (!domainPattern.test(normalized)) {
-      setDomainError("Enter a valid domain, e.g. example.com.");
-      return;
-    }
-
-    if (allowedDomains.includes(normalized)) {
-      setDomainError("That domain is already allowed.");
-      return;
-    }
-
-    setAllowedDomains((domains) => [...domains, normalized]);
-    setDomainDraft("");
-    setDomainError(null);
-  }
-
-  function removeDomain(domain: string) {
-    setAllowedDomains((domains) => domains.filter((existing) => existing !== domain));
-  }
-
-  function handleDomainKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter" || event.key === ",") {
-      event.preventDefault();
-      addDomain();
-    }
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (validationError) {
-      return;
-    }
-
-    updateConfig.mutate(
-      {
-        allowedDomains,
-        botName: botName.trim(),
-        closingMessage: closingMessage.trim() || null,
-        primaryColor,
-        welcomeMessage: welcomeMessage.trim(),
-      },
-      {
-        onError: (error) => {
-          toast.error(error instanceof Error ? error.message : "Failed to save Web Widget.");
-        },
-        onSuccess: () => {
-          toast.success("Web Widget saved.");
-        },
-      },
-    );
-  }
-
-  function handleReset() {
-    if (!current) {
-      return;
-    }
-
-    setBotName(current.botName);
-    setWelcomeMessage(current.welcomeMessage);
-    setPrimaryColor(current.primaryColor);
-    setAllowedDomains(current.allowedDomains);
-    setClosingMessage(currentClosingMessage);
-    setDomainDraft("");
-    setDomainError(null);
-  }
-
-  async function copySnippet() {
-    try {
-      await navigator.clipboard.writeText(embedSnippet);
-      toast.success("Embed snippet copied.");
-    } catch {
-      toast.error("Failed to copy embed snippet.");
-    }
-  }
+  const {
+    addDomain,
+    allowedDomains,
+    botName,
+    closingMessage,
+    config,
+    copySnippet,
+    current,
+    domainDraft,
+    domainError,
+    embedSnippet,
+    handleDomainKeyDown,
+    handleReset,
+    handleSubmit,
+    isDirty,
+    primaryColor,
+    removeDomain,
+    setBotName,
+    setClosingMessage,
+    setDomainDraft,
+    setDomainError,
+    setPrimaryColor,
+    setWelcomeMessage,
+    updateConfig,
+    validationError,
+    welcomeMessage,
+  } = useWidgetSettingsForm();
 
   return (
     <PlatformAppShell>
@@ -340,46 +232,5 @@ const WebWidgetSettingsView = () => {
     </PlatformAppShell>
   );
 };
-
-function validateWidgetConfig(
-  botName: string,
-  welcomeMessage: string,
-  primaryColor: string,
-  closingMessage: string,
-) {
-  if (!botName.trim()) {
-    return "Bot name is required.";
-  }
-
-  if (botName.trim().length > 60) {
-    return "Bot name must be 60 characters or fewer.";
-  }
-
-  if (!welcomeMessage.trim()) {
-    return "Welcome message is required.";
-  }
-
-  if (welcomeMessage.trim().length > 500) {
-    return "Welcome message must be 500 characters or fewer.";
-  }
-
-  if (!hexColorPattern.test(primaryColor)) {
-    return "Enter a hex colour, e.g. #2563eb.";
-  }
-
-  if (closingMessage.trim().length > 1000) {
-    return "Closing message must be 1000 characters or fewer.";
-  }
-
-  return null;
-}
-
-function domainsAreEqual(a: string[], b: string[]) {
-  if (a.length !== b.length) {
-    return false;
-  }
-
-  return a.every((domain, index) => domain === b[index]);
-}
 
 export default WebWidgetSettingsView;
