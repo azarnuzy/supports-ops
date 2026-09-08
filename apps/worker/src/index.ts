@@ -7,6 +7,7 @@ import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
 import { processAutoResolveJob, processFollowUpJob } from "./follow-up";
 import type { AutoResolveJob, FollowUpJob } from "./follow-up";
+import { processTicketKnowledgeIndexJob, type TicketKnowledgeIndexJob } from "./ticket-knowledge-index";
 
 export type { ExampleJob } from "./types";
 
@@ -78,12 +79,21 @@ export function startFollowUpWorker() {
   }, { connection });
 }
 
+export function startTicketKnowledgeIndexWorker() {
+  return new Worker<TicketKnowledgeIndexJob>(
+    "ticket-knowledge-index",
+    processTicketKnowledgeIndexJob,
+    { connection },
+  );
+}
+
 export function runWorker() {
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
   const knowledgeIngestWorker = startKnowledgeIngestWorker();
   const attachmentProcessWorker = startAttachmentProcessWorker();
   const followUpWorker = startFollowUpWorker();
+  const ticketKnowledgeIndexWorker = startTicketKnowledgeIndexWorker();
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "Job completed");
@@ -104,8 +114,18 @@ export function runWorker() {
   followUpWorker.on("failed", (job, error) => {
     logger.error({ error, jobId: job?.id }, "Ticket Follow-Up failed");
   });
+  ticketKnowledgeIndexWorker.on("failed", (job, error) => {
+    logger.error({ error, jobId: job?.id }, "Ticket Knowledge indexing failed");
+  });
 
-  return { attachmentProcessWorker, followUpWorker, knowledgeIngestWorker, sessionEmailWorker, worker };
+  return {
+    attachmentProcessWorker,
+    followUpWorker,
+    knowledgeIngestWorker,
+    sessionEmailWorker,
+    ticketKnowledgeIndexWorker,
+    worker,
+  };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
