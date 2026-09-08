@@ -14,6 +14,8 @@ import {
   createCustomerMessage,
   createCustomerAttachment,
   generateAiReply,
+  customerRequestedHuman,
+  escalate,
   getMessagesAfter,
   getWebSession,
   toPublicWidgetConfig,
@@ -104,7 +106,11 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       }
       if (result.created) {
         void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
-        void generateAiReply(result.message.ticketId, result.message.workspaceId, result.message.content);
+        if (customerRequestedHuman(result.message.content)) {
+          void escalate(result.message.ticketId, result.message.workspaceId, "CUSTOMER_REQUESTED_HUMAN", result.message.content);
+        } else {
+          void generateAiReply(result.message.ticketId, result.message.workspaceId, result.message.content);
+        }
       }
       return c.json(result.message, result.created ? 201 : 200);
     } catch (error) {
@@ -124,6 +130,9 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       const result = await createCustomerAttachment(accessToken, c.req.valid("form"));
       if (!result) return c.json({ error: "unauthorized" }, 401);
       void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+      if (customerRequestedHuman(result.message.content)) {
+        void escalate(result.message.ticketId, result.message.workspaceId, "CUSTOMER_REQUESTED_HUMAN", result.message.content);
+      }
       return c.json(result, 201);
     } catch (error) {
       if (error instanceof InvalidAttachmentError) {

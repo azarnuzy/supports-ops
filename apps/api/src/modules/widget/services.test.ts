@@ -45,7 +45,7 @@ vi.mock("@repo/ai-agent", () => ({
   createClassificationModel: mocks.createClassificationModel,
 }));
 
-const { ClassificationNotConfiguredError, createCustomerMessage } = await import("./services");
+const { ClassificationNotConfiguredError, createCustomerMessage, customerRequestedHuman } = await import("./services");
 
 const txMock = {
   aiActivity: { createMany: mocks.aiActivityCreateMany },
@@ -198,5 +198,20 @@ describe("createCustomerMessage", () => {
       kind: "message",
       message: { id: "msg-1", position: 1, ticketId: "ticket-winner" },
     });
+  });
+});
+
+describe("customerRequestedHuman", () => {
+  it.each([
+    "I want to speak with a person.",
+    "Please connect me to a human agent.",
+    "Saya mau bicara dengan human.",
+    "Tolong hubungkan saya ke CS.",
+  ])("recognizes an explicit request in natural language: %s", (content) => {
+    expect(customerRequestedHuman(content)).toBe(true);
+  });
+
+  it("does not treat an ordinary support question as an escalation request", () => {
+    expect(customerRequestedHuman("Where can I download my invoice?")).toBe(false);
   });
 });

@@ -8,6 +8,8 @@ model Ticket {
   category           TicketCategory   @default(GENERAL)
   priority           TicketPriority   @default(NORMAL)
   status             TicketStatus     @default(AI_HANDLING)
+  escalationReason   EscalationReason?
+  escalatedAt        DateTime?
   messageSeq         Int              @default(0)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt

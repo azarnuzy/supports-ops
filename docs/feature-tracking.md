@@ -46,7 +46,8 @@ Status yang dipakai:
 | Fitur | Status |
 | --- | --- |
 | AI Agent menjawab dari Customer-Safe Knowledge | Siap dicoba di Web Widget; lihat prasyarat dan batasan di atas. |
-| Escalation, Shared Human Queue, Claim, dan Takeover | Belum tersedia |
+| Escalation dan Shared Human Queue | Siap dicoba di Web Widget — minta Human Agent secara natural dalam Bahasa Indonesia atau Inggris, atau kirim pertanyaan tanpa Knowledge Source Customer-Safe yang relevan. Ticket berpindah ke `ESCALATED`, menyimpan alasan baku dan AI Activity, lalu Customer menerima acknowledgement; pesan Customer berikutnya tetap tercatat tanpa balasan AI. Memerlukan prasyarat Web Widget dan, untuk escalation berbasis knowledge, konfigurasi AI Agent. Belum ada UI Shared Human Queue, Claim, atau Takeover untuk Human Agent. |
+| Claim dan Takeover | Belum tersedia |
 | Human Agent membalas dan melakukan Resolution | Belum tersedia |
 | AI Copilot dan Suggested Reply | Belum tersedia |
 | Activity Timeline, AI Activity, Follow-Up, dan Auto-Resolution | Belum tersedia |
