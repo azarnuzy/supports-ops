@@ -49,7 +49,8 @@ Status yang dipakai:
 | Human Agent membalas dan melakukan Resolution | Belum tersedia |
 | AI Copilot dan Suggested Reply | Belum tersedia |
 | Activity Timeline, AI Activity, Follow-Up, dan Auto-Resolution | Belum tersedia |
-| Attachment, WhatsApp, email sebagai Channel support, dan Business Tools | Belum tersedia |
+| Business Tools | Sebagian siap — AI Agent dapat membaca Customer, Subscription, dan Invoice dari Business System terpisah; kegagalan tool serta permintaan perubahan langganan/refund dieskalasi. Jalankan Postgres dan Business System (`docker compose -f docker-compose.dev.yaml up -d`) serta gunakan Customer demo `budi@example.com` atau `siti@example.com`. Belum ada UI Admin untuk melihat AI Activity atau mengelola data Business System. |
+| Attachment, WhatsApp, dan email sebagai Channel support | Belum tersedia |
 
 ## Aturan pembaruan
 

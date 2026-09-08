@@ -49,6 +49,7 @@ const apiEnvSchema = z
     AUTH_SECRET: optionalStringSchema,
     BETTER_AUTH_SECRET: optionalStringSchema,
     BETTER_AUTH_URL: z.string().trim().url().default(defaultBetterAuthUrl),
+    BUSINESS_SYSTEM_URL: z.string().trim().url().default("http://localhost:8001"),
     CLIENT_ORIGINS: z.string().trim().min(1).default(defaultClientOrigins),
     DATABASE_URL: z.string().trim().min(1).default(defaultDatabaseUrl),
     EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
@@ -106,6 +107,7 @@ export const appConfig = {
 } as const;
 
 export const apiConfig = {
+  businessSystemUrl: env.BUSINESS_SYSTEM_URL,
   port: env.API_PORT,
   clientOrigins: parseCsv(env.CLIENT_ORIGINS),
 } as const;

@@ -37,7 +37,7 @@ echo "Validating release ${IMAGE_TAG}..."
 "${compose[@]}" config --quiet
 
 echo "Pulling immutable application images..."
-"${compose[@]}" pull api worker platform widget migrate
+"${compose[@]}" pull api worker business-system platform widget migrate
 
 echo "Starting PostgreSQL and Redis..."
 "${compose[@]}" up -d postgres redis
@@ -46,9 +46,9 @@ echo "Applying database migrations..."
 "${compose[@]}" run --rm migrate
 
 echo "Starting application services..."
-if ! "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 180 api worker platform widget; then
+if ! "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 180 api worker business-system platform widget; then
   "${compose[@]}" ps
-  "${compose[@]}" logs --tail=150 api worker platform widget
+  "${compose[@]}" logs --tail=150 api worker business-system platform widget
   echo "Deployment failed. Re-run this script with the previous commit SHA to roll back the images." >&2
   exit 1
 fi
