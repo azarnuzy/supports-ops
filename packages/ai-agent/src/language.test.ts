@@ -7,9 +7,9 @@ describe("detectLanguage", () => {
   });
 
   it("detects Indonesian from common stopwords", () => {
-    expect(detectLanguage("Silakan reset kata sandi anda yang sudah kadaluarsa, terima kasih.")).toBe(
-      "id",
-    );
+    expect(
+      detectLanguage("Silakan reset kata sandi anda yang sudah kadaluarsa, terima kasih."),
+    ).toBe("id");
   });
 
   it("returns unknown when no supported language's stopwords are present", () => {
