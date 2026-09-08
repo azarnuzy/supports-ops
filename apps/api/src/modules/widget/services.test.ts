@@ -60,8 +60,12 @@ vi.mock("./realtime", () => ({
   publishWidgetEvent: mocks.publishWidgetEvent,
 }));
 
-const { ClassificationNotConfiguredError, createCustomerMessage, customerRequestedHuman, resolveByAi } =
-  await import("./services");
+const {
+  ClassificationNotConfiguredError,
+  createCustomerMessage,
+  customerRequestedHuman,
+  resolveByAi,
+} = await import("./services");
 
 const txMock = {
   aiActivity: { create: mocks.aiActivityCreate, createMany: mocks.aiActivityCreateMany },
@@ -76,7 +80,10 @@ const txMock = {
     update: mocks.ticketUpdate,
     updateMany: mocks.ticketUpdateMany,
   },
-  webSession: { findUniqueOrThrow: mocks.webSessionFindUniqueOrThrow, update: mocks.webSessionUpdate },
+  webSession: {
+    findUniqueOrThrow: mocks.webSessionFindUniqueOrThrow,
+    update: mocks.webSessionUpdate,
+  },
 };
 
 function resetMocks() {

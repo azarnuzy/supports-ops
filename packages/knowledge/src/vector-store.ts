@@ -153,7 +153,10 @@ export type ReplaceTicketChunksParams = {
  * denormalized onto the row so `searchTicketChunks` can filter without a
  * join — see ADR-0003.
  */
-export async function replaceTicketChunks(db: SqlDb, params: ReplaceTicketChunksParams): Promise<void> {
+export async function replaceTicketChunks(
+  db: SqlDb,
+  params: ReplaceTicketChunksParams,
+): Promise<void> {
   const { workspaceId, ticketId, customerIdentityId, channelType, chunks } = params;
 
   await db.$executeRaw`

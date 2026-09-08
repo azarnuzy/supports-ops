@@ -69,7 +69,9 @@ const SharedHumanQueueView = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
-              {liveTickets.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
+              {liveTickets.isPending ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : null}
               {liveTickets.isError ? (
                 <p className="text-sm text-destructive">Unable to load live Tickets.</p>
               ) : null}
@@ -94,7 +96,9 @@ const SharedHumanQueueView = () => {
                           onSuccess: () => toast.success("Ticket taken over."),
                           onError: (error) =>
                             toast.error(
-                              error instanceof Error ? error.message : "Unable to take over Ticket.",
+                              error instanceof Error
+                                ? error.message
+                                : "Unable to take over Ticket.",
                             ),
                         })
                       }
@@ -105,7 +109,9 @@ const SharedHumanQueueView = () => {
                   <div className="mt-3 grid gap-2 border-t pt-3 text-sm">
                     {ticket.messages.map((message) => (
                       <p key={message.position}>
-                        <span className="font-medium">{message.senderType.replaceAll("_", " ")}:</span>{" "}
+                        <span className="font-medium">
+                          {message.senderType.replaceAll("_", " ")}:
+                        </span>{" "}
                         {message.content}
                       </p>
                     ))}

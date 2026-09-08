@@ -54,7 +54,9 @@ function parseArgs(argv: string[]): { category?: EvalCategoryName; caseId?: stri
   }
 
   if (category && !evalCategoryNames.includes(category as EvalCategoryName)) {
-    throw new Error(`Unknown category "${category}". Known categories: ${evalCategoryNames.join(", ")}`);
+    throw new Error(
+      `Unknown category "${category}". Known categories: ${evalCategoryNames.join(", ")}`,
+    );
   }
 
   return { category: category as EvalCategoryName | undefined, caseId };

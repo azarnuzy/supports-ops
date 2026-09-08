@@ -3,7 +3,11 @@ import { prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import type { UpdateAiSettingsInput } from "./schema";
 
-const defaults = { autoResolveAfterSeconds: 3600, autoResolveEnabled: true, followUpAfterSeconds: 900 };
+const defaults = {
+  autoResolveAfterSeconds: 3600,
+  autoResolveEnabled: true,
+  followUpAfterSeconds: 900,
+};
 
 export async function getAiSettings() {
   const workspaceId = requireWorkspaceId();
