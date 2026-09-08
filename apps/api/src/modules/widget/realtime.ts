@@ -12,6 +12,15 @@ export type WidgetEvent = {
 
 export type TicketQueueEvent = { type: "ticket.queue.changed" };
 
+export type KnowledgeSourceEvent = {
+  type: "knowledge.updated";
+  data: {
+    knowledgeSourceId: string;
+    status: "DRAFT" | "PROCESSING" | "READY" | "PUBLISHED" | "FAILED";
+    failureReason?: string | null;
+  };
+};
+
 const generatingTickets = new Set<string>();
 
 export function setTicketGenerating(ticketId: string, generating: boolean) {
@@ -32,6 +41,10 @@ function channel(ticketId: string) {
 
 function queueChannel(workspaceId: string) {
   return `supportops:ticket-queue:${workspaceId}`;
+}
+
+function knowledgeChannel(workspaceId: string) {
+  return `supportops:knowledge:${workspaceId}`;
 }
 
 export async function publishWidgetEvent(ticketId: string, event: WidgetEvent) {
@@ -64,5 +77,28 @@ export async function subscribeToTicketQueueEvents(
   const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
   subscriber.on("message", (_channel, payload) => onEvent(JSON.parse(payload) as TicketQueueEvent));
   await subscriber.subscribe(queueChannel(workspaceId));
+  return () => subscriber.disconnect();
+}
+
+export async function publishKnowledgeSourceEvent(
+  workspaceId: string,
+  data: KnowledgeSourceEvent["data"],
+) {
+  publisher ??= new Redis(redisUrl, { maxRetriesPerRequest: null });
+  await publisher.publish(
+    knowledgeChannel(workspaceId),
+    JSON.stringify({ data, type: "knowledge.updated" } satisfies KnowledgeSourceEvent),
+  );
+}
+
+export async function subscribeToKnowledgeSourceEvents(
+  workspaceId: string,
+  onEvent: (event: KnowledgeSourceEvent) => void,
+) {
+  const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  subscriber.on("message", (_channel, payload) =>
+    onEvent(JSON.parse(payload) as KnowledgeSourceEvent),
+  );
+  await subscriber.subscribe(knowledgeChannel(workspaceId));
   return () => subscriber.disconnect();
 }

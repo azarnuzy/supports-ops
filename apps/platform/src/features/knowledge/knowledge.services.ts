@@ -14,6 +14,12 @@ import type { DocumentationUrlInput, ManualFaqInput } from "./knowledge.types";
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const apiClient = createApiClient(apiBaseUrl);
 
+export function subscribeToKnowledgeSourceEvents(onChange: () => void) {
+  const events = new EventSource(`${apiBaseUrl}/knowledge/events`, { withCredentials: true });
+  events.addEventListener("knowledge.updated", onChange);
+  return () => events.close();
+}
+
 export async function getKnowledgeSources() {
   return listKnowledgeSources(apiClient);
 }

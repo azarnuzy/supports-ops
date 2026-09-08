@@ -4,6 +4,7 @@ import { createStorage } from "@repo/storage";
 import { embeddingConfig, storageConfig } from "../../config";
 import { prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
+import { publishKnowledgeSourceEvent } from "../widget/realtime";
 import { enqueueKnowledgeIngest } from "./queue";
 import type {
   CreateDocumentationUrlInput,
@@ -100,6 +101,10 @@ export async function createDocumentationUrl(input: CreateDocumentationUrlInput)
       workspaceId,
     },
   });
+  await publishKnowledgeSourceEvent(workspaceId, {
+    knowledgeSourceId: knowledgeSource.id,
+    status: "PROCESSING",
+  });
   await enqueueKnowledgeIngest({
     kind: "CRAWL",
     knowledgeSourceId: knowledgeSource.id,
@@ -163,14 +168,19 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
   const existing = await findEditableKnowledgeSource(id);
 
   if (existing.sourceType === "HELP_CENTER") {
+    const helpCenterWorkspaceId = requireWorkspaceId();
     const knowledgeSource = await prisma.knowledgeSource.update({
       data: { failureReason: null, status: "PROCESSING" },
       where: { id: existing.id },
     });
+    await publishKnowledgeSourceEvent(helpCenterWorkspaceId, {
+      knowledgeSourceId: existing.id,
+      status: "PROCESSING",
+    });
     await enqueueKnowledgeIngest({
       kind: "CRAWL",
       knowledgeSourceId: existing.id,
-      workspaceId: requireWorkspaceId(),
+      workspaceId: helpCenterWorkspaceId,
     });
     return toDto(knowledgeSource);
   }
@@ -183,6 +193,11 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
   const knowledgeSource = await prisma.knowledgeSource.update({
     data: { failureReason: null, status: "PROCESSING" },
     where: { id: existing.id },
+  });
+
+  await publishKnowledgeSourceEvent(workspaceId, {
+    knowledgeSourceId: existing.id,
+    status: "PROCESSING",
   });
 
   await enqueueKnowledgeIngest({

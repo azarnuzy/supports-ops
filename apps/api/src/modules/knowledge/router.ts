@@ -1,7 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
+import { subscribeToKnowledgeSourceEvents } from "../widget/realtime";
 import {
   createDocumentationUrlSchema,
   createManualFaqSchema,
@@ -82,6 +84,17 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
 
       throw error;
     }
+  })
+  .get("/events", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    return streamSSE(c, async (stream) => {
+      const unsubscribe = await subscribeToKnowledgeSourceEvents(user.workspaceId, async (event) => {
+        await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
+      });
+      stream.onAbort(unsubscribe);
+      await new Promise<void>(() => undefined);
+    });
   })
   .get("/:id", async (c) => {
     const currentUser = requireAdmin(c);

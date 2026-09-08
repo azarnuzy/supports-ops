@@ -33,6 +33,7 @@ import { PlatformAppShell } from "../../../app-shell";
 import {
   useCreateDocumentationUrlMutation,
   useCreatePdfKnowledgeSourceMutation,
+  useKnowledgeSourceEvents,
 } from "../../knowledge.hooks";
 import { useKnowledgeSourcesForm, useRetrievalTestPanel } from "./knowledge.hooks";
 import {
@@ -46,6 +47,7 @@ import {
 } from "./knowledge.services";
 
 const KnowledgeView = () => {
+  useKnowledgeSourceEvents();
   const addDocumentationUrl = useCreateDocumentationUrlMutation();
   const addPdf = useCreatePdfKnowledgeSourceMutation();
   const [documentationUrl, setDocumentationUrl] = useState("");
