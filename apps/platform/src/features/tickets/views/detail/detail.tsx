@@ -24,9 +24,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/ta
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
 import { useQuery } from "@tanstack/react-query";
 import { HistoryIcon } from "lucide-react";
+import { useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { getInitials } from "../../../../lib/utils";
 import { ticketDetailQueryOptions } from "../../tickets.hooks";
+import { openAttachment } from "../../tickets.services";
 
 function bubbleVariant(senderType: TicketDetailMessage["senderType"]) {
   if (senderType === "CUSTOMER") return "customer" as const;
@@ -98,6 +100,27 @@ function describeActivity(activity: TicketActivity): { mono?: string; text: stri
 const TicketDetailView = ({ ticketId }: { ticketId: string }) => {
   const ticket = useQuery(ticketDetailQueryOptions(ticketId));
 
+  // The Ticket's lifecycle opens with the Web Session it was born from, then
+  // the recorded AI Activity steps in creation order.
+  const timeline: {
+    createdAt: string;
+    description: { mono?: string; text: string };
+    id: string;
+  }[] = ticket.data
+    ? [
+        {
+          createdAt: ticket.data.ticket.webSession.createdAt,
+          description: { text: "Session created." },
+          id: "web-session",
+        },
+        ...ticket.data.ticket.aiActivities.map((activity) => ({
+          createdAt: activity.createdAt,
+          description: describeActivity(activity),
+          id: activity.id,
+        })),
+      ]
+    : [];
+
   return (
     <PlatformAppShell fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -148,7 +171,7 @@ const TicketDetailView = ({ ticketId }: { ticketId: string }) => {
               </TabsContent>
               <TabsContent value="timeline" className="min-h-0 flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-2xl p-4">
-                  {ticket.data.ticket.aiActivities.length === 0 ? (
+                  {timeline.length === 0 ? (
                     <Empty className="border-0">
                       <EmptyMedia variant="icon">
                         <HistoryIcon />
@@ -157,12 +180,12 @@ const TicketDetailView = ({ ticketId }: { ticketId: string }) => {
                     </Empty>
                   ) : (
                     <ol className="grid gap-3">
-                      {ticket.data.ticket.aiActivities.map((activity) => {
-                        const description = describeActivity(activity);
+                      {timeline.map((entry) => {
+                        const description = entry.description;
                         return (
-                          <li key={activity.id} className="flex items-baseline gap-3 text-sm">
+                          <li key={entry.id} className="flex items-baseline gap-3 text-sm">
                             <span className="w-20 shrink-0 text-xs text-muted-foreground">
-                              {new Date(activity.createdAt).toLocaleTimeString()}
+                              {new Date(entry.createdAt).toLocaleTimeString()}
                             </span>
                             <span>
                               {description.text}
@@ -226,6 +249,7 @@ function ConversationMessage({ message }: { message: TicketDetailMessage }) {
 }
 
 function AttachmentItem({ attachment }: { attachment: TicketAttachment }) {
+  const [opening, setOpening] = useState(false);
   const state =
     attachment.processingStatus === "READY"
       ? "done"
@@ -233,20 +257,23 @@ function AttachmentItem({ attachment }: { attachment: TicketAttachment }) {
         ? "error"
         : "processing";
   return (
-    <a
-      href={attachment.storageKey}
-      target="_blank"
-      rel="noreferrer"
-      className="block w-fit max-w-full"
+    <button
+      type="button"
+      disabled={opening}
+      className="block w-fit max-w-full cursor-pointer text-left"
+      onClick={() => {
+        setOpening(true);
+        void openAttachment(attachment.id).finally(() => setOpening(false));
+      }}
     >
-      <Attachment state={state}>
+      <Attachment state={opening ? "processing" : state}>
         <AttachmentMedia />
         <AttachmentContent>
           <AttachmentTitle>{attachment.fileName}</AttachmentTitle>
           <AttachmentDescription>{formatBytes(attachment.sizeBytes)}</AttachmentDescription>
         </AttachmentContent>
       </Attachment>
-    </a>
+    </button>
   );
 }
 
