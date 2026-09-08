@@ -17,7 +17,20 @@ model Ticket {
   customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
   conversation       Conversation?
   messages           Message[]
+  aiActivities       AiActivity[]
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, customerIdentityId])
+}
+
+model AiActivity {
+  id          String         @id
+  workspaceId String
+  ticketId    String
+  eventType   AiActivityType
+  metadata    Json
+  createdAt   DateTime       @default(now())
+  ticket      Ticket         @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId, createdAt])
 }
