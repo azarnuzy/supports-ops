@@ -14,6 +14,7 @@ import {
 } from "@repo/knowledge";
 import { BusinessToolError, createBusinessTools } from "@repo/tools";
 import { createStorage } from "@repo/storage";
+import { type Span, withSpan } from "@repo/logger/telemetry";
 import {
   aiAgentConfig,
   apiConfig,
@@ -314,6 +315,21 @@ export async function generateAiReply(
   workspaceId: string,
   customerMessage: string,
 ) {
+  return withSpan(
+    "ai_agent.run",
+    { "supportops.ticket_id": ticketId, "supportops.workspace_id": workspaceId },
+    (run) => generateAiReplyRun(run, ticketId, workspaceId, customerMessage),
+  );
+}
+
+/** The run itself. Retrieval, Business Tool calls, generation, and the final
+ * decision all nest under the caller's `ai_agent.run` span. */
+async function generateAiReplyRun(
+  run: Span,
+  ticketId: string,
+  workspaceId: string,
+  customerMessage: string,
+) {
   const ticket = await unscopedPrisma.ticket.findUnique({
     select: {
       channel: { select: { type: true } },
@@ -322,7 +338,10 @@ export async function generateAiReply(
     },
     where: { id: ticketId },
   });
-  if (ticket?.status !== "AI_HANDLING") return;
+  if (ticket?.status !== "AI_HANDLING") {
+    run.setAttribute("ai_agent.decision", "SKIPPED");
+    return;
+  }
   if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey) {
     await escalate(ticketId, workspaceId, "AI_GENERATION_FAILED", customerMessage);
     return;
@@ -333,31 +352,50 @@ export async function generateAiReply(
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "generating" } });
 
   try {
-    const embeddingClient = createEmbeddingClient({
-      ...embeddingConfig,
-      apiKey: embeddingConfig.apiKey,
-    });
-    const [embedding] = await embeddingClient.embed([customerMessage]);
-    const sources = embedding
-      ? await findKnowledgeChunks(unscopedPrisma, {
-          embedding,
-          workspaceId,
-          retrievalMode: "CUSTOMER",
-        })
-      : [];
-    const attachments = await unscopedPrisma.attachment.findMany({
-      select: { extractedText: true, id: true },
-      where: { deletedAt: null, extractedText: { not: null }, processingStatus: "READY", ticketId },
-    });
-    const ticketKnowledge = embedding
-      ? await findTicketKnowledgeChunks(unscopedPrisma, {
-          channelType: ticket.channel.type,
-          customerIdentityId: ticket.customerIdentity.id,
-          embedding,
-          excludeTicketId: ticketId,
-          workspaceId,
-        })
-      : [];
+    // The guard above narrows the key; closures do not inherit that narrowing.
+    const embeddingApiKey = embeddingConfig.apiKey;
+    const [, sources, attachments, ticketKnowledge] = await withSpan(
+      "ai_agent.retrieve_knowledge",
+      {},
+      async (retrieval) => {
+        const embeddingClient = createEmbeddingClient({
+          ...embeddingConfig,
+          apiKey: embeddingApiKey,
+        });
+        const [embedding] = await embeddingClient.embed([customerMessage]);
+        const sources = embedding
+          ? await findKnowledgeChunks(unscopedPrisma, {
+              embedding,
+              workspaceId,
+              retrievalMode: "CUSTOMER",
+            })
+          : [];
+        const attachments = await unscopedPrisma.attachment.findMany({
+          select: { extractedText: true, id: true },
+          where: {
+            deletedAt: null,
+            extractedText: { not: null },
+            processingStatus: "READY",
+            ticketId,
+          },
+        });
+        const ticketKnowledge = embedding
+          ? await findTicketKnowledgeChunks(unscopedPrisma, {
+              channelType: ticket.channel.type,
+              customerIdentityId: ticket.customerIdentity.id,
+              embedding,
+              excludeTicketId: ticketId,
+              workspaceId,
+            })
+          : [];
+        retrieval.setAttributes({
+          "ai_agent.knowledge_chunks": sources.length,
+          "ai_agent.attachments": attachments.length,
+          "ai_agent.ticket_knowledge_chunks": ticketKnowledge.length,
+        });
+        return [embedding, sources, attachments, ticketKnowledge] as const;
+      },
+    );
 
     await unscopedPrisma.aiActivity.create({
       data: {
@@ -390,7 +428,12 @@ export async function generateAiReply(
       where: { eventType: "CLARIFICATION_ASKED", ticketId },
     });
     const businessData = await getBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
+    run.setAttribute("ai_agent.business_tool_data", Boolean(businessData));
     if (!sources.length && !businessData && !looksLikeResolutionSignal(customerMessage)) {
+      run.setAttributes({
+        "ai_agent.decision": "ESCALATE",
+        "ai_agent.escalation_reason": "NO_RELEVANT_KNOWLEDGE",
+      });
       await escalate(ticketId, workspaceId, "NO_RELEVANT_KNOWLEDGE", customerMessage);
       return;
     }
@@ -430,20 +473,23 @@ export async function generateAiReply(
       }
     }
     if (!decision) throw lastError ?? new ReplyGenerationFailedError();
-    if (!isTicketGenerating(ticketId)) return;
+    run.setAttributes({
+      "ai_agent.decision": decision.decision,
+      ...(decision.escalationReason
+        ? { "ai_agent.escalation_reason": decision.escalationReason }
+        : {}),
+    });
 
     if (
       decision.decision === "ESCALATE" ||
       (decision.decision === "CLARIFY" && clarificationCount >= 2)
     ) {
-      await escalate(
-        ticketId,
-        workspaceId,
+      const reason =
         decision.decision === "CLARIFY"
           ? "AI_FAILED_ATTEMPTS"
-          : (decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE"),
-        customerMessage,
-      );
+          : (decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE");
+      run.setAttribute("ai_agent.escalation_reason", reason);
+      await escalate(ticketId, workspaceId, reason, customerMessage);
       return;
     }
     if (decision.decision === "RESOLVE") {
@@ -471,12 +517,10 @@ export async function generateAiReply(
     );
     await publishTicketQueueEvent(workspaceId);
   } catch (error) {
-    await escalate(
-      ticketId,
-      workspaceId,
-      error instanceof BusinessToolError ? "BUSINESS_TOOL_FAILURE" : "AI_GENERATION_FAILED",
-      customerMessage,
-    );
+    const reason =
+      error instanceof BusinessToolError ? "BUSINESS_TOOL_FAILURE" : "AI_GENERATION_FAILED";
+    run.setAttributes({ "ai_agent.decision": "ESCALATE", "ai_agent.escalation_reason": reason });
+    await escalate(ticketId, workspaceId, reason, customerMessage);
   } finally {
     setTicketGenerating(ticketId, false);
     const finalTicket = await unscopedPrisma.ticket.findUnique({
@@ -807,7 +851,12 @@ export async function getMessagesAfter(accessToken: string, afterPosition: numbe
     where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } },
     orderBy: { position: "asc" },
   });
-  return { messages, sessionStatus: session.status, ticketId: session.ticket.id, ticketStatus: session.ticket.status };
+  return {
+    messages,
+    sessionStatus: session.status,
+    ticketId: session.ticket.id,
+    ticketStatus: session.ticket.status,
+  };
 }
 
 export function toPublicWidgetConfig(config: PublicWidgetConfig): PublicWidgetConfig {
