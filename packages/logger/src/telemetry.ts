@@ -1,5 +1,12 @@
-import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
+import {
+  SpanStatusCode,
+  trace,
+  type Attributes,
+  type Exception,
+  type Span,
+} from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
@@ -60,17 +67,44 @@ export async function shutdownTelemetry() {
   sdk = null;
 }
 
+const tracer = trace.getTracer("@repo/logger");
+
+/** Runs `fn` inside a span of the host process's trace, so nested work and
+ * agent observers land under it. Without a started SDK this is a no-op
+ * wrapper that simply runs `fn`. Ends with an error status and the recorded
+ * exception when `fn` throws. */
+export async function withSpan<T>(
+  name: string,
+  attributes: Attributes,
+  fn: (span: Span) => Promise<T>,
+): Promise<T> {
+  return tracer.startActiveSpan(name, { attributes }, async (span) => {
+    try {
+      return await fn(span);
+    } catch (error) {
+      span.recordException(error as Exception);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+export type { Span };
+
 function getTelemetryHeaders(config: TelemetryConfig) {
   if (!config.apiKey) {
     return undefined;
   }
 
-  return {
-    [config.apiKeyHeader]:
-      config.apiKeyHeader.toLowerCase() === "authorization"
-        ? `Bearer ${config.apiKey}`
-        : config.apiKey,
-  };
+  // A bare `authorization` credential gets the conventional `Bearer` prefix; a
+  // preformatted value with an explicit scheme — `Basic <base64>`, what
+  // Langfuse's OTLP endpoint expects — passes through verbatim.
+  const credential =
+    config.apiKeyHeader.toLowerCase() === "authorization" && !/\s/.test(config.apiKey)
+      ? `Bearer ${config.apiKey}`
+      : config.apiKey;
+  return { [config.apiKeyHeader]: credential };
 }
 
 function registerTelemetryShutdown() {
@@ -81,4 +115,8 @@ function registerTelemetryShutdown() {
       });
     });
   }
+  // Normal exit (short-lived scripts): flush pending spans before the loop drains.
+  process.once("beforeExit", () => {
+    void shutdownTelemetry();
+  });
 }
