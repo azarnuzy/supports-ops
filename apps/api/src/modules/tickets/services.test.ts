@@ -162,8 +162,12 @@ describe("getTicketDetail", () => {
     expect(result).toEqual({ id: "t-1" });
     const call = mocks.ticketFindFirst.mock.calls[0]?.[0];
     expect(call.where).toEqual({ AND: [{ deletedAt: null, id: "t-1" }, {}] });
-  });
+    // The timeline opens with the Web Session's creation, and attachments are
+    // opened through the download endpoint, so no storage key is exposed.
+    expect(call.select.webSession).toEqual({ select: { createdAt: true } });
+    expect(call.select.messages.select.attachments.select.storageKey).toBeUndefined();
 
+  });
   it("throws when the Ticket does not exist or is not visible", async () => {
     mocks.ticketFindFirst.mockResolvedValue(null);
 
