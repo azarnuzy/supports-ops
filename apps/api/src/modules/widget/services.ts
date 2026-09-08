@@ -362,7 +362,7 @@ export async function generateAiReply(
       where: { eventType: "CLARIFICATION_ASKED", ticketId },
     });
     const businessData = await getBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
-    if (!sources.length && !businessData) {
+    if (!sources.length && !businessData && !looksLikeResolutionSignal(customerMessage)) {
       await escalate(ticketId, workspaceId, "NO_RELEVANT_KNOWLEDGE", customerMessage);
       return;
     }
@@ -414,6 +414,10 @@ export async function generateAiReply(
       );
       return;
     }
+    if (decision.decision === "RESOLVE") {
+      await resolveByAi(ticketId, workspaceId);
+      return;
+    }
     if (!decision.content) throw new ReplyGenerationFailedError();
 
     const message = await appendAiMessage(ticketId, workspaceId, decision.content);
@@ -444,7 +448,14 @@ export async function generateAiReply(
     });
     await publishWidgetEvent(ticketId, {
       type: "ticket.status",
-      data: { status: finalTicket?.status === "ESCALATED" ? "escalated" : "ready" },
+      data: {
+        status:
+          finalTicket?.status === "ESCALATED"
+            ? "escalated"
+            : finalTicket?.status === "RESOLVED"
+              ? "resolved"
+              : "ready",
+      },
     });
   }
 }
@@ -598,6 +609,59 @@ export async function escalate(
   if (!result) return;
   await publishWidgetEvent(ticketId, { type: "message.created", data: result });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "escalated" } });
+  await publishTicketQueueEvent(workspaceId);
+}
+
+export async function resolveByAi(ticketId: string, workspaceId: string) {
+  const closing = await unscopedPrisma.$transaction(async (tx) => {
+    const transition = await tx.ticket.updateMany({
+      data: {
+        messageSeq: { increment: 1 },
+        resolvedAt: new Date(),
+        resolvedBy: "AI_AGENT",
+        resolutionReason: "CUSTOMER_CONFIRMED",
+        status: "RESOLVED",
+      },
+      where: { id: ticketId, status: "AI_HANDLING" },
+    });
+    if (!transition.count) return null;
+    const ticket = await tx.ticket.findUniqueOrThrow({
+      include: { workspace: { select: { closingMessage: true } } },
+      where: { id: ticketId },
+    });
+    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
+    const content = ticket.workspace.closingMessage ?? "This conversation has been resolved.";
+    const closingMessage = await tx.message.create({
+      data: {
+        content,
+        externalMessageId: `resolution:${randomUUID()}`,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content },
+        position: ticket.messageSeq,
+        role: "system",
+        runId: randomUUID(),
+        senderType: "SYSTEM",
+        ticketId,
+        turn: ticket.messageSeq,
+        workspaceId,
+      },
+    });
+    await tx.webSession.update({ data: { status: "CLOSED" }, where: { id: ticket.webSessionId } });
+    await tx.aiActivity.create({
+      data: {
+        eventType: "RESOLVED",
+        id: randomUUID(),
+        metadata: { reason: "CUSTOMER_CONFIRMED" },
+        ticketId,
+        workspaceId,
+      },
+    });
+    return closingMessage;
+  });
+  if (!closing) return;
+  await publishWidgetEvent(ticketId, { type: "message.created", data: closing });
+  await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "resolved" } });
   await publishTicketQueueEvent(workspaceId);
 }
 

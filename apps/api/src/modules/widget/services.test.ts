@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  aiActivityCreate: vi.fn(),
   aiActivityCreateMany: vi.fn(),
   classificationConfig: {
     apiKey: "sk-test",
@@ -13,11 +14,16 @@ const mocks = vi.hoisted(() => ({
   createClassificationModel: vi.fn().mockReturnValue({ id: "fake-model" }),
   messageCreate: vi.fn(),
   messageFindUnique: vi.fn(),
+  publishTicketQueueEvent: vi.fn(),
+  publishWidgetEvent: vi.fn(),
   ticketCreate: vi.fn(),
+  ticketFindUniqueOrThrow: vi.fn(),
   ticketUpdate: vi.fn(),
+  ticketUpdateMany: vi.fn(),
   transaction: vi.fn(),
   webSessionFindUnique: vi.fn(),
   webSessionFindUniqueOrThrow: vi.fn(),
+  webSessionUpdate: vi.fn(),
 }));
 
 class FakePrismaKnownRequestError extends Error {
@@ -49,21 +55,32 @@ vi.mock("@repo/ai-agent", () => ({
   createClassificationModel: mocks.createClassificationModel,
 }));
 
-const { ClassificationNotConfiguredError, createCustomerMessage, customerRequestedHuman } =
+vi.mock("./realtime", () => ({
+  publishTicketQueueEvent: mocks.publishTicketQueueEvent,
+  publishWidgetEvent: mocks.publishWidgetEvent,
+}));
+
+const { ClassificationNotConfiguredError, createCustomerMessage, customerRequestedHuman, resolveByAi } =
   await import("./services");
 
 const txMock = {
-  aiActivity: { createMany: mocks.aiActivityCreateMany },
+  aiActivity: { create: mocks.aiActivityCreate, createMany: mocks.aiActivityCreateMany },
   conversation: {
     create: mocks.conversationCreate,
     findUniqueOrThrow: mocks.conversationFindUniqueOrThrow,
   },
   message: { create: mocks.messageCreate, findUnique: mocks.messageFindUnique },
-  ticket: { create: mocks.ticketCreate, update: mocks.ticketUpdate },
-  webSession: { findUniqueOrThrow: mocks.webSessionFindUniqueOrThrow },
+  ticket: {
+    create: mocks.ticketCreate,
+    findUniqueOrThrow: mocks.ticketFindUniqueOrThrow,
+    update: mocks.ticketUpdate,
+    updateMany: mocks.ticketUpdateMany,
+  },
+  webSession: { findUniqueOrThrow: mocks.webSessionFindUniqueOrThrow, update: mocks.webSessionUpdate },
 };
 
 function resetMocks() {
+  mocks.aiActivityCreate.mockReset();
   mocks.aiActivityCreateMany.mockReset();
   mocks.classifyMessage.mockReset();
   mocks.conversationCreate.mockReset();
@@ -71,13 +88,18 @@ function resetMocks() {
   mocks.createClassificationModel.mockReset().mockReturnValue({ id: "fake-model" });
   mocks.messageCreate.mockReset();
   mocks.messageFindUnique.mockReset();
+  mocks.publishTicketQueueEvent.mockReset();
+  mocks.publishWidgetEvent.mockReset();
   mocks.ticketCreate.mockReset();
+  mocks.ticketFindUniqueOrThrow.mockReset();
   mocks.ticketUpdate.mockReset();
+  mocks.ticketUpdateMany.mockReset();
   mocks.transaction
     .mockReset()
     .mockImplementation(async (callback: (tx: typeof txMock) => unknown) => callback(txMock));
   mocks.webSessionFindUnique.mockReset();
   mocks.webSessionFindUniqueOrThrow.mockReset();
+  mocks.webSessionUpdate.mockReset();
   mocks.classificationConfig.apiKey = "sk-test";
 }
 
@@ -239,5 +261,66 @@ describe("customerRequestedHuman", () => {
 
   it("does not treat an ordinary support question as an escalation request", () => {
     expect(customerRequestedHuman("Where can I download my invoice?")).toBe(false);
+  });
+});
+
+describe("resolveByAi", () => {
+  beforeEach(resetMocks);
+
+  it("resolves the Ticket, closes the Web Session, and sends the workspace closing message", async () => {
+    mocks.ticketUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.ticketFindUniqueOrThrow.mockResolvedValue({
+      messageSeq: 3,
+      webSessionId: "session-1",
+      workspace: { closingMessage: "Glad we could help!" },
+    });
+    mocks.conversationFindUniqueOrThrow.mockResolvedValue({ id: "conv-1" });
+    mocks.messageCreate.mockResolvedValue({
+      content: "Glad we could help!",
+      id: "msg-close",
+      ticketId: "ticket-1",
+    });
+
+    await resolveByAi("ticket-1", "ws-1");
+
+    expect(mocks.ticketUpdateMany).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        resolutionReason: "CUSTOMER_CONFIRMED",
+        resolvedBy: "AI_AGENT",
+        status: "RESOLVED",
+      }),
+      where: { id: "ticket-1", status: "AI_HANDLING" },
+    });
+    expect(mocks.messageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ content: "Glad we could help!", senderType: "SYSTEM" }),
+      }),
+    );
+    expect(mocks.webSessionUpdate).toHaveBeenCalledWith({
+      data: { status: "CLOSED" },
+      where: { id: "session-1" },
+    });
+    expect(mocks.aiActivityCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "RESOLVED",
+        metadata: { reason: "CUSTOMER_CONFIRMED" },
+        ticketId: "ticket-1",
+      }),
+    });
+    expect(mocks.publishWidgetEvent).toHaveBeenCalledWith("ticket-1", {
+      type: "ticket.status",
+      data: { status: "resolved" },
+    });
+    expect(mocks.publishTicketQueueEvent).toHaveBeenCalledWith("ws-1");
+  });
+
+  it("does nothing when the Ticket is no longer AI_HANDLING", async () => {
+    mocks.ticketUpdateMany.mockResolvedValue({ count: 0 });
+
+    await resolveByAi("ticket-1", "ws-1");
+
+    expect(mocks.messageCreate).not.toHaveBeenCalled();
+    expect(mocks.publishWidgetEvent).not.toHaveBeenCalled();
+    expect(mocks.publishTicketQueueEvent).not.toHaveBeenCalled();
   });
 });
