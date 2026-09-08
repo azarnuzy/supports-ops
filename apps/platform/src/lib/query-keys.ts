@@ -15,6 +15,7 @@ export const queryKeys = {
     myTickets: ["workspace", "my-tickets"] as const,
     liveAiTickets: ["workspace", "live-ai-tickets"] as const,
     sharedHumanQueue: ["workspace", "shared-human-queue"] as const,
+    analytics: ["workspace", "analytics"] as const,
     tickets: ["workspace", "tickets"] as const,
     ticket: (id: string) => ["workspace", "tickets", id] as const,
   },
