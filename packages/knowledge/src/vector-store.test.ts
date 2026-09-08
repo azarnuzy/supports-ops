@@ -74,6 +74,7 @@ describe("searchChunks", () => {
     expect(db.$queryRaw).toHaveBeenCalledTimes(1);
     const queryCall = db.$queryRaw.mock.calls[0];
     expect(queryCall).toContain("ws1");
+    expect(queryCall).toContain("CUSTOMER");
     expect(results).toEqual([
       {
         chunkId: "ks1:0",
@@ -83,6 +84,18 @@ describe("searchChunks", () => {
         similarity: 0.9,
       },
     ]);
+  });
+
+  it("lets the AI Copilot include Internal-Only chunks", async () => {
+    const db = createDb();
+
+    await searchChunks(db, {
+      embedding: [0.1],
+      retrievalMode: "COPILOT",
+      workspaceId: "ws1",
+    });
+
+    expect(db.$queryRaw.mock.calls[0]).toContain("COPILOT");
   });
 
   it("filters out results below minSimilarity", async () => {
