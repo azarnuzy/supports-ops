@@ -220,7 +220,11 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
   cancelTicketGeneration(ticketId);
   const result = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
-      data: { assignedHumanAgentId: adminId, messageSeq: { increment: 1 }, status: "HUMAN_HANDLING" },
+      data: {
+        assignedHumanAgentId: adminId,
+        messageSeq: { increment: 1 },
+        status: "HUMAN_HANDLING",
+      },
       where: { id: ticketId, status: "AI_HANDLING", workspaceId },
     });
     if (!transition.count) throw new TicketNotAvailableForTakeoverError();
@@ -228,7 +232,10 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
       tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: { messageSeq: true } }),
       tx.conversation.findUniqueOrThrow({ where: { ticketId } }),
     ]);
-    const admin = await tx.user.findUniqueOrThrow({ where: { id: adminId }, select: { name: true } });
+    const admin = await tx.user.findUniqueOrThrow({
+      where: { id: adminId },
+      select: { name: true },
+    });
     const content = `Hello, I’m ${admin.name} from the support team. I’ve taken over and will continue helping you.`;
     const message = await tx.message.create({
       data: {
@@ -248,9 +255,18 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
       },
     });
     await tx.aiActivity.create({
-      data: { eventType: "TAKEN_OVER", id: randomUUID(), metadata: { adminId }, ticketId, workspaceId },
+      data: {
+        eventType: "TAKEN_OVER",
+        id: randomUUID(),
+        metadata: { adminId },
+        ticketId,
+        workspaceId,
+      },
     });
-    return { message, ticket: await tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: ticketSelect }) };
+    return {
+      message,
+      ticket: await tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: ticketSelect }),
+    };
   });
   await publishWidgetEvent(ticketId, { type: "message.created", data: result.message });
   await cancelFollowUpTimers(ticketId);
@@ -269,7 +285,13 @@ export async function claimTicket(ticketId: string, humanAgentId: string, worksp
     });
     if (!transition.count) throw new TicketAlreadyClaimedError();
     await tx.aiActivity.create({
-      data: { eventType: "CLAIMED", id: randomUUID(), metadata: { humanAgentId }, ticketId },
+      data: {
+        eventType: "CLAIMED",
+        id: randomUUID(),
+        metadata: { humanAgentId },
+        ticketId,
+        workspaceId,
+      },
     });
     return tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: ticketSelect });
   });
@@ -456,7 +478,8 @@ export async function sendHumanReply(ticketId: string, humanAgentId: string, con
 }
 
 export async function suggestReply(ticketId: string, humanAgentId: string, workspaceId: string) {
-  if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey) throw new SuggestedReplyNotConfiguredError();
+  if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey)
+    throw new SuggestedReplyNotConfiguredError();
   const ticket = await unscopedPrisma.ticket.findFirst({
     select: {
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
@@ -466,17 +489,31 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
         select: { content: true, senderType: true },
       },
     },
-    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING", workspaceId },
+    where: {
+      assignedHumanAgentId: humanAgentId,
+      id: ticketId,
+      status: "HUMAN_HANDLING",
+      workspaceId,
+    },
   });
   if (!ticket) throw new TicketNotOwnedError();
 
-  const customerMessage = [...ticket.messages].reverse().find((message) => message.senderType === "CUSTOMER")?.content;
+  const customerMessage = [...ticket.messages]
+    .reverse()
+    .find((message) => message.senderType === "CUSTOMER")?.content;
   if (!customerMessage) throw new Error("A Customer message is required to draft a reply.");
 
-  const embeddingClient = createEmbeddingClient({ ...embeddingConfig, apiKey: embeddingConfig.apiKey });
+  const embeddingClient = createEmbeddingClient({
+    ...embeddingConfig,
+    apiKey: embeddingConfig.apiKey,
+  });
   const [embedding] = await embeddingClient.embed([customerMessage]);
   const sources = embedding
-    ? await findKnowledgeChunks(unscopedPrisma, { embedding, retrievalMode: "COPILOT", workspaceId })
+    ? await findKnowledgeChunks(unscopedPrisma, {
+        embedding,
+        retrievalMode: "COPILOT",
+        workspaceId,
+      })
     : [];
   const previousTickets = await unscopedPrisma.ticket.findMany({
     orderBy: { resolvedAt: "desc" },
@@ -492,16 +529,29 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
       workspaceId,
     },
   });
-  const businessData = await getCopilotBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
+  const businessData = await getCopilotBusinessToolData(
+    ticketId,
+    workspaceId,
+    ticket.customerIdentity,
+  );
   const draft = await generateSuggestedReply({
     businessData,
     customerMessage,
-    customerSafeSources: sources.filter((source) => source.visibility === "CUSTOMER_SAFE").map((source) => source.content),
-    currentConversation: ticket.messages.map((message) => `${message.senderType}: ${message.content}`).join("\n"),
-    internalOnlySources: sources.filter((source) => source.visibility === "INTERNAL_ONLY").map((source) => source.content),
+    customerSafeSources: sources
+      .filter((source) => source.visibility === "CUSTOMER_SAFE")
+      .map((source) => source.content),
+    currentConversation: ticket.messages
+      .map((message) => `${message.senderType}: ${message.content}`)
+      .join("\n"),
+    internalOnlySources: sources
+      .filter((source) => source.visibility === "INTERNAL_ONLY")
+      .map((source) => source.content),
     model: createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }),
     previousTicketContext: previousTickets
-      .map((previous) => `${previous.title}\n${previous.messages.map((message) => `${message.senderType}: ${message.content}`).join("\n")}`)
+      .map(
+        (previous) =>
+          `${previous.title}\n${previous.messages.map((message) => `${message.senderType}: ${message.content}`).join("\n")}`,
+      )
       .join("\n\n"),
   });
   await unscopedPrisma.aiActivity.createMany({
@@ -668,13 +718,15 @@ async function deliverMessage(message: Awaited<ReturnType<typeof unscopedPrisma.
     try {
       await publishWidgetEvent(message.ticketId, { type: "message.created", data: message });
       return unscopedPrisma.message.update({
-        data: { deliveryAttempts: attempts, deliveryStatus: "SENT" }, where: { id: message.id },
+        data: { deliveryAttempts: attempts, deliveryStatus: "SENT" },
+        where: { id: message.id },
       });
     } catch {
       // The message remains durable and will also replay when the Widget reconnects.
     }
   }
   return unscopedPrisma.message.update({
-    data: { deliveryAttempts: attempts, deliveryStatus: "FAILED" }, where: { id: message.id },
+    data: { deliveryAttempts: attempts, deliveryStatus: "FAILED" },
+    where: { id: message.id },
   });
 }
