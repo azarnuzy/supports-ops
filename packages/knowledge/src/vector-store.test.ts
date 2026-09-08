@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { replaceChunks, replaceTicketChunks, searchChunks, searchTicketChunks } from "./vector-store";
+import {
+  replaceChunks,
+  replaceTicketChunks,
+  searchChunks,
+  searchTicketChunks,
+} from "./vector-store";
 
 function createDb() {
   return {

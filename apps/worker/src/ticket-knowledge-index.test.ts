@@ -55,9 +55,7 @@ const resolvedTicket = {
 
 function resetMocks() {
   mocks.ticketFindFirst.mockReset().mockResolvedValue(resolvedTicket);
-  mocks.chunkText
-    .mockReset()
-    .mockReturnValue([{ content: "I was charged twice.", position: 0 }]);
+  mocks.chunkText.mockReset().mockReturnValue([{ content: "I was charged twice.", position: 0 }]);
   mocks.createOpenAiEmbeddingClient.mockReset().mockReturnValue({ embed: mocks.embed });
   mocks.embed.mockReset().mockResolvedValue([[0.1, 0.2]]);
   mocks.txTicketFindFirst.mockReset().mockResolvedValue({ id: "t-1" });
@@ -72,7 +70,8 @@ describe("processTicketKnowledgeIndexJob", () => {
     await processTicketKnowledgeIndexJob(baseJob);
 
     expect(mocks.embed).toHaveBeenCalledTimes(1);
-    const [indexedText] = mocks.embed.mock.calls[0]?.[0] as string[];
+    const call = mocks.embed.mock.calls[0] as [string[]];
+    const [indexedText] = call[0];
     expect(indexedText).toContain("I was charged twice.");
 
     expect(mocks.replaceTicketChunks).toHaveBeenCalledWith(
