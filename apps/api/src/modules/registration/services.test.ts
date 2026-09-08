@@ -61,6 +61,7 @@ describe("registerAdminWorkspace", () => {
       user?: unknown;
       workspace?: unknown;
       aiAgent?: unknown;
+      aiSettings?: unknown;
       channel?: unknown;
       webWidgetConfig?: unknown;
     } = {};
@@ -70,6 +71,12 @@ describe("registerAdminWorkspace", () => {
         account: {
           create: vi.fn(async ({ data }: { data: unknown }) => {
             created.account = data;
+            return data;
+          }),
+        },
+        aiSettings: {
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            created.aiSettings = data;
             return data;
           }),
         },

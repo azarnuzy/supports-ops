@@ -193,6 +193,7 @@ describe("publishKnowledgeSource", () => {
     });
     expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith({
       content: draftSource.content,
+      kind: "CONTENT",
       knowledgeSourceId: "ks-1",
       title: draftSource.title,
       visibility: draftSource.visibility,
