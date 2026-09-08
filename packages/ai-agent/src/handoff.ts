@@ -1,4 +1,5 @@
 import { Agent, type CompletionModel } from "@anvia/core";
+import { detectLanguage, languageName } from "./language";
 import { agentObservability } from "./telemetry";
 import { z } from "zod";
 
@@ -22,6 +23,21 @@ export class SuggestedReplyGenerationFailedError extends Error {
     super("The AI Copilot could not generate a Suggested Reply.", options);
     this.name = "SuggestedReplyGenerationFailedError";
   }
+}
+
+/**
+ * The model is instructed to "write in the Customer's language" but does not
+ * reliably follow that instruction on every call (issue #38: the same
+ * English conversation sometimes drafted a reply in Spanish). Detecting the
+ * conversation's dominant language deterministically and naming it in the
+ * prompt removes the guesswork; when detection is inconclusive, the model
+ * still gets its original, more general instruction to fall back on.
+ */
+function languageInstruction(text: string): string {
+  const detected = detectLanguage(text);
+  return detected === "unknown"
+    ? "Write only a concise draft in the Customer's language."
+    : `Write only a concise draft in ${languageName(detected)}, the Customer's language.`;
 }
 
 /** A Copilot draft may learn from Internal-Only material, but it must never
@@ -51,7 +67,7 @@ export async function generateSuggestedReply(params: {
   const agent = new Agent({
     ...agentObservability(),
     id: "suggested-reply",
-    instructions: `You are SupportOps' AI Copilot helping a Human Agent draft a reply to a Customer. Write only a concise draft in the Customer's language. Never say you are an AI or address the Human Agent.
+    instructions: `You are SupportOps' AI Copilot helping a Human Agent draft a reply to a Customer. ${languageInstruction(params.currentConversation || params.customerMessage)} Never say you are an AI or address the Human Agent.
 
 Customer-Safe knowledge may be stated directly. Internal-Only knowledge is background for the Human Agent: do not quote, paraphrase closely, name, or reveal it. Do not reveal implementation details, private reasoning, source identifiers, or Business Tool data beyond the Customer-specific facts necessary to answer.
 
@@ -100,12 +116,18 @@ export function generateEscalationSummary(params: {
   const transcript = params.ticket.messages
     .map((message) => `${message.senderType}: ${message.content}`)
     .join("\n");
+  const firstCustomerMessage = params.ticket.messages.find(
+    (message) => message.senderType === "CUSTOMER",
+  )?.content;
+  const detectedLanguage = detectLanguage(firstCustomerMessage || transcript);
+  const summaryLanguagePhrase =
+    detectedLanguage === "unknown" ? "the Customer's language" : languageName(detectedLanguage);
   const agent = new Agent({
     ...agentObservability(),
     id: "escalation-summary",
     instructions: `You are SupportOps' AI Agent briefing a Human Agent who has just claimed a Ticket. Use only the supplied Ticket record; do not infer facts that are not recorded. Do not expose private reasoning or describe yourself as an assistant.
 
-Write a concise Escalation Summary in the Customer's language with these exact Markdown headings:
+Write a concise Escalation Summary in ${summaryLanguagePhrase} with these exact Markdown headings:
 ## Customer need
 ## Escalation reason
 ## Already tried
