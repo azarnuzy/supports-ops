@@ -24,6 +24,7 @@ export type AiSettings = {
 
 export async function fetchAiSettings(client: ApiClient) {
   const response = await client["ai-settings"].$get();
+
   if (response.status === 403) throw new Error("Only an Admin can manage AI settings.");
   if (!response.ok) throw new Error("Failed to load AI settings.");
   return (await response.json()) as { aiSettings: AiSettings };
@@ -126,7 +127,6 @@ export type TicketAttachment = {
   mimeType: string;
   processingStatus: "PROCESSING" | "READY" | "FAILED";
   sizeBytes: number;
-  storageKey: string;
 };
 
 export type TicketDetailMessage = TicketMessage & {
@@ -144,12 +144,11 @@ export type TicketActivity = {
 
 export type TicketDetail = TicketListItem & {
   aiActivities: TicketActivity[];
-  channel: { channelType: "WEB" | "WHATSAPP"; id: string };
-  escalatedAt: string | null;
   escalationReason: string | null;
   escalationSummary: string | null;
   escalationSummaryStatus: "PENDING" | "READY" | "FAILED";
   messages: TicketDetailMessage[];
+  webSession: { createdAt: string };
   resolutionReason: string | null;
   resolvedBy: string | null;
 };
@@ -198,6 +197,15 @@ export async function getTicketDetail(client: ApiClient, id: string) {
   return (await response.json()) as { ticket: TicketDetail };
 }
 
+/** Attachments open through the signed download URL, never through the raw
+ * storage key. */
+export async function getAttachmentDownloadUrl(client: ApiClient, id: string) {
+  const response = await client.attachments[":id"].download.$get({ param: { id } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (!response.ok) throw new Error("Failed to open the attachment.");
+  return (await response.json()) as { url: string };
+}
+
 export async function listSharedHumanQueue(client: ApiClient) {
   const response = await client.tickets.queue.$get();
   if (response.status === 401) throw new UnauthorizedApiError();
@@ -214,6 +222,7 @@ export async function listMyTickets(client: ApiClient) {
 
 export async function listLiveAiTickets(client: ApiClient) {
   const response = await client.tickets.live.$get();
+
   if (response.status === 403) throw new Error("Only an Admin can view live AI-handled Tickets.");
   if (!response.ok) throw new Error("Failed to load live Tickets.");
   return (await response.json()) as { tickets: SupportTicket[] };
@@ -221,6 +230,7 @@ export async function listLiveAiTickets(client: ApiClient) {
 
 export async function takeOverTicket(client: ApiClient, id: string) {
   const response = await client.tickets[":id"].takeover.$post({ param: { id } });
+
   if (response.status === 403) throw new Error("Only an Admin can take over Tickets.");
   if (response.status === 409) throw new Error("This Ticket is no longer handled by the AI Agent.");
   if (!response.ok) throw new Error("Failed to take over the Ticket.");
@@ -244,6 +254,7 @@ export async function reassignTicket(client: ApiClient, id: string, humanAgentId
     param: { id },
     json: { humanAgentId },
   });
+
   if (response.status === 403) throw new Error("Only an Admin can reassign Tickets.");
   if (response.status === 422) throw new Error("Choose an active Human Agent in this Workspace.");
   if (!response.ok) throw new Error("Failed to reassign the Ticket.");
