@@ -1,6 +1,10 @@
 import type { EvalTarget } from "@anvia/core/evals";
-import { classifyMessage, type ClassificationDecision, type ClassificationModel } from "../classification";
-import { generateSuggestedReply } from "../handoff";
+import {
+  classifyMessage,
+  type ClassificationDecision,
+  type ClassificationModel,
+} from "../classification";
+import { generateEscalationSummary, generateSuggestedReply } from "../handoff";
 import { streamReply, type ReplyDecision, type ReplyModel } from "../reply";
 
 /**
@@ -63,4 +67,19 @@ export function createSuggestedReplyTarget(
       model,
       previousTicketContext: input.previousTicketContext,
     });
+}
+
+export type EscalationSummaryEvalInput = {
+  ticket: {
+    escalationReason: string;
+    messages: Array<{ content: string; senderType: string }>;
+    recordedActivity: string;
+    title: string;
+  };
+};
+
+export function createEscalationSummaryTarget(
+  model: ReplyModel,
+): EvalTarget<EscalationSummaryEvalInput, string> {
+  return (input) => generateEscalationSummary({ model, ticket: input.ticket });
 }

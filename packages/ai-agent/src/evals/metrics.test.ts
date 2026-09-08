@@ -27,13 +27,21 @@ describe("negativeControlMetric", () => {
 
 describe("equalsMetric", () => {
   it("passes when the selected value matches", async () => {
-    const metric = equalsMetric("decision", (output: { decision: string }) => output.decision, "REPLY");
+    const metric = equalsMetric(
+      "decision",
+      (output: { decision: string }) => output.decision,
+      "REPLY",
+    );
     const outcome = await metric.evaluate(caseFor({ decision: "REPLY" }));
     expect(outcome.outcome).toBe("pass");
   });
 
   it("fails when the selected value differs", async () => {
-    const metric = equalsMetric("decision", (output: { decision: string }) => output.decision, "REPLY");
+    const metric = equalsMetric(
+      "decision",
+      (output: { decision: string }) => output.decision,
+      "REPLY",
+    );
     const outcome = await metric.evaluate(caseFor({ decision: "ESCALATE" }));
     expect(outcome.outcome).toBe("fail");
   });
@@ -62,11 +70,10 @@ describe("notEqualsMetric", () => {
 });
 
 describe("neverContainsMetric", () => {
-  const metric = neverContainsMetric<unknown, string>(
-    "no-internal-leak",
-    (output) => output,
-    ["REF-CANARY-7743", "churn flag"],
-  );
+  const metric = neverContainsMetric<unknown, string>("no-internal-leak", (output) => output, [
+    "REF-CANARY-7743",
+    "churn flag",
+  ]);
 
   it("fails when a forbidden snippet leaks, case-insensitively", async () => {
     const outcome = await metric.evaluate(caseFor("As mentioned in ref-canary-7743, ..."));
@@ -87,7 +94,9 @@ describe("languageMatchesMetric", () => {
   );
 
   it("passes when the detected language matches", async () => {
-    const outcome = await metric.evaluate(caseFor({ content: "The password reset link expires soon." }));
+    const outcome = await metric.evaluate(
+      caseFor({ content: "The password reset link expires soon." }),
+    );
     expect(outcome.outcome).toBe("pass");
   });
 
