@@ -1,6 +1,7 @@
 import { extract } from "@anvia/core/extractor";
 import { OpenAIClient } from "@anvia/openai";
 import type { CompletionModel } from "@anvia/core";
+import { withSpan } from "@repo/logger/telemetry";
 import { z } from "zod";
 
 export const ticketCategorySchema = z.enum([
@@ -73,21 +74,31 @@ export async function classifyMessage(params: {
   model: ClassificationModel;
   content: string;
 }): Promise<ClassificationDecision> {
-  let output: z.infer<typeof classificationOutputSchema>;
+  return withSpan("ai_agent.classify", {}, async (span) => {
+    let output: z.infer<typeof classificationOutputSchema>;
 
-  try {
-    ({ output } = await extract({
-      instructions,
-      model: params.model,
-      outputSchema: classificationOutputSchema,
-      retries: { maxAttempts: 2 },
-      text: params.content,
-    }));
-  } catch (error) {
-    throw new ClassificationFailedError({ cause: error });
-  }
+    try {
+      ({ output } = await extract({
+        instructions,
+        model: params.model,
+        outputSchema: classificationOutputSchema,
+        retries: { maxAttempts: 2 },
+        text: params.content,
+      }));
+    } catch (error) {
+      throw new ClassificationFailedError({ cause: error });
+    }
 
-  return narrowClassification(output, params.content);
+    const decision = narrowClassification(output, params.content);
+    span.setAttribute("ai_agent.qualifies", decision.qualifies);
+    if (decision.qualifies) {
+      span.setAttributes({
+        "ai_agent.category": decision.category,
+        "ai_agent.priority": decision.priority,
+      });
+    }
+    return decision;
+  });
 }
 
 function narrowClassification(

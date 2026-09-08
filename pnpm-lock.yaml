@@ -228,10 +228,25 @@ importers:
       '@anvia/openai':
         specifier: 1.1.2
         version: 1.1.2(@anvia/core@1.1.2(zod@4.4.3))(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(zod@4.4.3)
+      '@anvia/otel':
+        specifier: 1.1.2
+        version: 1.1.2(@anvia/core@1.1.2(zod@4.4.3))
+      '@repo/logger':
+        specifier: workspace:*
+        version: link:../logger
       zod:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@opentelemetry/api':
+        specifier: ^1.9.1
+        version: 1.9.1
+      '@opentelemetry/context-async-hooks':
+        specifier: ^2.11.0
+        version: 2.11.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-base':
+        specifier: ^2.10.0
+        version: 2.10.0(@opentelemetry/api@1.9.1)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -329,6 +344,9 @@ importers:
 
   packages/tools:
     dependencies:
+      '@repo/logger':
+        specifier: workspace:*
+        version: link:../logger
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -434,6 +452,11 @@ packages:
 
   '@anvia/openai@1.1.2':
     resolution: {integrity: sha512-c72BO1KKN2mI8m9tuVApLaR81oETkyZWzkXylWMAG2uScTtNAubTVCpUyoIvxxCu8oNQJYDQyOBQwDLteQGWdw==}
+    peerDependencies:
+      '@anvia/core': 1.1.2
+
+  '@anvia/otel@1.1.2':
+    resolution: {integrity: sha512-ZpclRDl0RwqITjsOrhX3S+MkpzuGz9T7d33LGDfwshTrD32jmrfpVhs263ERUhu3IJ7LTn5FPzEAa6b0N5nP7Q==}
     peerDependencies:
       '@anvia/core': 1.1.2
 
@@ -1102,6 +1125,10 @@ packages:
     resolution: {integrity: sha512-OlanaW1vv7ufTqQ3/fPLI4arGt5ZoM+P8abOMki6uEYnpRazepSWDwDnnw+la7kE26SHVC18//SMccrDvLKOXQ==}
     engines: {node: '>=8.0.0'}
 
+  '@opentelemetry/api-logs@0.222.0':
+    resolution: {integrity: sha512-9mb1If+IF6u0ZVXkHQ6ogEae5HwA6ajIVUgpSDQyRASxft6BSXHvBvPooRle3yFN/fKnCdSOnuu0OC3PLcF6+g==}
+    engines: {node: '>=8.0.0'}
+
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
@@ -1121,6 +1148,12 @@ packages:
 
   '@opentelemetry/context-async-hooks@2.10.0':
     resolution: {integrity: sha512-bvyMcgLEkozzSzpEEEo1OMoeQ97bxj6Qs2uN3mPrSdDvObMI1myffD/BPqcLlzZO9//d1SqQA/WPw7Cz2AiqhA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0 <1.10.0'
+
+  '@opentelemetry/context-async-hooks@2.11.0':
+    resolution: {integrity: sha512-Tr79DyWI8itsBdg+jH+opjfrwLzX+erk1/ExkIwhWoAVjVrJIn2y5+cGjTC0Vy8fyNIA/y8wuJPZwr1T3xCZeQ==}
     engines: {node: ^18.19.0 || >=20.6.0}
     peerDependencies:
       '@opentelemetry/api': '>=1.0.0 <1.10.0'
@@ -4641,6 +4674,12 @@ snapshots:
       - ws
       - zod
 
+  '@anvia/otel@1.1.2(@anvia/core@1.1.2(zod@4.4.3))':
+    dependencies:
+      '@anvia/core': 1.1.2(zod@4.4.3)
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.222.0
+
   '@aws-sdk/checksums@3.1000.26':
     dependencies:
       '@aws-sdk/core': 3.977.6
@@ -5230,6 +5269,10 @@ snapshots:
     dependencies:
       '@opentelemetry/api': 1.9.1
 
+  '@opentelemetry/api-logs@0.222.0':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+
   '@opentelemetry/api@1.9.1': {}
 
   '@opentelemetry/auto-instrumentations-node@0.79.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))':
@@ -5295,6 +5338,10 @@ snapshots:
       yaml: 2.9.0
 
   '@opentelemetry/context-async-hooks@2.10.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+
+  '@opentelemetry/context-async-hooks@2.11.0(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
 

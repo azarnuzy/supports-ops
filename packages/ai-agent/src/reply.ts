@@ -2,6 +2,8 @@ import { Agent, type CompletionModel } from "@anvia/core";
 import { OpenAIClient } from "@anvia/openai";
 import { z } from "zod";
 
+import { agentObservability } from "./telemetry";
+
 export type ReplyModel = CompletionModel;
 
 const replyOutputSchema = z.object({
@@ -56,6 +58,7 @@ export function streamReply(params: {
     ? params.ticketContext.map((entry) => `[${entry.id}] ${entry.content}`).join("\n\n")
     : undefined;
   const agent = new Agent({
+    ...agentObservability(),
     id: "customer-reply",
     instructions: `You are SupportOps' AI Agent speaking to a Customer. Reply in the language of the Customer's message.
 
