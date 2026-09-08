@@ -269,7 +269,7 @@ export async function claimTicket(ticketId: string, humanAgentId: string, worksp
     });
     if (!transition.count) throw new TicketAlreadyClaimedError();
     await tx.aiActivity.create({
-      data: { eventType: "CLAIMED", id: randomUUID(), metadata: { humanAgentId }, ticketId },
+      data: { eventType: "CLAIMED", id: randomUUID(), metadata: { humanAgentId }, ticketId, workspaceId },
     });
     return tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: ticketSelect });
   });
