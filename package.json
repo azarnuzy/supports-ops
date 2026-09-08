@@ -16,6 +16,7 @@
     "lint:fix": "biome check --write .",
     "with-env": "dotenv -e .env --",
     "createsuperuser": "pnpm with-env tsx scripts/createsuperuser.ts",
+    "seed:demo": "pnpm with-env tsx scripts/seed-demo.ts",
     "eval:ai-agent": "pnpm with-env pnpm --filter @repo/ai-agent eval --",
     "db:generate": "pnpm --filter @repo/api db:generate",
     "db:deploy": "pnpm --filter @repo/api db:deploy",
