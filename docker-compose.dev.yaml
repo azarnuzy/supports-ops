@@ -34,6 +34,19 @@ services:
       timeout: 5s
       retries: 10
 
+  business-system:
+    build:
+      context: .
+      target: business-system
+    environment:
+      BUSINESS_SYSTEM_DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/supportops?schema=business_system"
+      BUSINESS_SYSTEM_PORT: "8001"
+    ports:
+      - "${BUSINESS_SYSTEM_HOST_PORT:-8001}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_dev_data:
   redis_dev_data:

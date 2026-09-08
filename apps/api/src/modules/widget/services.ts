@@ -8,7 +8,8 @@ import {
   streamReply,
 } from "@repo/ai-agent";
 import { createOpenAiEmbeddingClient as createEmbeddingClient, searchChunks as findKnowledgeChunks } from "@repo/knowledge";
-import { aiAgentConfig, classificationConfig, embeddingConfig } from "../../config";
+import { BusinessToolError, createBusinessTools } from "@repo/tools";
+import { aiAgentConfig, apiConfig, classificationConfig, embeddingConfig } from "../../config";
 import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
@@ -65,12 +66,15 @@ export async function getApprovedWidget(widgetKey: string, origin: string) {
 export async function createWebSession(input: PreChatInput, origin: string) {
   const config = await getApprovedWidget(input.widgetKey, origin);
   const accessToken = randomBytes(32).toString("base64url");
+  const businessTools = createBusinessTools(apiConfig.businessSystemUrl);
+  const customer = await businessTools.getCustomerByEmail(input.email).catch(() => null);
 
   const session = await unscopedPrisma.$transaction(async (tx) => {
     const customerIdentity = await tx.customerIdentity.create({
       data: {
         channelType: "WEB",
         email: input.email,
+        externalCustomerId: customer?.id,
         id: randomUUID(),
         name: input.name,
         workspaceId: config.workspaceId,
@@ -189,7 +193,10 @@ async function appendMessage(ticketId: string, workspaceId: string, input: Custo
 /** Starts after the Customer message has been committed. Streaming fragments
  * never acquire a Message position; only the completed AI Agent reply does. */
 export async function generateAiReply(ticketId: string, workspaceId: string, customerMessage: string) {
-  const ticket = await unscopedPrisma.ticket.findUnique({ select: { status: true }, where: { id: ticketId } });
+  const ticket = await unscopedPrisma.ticket.findUnique({
+    select: { customerIdentity: { select: { email: true, externalCustomerId: true, id: true } }, status: true },
+    where: { id: ticketId },
+  });
   if (!ticket || ticket.status !== "AI_HANDLING") return;
   if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey) {
     await escalate(ticketId, workspaceId, "reply_not_configured");
@@ -220,6 +227,7 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
     const clarificationCount = await unscopedPrisma.aiActivity.count({
       where: { eventType: "CLARIFICATION_ASKED", ticketId },
     });
+    const businessData = await getBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
     const model = createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey });
     let decision: Awaited<ReturnType<typeof streamReply>> | undefined;
     let lastError: unknown;
@@ -230,6 +238,7 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
           customerMessage,
           model,
           onDelta: (delta) => publishWidgetEvent(ticketId, { type: "message.delta", data: { delta, provisionalId } }),
+          businessData,
           sources: sources.map((source) => ({ id: source.chunkId, content: source.content })),
         });
         break;
@@ -253,11 +262,66 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
       },
     });
     await publishWidgetEvent(ticketId, { type: "message.created", data: message });
-  } catch {
-    await escalate(ticketId, workspaceId, "generation_failed");
+  } catch (error) {
+    await escalate(ticketId, workspaceId, error instanceof BusinessToolError ? "business_tool_failed" : "generation_failed");
   } finally {
     setTicketGenerating(ticketId, false);
-    await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "ready" } });
+    const finalTicket = await unscopedPrisma.ticket.findUnique({ select: { status: true }, where: { id: ticketId } });
+    await publishWidgetEvent(ticketId, {
+      type: "ticket.status",
+      data: { status: finalTicket?.status === "ESCALATED" ? "escalated" : "ready" },
+    });
+  }
+}
+
+async function getBusinessToolData(
+  ticketId: string,
+  workspaceId: string,
+  identity: { email: string; externalCustomerId: string | null; id: string },
+) {
+  const tools = createBusinessTools(apiConfig.businessSystemUrl);
+  try {
+    let customerId = identity.externalCustomerId;
+    if (!customerId) {
+      const customer = await tools.getCustomerByEmail(identity.email);
+      await unscopedPrisma.aiActivity.create({
+        data: {
+          eventType: "TOOL_CALLED",
+          id: randomUUID(),
+          metadata: { outcome: "SUCCESS", tool: "getCustomerByEmail" },
+          ticketId,
+          workspaceId,
+        },
+      });
+      if (!customer) return undefined;
+      customerId = customer.id;
+      await unscopedPrisma.customerIdentity.update({
+        data: { externalCustomerId: customerId },
+        where: { id: identity.id },
+      });
+    }
+    const [subscription, invoice] = await Promise.all([
+      tools.getSubscriptionStatus(customerId),
+      tools.getInvoiceStatus(customerId),
+    ]);
+    await unscopedPrisma.aiActivity.createMany({
+      data: [
+        { eventType: "TOOL_CALLED", id: randomUUID(), metadata: { outcome: "SUCCESS", tool: "getSubscriptionStatus" }, ticketId, workspaceId },
+        { eventType: "TOOL_CALLED", id: randomUUID(), metadata: { outcome: "SUCCESS", tool: "getInvoiceStatus" }, ticketId, workspaceId },
+      ],
+    });
+    return JSON.stringify({ invoice, subscription });
+  } catch (error) {
+    await unscopedPrisma.aiActivity.create({
+      data: {
+        eventType: "TOOL_FAILED",
+        id: randomUUID(),
+        metadata: { outcome: "FAILED", tool: "Business System" },
+        ticketId,
+        workspaceId,
+      },
+    });
+    throw error instanceof BusinessToolError ? error : new BusinessToolError("Business Tool failed.", { cause: error });
   }
 }
 

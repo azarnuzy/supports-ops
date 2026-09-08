@@ -3,6 +3,7 @@
 pnpm workspace with:
 
 - `apps/api`: Hono API on Node.js.
+- `apps/business-system`: separate, read-only Customer, Subscription, and Invoice HTTP service.
 - `apps/platform`: React + Vite + TanStack Router file routes + TanStack Query.
 - `apps/widget`: customer-facing Web Widget.
 - `apps/worker`: Redis + BullMQ deployable.
@@ -33,6 +34,7 @@ pnpm db:migrate
 
 ```sh
 pnpm --filter @repo/api dev
+pnpm --filter @repo/business-system dev
 pnpm --filter @repo/platform dev
 pnpm --filter @repo/worker dev
 ```

@@ -16,6 +16,7 @@ x-api-service: &api-service
     <<: *application-environment
     API_PORT: "8000"
     DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=public"
+    BUSINESS_SYSTEM_URL: "http://business-system:8001"
     BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
     BETTER_AUTH_URL: "https://api.support.azarnuzy.com"
     CLIENT_ORIGINS: "https://support.azarnuzy.com,https://widget.support.azarnuzy.com"
@@ -92,6 +93,23 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    networks: [internal]
+
+  business-system:
+    image: "ghcr.io/azarnuzy/supports-ops-business-system:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
+    restart: unless-stopped
+    environment:
+      BUSINESS_SYSTEM_DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=business_system"
+      BUSINESS_SYSTEM_PORT: "8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8001/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks: [internal]
 
   platform:

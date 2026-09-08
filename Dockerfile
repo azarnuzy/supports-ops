@@ -40,6 +40,15 @@ ENV NODE_ENV=production
 
 CMD ["pnpm", "--filter", "@repo/worker", "exec", "tsx", "src/main.ts"]
 
+FROM build AS business-system
+
+ENV NODE_ENV=production
+ENV BUSINESS_SYSTEM_PORT=8001
+
+EXPOSE 8001
+
+CMD ["pnpm", "--filter", "@repo/business-system", "exec", "tsx", "src/main.ts"]
+
 FROM caddy:2-alpine AS platform
 
 COPY deploy/Caddyfile.static /etc/caddy/Caddyfile

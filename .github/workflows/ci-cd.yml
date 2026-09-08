@@ -69,6 +69,8 @@ jobs:
             image: api
           - target: worker
             image: worker
+          - target: business-system
+            image: business-system
           - target: platform
             image: platform
           - target: widget
@@ -131,6 +133,7 @@ jobs:
         run: |
           docker buildx imagetools inspect "${IMAGE_PREFIX}-api:${GITHUB_SHA}"
           docker buildx imagetools inspect "${IMAGE_PREFIX}-worker:${GITHUB_SHA}"
+          docker buildx imagetools inspect "${IMAGE_PREFIX}-business-system:${GITHUB_SHA}"
           docker buildx imagetools inspect "${IMAGE_PREFIX}-platform:${GITHUB_SHA}"
           docker buildx imagetools inspect "${IMAGE_PREFIX}-widget:${GITHUB_SHA}"
 

@@ -30,6 +30,7 @@ services:
       BETTER_AUTH_URL: "${BETTER_AUTH_URL:-http://localhost:8000}"
       CLIENT_ORIGINS: "${CLIENT_ORIGINS:-http://localhost:3000,http://localhost:4000}"
       DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/supportops?schema=public}"
+      BUSINESS_SYSTEM_URL: "http://business-system:8001"
       ENABLE_TELEMETRY: "${ENABLE_TELEMETRY:-false}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       TELEMETRY_API_KEY: "${TELEMETRY_API_KEY:-}"
@@ -55,6 +56,29 @@ services:
       retries: 12
       start_period: 20s
     command: sh -c "pnpm db:deploy && pnpm --filter @repo/api start"
+
+  business-system:
+    build:
+      context: .
+      target: business-system
+    image: supportops-business-system
+    container_name: supportops-business-system
+    restart: unless-stopped
+    environment:
+      BUSINESS_SYSTEM_DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/supportops?schema=business_system}"
+      BUSINESS_SYSTEM_PORT: "8001"
+    ports:
+      - "${BUSINESS_SYSTEM_HOST_PORT:-8001}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD", "node", "-e", "fetch('http://127.0.0.1:8001/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
 volumes:
   postgres_data:
