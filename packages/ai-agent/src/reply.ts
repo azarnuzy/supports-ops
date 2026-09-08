@@ -45,12 +45,16 @@ export function streamReply(params: {
   model: ReplyModel;
   customerMessage: string;
   sources: Array<{ id: string; content: string }>;
+  ticketContext?: Array<{ id: string; content: string }>;
   clarificationCount: number;
   onDelta(delta: string): Promise<void> | void;
 }): Promise<ReplyDecision> {
   const sources = params.sources.length
     ? params.sources.map((source) => `[${source.id}] ${source.content}`).join("\n\n")
     : "No published Customer-Safe Knowledge Source was retrieved.";
+  const ticketContext = params.ticketContext?.length
+    ? params.ticketContext.map((entry) => `[${entry.id}] ${entry.content}`).join("\n\n")
+    : undefined;
   const agent = new Agent({
     id: "customer-reply",
     instructions: `You are SupportOps' AI Agent speaking to a Customer. Reply in the language of the Customer's message.
@@ -58,6 +62,8 @@ export function streamReply(params: {
 Grounding is mandatory for company facts: only state a product, policy, account, billing, or service fact that appears in the retrieved Customer-Safe Knowledge Sources below. Never use model knowledge to fill a gap.
 
 Live Customer-specific facts are supplied separately by fixed, read-only Business Tools. You may use those facts only for this Customer. A request to change a subscription, modify billing, issue a refund, or otherwise write to the Business System must ESCALATE; no Business Tool can perform writes. If a Customer-specific fact is required but no live data is supplied, ESCALATE rather than guessing.
+
+${ticketContext ? "Previous Tickets from this same Customer are supplied below as context only: what happened or was granted in one Ticket is never a company policy or a guaranteed precedent for this one. Never use them to satisfy the grounding requirement above.\n\n" : ""}
 
 Choose REPLY when the sources let you answer. Choose CLARIFY only when the Customer's request is genuinely ambiguous and fewer than two clarification questions have already been asked (${params.clarificationCount} asked). Choose ESCALATE when no published source covers the factual request, when the requested answer is not supported by the sources, or after two clarifying questions. Conversational acknowledgements can be REPLY without a source.
 
@@ -67,7 +73,7 @@ For REPLY or CLARIFY, content is a concise Customer-facing message and escalatio
 
 Retrieved Customer-Safe Knowledge Sources:
 ${sources}
-
+${ticketContext ? `\nPrevious Tickets from this Customer (context only, not company policy):\n${ticketContext}\n` : ""}
 Live Business Tool data:
 ${params.businessData ?? "No Customer-specific Business Tool data is available."}`,
     maxTurns: 1,
