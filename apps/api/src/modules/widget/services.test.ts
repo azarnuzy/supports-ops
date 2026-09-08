@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   aiActivityCreateMany: vi.fn(),
-  classificationConfig: { apiKey: "sk-test", baseUrl: "https://openrouter.ai/api/v1", modelId: "openai/gpt-4.1-nano" },
+  classificationConfig: {
+    apiKey: "sk-test",
+    baseUrl: "https://openrouter.ai/api/v1",
+    modelId: "openai/gpt-4.1-nano",
+  },
   classifyMessage: vi.fn(),
   conversationCreate: vi.fn(),
   conversationFindUniqueOrThrow: vi.fn(),
@@ -45,11 +49,15 @@ vi.mock("@repo/ai-agent", () => ({
   createClassificationModel: mocks.createClassificationModel,
 }));
 
-const { ClassificationNotConfiguredError, createCustomerMessage, customerRequestedHuman } = await import("./services");
+const { ClassificationNotConfiguredError, createCustomerMessage, customerRequestedHuman } =
+  await import("./services");
 
 const txMock = {
   aiActivity: { createMany: mocks.aiActivityCreateMany },
-  conversation: { create: mocks.conversationCreate, findUniqueOrThrow: mocks.conversationFindUniqueOrThrow },
+  conversation: {
+    create: mocks.conversationCreate,
+    findUniqueOrThrow: mocks.conversationFindUniqueOrThrow,
+  },
   message: { create: mocks.messageCreate, findUnique: mocks.messageFindUnique },
   ticket: { create: mocks.ticketCreate, update: mocks.ticketUpdate },
   webSession: { findUniqueOrThrow: mocks.webSessionFindUniqueOrThrow },
@@ -65,7 +73,9 @@ function resetMocks() {
   mocks.messageFindUnique.mockReset();
   mocks.ticketCreate.mockReset();
   mocks.ticketUpdate.mockReset();
-  mocks.transaction.mockReset().mockImplementation(async (callback: (tx: typeof txMock) => unknown) => callback(txMock));
+  mocks.transaction
+    .mockReset()
+    .mockImplementation(async (callback: (tx: typeof txMock) => unknown) => callback(txMock));
   mocks.webSessionFindUnique.mockReset();
   mocks.webSessionFindUniqueOrThrow.mockReset();
   mocks.classificationConfig.apiKey = "sk-test";
@@ -107,7 +117,11 @@ describe("createCustomerMessage", () => {
   });
 
   it("throws ClassificationNotConfiguredError when no Web Session Ticket exists and no API key is set", async () => {
-    mocks.webSessionFindUnique.mockResolvedValue({ status: "ACTIVE", ticket: null, workspaceId: "ws-1" });
+    mocks.webSessionFindUnique.mockResolvedValue({
+      status: "ACTIVE",
+      ticket: null,
+      workspaceId: "ws-1",
+    });
     mocks.classificationConfig.apiKey = "";
 
     await expect(createCustomerMessage("token", input)).rejects.toBeInstanceOf(
@@ -117,7 +131,11 @@ describe("createCustomerMessage", () => {
   });
 
   it("creates no Ticket and returns a warm reply for a greeting", async () => {
-    mocks.webSessionFindUnique.mockResolvedValue({ status: "ACTIVE", ticket: null, workspaceId: "ws-1" });
+    mocks.webSessionFindUnique.mockResolvedValue({
+      status: "ACTIVE",
+      ticket: null,
+      workspaceId: "ws-1",
+    });
     mocks.classifyMessage.mockResolvedValue({ qualifies: false, reply: "Hi there!" });
 
     const result = await createCustomerMessage("token", { ...input, content: "hi" });
@@ -128,7 +146,11 @@ describe("createCustomerMessage", () => {
   });
 
   it("creates a Ticket, its first Message, and two AiActivity rows for a genuine request", async () => {
-    mocks.webSessionFindUnique.mockResolvedValue({ status: "ACTIVE", ticket: null, workspaceId: "ws-1" });
+    mocks.webSessionFindUnique.mockResolvedValue({
+      status: "ACTIVE",
+      ticket: null,
+      workspaceId: "ws-1",
+    });
     mocks.classifyMessage.mockResolvedValue({
       category: "BILLING",
       priority: "HIGH",
@@ -169,7 +191,11 @@ describe("createCustomerMessage", () => {
   });
 
   it("appends to the winning Ticket when two first messages race to create one", async () => {
-    mocks.webSessionFindUnique.mockResolvedValue({ status: "ACTIVE", ticket: null, workspaceId: "ws-1" });
+    mocks.webSessionFindUnique.mockResolvedValue({
+      status: "ACTIVE",
+      ticket: null,
+      workspaceId: "ws-1",
+    });
     mocks.classifyMessage.mockResolvedValue({
       category: "GENERAL",
       priority: "NORMAL",

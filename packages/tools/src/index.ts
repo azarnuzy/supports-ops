@@ -42,11 +42,14 @@ export function createBusinessTools(baseUrl: string, fetcher: typeof fetch = fet
       throw new BusinessToolError("The Business System could not be reached.", { cause: error });
     }
     if (response.status === 404) return null;
-    if (!response.ok) throw new BusinessToolError(`The Business System returned ${response.status}.`);
+    if (!response.ok)
+      throw new BusinessToolError(`The Business System returned ${response.status}.`);
     try {
       return await response.json();
     } catch (error) {
-      throw new BusinessToolError("The Business System returned an invalid response.", { cause: error });
+      throw new BusinessToolError("The Business System returned an invalid response.", {
+        cause: error,
+      });
     }
   };
 
@@ -56,7 +59,9 @@ export function createBusinessTools(baseUrl: string, fetcher: typeof fetch = fet
       try {
         return result === null ? null : customerSchema.parse(result);
       } catch (error) {
-        throw new BusinessToolError("The Business System returned an invalid customer.", { cause: error });
+        throw new BusinessToolError("The Business System returned an invalid customer.", {
+          cause: error,
+        });
       }
     },
     async getSubscriptionStatus(customerId) {
@@ -64,7 +69,9 @@ export function createBusinessTools(baseUrl: string, fetcher: typeof fetch = fet
       try {
         return result === null ? null : subscriptionSchema.parse(result);
       } catch (error) {
-        throw new BusinessToolError("The Business System returned an invalid subscription.", { cause: error });
+        throw new BusinessToolError("The Business System returned an invalid subscription.", {
+          cause: error,
+        });
       }
     },
     async getInvoiceStatus(customerId, invoiceId) {
@@ -73,7 +80,9 @@ export function createBusinessTools(baseUrl: string, fetcher: typeof fetch = fet
       try {
         return result === null ? null : invoiceSchema.parse(result);
       } catch (error) {
-        throw new BusinessToolError("The Business System returned an invalid invoice.", { cause: error });
+        throw new BusinessToolError("The Business System returned an invalid invoice.", {
+          cause: error,
+        });
       }
     },
   };

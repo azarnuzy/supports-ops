@@ -76,11 +76,21 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
   )
   .use(
     "/messages",
-    cors({ allowHeaders: ["Content-Type"], allowMethods: ["POST", "OPTIONS"], credentials: false, origin: "*" }),
+    cors({
+      allowHeaders: ["Content-Type"],
+      allowMethods: ["POST", "OPTIONS"],
+      credentials: false,
+      origin: "*",
+    }),
   )
   .use(
     "/attachments",
-    cors({ allowHeaders: ["Content-Type"], allowMethods: ["POST", "OPTIONS"], credentials: false, origin: "*" }),
+    cors({
+      allowHeaders: ["Content-Type"],
+      allowMethods: ["POST", "OPTIONS"],
+      credentials: false,
+      origin: "*",
+    }),
   )
   .use("/events", cors({ allowMethods: ["GET", "OPTIONS"], credentials: false, origin: "*" }))
   .get("/config", (c) => c.json(c.get("widgetConfig"), 200))
@@ -105,11 +115,23 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
         return c.json({ reply: result.reply }, 200);
       }
       if (result.created) {
-        void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+        void publishWidgetEvent(result.message.ticketId, {
+          type: "message.created",
+          data: result.message,
+        });
         if (customerRequestedHuman(result.message.content)) {
-          void escalate(result.message.ticketId, result.message.workspaceId, "CUSTOMER_REQUESTED_HUMAN", result.message.content);
+          void escalate(
+            result.message.ticketId,
+            result.message.workspaceId,
+            "CUSTOMER_REQUESTED_HUMAN",
+            result.message.content,
+          );
         } else {
-          void generateAiReply(result.message.ticketId, result.message.workspaceId, result.message.content);
+          void generateAiReply(
+            result.message.ticketId,
+            result.message.workspaceId,
+            result.message.content,
+          );
         }
       }
       return c.json(result.message, result.created ? 201 : 200);
@@ -129,9 +151,17 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     try {
       const result = await createCustomerAttachment(accessToken, c.req.valid("form"));
       if (!result) return c.json({ error: "unauthorized" }, 401);
-      void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+      void publishWidgetEvent(result.message.ticketId, {
+        type: "message.created",
+        data: result.message,
+      });
       if (customerRequestedHuman(result.message.content)) {
-        void escalate(result.message.ticketId, result.message.workspaceId, "CUSTOMER_REQUESTED_HUMAN", result.message.content);
+        void escalate(
+          result.message.ticketId,
+          result.message.workspaceId,
+          "CUSTOMER_REQUESTED_HUMAN",
+          result.message.content,
+        );
       }
       return c.json(result, 201);
     } catch (error) {
@@ -145,18 +175,31 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
     const position = Number(c.req.header("Last-Event-ID") ?? "0");
-    const replay = await getMessagesAfter(accessToken, Number.isSafeInteger(position) && position >= 0 ? position : 0);
+    const replay = await getMessagesAfter(
+      accessToken,
+      Number.isSafeInteger(position) && position >= 0 ? position : 0,
+    );
     if (!replay) return c.json({ error: "unauthorized" }, 401);
     return streamSSE(c, async (stream) => {
       for (const message of replay.messages) {
-        await stream.writeSSE({ data: JSON.stringify(message), event: "message.created", id: String(message.position) });
+        await stream.writeSSE({
+          data: JSON.stringify(message),
+          event: "message.created",
+          id: String(message.position),
+        });
       }
       const unsubscribe = await subscribeToWidgetEvents(replay.ticketId, async (event) => {
         const data = event.data as { position?: number };
-        await stream.writeSSE({ data: JSON.stringify(event.data), event: event.type, id: data.position ? String(data.position) : undefined });
+        await stream.writeSSE({
+          data: JSON.stringify(event.data),
+          event: event.type,
+          id: data.position ? String(data.position) : undefined,
+        });
       });
       await stream.writeSSE({
-        data: JSON.stringify({ status: isTicketGenerating(replay.ticketId) ? "generating" : "ready" }),
+        data: JSON.stringify({
+          status: isTicketGenerating(replay.ticketId) ? "generating" : "ready",
+        }),
         event: "ticket.status",
       });
       stream.onAbort(unsubscribe);

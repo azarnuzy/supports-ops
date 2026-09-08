@@ -36,11 +36,12 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       await crawlDocumentation(owned.id, workspaceId);
       return;
     }
-    const content = job.data.kind === "PDF"
-      ? await extractPdf(owned.id)
-      : job.data.kind === "URL"
-        ? await extractUrl(owned.id)
-        : job.data.content;
+    const content =
+      job.data.kind === "PDF"
+        ? await extractPdf(owned.id)
+        : job.data.kind === "URL"
+          ? await extractUrl(owned.id)
+          : job.data.content;
     if (!content?.trim()) throw new Error("The source did not contain readable text.");
     const source = await prisma.knowledgeSource.findFirst({ where: { id: knowledgeSourceId } });
     if (!source) throw new Error("Knowledge Source no longer exists.");
@@ -106,8 +107,20 @@ async function extractPdf(id: string) {
   const source = await prisma.knowledgeSource.findFirst({ where: { id } });
   if (!source?.sourceUrl) throw new Error("PDF file is missing.");
   if (!ingestionConfig.mistralApiKey) throw new Error("Configure MISTRAL_API_KEY to process PDFs.");
-  const documentUrl = await createStorage(storageConfig).getSignedGetObjectUrl({ key: source.sourceUrl });
-  const response = await fetch("https://api.mistral.ai/v1/ocr", { method: "POST", headers: { Authorization: `Bearer ${ingestionConfig.mistralApiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: "mistral-ocr-latest", document: { type: "document_url", document_url: documentUrl } }) });
+  const documentUrl = await createStorage(storageConfig).getSignedGetObjectUrl({
+    key: source.sourceUrl,
+  });
+  const response = await fetch("https://api.mistral.ai/v1/ocr", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ingestionConfig.mistralApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "mistral-ocr-latest",
+      document: { type: "document_url", document_url: documentUrl },
+    }),
+  });
   if (!response.ok) throw new Error(`OCR failed: ${await response.text()}`);
   const body = (await response.json()) as { pages?: Array<{ markdown?: string }> };
   return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
@@ -124,15 +137,50 @@ async function crawlDocumentation(parentId: string, workspaceId: string) {
   const parent = await prisma.knowledgeSource.findFirst({ where: { id: parentId } });
   if (!parent?.sourceUrl) throw new Error("Documentation URL is missing.");
   const pages = await crawlPages(parent.sourceUrl, 1, 25);
-  await Promise.allSettled(pages.map((page) => prisma.knowledgeSource.create({ data: { id: crypto.randomUUID(), parentId, sourceType: "URL", sourceUrl: page.url, status: "DRAFT", title: page.title, visibility: parent.visibility, workspaceId } })));
-  await prisma.knowledgeSource.update({ data: { failureReason: null, status: "READY" }, where: { id: parentId } });
+  await Promise.allSettled(
+    pages.map((page) =>
+      prisma.knowledgeSource.create({
+        data: {
+          id: crypto.randomUUID(),
+          parentId,
+          sourceType: "URL",
+          sourceUrl: page.url,
+          status: "DRAFT",
+          title: page.title,
+          visibility: parent.visibility,
+          workspaceId,
+        },
+      }),
+    ),
+  );
+  await prisma.knowledgeSource.update({
+    data: { failureReason: null, status: "READY" },
+    where: { id: parentId },
+  });
 }
 
 async function crawlPages(url: string, maxDepth: number, limit: number) {
-  if (!ingestionConfig.tavilyApiKey) throw new Error("Configure TAVILY_API_KEY to crawl documentation URLs.");
-  const response = await fetch("https://api.tavily.com/crawl", { method: "POST", headers: { Authorization: `Bearer ${ingestionConfig.tavilyApiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ url, max_depth: maxDepth, limit }) });
+  if (!ingestionConfig.tavilyApiKey)
+    throw new Error("Configure TAVILY_API_KEY to crawl documentation URLs.");
+  const response = await fetch("https://api.tavily.com/crawl", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ingestionConfig.tavilyApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url, max_depth: maxDepth, limit }),
+  });
   if (!response.ok) throw new Error(`Crawl failed: ${await response.text()}`);
-  const body = (await response.json()) as { results?: Array<{ raw_content?: string; title?: string; url: string }> };
+  const body = (await response.json()) as {
+    results?: Array<{ raw_content?: string; title?: string; url: string }>;
+  };
   const origin = new URL(url).origin;
-  return (body.results ?? []).filter((page) => new URL(page.url).origin === origin).slice(0, limit).map((page) => ({ content: page.raw_content ?? "", title: page.title ?? page.url, url: page.url }));
+  return (body.results ?? [])
+    .filter((page) => new URL(page.url).origin === origin)
+    .slice(0, limit)
+    .map((page) => ({
+      content: page.raw_content ?? "",
+      title: page.title ?? page.url,
+      url: page.url,
+    }));
 }

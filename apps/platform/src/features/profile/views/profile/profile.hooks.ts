@@ -21,8 +21,7 @@ export function useProfileForm() {
 
   const normalizedImage = image.trim() || null;
   const isDirty =
-    !!currentUser &&
-    (name !== currentUser.name || normalizedImage !== (currentUser.image ?? null));
+    !!currentUser && (name !== currentUser.name || normalizedImage !== (currentUser.image ?? null));
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

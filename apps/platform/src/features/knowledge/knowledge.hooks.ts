@@ -27,12 +27,26 @@ export function useCreateManualFaqMutation() {
 
 export function useCreateDocumentationUrlMutation() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: createDocumentationUrl, onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }) });
+  return useMutation({
+    mutationFn: createDocumentationUrl,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
+  });
 }
 
 export function useCreatePdfKnowledgeSourceMutation() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: ({ file, visibility }: { file: File; visibility: "CUSTOMER_SAFE" | "INTERNAL_ONLY" }) => createPdfKnowledgeSource(file, visibility), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }) });
+  return useMutation({
+    mutationFn: ({
+      file,
+      visibility,
+    }: {
+      file: File;
+      visibility: "CUSTOMER_SAFE" | "INTERNAL_ONLY";
+    }) => createPdfKnowledgeSource(file, visibility),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
+  });
 }
 
 export function useUpdateManualFaqMutation() {

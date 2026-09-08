@@ -16,7 +16,9 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     return;
   }
 
-  const response = await fetch(`${apiUrl.replace(/\/$/, "")}/widget/config?key=${encodeURIComponent(widgetKey)}`);
+  const response = await fetch(
+    `${apiUrl.replace(/\/$/, "")}/widget/config?key=${encodeURIComponent(widgetKey)}`,
+  );
 
   if (!response.ok) {
     return;
@@ -61,15 +63,26 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
 
   const connect = (accessToken: string) => {
     eventSource?.close();
-    eventSource = new EventSource(`${apiUrl.replace(/\/$/, "")}/widget/events?token=${encodeURIComponent(accessToken)}`);
+    eventSource = new EventSource(
+      `${apiUrl.replace(/\/$/, "")}/widget/events?token=${encodeURIComponent(accessToken)}`,
+    );
     eventSource.addEventListener("message.created", (event) => {
-      const message = JSON.parse((event as MessageEvent<string>).data) as { content: string; position: number; senderType: string };
+      const message = JSON.parse((event as MessageEvent<string>).data) as {
+        content: string;
+        position: number;
+        senderType: string;
+      };
       messages?.querySelector(`[data-provisional-id]`)?.remove();
       appendMessage(message);
     });
     eventSource.addEventListener("message.delta", (event) => {
-      const delta = JSON.parse((event as MessageEvent<string>).data) as { delta: string; provisionalId: string };
-      let bubble = messages?.querySelector<HTMLElement>(`[data-provisional-id="${delta.provisionalId}"]`);
+      const delta = JSON.parse((event as MessageEvent<string>).data) as {
+        delta: string;
+        provisionalId: string;
+      };
+      let bubble = messages?.querySelector<HTMLElement>(
+        `[data-provisional-id="${delta.provisionalId}"]`,
+      );
       if (!bubble) {
         bubble = document.createElement("p");
         bubble.className = "message";
@@ -83,8 +96,13 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       if (input) input.disabled = status.status === "generating";
     });
     eventSource.addEventListener("attachment.updated", (event) => {
-      const update = JSON.parse((event as MessageEvent<string>).data) as { attachmentId: string; processingStatus: string };
-      const status = messages?.querySelector<HTMLElement>(`[data-attachment-id="${update.attachmentId}"]`);
+      const update = JSON.parse((event as MessageEvent<string>).data) as {
+        attachmentId: string;
+        processingStatus: string;
+      };
+      const status = messages?.querySelector<HTMLElement>(
+        `[data-attachment-id="${update.attachmentId}"]`,
+      );
       if (status) status.textContent = `Attachment: ${update.processingStatus.toLowerCase()}`;
     });
   };
@@ -154,13 +172,17 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
 
   const accessToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
   if (accessToken) {
-    preChat && (preChat.hidden = true);
+    if (preChat) preChat.hidden = true;
     chat?.removeAttribute("hidden");
     connect(accessToken);
   }
 }
 
-async function startSession(apiUrl: string, widgetKey: string, customer: { email: string; name: string }) {
+async function startSession(
+  apiUrl: string,
+  widgetKey: string,
+  customer: { email: string; name: string },
+) {
   const response = await fetch(
     `${apiUrl.replace(/\/$/, "")}/widget/pre-chat?key=${encodeURIComponent(widgetKey)}`,
     {
@@ -175,10 +197,14 @@ async function startSession(apiUrl: string, widgetKey: string, customer: { email
 }
 
 async function sendMessage(apiUrl: string, accessToken: string, content: string) {
-  const response = await fetch(`${apiUrl.replace(/\/$/, "")}/widget/messages?token=${encodeURIComponent(accessToken)}`, {
-    body: JSON.stringify({ content, idempotencyKey: crypto.randomUUID() }),
-    headers: { "Content-Type": "application/json" }, method: "POST",
-  });
+  const response = await fetch(
+    `${apiUrl.replace(/\/$/, "")}/widget/messages?token=${encodeURIComponent(accessToken)}`,
+    {
+      body: JSON.stringify({ content, idempotencyKey: crypto.randomUUID() }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+  );
   if (!response.ok) throw new Error("Unable to send message");
   return (await response.json()) as
     | { content: string; position: number; senderType: string }
@@ -189,10 +215,13 @@ async function sendAttachment(apiUrl: string, accessToken: string, content: stri
   const form = new FormData();
   form.set("file", file);
   if (content) form.set("content", content);
-  const response = await fetch(`${apiUrl.replace(/\/$/, "")}/widget/attachments?token=${encodeURIComponent(accessToken)}`, {
-    body: form,
-    method: "POST",
-  });
+  const response = await fetch(
+    `${apiUrl.replace(/\/$/, "")}/widget/attachments?token=${encodeURIComponent(accessToken)}`,
+    {
+      body: form,
+      method: "POST",
+    },
+  );
   if (!response.ok) throw new Error("Unable to upload attachment");
   return (await response.json()) as {
     attachment: { id: string };
@@ -234,7 +263,12 @@ function renderWidget(config: WidgetConfig) {
 }
 
 function escapeHtml(value: string) {
-  return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
+  return value.replace(
+    /[&<>'"]/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ??
+      character,
+  );
 }
 
 function escapeCss(value: string) {

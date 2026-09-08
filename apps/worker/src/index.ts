@@ -64,7 +64,9 @@ export function startKnowledgeIngestWorker() {
 }
 
 export function startAttachmentProcessWorker() {
-  return new Worker<AttachmentProcessJob>("attachment-process", processAttachmentJob, { connection });
+  return new Worker<AttachmentProcessJob>("attachment-process", processAttachmentJob, {
+    connection,
+  });
 }
 
 export function runWorker() {

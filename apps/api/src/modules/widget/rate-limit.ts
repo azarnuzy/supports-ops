@@ -14,7 +14,10 @@ const incrementWithinWindow = `
 
 export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSeconds: number };
 
-export async function limitWidgetMessage(sessionToken: string, address: string): Promise<RateLimitResult> {
+export async function limitWidgetMessage(
+  sessionToken: string,
+  address: string,
+): Promise<RateLimitResult> {
   const session = await consume(`supportops:widget-rate:session:${sessionToken}`, sessionLimit);
   if (!session.allowed) return session;
 
@@ -23,7 +26,10 @@ export async function limitWidgetMessage(sessionToken: string, address: string):
 
 async function consume(key: string, limit: number): Promise<RateLimitResult> {
   redis ??= new Redis(redisUrl, { maxRetriesPerRequest: null });
-  const [count, ttl] = (await redis.eval(incrementWithinWindow, 1, key, String(windowSeconds))) as [number, number];
+  const [count, ttl] = (await redis.eval(incrementWithinWindow, 1, key, String(windowSeconds))) as [
+    number,
+    number,
+  ];
   if (count <= limit) return { allowed: true };
   return { allowed: false, retryAfterSeconds: Math.max(ttl, 1) };
 }

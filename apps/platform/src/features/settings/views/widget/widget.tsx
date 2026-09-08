@@ -184,7 +184,9 @@ const WebWidgetSettingsView = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Embed snippet</CardTitle>
-                  <CardDescription>Paste this before the closing &lt;/body&gt; tag.</CardDescription>
+                  <CardDescription>
+                    Paste this before the closing &lt;/body&gt; tag.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3">
                   <pre className="overflow-x-auto rounded-md border bg-muted p-3 font-mono text-xs leading-relaxed">
