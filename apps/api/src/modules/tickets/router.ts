@@ -7,6 +7,7 @@ import { subscribeToTicketQueueEvents } from "../widget/realtime";
 import { reassignTicketSchema } from "./schema";
 import {
   claimTicket,
+  completeHandoff,
   HumanAgentNotFoundError,
   listMyTickets,
   listSharedHumanQueue,
@@ -40,10 +41,9 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     if (!user) return c.json({ error: "unauthorized" }, 401);
     if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
     try {
-      return c.json(
-        { ticket: await claimTicket(c.req.param("id"), user.id, user.workspaceId) },
-        200,
-      );
+      const ticket = await claimTicket(c.req.param("id"), user.id, user.workspaceId);
+      void completeHandoff(ticket.id, user.id, user.workspaceId).catch(() => undefined);
+      return c.json({ ticket }, 200);
     } catch (error) {
       if (error instanceof TicketAlreadyClaimedError)
         return c.json({ error: "already_claimed", message: error.message }, 409);
