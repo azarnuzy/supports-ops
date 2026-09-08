@@ -66,7 +66,8 @@ export type SearchChunksParams = {
   embedding: number[];
   limit?: number;
   minSimilarity?: number;
-  visibility?: KnowledgeVisibility;
+  /** Customer retrieval is the safe default; only the AI Copilot may opt in to Internal-Only. */
+  retrievalMode?: "CUSTOMER" | "COPILOT";
 };
 
 export type ChunkSearchResult = {
@@ -90,8 +91,9 @@ const DEFAULT_MIN_SIMILARITY = 0.15;
 
 /**
  * Searches published, non-deleted Knowledge chunks by cosine similarity,
- * scoped to one Workspace and optionally one Visibility. Never reaches a
- * Workspace it wasn't given, and never returns a Chunk below
+ * scoped to one Workspace. Customer retrieval is restricted to Customer-Safe
+ * content; the AI Copilot may additionally retrieve Internal-Only content.
+ * Never reaches a Workspace it wasn't given, and never returns a Chunk below
  * `minSimilarity` — the mechanism the retrieval test screen and the AI
  * Agent's retrieval both call.
  */
@@ -102,7 +104,7 @@ export async function searchChunks(
   const limit = params.limit ?? DEFAULT_SEARCH_LIMIT;
   const minSimilarity = params.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
   const queryVector = toVectorLiteral(params.embedding);
-  const visibility = params.visibility ?? null;
+  const retrievalMode = params.retrievalMode ?? "CUSTOMER";
 
   const rows = await db.$queryRaw<RawChunkRow[]>`
     SELECT "id", "knowledgeSourceId", "content", "position",
@@ -113,7 +115,10 @@ export async function searchChunks(
       AND "isPublished" = true
       AND "deletedAt" IS NULL
       AND "embedding" IS NOT NULL
-      AND (${visibility}::text IS NULL OR "visibility" = ${visibility}::"KnowledgeVisibility")
+      AND (
+        ${retrievalMode} = 'COPILOT'
+        OR "visibility" = 'CUSTOMER_SAFE'::"KnowledgeVisibility"
+      )
     ORDER BY "embedding" <=> ${queryVector}::vector ASC
     LIMIT ${limit}
   `;

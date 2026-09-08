@@ -78,10 +78,19 @@ export async function updateManualFaq(
 ): Promise<KnowledgeSourceDto> {
   const existing = await findEditableKnowledgeSource(id);
 
-  const knowledgeSource = await prisma.knowledgeSource.update({
-    data: { content: input.content, title: input.title, visibility: input.visibility },
-    where: { id: existing.id },
-  });
+  // Visibility is denormalized onto Chunks because retrieval cannot join back
+  // to KnowledgeSource. Keep both rows in the same transaction so hiding a
+  // source takes effect for the Customer-facing retriever immediately.
+  const [knowledgeSource] = await prisma.$transaction([
+    prisma.knowledgeSource.update({
+      data: { content: input.content, title: input.title, visibility: input.visibility },
+      where: { id: existing.id },
+    }),
+    prisma.chunk.updateMany({
+      data: { visibility: input.visibility },
+      where: { knowledgeSourceId: existing.id },
+    }),
+  ]);
 
   return toDto(knowledgeSource);
 }

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   embed: vi.fn(),
   findFirst: vi.fn(),
   replaceChunks: vi.fn(),
+  txKnowledgeSourceFindFirst: vi.fn(),
   txKnowledgeSourceUpdate: vi.fn(),
   update: vi.fn(),
 }));
@@ -27,7 +28,12 @@ vi.mock("./config", () => ({
 vi.mock("./prisma", () => ({
   prisma: {
     $transaction: (operation: (tx: unknown) => Promise<unknown>) =>
-      operation({ knowledgeSource: { update: mocks.txKnowledgeSourceUpdate } }),
+      operation({
+        knowledgeSource: {
+          findFirst: mocks.txKnowledgeSourceFindFirst,
+          update: mocks.txKnowledgeSourceUpdate,
+        },
+      }),
     knowledgeSource: { findFirst: mocks.findFirst, update: mocks.update },
   },
 }));
@@ -51,6 +57,7 @@ function resetMocks() {
   mocks.createOpenAiEmbeddingClient.mockReset().mockReturnValue({ embed: mocks.embed });
   mocks.embed.mockReset().mockResolvedValue([[0.1, 0.2]]);
   mocks.findFirst.mockReset().mockResolvedValue({ id: "ks-1" });
+  mocks.txKnowledgeSourceFindFirst.mockReset().mockResolvedValue({ id: "ks-1" });
   mocks.replaceChunks.mockReset().mockResolvedValue(undefined);
   mocks.txKnowledgeSourceUpdate.mockReset().mockResolvedValue(undefined);
   mocks.update.mockReset().mockResolvedValue(undefined);
@@ -59,15 +66,18 @@ function resetMocks() {
 describe("processKnowledgeIngestJob", () => {
   beforeEach(resetMocks);
 
-  it("chunks, embeds, and indexes the source, moving it through READY to PUBLISHED", async () => {
+  it("chunks, embeds, and indexes an active source before publishing it", async () => {
     await processKnowledgeIngestJob(baseJob);
 
     expect(mocks.findFirst).toHaveBeenCalledWith({
       select: { id: true },
-      where: { id: "ks-1", workspaceId: "ws-1" },
+      where: { deletedAt: null, id: "ks-1", workspaceId: "ws-1" },
     });
     expect(mocks.embed).toHaveBeenCalledWith(["Click the forgot password link."]);
-    expect(mocks.update).toHaveBeenCalledWith({ data: { status: "READY" }, where: { id: "ks-1" } });
+    expect(mocks.txKnowledgeSourceFindFirst).toHaveBeenCalledWith({
+      select: { id: true },
+      where: { deletedAt: null, id: "ks-1", status: "PROCESSING", workspaceId: "ws-1" },
+    });
     expect(mocks.replaceChunks).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -84,6 +94,15 @@ describe("processKnowledgeIngestJob", () => {
       data: { publishedAt: expect.any(Date), status: "PUBLISHED" },
       where: { id: "ks-1" },
     });
+  });
+
+  it("does not restore chunks when the source was deleted during embedding", async () => {
+    mocks.txKnowledgeSourceFindFirst.mockResolvedValue(null);
+
+    await processKnowledgeIngestJob(baseJob);
+
+    expect(mocks.replaceChunks).not.toHaveBeenCalled();
+    expect(mocks.txKnowledgeSourceUpdate).not.toHaveBeenCalled();
   });
 
   it("refuses to process a source from a different Workspace", async () => {

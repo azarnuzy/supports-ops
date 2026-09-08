@@ -22,7 +22,7 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
 
   const owned = await prisma.knowledgeSource.findFirst({
     select: { id: true },
-    where: { id: knowledgeSourceId, workspaceId },
+    where: { deletedAt: null, id: knowledgeSourceId, workspaceId },
   });
 
   if (!owned) {
@@ -44,12 +44,19 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       ? await embeddingClient.embed(chunks.map((chunk) => chunk.content))
       : [];
 
-    await prisma.knowledgeSource.update({
-      data: { status: "READY" },
-      where: { id: knowledgeSourceId },
-    });
-
     await prisma.$transaction(async (tx) => {
+      // Deletion can happen while embeddings are being generated. Recheck it
+      // inside this transaction before replacing chunks, otherwise a deleted
+      // source could be repopulated with retrievable chunks after its delete.
+      const activeSource = await tx.knowledgeSource.findFirst({
+        select: { id: true },
+        where: { deletedAt: null, id: knowledgeSourceId, status: "PROCESSING", workspaceId },
+      });
+
+      if (!activeSource) {
+        return;
+      }
+
       await replaceChunks(tx, {
         chunks: chunks.map((chunk, index) => ({
           content: chunk.content,

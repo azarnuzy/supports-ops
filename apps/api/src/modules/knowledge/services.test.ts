@@ -159,6 +159,23 @@ describe("updateManualFaq", () => {
 
     expect(mocks.knowledgeSourceUpdate).not.toHaveBeenCalled();
   });
+
+  it("updates a source and its chunks' visibility in one transaction", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({ ...draftSource, status: "PUBLISHED" });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({ ...draftSource, visibility: "INTERNAL_ONLY" });
+
+    await updateManualFaq("ks-1", {
+      content: "Click forgot password.",
+      title: "How to reset password",
+      visibility: "INTERNAL_ONLY",
+    });
+
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.chunkUpdateMany).toHaveBeenCalledWith({
+      data: { visibility: "INTERNAL_ONLY" },
+      where: { knowledgeSourceId: "ks-1" },
+    });
+  });
 });
 
 describe("publishKnowledgeSource", () => {
