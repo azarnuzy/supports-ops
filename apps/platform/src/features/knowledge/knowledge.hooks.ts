@@ -1,4 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { queryKeys } from "../../lib/query-keys";
 import {
   createManualFaq,
@@ -7,6 +8,7 @@ import {
   deleteKnowledgeSource,
   getKnowledgeSources,
   publishKnowledgeSource,
+  subscribeToKnowledgeSourceEvents,
   updateManualFaq,
 } from "./knowledge.services";
 
@@ -14,6 +16,18 @@ export const knowledgeSourcesQueryOptions = queryOptions({
   queryFn: getKnowledgeSources,
   queryKey: queryKeys.workspace.knowledgeSources,
 });
+
+export function useKnowledgeSourceEvents() {
+  const queryClient = useQueryClient();
+
+  useEffect(
+    () =>
+      subscribeToKnowledgeSourceEvents(() =>
+        void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
+      ),
+    [queryClient],
+  );
+}
 
 export function useCreateManualFaqMutation() {
   const queryClient = useQueryClient();

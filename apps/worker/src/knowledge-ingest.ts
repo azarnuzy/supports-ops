@@ -1,7 +1,28 @@
 import { chunkText, createOpenAiEmbeddingClient, replaceChunks } from "@repo/knowledge";
 import { createStorage } from "@repo/storage";
+import Redis from "ioredis";
 import { embeddingConfig, ingestionConfig, storageConfig } from "./config";
 import { prisma } from "./prisma";
+
+let publisher: Redis | undefined;
+
+async function publishStatus(
+  workspaceId: string,
+  knowledgeSourceId: string,
+  status: "DRAFT" | "PROCESSING" | "READY" | "PUBLISHED" | "FAILED",
+  failureReason?: string,
+) {
+  publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
+    maxRetriesPerRequest: null,
+  });
+  await publisher.publish(
+    `supportops:knowledge:${workspaceId}`,
+    JSON.stringify({
+      data: { failureReason, knowledgeSourceId, status },
+      type: "knowledge.updated",
+    }),
+  );
+}
 
 export type KnowledgeIngestJob = {
   kind: "CONTENT" | "CRAWL" | "PDF" | "URL";
@@ -60,7 +81,7 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       ? await embeddingClient.embed(chunks.map((chunk) => chunk.content))
       : [];
 
-    await prisma.$transaction(async (tx) => {
+    const wasPublished = await prisma.$transaction(async (tx) => {
       // Deletion can happen while embeddings are being generated. Recheck it
       // inside this transaction before replacing chunks, otherwise a deleted
       // source could be repopulated with retrievable chunks after its delete.
@@ -70,7 +91,7 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       });
 
       if (!activeSource) {
-        return;
+        return false;
       }
 
       await replaceChunks(tx, {
@@ -89,15 +110,20 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
         data: { publishedAt: new Date(), status: "PUBLISHED" },
         where: { id: knowledgeSourceId },
       });
+
+      return true;
     });
+
+    if (wasPublished) {
+      await publishStatus(workspaceId, knowledgeSourceId, "PUBLISHED");
+    }
   } catch (error) {
+    const failureReason = error instanceof Error ? error.message : "Knowledge ingest failed.";
     await prisma.knowledgeSource.update({
-      data: {
-        failureReason: error instanceof Error ? error.message : "Knowledge ingest failed.",
-        status: "FAILED",
-      },
+      data: { failureReason, status: "FAILED" },
       where: { id: knowledgeSourceId },
     });
+    await publishStatus(workspaceId, knowledgeSourceId, "FAILED", failureReason);
 
     throw error;
   }
@@ -129,7 +155,7 @@ async function extractPdf(id: string) {
 async function extractUrl(id: string) {
   const source = await prisma.knowledgeSource.findFirst({ where: { id } });
   if (!source?.sourceUrl) throw new Error("Documentation URL is missing.");
-  const [page] = await crawlPages(source.sourceUrl, 0, 1);
+  const [page] = await crawlPages(source.sourceUrl, 1, 1);
   return page?.content ?? "";
 }
 
@@ -157,6 +183,7 @@ async function crawlDocumentation(parentId: string, workspaceId: string) {
     data: { failureReason: null, status: "READY" },
     where: { id: parentId },
   });
+  await publishStatus(workspaceId, parentId, "READY");
 }
 
 async function crawlPages(url: string, maxDepth: number, limit: number) {
