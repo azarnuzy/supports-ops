@@ -14,6 +14,7 @@ import { Link } from "@tanstack/react-router";
 import { PlatformAppShell } from "../../../app-shell";
 import { meQueryOptions } from "../../../auth";
 import { getInitials } from "../../../../lib/utils";
+import { formatDate } from "./dashboard.services";
 
 const DashboardView = () => {
   const user = useQuery(meQueryOptions);
@@ -95,12 +96,6 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
       <span className="truncate font-medium">{value}</span>
     </div>
   );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-  }).format(new Date(value));
 }
 
 export default DashboardView;
