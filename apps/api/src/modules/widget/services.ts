@@ -14,7 +14,7 @@ import { aiAgentConfig, apiConfig, classificationConfig, embeddingConfig, storag
 import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
-import { publishWidgetEvent, setTicketGenerating } from "./realtime";
+import { publishTicketQueueEvent, publishWidgetEvent, setTicketGenerating } from "./realtime";
 import { enqueueAttachmentProcess } from "./attachment-queue";
 
 export type PublicWidgetConfig = {
@@ -450,6 +450,7 @@ export async function escalate(ticketId: string, workspaceId: string, reason: Es
   if (!result) return;
   await publishWidgetEvent(ticketId, { type: "message.created", data: result });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "escalated" } });
+  await publishTicketQueueEvent(workspaceId);
 }
 
 function acknowledgementFor(customerMessage: string) {

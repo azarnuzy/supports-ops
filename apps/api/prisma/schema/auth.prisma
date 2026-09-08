@@ -10,6 +10,7 @@ model User {
   role          Role
   deletedAt     DateTime?
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  assignedTickets Ticket[] @relation("TicketAssignee")
   sessions      Session[]
   accounts      Account[]
 

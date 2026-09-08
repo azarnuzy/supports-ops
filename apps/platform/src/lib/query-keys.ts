@@ -12,5 +12,7 @@ export const queryKeys = {
     knowledgeSources: ["workspace", "knowledge-sources"] as const,
     users: ["workspace", "users"] as const,
     widgetConfig: ["workspace", "widget-config"] as const,
+    myTickets: ["workspace", "my-tickets"] as const,
+    sharedHumanQueue: ["workspace", "shared-human-queue"] as const,
   },
 } as const;

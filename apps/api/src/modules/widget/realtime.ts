@@ -5,6 +5,8 @@ export type WidgetEvent = {
   data: unknown;
 };
 
+export type TicketQueueEvent = { type: "ticket.queue.changed" };
+
 const generatingTickets = new Set<string>();
 
 export function setTicketGenerating(ticketId: string, generating: boolean) {
@@ -21,6 +23,10 @@ let publisher: Redis | undefined;
 
 function channel(ticketId: string) {
   return `supportops:ticket:${ticketId}`;
+function queueChannel(workspaceId: string) {
+  return `supportops:ticket-queue:${workspaceId}`;
+}
+
 }
 
 export async function publishWidgetEvent(ticketId: string, event: WidgetEvent) {
@@ -32,5 +38,17 @@ export async function subscribeToWidgetEvents(ticketId: string, onEvent: (event:
   const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
   subscriber.on("message", (_channel, payload) => onEvent(JSON.parse(payload) as WidgetEvent));
   await subscriber.subscribe(channel(ticketId));
+
+export async function publishTicketQueueEvent(workspaceId: string) {
+  publisher ??= new Redis(redisUrl, { maxRetriesPerRequest: null });
+  await publisher.publish(queueChannel(workspaceId), JSON.stringify({ type: "ticket.queue.changed" } satisfies TicketQueueEvent));
+}
+
+export async function subscribeToTicketQueueEvents(workspaceId: string, onEvent: (event: TicketQueueEvent) => void) {
+  const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  subscriber.on("message", (_channel, payload) => onEvent(JSON.parse(payload) as TicketQueueEvent));
+  await subscriber.subscribe(queueChannel(workspaceId));
+  return () => subscriber.disconnect();
+}
   return () => subscriber.disconnect();
 }

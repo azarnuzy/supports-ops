@@ -109,7 +109,7 @@ export function PlatformAppShell({
           { icon: SettingsIcon, label: "Settings", to: "/settings/agents" },
         ]
       : [
-          { icon: TicketCheckIcon, label: "Shared queue", to: "/chat" },
+          { icon: TicketCheckIcon, label: "Shared queue", to: "/tickets/queue" },
           { icon: UserRoundIcon, label: "My tickets", to: "/tickets/mine" },
         ];
 

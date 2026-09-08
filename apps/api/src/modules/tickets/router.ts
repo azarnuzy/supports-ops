@@ -1,0 +1,72 @@
+import { zValidator } from "@hono/zod-validator";
+import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
+import { requireAdmin } from "../auth/guards";
+import type { AuthVariables } from "../auth/types";
+import { subscribeToTicketQueueEvents } from "../widget/realtime";
+import { reassignTicketSchema } from "./schema";
+import {
+  claimTicket,
+  HumanAgentNotFoundError,
+  listMyTickets,
+  listSharedHumanQueue,
+  reassignTicket,
+  TicketAlreadyClaimedError,
+} from "./services";
+
+export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
+  .get("/queue", async (c) => {
+    if (!c.get("user")) return c.json({ error: "unauthorized" }, 401);
+    return c.json({ tickets: await listSharedHumanQueue() }, 200);
+  })
+  .get("/mine", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    return c.json({ tickets: await listMyTickets(user.id) }, 200);
+  })
+  .get("/queue/events", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    return streamSSE(c, async (stream) => {
+      const unsubscribe = await subscribeToTicketQueueEvents(user.workspaceId, async (event) => {
+        await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
+      });
+      stream.onAbort(unsubscribe);
+      await new Promise<void>(() => undefined);
+    });
+  })
+  .post("/:id/claim", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    try {
+      return c.json(
+        { ticket: await claimTicket(c.req.param("id"), user.id, user.workspaceId) },
+        200,
+      );
+    } catch (error) {
+      if (error instanceof TicketAlreadyClaimedError)
+        return c.json({ error: "already_claimed", message: error.message }, 409);
+      throw error;
+    }
+  })
+  .patch("/:id/assignee", zValidator("json", reassignTicketSchema), async (c) => {
+    const user = requireAdmin(c);
+    if (!user) return c.json({ error: "forbidden" }, 403);
+    try {
+      return c.json(
+        {
+          ticket: await reassignTicket(
+            c.req.param("id"),
+            c.req.valid("json").humanAgentId,
+            user.workspaceId,
+          ),
+        },
+        200,
+      );
+    } catch (error) {
+      if (error instanceof HumanAgentNotFoundError)
+        return c.json({ error: "human_agent_not_found" }, 422);
+      throw error;
+    }
+  });
