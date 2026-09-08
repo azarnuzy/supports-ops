@@ -10,12 +10,15 @@ import {
   completeHandoff,
   HumanAgentNotFoundError,
   listMyTickets,
+  listAiHandlingTickets,
   listSharedHumanQueue,
   reassignTicket,
   suggestReply,
   SuggestedReplyNotConfiguredError,
   TicketAlreadyClaimedError,
   TicketNotOwnedError,
+  TicketNotAvailableForTakeoverError,
+  takeOverTicket,
   resolveTicket,
   sendHumanReply,
 } from "./services";
@@ -29,6 +32,11 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
     return c.json({ tickets: await listMyTickets(user.id) }, 200);
+  })
+  .get("/live", async (c) => {
+    const user = requireAdmin(c);
+    if (!user) return c.json({ error: "forbidden" }, 403);
+    return c.json({ tickets: await listAiHandlingTickets(user.workspaceId) }, 200);
   })
   .get("/queue/events", async (c) => {
     const user = c.get("user");
@@ -44,7 +52,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/:id/claim", async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
-    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN") return c.json({ error: "forbidden" }, 403);
     try {
       const ticket = await claimTicket(c.req.param("id"), user.id, user.workspaceId);
       void completeHandoff(ticket.id, user.id, user.workspaceId).catch(() => undefined);
@@ -55,10 +63,21 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       throw error;
     }
   })
+  .post("/:id/takeover", async (c) => {
+    const user = requireAdmin(c);
+    if (!user) return c.json({ error: "forbidden" }, 403);
+    try {
+      return c.json({ ticket: await takeOverTicket(c.req.param("id"), user.id, user.workspaceId) }, 200);
+    } catch (error) {
+      if (error instanceof TicketNotAvailableForTakeoverError)
+        return c.json({ error: "ticket_not_available_for_takeover" }, 409);
+      throw error;
+    }
+  })
   .post("/:id/messages", zValidator("json", humanReplySchema), async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
-    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN") return c.json({ error: "forbidden" }, 403);
     try {
       return c.json({ message: await sendHumanReply(c.req.param("id"), user.id, c.req.valid("json").content) }, 201);
     } catch (error) {
@@ -69,7 +88,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/:id/suggested-reply", async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
-    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN") return c.json({ error: "forbidden" }, 403);
     try {
       return c.json({ suggestedReply: await suggestReply(c.req.param("id"), user.id, user.workspaceId) }, 200);
     } catch (error) {

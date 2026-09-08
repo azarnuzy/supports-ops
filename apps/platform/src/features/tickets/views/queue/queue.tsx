@@ -21,9 +21,11 @@ import { PlatformAppShell } from "../../../app-shell";
 import { meQueryOptions, workspaceUsersQueryOptions } from "../../../auth";
 import {
   sharedHumanQueueQueryOptions,
+  liveAiTicketsQueryOptions,
   useClaimTicketMutation,
   useReassignTicketMutation,
   useSharedHumanQueueEvents,
+  useTakeOverTicketMutation,
 } from "../../tickets.hooks";
 
 function priorityVariant(priority: "LOW" | "NORMAL" | "HIGH") {
@@ -39,6 +41,11 @@ const SharedHumanQueueView = () => {
   });
   const claim = useClaimTicketMutation();
   const reassign = useReassignTicketMutation();
+  const liveTickets = useQuery({
+    ...liveAiTicketsQueryOptions,
+    enabled: user.data?.role === "ADMIN",
+  });
+  const takeover = useTakeOverTicketMutation();
   const [assignees, setAssignees] = useState<Record<string, string>>({});
   useSharedHumanQueueEvents();
 
@@ -53,6 +60,61 @@ const SharedHumanQueueView = () => {
             but never changes that order.
           </p>
         </div>
+        {user.data?.role === "ADMIN" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Live AI-handled Tickets</CardTitle>
+              <CardDescription>
+                Watch Customer and AI Agent messages as they arrive, then take over when needed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {liveTickets.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
+              {liveTickets.isError ? (
+                <p className="text-sm text-destructive">Unable to load live Tickets.</p>
+              ) : null}
+              {liveTickets.data?.tickets.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No Tickets are currently handled by the AI Agent.
+                </p>
+              ) : null}
+              {liveTickets.data?.tickets.map((ticket) => (
+                <div className="rounded-lg border p-4" key={ticket.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{ticket.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Customer: {ticket.customerIdentity.name}
+                      </p>
+                    </div>
+                    <Button
+                      disabled={takeover.isPending}
+                      onClick={() =>
+                        takeover.mutate(ticket.id, {
+                          onSuccess: () => toast.success("Ticket taken over."),
+                          onError: (error) =>
+                            toast.error(
+                              error instanceof Error ? error.message : "Unable to take over Ticket.",
+                            ),
+                        })
+                      }
+                    >
+                      {takeover.isPending ? "Taking over…" : "Take over"}
+                    </Button>
+                  </div>
+                  <div className="mt-3 grid gap-2 border-t pt-3 text-sm">
+                    {ticket.messages.map((message) => (
+                      <p key={message.position}>
+                        <span className="font-medium">{message.senderType.replaceAll("_", " ")}:</span>{" "}
+                        {message.content}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>Waiting for a Human Agent</CardTitle>

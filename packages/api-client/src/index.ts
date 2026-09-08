@@ -69,6 +69,23 @@ export async function listMyTickets(client: ApiClient) {
   return (await response.json()) as { tickets: SupportTicket[] };
 }
 
+export async function listLiveAiTickets(client: ApiClient) {
+  const response = await client.tickets.live.$get();
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only an Admin can view live AI-handled Tickets.");
+  if (!response.ok) throw new Error("Failed to load live Tickets.");
+  return (await response.json()) as { tickets: SupportTicket[] };
+}
+
+export async function takeOverTicket(client: ApiClient, id: string) {
+  const response = await client.tickets[":id"].takeover.$post({ param: { id } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only an Admin can take over Tickets.");
+  if (response.status === 409) throw new Error("This Ticket is no longer handled by the AI Agent.");
+  if (!response.ok) throw new Error("Failed to take over the Ticket.");
+  return (await response.json()) as { ticket: SupportTicket };
+}
+
 export async function claimTicket(client: ApiClient, id: string) {
   const response = await client.tickets[":id"].claim.$post({ param: { id } });
   if (response.status === 401) throw new UnauthorizedApiError();

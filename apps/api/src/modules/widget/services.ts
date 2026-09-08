@@ -23,7 +23,12 @@ import {
 import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
-import { publishTicketQueueEvent, publishWidgetEvent, setTicketGenerating } from "./realtime";
+import {
+  isTicketGenerating,
+  publishTicketQueueEvent,
+  publishWidgetEvent,
+  setTicketGenerating,
+} from "./realtime";
 import { enqueueAttachmentProcess } from "./attachment-queue";
 
 export type PublicWidgetConfig = {
@@ -76,6 +81,16 @@ export type CreateCustomerMessageResult =
 
 export function customerRequestedHuman(content: string) {
   return /\b(?:human|real (?:person|agent)|live (?:agent|person)|customer service|representative|(?:speak|talk) (?:to|with) (?:a )?(?:human|person|someone|agent)|connect (?:me )?to (?:a )?(?:human|person|agent)|(?:bicara|ngobrol) (?:dengan|sama) (?:human|manusia|orang|cs|customer service)|hubungkan (?:saya|aku) (?:ke|dengan) (?:human|manusia|orang|cs|customer service)|orangnya|cs)\b/i.test(
+    content,
+  );
+}
+
+/** Broad, low-precision signal that a message might be a resolution
+ * confirmation or a bare thanks. Used only to let such messages reach the
+ * reply Agent even when retrieval finds no supporting Knowledge; the Agent
+ * makes the actual REPLY/RESOLVE/CLARIFY distinction. */
+function looksLikeResolutionSignal(content: string) {
+  return /\b(?:thanks?|thank you|solved|resolved|fixed|working|works now|got it|all good|that('?s| is) (?:it|all)|makasih|terima kasih|sudah (?:selesai|beres|bisa|oke?)|beres|selesai|berhasil)\b/i.test(
     content,
   );
 }
@@ -360,8 +375,13 @@ export async function generateAiReply(
           clarificationCount,
           customerMessage,
           model,
-          onDelta: (delta) =>
-            publishWidgetEvent(ticketId, { type: "message.delta", data: { delta, provisionalId } }),
+          onDelta: (delta) => {
+            if (!isTicketGenerating(ticketId)) return;
+            return publishWidgetEvent(ticketId, {
+              type: "message.delta",
+              data: { delta, provisionalId },
+            });
+          },
           businessData,
           sources: [
             ...sources.map((source) => ({ id: source.chunkId, content: source.content })),
@@ -378,6 +398,7 @@ export async function generateAiReply(
       }
     }
     if (!decision) throw lastError ?? new ReplyGenerationFailedError();
+    if (!isTicketGenerating(ticketId)) return;
 
     if (
       decision.decision === "ESCALATE" ||
@@ -396,6 +417,7 @@ export async function generateAiReply(
     if (!decision.content) throw new ReplyGenerationFailedError();
 
     const message = await appendAiMessage(ticketId, workspaceId, decision.content);
+    if (!message) return;
     await unscopedPrisma.aiActivity.create({
       data: {
         eventType: decision.decision === "CLARIFY" ? "CLARIFICATION_ASKED" : "AI_REPLIED",
@@ -406,6 +428,7 @@ export async function generateAiReply(
       },
     });
     await publishWidgetEvent(ticketId, { type: "message.created", data: message });
+    await publishTicketQueueEvent(workspaceId);
   } catch (error) {
     await escalate(
       ticketId,
@@ -493,8 +516,13 @@ async function getBusinessToolData(
 
 async function appendAiMessage(ticketId: string, workspaceId: string, content: string) {
   return unscopedPrisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
+    const transition = await tx.ticket.updateMany({
       data: { messageSeq: { increment: 1 } },
+      where: { id: ticketId, status: "AI_HANDLING" },
+    });
+    if (!transition.count) return null;
+    const ticket = await tx.ticket.findUniqueOrThrow({
+      select: { messageSeq: true },
       where: { id: ticketId },
     });
     const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });

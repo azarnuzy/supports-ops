@@ -2,11 +2,13 @@ import {
   claimTicket as claimTicketRequest,
   createApiClient,
   generateSuggestedReply as generateSuggestedReplyRequest,
+  listLiveAiTickets as listLiveAiTicketsRequest,
   listMyTickets as listMyTicketsRequest,
   listSharedHumanQueue as listSharedHumanQueueRequest,
   reassignTicket as reassignTicketRequest,
   resolveHumanTicket as resolveHumanTicketRequest,
   sendHumanReply as sendHumanReplyRequest,
+  takeOverTicket as takeOverTicketRequest,
 } from "@repo/api-client";
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -18,6 +20,14 @@ export function getSharedHumanQueue() {
 
 export function getMyTickets() {
   return listMyTicketsRequest(apiClient);
+}
+
+export function getLiveAiTickets() {
+  return listLiveAiTicketsRequest(apiClient);
+}
+
+export function takeOverTicket(id: string) {
+  return takeOverTicketRequest(apiClient, id);
 }
 
 export function claimTicket(id: string) {

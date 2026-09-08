@@ -32,6 +32,13 @@ export function isTicketGenerating(ticketId: string) {
   return generatingTickets.has(ticketId);
 }
 
+/** A streamed model response cannot safely become a durable Message once a
+ * human has taken ownership. Removing it from this set makes both deltas and
+ * the eventual completed response a no-op. */
+export function cancelTicketGeneration(ticketId: string) {
+  generatingTickets.delete(ticketId);
+}
+
 const redisUrl = process.env.REDIS_URL ?? "redis://localhost:16379";
 let publisher: Redis | undefined;
 
