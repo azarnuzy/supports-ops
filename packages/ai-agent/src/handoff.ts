@@ -1,4 +1,5 @@
 import { Agent, type CompletionModel } from "@anvia/core";
+import { agentObservability } from "./telemetry";
 import { z } from "zod";
 
 const suggestedReplySchema = z.object({
@@ -48,6 +49,7 @@ export async function generateSuggestedReply(params: {
   previousTicketContext: string;
 }): Promise<string> {
   const agent = new Agent({
+    ...agentObservability(),
     id: "suggested-reply",
     instructions: `You are SupportOps' AI Copilot helping a Human Agent draft a reply to a Customer. Write only a concise draft in the Customer's language. Never say you are an AI or address the Human Agent.
 
@@ -99,6 +101,7 @@ export function generateEscalationSummary(params: {
     .map((message) => `${message.senderType}: ${message.content}`)
     .join("\n");
   const agent = new Agent({
+    ...agentObservability(),
     id: "escalation-summary",
     instructions: `You are SupportOps' AI Agent briefing a Human Agent who has just claimed a Ticket. Use only the supplied Ticket record; do not infer facts that are not recorded. Do not expose private reasoning or describe yourself as an assistant.
 
