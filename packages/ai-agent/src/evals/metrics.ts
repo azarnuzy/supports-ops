@@ -7,7 +7,6 @@ import {
 } from "@anvia/core/evals";
 import { detectLanguage, type SupportedLanguage } from "../language";
 
-export { detectLanguage };
 export type EvalLanguage = SupportedLanguage;
 
 /**
