@@ -31,7 +31,7 @@ Status yang dipakai:
 | `/knowledge` | Admin | Siap dicoba | Membuat, mengubah, menghapus, dan publish Manual FAQ; memilih Customer-Safe atau Internal-Only; menjalankan Retrieval test. | Hanya Manual FAQ. Sumber yang dipublish Customer-Safe dipakai oleh AI Agent di Web Widget; Internal-Only tidak pernah dipakai untuk balasan Customer. |
 | `/chat` | Pengguna masuk | Sebagian siap | Menjelajahi tampilan inbox, pencarian/filter tampilan, dan panel detail percakapan contoh. | Semua percakapan dan tindakan masih data/UI contoh; belum membaca atau mengelola Ticket nyata. |
 | `/tickets/queue` | Human Agent, Admin | Siap dicoba | Melihat Shared Human Queue escalated secara oldest-first; Human Agent dapat Claim dan Admin dapat memilih Human Agent untuk menugaskan Ticket. Perubahan queue masuk otomatis tanpa refresh halaman. | Belum ada detail Ticket atau balasan Human Agent dari halaman ini. |
-| `/tickets/mine` | Human Agent | Siap dicoba | Melihat semua Ticket aktif yang telah di-Claim oleh Human Agent yang masuk. | Belum ada detail Ticket atau balasan Human Agent dari halaman ini. |
+| `/tickets/mine` | Human Agent | Siap dicoba | Melihat semua Ticket aktif yang telah di-Claim oleh Human Agent yang masuk, termasuk Escalation Summary yang muncul setelah Handoff selesai dibuat. | Belum ada detail Ticket atau balasan Human Agent dari halaman ini. |
 | `/gallery` | Pengguna masuk | Siap dicoba | Melihat komponen visual dan status Ticket untuk referensi desain. | Hanya galeri komponen, bukan fitur operasional. |
 
 ## Web Widget
@@ -49,6 +49,7 @@ Status yang dipakai:
 | AI Agent menjawab dari Customer-Safe Knowledge | Siap dicoba di Web Widget; lihat prasyarat dan batasan di atas. |
 | Escalation dan Shared Human Queue | Siap dicoba di Web Widget — minta Human Agent secara natural dalam Bahasa Indonesia atau Inggris, atau kirim pertanyaan tanpa Knowledge Source Customer-Safe yang relevan. Ticket berpindah ke `ESCALATED`, menyimpan alasan baku dan AI Activity, lalu Customer menerima acknowledgement; pesan Customer berikutnya tetap tercatat tanpa balasan AI. Memerlukan prasyarat Web Widget dan, untuk escalation berbasis knowledge, konfigurasi AI Agent. Belum ada UI Shared Human Queue, Claim, atau Takeover untuk Human Agent. |
 | Claim | Siap dicoba — Human Agent dapat Claim Ticket dari Shared Human Queue; update kondisional memastikan satu Claim menang bila dua Human Agent mencoba bersamaan. Admin dapat menugaskan Ticket kepada Human Agent lain. Membutuhkan Postgres dan Redis, serta Ticket yang sudah dieskalasi. |
+| Handoff dan Escalation Summary | Siap dicoba — setelah Human Agent Claim Ticket, Customer menerima pengenalan yang menyebut nama Human Agent melalui SSE, dan Escalation Summary baru dibuat dari percakapan serta AI Activity saat itu. Ringkasan muncul otomatis di `/tickets/mine`; bila pembuatan gagal, Claim tetap berlaku dan Human Agent melihat pemberitahuan untuk meninjau percakapan langsung. Membutuhkan prasyarat Claim dan `OPENROUTER_API_KEY` untuk menghasilkan ringkasan. |
 | Takeover | Belum tersedia |
 | Human Agent membalas dan melakukan Resolution | Belum tersedia |
 | AI Copilot dan Suggested Reply | Belum tersedia |

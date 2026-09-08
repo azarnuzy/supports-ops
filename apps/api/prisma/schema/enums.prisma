@@ -30,6 +30,12 @@ enum TicketStatus {
   RESOLVED
 }
 
+enum EscalationSummaryStatus {
+  PENDING
+  READY
+  FAILED
+}
+
 enum EscalationReason {
   LOW_KNOWLEDGE_CONFIDENCE
   NO_RELEVANT_KNOWLEDGE

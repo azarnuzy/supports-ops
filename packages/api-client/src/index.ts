@@ -37,6 +37,8 @@ export type SupportTicket = {
   assignedHumanAgent: { id: string; name: string } | null;
   createdAt: string;
   escalatedAt: string | null;
+  escalationSummary: string | null;
+  escalationSummaryStatus: "PENDING" | "READY" | "FAILED";
   id: string;
   priority: TicketPriority;
   title: string;

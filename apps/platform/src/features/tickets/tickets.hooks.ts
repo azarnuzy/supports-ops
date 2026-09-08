@@ -29,6 +29,10 @@ function useTicketInvalidation() {
 }
 
 export function useSharedHumanQueueEvents() {
+  useTicketEvents();
+}
+
+export function useTicketEvents() {
   const invalidate = useTicketInvalidation();
   useEffect(() => subscribeToSharedHumanQueue(() => void invalidate()), [invalidate]);
 }

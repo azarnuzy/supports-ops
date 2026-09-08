@@ -6,6 +6,10 @@ export {
   ticketPrioritySchema,
 } from "./classification";
 export { createReplyModel, ReplyGenerationFailedError, streamReply } from "./reply";
+export {
+  EscalationSummaryGenerationFailedError,
+  generateEscalationSummary,
+} from "./handoff";
 export type {
   ClassificationDecision,
   ClassificationModel,

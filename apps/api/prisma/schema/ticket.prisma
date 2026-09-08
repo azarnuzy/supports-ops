@@ -10,6 +10,8 @@ model Ticket {
   status             TicketStatus     @default(AI_HANDLING)
   escalationReason   EscalationReason?
   escalatedAt        DateTime?
+  escalationSummary  String?
+  escalationSummaryStatus EscalationSummaryStatus @default(PENDING)
   assignedHumanAgentId String?
   messageSeq         Int              @default(0)
   createdAt          DateTime         @default(now())
