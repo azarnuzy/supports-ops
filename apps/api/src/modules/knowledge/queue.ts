@@ -2,11 +2,12 @@ import { Queue, type ConnectionOptions } from "bullmq";
 import type { KnowledgeVisibility } from "../../utils/prisma";
 
 export type KnowledgeIngestJob = {
+  kind: "CONTENT" | "CRAWL" | "PDF" | "URL";
   knowledgeSourceId: string;
   workspaceId: string;
-  title: string;
-  content: string;
-  visibility: KnowledgeVisibility;
+  title?: string;
+  content?: string;
+  visibility?: KnowledgeVisibility;
 };
 
 const connection: ConnectionOptions = {

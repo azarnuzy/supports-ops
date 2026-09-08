@@ -11,6 +11,7 @@ const defaultBetterAuthUrl = "http://localhost:8000";
 const defaultBetterAuthSecret = "dev-change-me";
 const productionSecretMinimumLength = 32;
 const defaultEmbeddingModel = "openai/text-embedding-3-small";
+const defaultFastModel = "openai/gpt-4.1-nano";
 export const modelGatewayBaseUrl = "https://openrouter.ai/api/v1";
 
 const runtimeEnvSchema = z.enum(["development", "test", "production"]).default("development");
@@ -53,6 +54,13 @@ const apiEnvSchema = z
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LOG_LEVEL: logLevelSchema,
     OPENROUTER_API_KEY: optionalStringSchema,
+    S3_ACCESS_KEY_ID: optionalStringSchema,
+    S3_BUCKET: z.string().trim().min(1).default("supportops"),
+    S3_ENDPOINT: optionalStringSchema,
+    S3_FORCE_PATH_STYLE: booleanSchema.default(true),
+    S3_PUBLIC_BASE_URL: optionalStringSchema,
+    S3_REGION: z.string().trim().min(1).default("auto"),
+    S3_SECRET_ACCESS_KEY: optionalStringSchema,
     TELEMETRY_API_KEY: optionalStringSchema,
     TELEMETRY_API_KEY_HEADER: z.string().trim().min(1).default("authorization"),
     TELEMETRY_EXPORTER: telemetryExporterSchema,
@@ -113,6 +121,16 @@ export const embeddingConfig = {
   apiKey: env.OPENROUTER_API_KEY,
   baseUrl: modelGatewayBaseUrl,
   modelId: env.EMBEDDING_MODEL,
+} as const;
+
+export const storageConfig = {
+  accessKeyId: env.S3_ACCESS_KEY_ID ?? "",
+  bucket: env.S3_BUCKET,
+  endpoint: env.S3_ENDPOINT,
+  forcePathStyle: env.S3_FORCE_PATH_STYLE,
+  publicBaseUrl: env.S3_PUBLIC_BASE_URL,
+  region: env.S3_REGION,
+  secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? "",
 } as const;
 
 export const loggerConfig = {

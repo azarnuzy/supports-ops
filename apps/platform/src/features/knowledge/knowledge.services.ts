@@ -1,13 +1,15 @@
 import {
   createApiClient,
   createManualFaq as createManualFaqRequest,
+  createDocumentationUrl as createDocumentationUrlRequest,
+  createPdfKnowledgeSource as createPdfKnowledgeSourceRequest,
   deleteKnowledgeSource as deleteKnowledgeSourceRequest,
   listKnowledgeSources,
   publishKnowledgeSource as publishKnowledgeSourceRequest,
   testKnowledgeRetrieval,
   updateManualFaq as updateManualFaqRequest,
 } from "@repo/api-client";
-import type { ManualFaqInput } from "./knowledge.types";
+import type { DocumentationUrlInput, ManualFaqInput } from "./knowledge.types";
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const apiClient = createApiClient(apiBaseUrl);
@@ -18,6 +20,14 @@ export async function getKnowledgeSources() {
 
 export async function createManualFaq(input: ManualFaqInput) {
   return createManualFaqRequest(apiClient, input);
+}
+
+export async function createDocumentationUrl(input: DocumentationUrlInput) {
+  return createDocumentationUrlRequest(apiClient, input);
+}
+
+export async function createPdfKnowledgeSource(file: File, visibility: DocumentationUrlInput["visibility"]) {
+  return createPdfKnowledgeSourceRequest(apiClient, file, visibility);
 }
 
 export async function updateManualFaq(id: string, input: ManualFaqInput) {

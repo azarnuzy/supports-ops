@@ -2,9 +2,11 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { createManualFaqSchema, retrievalTestSchema, updateManualFaqSchema } from "./schema";
+import { createDocumentationUrlSchema, createManualFaqSchema, createPdfKnowledgeSourceSchema, retrievalTestSchema, updateManualFaqSchema } from "./schema";
 import {
   createManualFaq,
+  createDocumentationUrl,
+  createPdfKnowledgeSource,
   deleteKnowledgeSource,
   EmbeddingNotConfiguredError,
   getKnowledgeSource,
@@ -39,6 +41,19 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
     const knowledgeSource = await createManualFaq(c.req.valid("json"));
 
     return c.json({ knowledgeSource }, 201);
+  })
+  .post("/pdf", zValidator("form", createPdfKnowledgeSourceSchema), async (c) => {
+    if (!requireAdmin(c)) return c.json({ error: "forbidden" }, 403);
+    const { file, visibility } = c.req.valid("form");
+    try {
+      return c.json({ knowledgeSource: await createPdfKnowledgeSource(file, visibility) }, 201);
+    } catch (error) {
+      return c.json({ error: "invalid_pdf", message: error instanceof Error ? error.message : "Invalid PDF." }, 422);
+    }
+  })
+  .post("/url", zValidator("json", createDocumentationUrlSchema), async (c) => {
+    if (!requireAdmin(c)) return c.json({ error: "forbidden" }, 403);
+    return c.json({ knowledgeSource: await createDocumentationUrl(c.req.valid("json")) }, 201);
   })
   .post("/retrieval-test", zValidator("json", retrievalTestSchema), async (c) => {
     const currentUser = requireAdmin(c);

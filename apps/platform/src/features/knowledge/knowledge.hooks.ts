@@ -2,6 +2,8 @@ import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query
 import { queryKeys } from "../../lib/query-keys";
 import {
   createManualFaq,
+  createDocumentationUrl,
+  createPdfKnowledgeSource,
   deleteKnowledgeSource,
   getKnowledgeSources,
   publishKnowledgeSource,
@@ -21,6 +23,16 @@ export function useCreateManualFaqMutation() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
   });
+}
+
+export function useCreateDocumentationUrlMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: createDocumentationUrl, onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }) });
+}
+
+export function useCreatePdfKnowledgeSourceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: ({ file, visibility }: { file: File; visibility: "CUSTOMER_SAFE" | "INTERNAL_ONLY" }) => createPdfKnowledgeSource(file, visibility), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }) });
 }
 
 export function useUpdateManualFaqMutation() {
