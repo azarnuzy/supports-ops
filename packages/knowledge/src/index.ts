@@ -7,11 +7,16 @@ export {
 } from "./embeddings";
 export {
   replaceChunks,
+  replaceTicketChunks,
   searchChunks,
+  searchTicketChunks,
   type ChunkSearchResult,
   type ChunkToStore,
   type KnowledgeVisibility,
   type ReplaceChunksParams,
+  type ReplaceTicketChunksParams,
   type SearchChunksParams,
+  type SearchTicketChunksParams,
   type SqlDb,
+  type TicketChunkSearchResult,
 } from "./vector-store";

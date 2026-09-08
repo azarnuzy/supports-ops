@@ -137,6 +137,114 @@ export async function searchChunks(
     .filter((result) => result.similarity >= minSimilarity);
 }
 
+export type ReplaceTicketChunksParams = {
+  workspaceId: string;
+  ticketId: string;
+  customerIdentityId: string;
+  channelType: "WEB" | "WHATSAPP";
+  chunks: ChunkToStore[];
+};
+
+/**
+ * Replaces every Ticket-Knowledge Chunk belonging to one resolved Ticket:
+ * deletes the previous set, then inserts the new one with deterministic ids
+ * (`${ticketId}:${position}`), so re-indexing the same Ticket replaces
+ * rather than duplicates. `customerIdentityId` and `channelType` are
+ * denormalized onto the row so `searchTicketChunks` can filter without a
+ * join — see ADR-0003.
+ */
+export async function replaceTicketChunks(db: SqlDb, params: ReplaceTicketChunksParams): Promise<void> {
+  const { workspaceId, ticketId, customerIdentityId, channelType, chunks } = params;
+
+  await db.$executeRaw`
+    DELETE FROM "Chunk"
+    WHERE "workspaceId" = ${workspaceId} AND "ticketId" = ${ticketId} AND "kind" = 'TICKET'
+  `;
+
+  for (const chunk of chunks) {
+    await db.$executeRaw`
+      INSERT INTO "Chunk" (
+        "id", "workspaceId", "kind", "ticketId", "customerIdentityId", "channelType",
+        "content", "embedding", "position", "createdAt"
+      ) VALUES (
+        ${chunkId(ticketId, chunk.position)}, ${workspaceId}, 'TICKET', ${ticketId},
+        ${customerIdentityId}, ${channelType}::"ChannelType",
+        ${chunk.content}, ${toVectorLiteral(chunk.embedding)}::vector,
+        ${chunk.position}, now()
+      )
+    `;
+  }
+}
+
+export type SearchTicketChunksParams = {
+  workspaceId: string;
+  customerIdentityId: string;
+  channelType: "WEB" | "WHATSAPP";
+  embedding: number[];
+  excludeTicketId?: string;
+  limit?: number;
+  minSimilarity?: number;
+};
+
+export type TicketChunkSearchResult = {
+  chunkId: string;
+  ticketId: string;
+  content: string;
+  position: number;
+  similarity: number;
+};
+
+type RawTicketChunkRow = {
+  id: string;
+  ticketId: string;
+  content: string;
+  position: number;
+  similarity: number | string;
+};
+
+/**
+ * Searches Ticket-Knowledge chunks by cosine similarity, scoped to the same
+ * Workspace, the same Customer Identity, and the same Channel — the
+ * retrieval boundary the product requires so one Customer's Ticket history
+ * never surfaces for another. Only resolved Tickets are ever indexed as
+ * `kind = 'TICKET'` chunks in the first place, so no separate status filter
+ * is needed here.
+ */
+export async function searchTicketChunks(
+  db: SqlDb,
+  params: SearchTicketChunksParams,
+): Promise<TicketChunkSearchResult[]> {
+  const limit = params.limit ?? DEFAULT_SEARCH_LIMIT;
+  const minSimilarity = params.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
+  const queryVector = toVectorLiteral(params.embedding);
+  const excludeTicketId = params.excludeTicketId ?? "";
+
+  const rows = await db.$queryRaw<RawTicketChunkRow[]>`
+    SELECT "id", "ticketId", "content", "position",
+           1 - ("embedding" <=> ${queryVector}::vector) AS similarity
+    FROM "Chunk"
+    WHERE "workspaceId" = ${params.workspaceId}
+      AND "kind" = 'TICKET'
+      AND "customerIdentityId" = ${params.customerIdentityId}
+      AND "channelType" = ${params.channelType}::"ChannelType"
+      AND "deletedAt" IS NULL
+      AND "embedding" IS NOT NULL
+      AND "ticketId" IS DISTINCT FROM ${excludeTicketId}
+    ORDER BY "embedding" <=> ${queryVector}::vector ASC
+    LIMIT ${limit}
+  `;
+
+  return rows
+    .map((row) => ({
+      chunkId: row.id,
+      content: row.content,
+      position: row.position,
+      similarity: Number(row.similarity),
+      ticketId: row.ticketId,
+    }))
+    .filter((result) => result.similarity >= minSimilarity);
+}
+
 function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(",")}]`;
 }
