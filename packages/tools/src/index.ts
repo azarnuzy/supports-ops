@@ -1,3 +1,4 @@
+import { withSpan } from "@repo/logger/telemetry";
 import { z } from "zod";
 
 const customerSchema = z.object({ id: z.string(), name: z.string(), email: z.string().email() });
@@ -55,35 +56,43 @@ export function createBusinessTools(baseUrl: string, fetcher: typeof fetch = fet
 
   return {
     async getCustomerByEmail(email) {
-      const result = await request(`/customers?email=${encodeURIComponent(email)}`);
-      try {
-        return result === null ? null : customerSchema.parse(result);
-      } catch (error) {
-        throw new BusinessToolError("The Business System returned an invalid customer.", {
-          cause: error,
-        });
-      }
+      return withSpan("ai_agent.tool.getCustomerByEmail", {}, async () => {
+        const result = await request(`/customers?email=${encodeURIComponent(email)}`);
+        try {
+          return result === null ? null : customerSchema.parse(result);
+        } catch (error) {
+          throw new BusinessToolError("The Business System returned an invalid customer.", {
+            cause: error,
+          });
+        }
+      });
     },
     async getSubscriptionStatus(customerId) {
-      const result = await request(`/customers/${encodeURIComponent(customerId)}/subscription`);
-      try {
-        return result === null ? null : subscriptionSchema.parse(result);
-      } catch (error) {
-        throw new BusinessToolError("The Business System returned an invalid subscription.", {
-          cause: error,
-        });
-      }
+      return withSpan("ai_agent.tool.getSubscriptionStatus", {}, async () => {
+        const result = await request(`/customers/${encodeURIComponent(customerId)}/subscription`);
+        try {
+          return result === null ? null : subscriptionSchema.parse(result);
+        } catch (error) {
+          throw new BusinessToolError("The Business System returned an invalid subscription.", {
+            cause: error,
+          });
+        }
+      });
     },
     async getInvoiceStatus(customerId, invoiceId) {
-      const query = invoiceId ? `?invoiceId=${encodeURIComponent(invoiceId)}` : "";
-      const result = await request(`/customers/${encodeURIComponent(customerId)}/invoices${query}`);
-      try {
-        return result === null ? null : invoiceSchema.parse(result);
-      } catch (error) {
-        throw new BusinessToolError("The Business System returned an invalid invoice.", {
-          cause: error,
-        });
-      }
+      return withSpan("ai_agent.tool.getInvoiceStatus", {}, async () => {
+        const query = invoiceId ? `?invoiceId=${encodeURIComponent(invoiceId)}` : "";
+        const result = await request(
+          `/customers/${encodeURIComponent(customerId)}/invoices${query}`,
+        );
+        try {
+          return result === null ? null : invoiceSchema.parse(result);
+        } catch (error) {
+          throw new BusinessToolError("The Business System returned an invalid invoice.", {
+            cause: error,
+          });
+        }
+      });
     },
   };
 }
