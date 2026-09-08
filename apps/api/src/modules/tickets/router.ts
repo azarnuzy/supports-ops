@@ -4,7 +4,7 @@ import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
 import { subscribeToTicketQueueEvents } from "../widget/realtime";
-import { reassignTicketSchema } from "./schema";
+import { humanReplySchema, reassignTicketSchema } from "./schema";
 import {
   claimTicket,
   completeHandoff,
@@ -13,6 +13,9 @@ import {
   listSharedHumanQueue,
   reassignTicket,
   TicketAlreadyClaimedError,
+  TicketNotOwnedError,
+  resolveTicket,
+  sendHumanReply,
 } from "./services";
 
 export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -47,6 +50,28 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     } catch (error) {
       if (error instanceof TicketAlreadyClaimedError)
         return c.json({ error: "already_claimed", message: error.message }, 409);
+      throw error;
+    }
+  })
+  .post("/:id/messages", zValidator("json", humanReplySchema), async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    try {
+      return c.json({ message: await sendHumanReply(c.req.param("id"), user.id, c.req.valid("json").content) }, 201);
+    } catch (error) {
+      if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
+      throw error;
+    }
+  })
+  .post("/:id/resolve", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    try {
+      return c.json({ message: await resolveTicket(c.req.param("id"), user.id) }, 200);
+    } catch (error) {
+      if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
       throw error;
     }
   })

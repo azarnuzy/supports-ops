@@ -27,11 +27,11 @@ Status yang dipakai:
 | `/` | Pengguna masuk | Siap dicoba | Melihat ringkasan profil dan metadata Workspace. | Bukan dashboard metrik Ticket. |
 | `/profile` | Pengguna masuk | Siap dicoba | Mengubah nama tampilan dan URL avatar. | — |
 | `/settings/agents` | Admin | Siap dicoba | Membuat Human Agent dan melihat daftar Human Agent dalam Workspace. | Belum ada pengelolaan lanjutan seperti edit/nonaktifkan akun. |
-| `/settings/widget` | Admin | Siap dicoba | Mengatur nama AI, pesan sambutan/penutup, warna, domain yang diizinkan, preview, dan embed snippet. | Pesan penutup belum dipicu karena Resolution belum tersedia. |
+| `/settings/widget` | Admin | Siap dicoba | Mengatur nama AI, pesan sambutan/penutup, warna, domain yang diizinkan, preview, dan embed snippet. | Pesan penutup dipakai saat Human Agent melakukan Resolution. |
 | `/knowledge` | Admin | Siap dicoba | Membuat, mengubah, menghapus, dan publish Manual FAQ; memilih Customer-Safe atau Internal-Only; menjalankan Retrieval test. | Hanya Manual FAQ. Sumber yang dipublish Customer-Safe dipakai oleh AI Agent di Web Widget; Internal-Only tidak pernah dipakai untuk balasan Customer. |
 | `/chat` | Pengguna masuk | Sebagian siap | Menjelajahi tampilan inbox, pencarian/filter tampilan, dan panel detail percakapan contoh. | Semua percakapan dan tindakan masih data/UI contoh; belum membaca atau mengelola Ticket nyata. |
 | `/tickets/queue` | Human Agent, Admin | Siap dicoba | Melihat Shared Human Queue escalated secara oldest-first; Human Agent dapat Claim dan Admin dapat memilih Human Agent untuk menugaskan Ticket. Perubahan queue masuk otomatis tanpa refresh halaman. | Belum ada detail Ticket atau balasan Human Agent dari halaman ini. |
-| `/tickets/mine` | Human Agent | Siap dicoba | Melihat semua Ticket aktif yang telah di-Claim oleh Human Agent yang masuk, termasuk Escalation Summary yang muncul setelah Handoff selesai dibuat. | Belum ada detail Ticket atau balasan Human Agent dari halaman ini. |
+| `/tickets/mine` | Human Agent | Siap dicoba | Melihat percakapan Ticket yang telah di-Claim, mengirim balasan, dan melakukan Resolution. Pesan Customer serta perubahan Ticket masuk otomatis tanpa refresh. | Admin belum dapat membalas atau melakukan Resolution atas nama Human Agent. |
 | `/gallery` | Pengguna masuk | Siap dicoba | Melihat komponen visual dan status Ticket untuk referensi desain. | Hanya galeri komponen, bukan fitur operasional. |
 
 ## Web Widget
@@ -51,7 +51,7 @@ Status yang dipakai:
 | Claim | Siap dicoba — Human Agent dapat Claim Ticket dari Shared Human Queue; update kondisional memastikan satu Claim menang bila dua Human Agent mencoba bersamaan. Admin dapat menugaskan Ticket kepada Human Agent lain. Membutuhkan Postgres dan Redis, serta Ticket yang sudah dieskalasi. |
 | Handoff dan Escalation Summary | Siap dicoba — setelah Human Agent Claim Ticket, Customer menerima pengenalan yang menyebut nama Human Agent melalui SSE, dan Escalation Summary baru dibuat dari percakapan serta AI Activity saat itu. Ringkasan muncul otomatis di `/tickets/mine`; bila pembuatan gagal, Claim tetap berlaku dan Human Agent melihat pemberitahuan untuk meninjau percakapan langsung. Membutuhkan prasyarat Claim dan `OPENROUTER_API_KEY` untuk menghasilkan ringkasan. |
 | Takeover | Belum tersedia |
-| Human Agent membalas dan melakukan Resolution | Belum tersedia |
+| Human Agent membalas dan melakukan Resolution | Siap dicoba — Human Agent yang memiliki Ticket dapat membalas dari `/tickets/mine`; pesan langsung masuk melalui kanal SSE Web Widget yang sama dan Customer dapat membalas tanpa refresh. Resolution mengirim pesan penutup Workspace, mencatat `HUMAN_RESOLVED`, menutup Web Session, serta menjadikan transkrip pada Widget read-only dengan tombol untuk memulai percakapan baru. Membutuhkan prasyarat Web Widget, Postgres, dan Redis. Pengiriman outbound disimpan dengan status dan dicoba hingga tiga kali; belum ada antrean retry lintas-proses. |
 | AI Copilot dan Suggested Reply | Belum tersedia |
 | Activity Timeline, AI Activity, Follow-Up, dan Auto-Resolution | Belum tersedia |
 | Business Tools | Sebagian siap — AI Agent dapat membaca Customer, Subscription, dan Invoice dari Business System terpisah; kegagalan tool serta permintaan perubahan langganan/refund dieskalasi. Jalankan Postgres dan Business System (`docker compose -f docker-compose.dev.yaml up -d`) serta gunakan Customer demo `budi@example.com` atau `siti@example.com`. Belum ada UI Admin untuk melihat AI Activity atau mengelola data Business System. |

@@ -32,6 +32,13 @@ export type CreateHumanAgentInput = {
 };
 
 export type TicketPriority = "LOW" | "NORMAL" | "HIGH";
+export type TicketMessage = {
+  content: string;
+  createdAt: string;
+  deliveryStatus: "PENDING" | "SENT" | "FAILED";
+  position: number;
+  senderType: "CUSTOMER" | "AI_AGENT" | "HUMAN_AGENT" | "SYSTEM";
+};
 
 export type SupportTicket = {
   assignedHumanAgent: { id: string; name: string } | null;
@@ -43,6 +50,7 @@ export type SupportTicket = {
   priority: TicketPriority;
   title: string;
   customerIdentity: { name: string };
+  messages: TicketMessage[];
 };
 
 export class TicketAlreadyClaimedApiError extends Error {}
@@ -83,6 +91,24 @@ export async function reassignTicket(client: ApiClient, id: string, humanAgentId
   if (response.status === 422) throw new Error("Choose an active Human Agent in this Workspace.");
   if (!response.ok) throw new Error("Failed to reassign the Ticket.");
   return (await response.json()) as { ticket: SupportTicket };
+}
+
+export async function sendHumanReply(client: ApiClient, id: string, content: string) {
+  const response = await client.tickets[":id"].messages.$post({ param: { id }, json: { content } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
+  if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
+  if (!response.ok) throw new Error("Failed to send the reply.");
+  return response.json();
+}
+
+export async function resolveHumanTicket(client: ApiClient, id: string) {
+  const response = await client.tickets[":id"].resolve.$post({ param: { id } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only the assigned Human Agent can resolve this Ticket.");
+  if (response.status === 409) throw new Error("This Ticket is already resolved.");
+  if (!response.ok) throw new Error("Failed to resolve the Ticket.");
+  return response.json();
 }
 
 export class UnauthorizedApiError extends Error {

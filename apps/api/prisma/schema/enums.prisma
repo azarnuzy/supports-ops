@@ -75,6 +75,10 @@ enum MessageDeliveryStatus {
   FAILED
 }
 
+enum ResolutionReason {
+  HUMAN_RESOLVED
+}
+
 enum AttachmentProcessingStatus {
   PROCESSING
   READY

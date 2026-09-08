@@ -13,6 +13,9 @@ model Ticket {
   escalationSummary  String?
   escalationSummaryStatus EscalationSummaryStatus @default(PENDING)
   assignedHumanAgentId String?
+  resolvedBy           String?
+  resolutionReason     ResolutionReason?
+  resolvedAt           DateTime?
   messageSeq         Int              @default(0)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt

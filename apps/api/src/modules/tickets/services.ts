@@ -14,6 +14,16 @@ const ticketSelect = {
   escalatedAt: true,
   escalationSummary: true,
   escalationSummaryStatus: true,
+  messages: {
+    orderBy: { position: "asc" },
+    select: {
+      content: true,
+      createdAt: true,
+      deliveryStatus: true,
+      position: true,
+      senderType: true,
+    },
+  },
 } as const;
 
 export class TicketAlreadyClaimedError extends Error {
@@ -23,6 +33,7 @@ export class TicketAlreadyClaimedError extends Error {
 }
 
 export class HumanAgentNotFoundError extends Error {}
+export class TicketNotOwnedError extends Error {}
 
 export function listSharedHumanQueue() {
   return prisma.ticket.findMany({
@@ -197,4 +208,114 @@ export async function reassignTicket(ticketId: string, humanAgentId: string, wor
   });
   await publishTicketQueueEvent(workspaceId);
   return ticket;
+}
+
+export async function sendHumanReply(ticketId: string, humanAgentId: string, content: string) {
+  const message = await unscopedPrisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findFirst({
+      where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+    });
+    if (!ticket) throw new TicketNotOwnedError();
+    const updated = await tx.ticket.update({
+      data: { messageSeq: { increment: 1 } },
+      where: { id: ticketId },
+    });
+    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
+    return tx.message.create({
+      data: {
+        content,
+        deliveryStatus: "PENDING",
+        externalMessageId: `human:${randomUUID()}`,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content },
+        position: updated.messageSeq,
+        role: "assistant",
+        runId: randomUUID(),
+        senderType: "HUMAN_AGENT",
+        senderUserId: humanAgentId,
+        ticketId,
+        turn: updated.messageSeq,
+        workspaceId: ticket.workspaceId,
+      },
+    });
+  });
+  const delivered = await deliverMessage(message);
+  await publishTicketQueueEvent(message.workspaceId);
+  return delivered;
+}
+
+export async function resolveTicket(ticketId: string, humanAgentId: string) {
+  const closing = await unscopedPrisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findFirst({
+      include: { workspace: { select: { closingMessage: true } } },
+      where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+    });
+    if (!ticket) throw new TicketNotOwnedError();
+    const updated = await tx.ticket.update({
+      data: {
+        messageSeq: { increment: 1 },
+        resolvedAt: new Date(),
+        resolvedBy: humanAgentId,
+        resolutionReason: "HUMAN_RESOLVED",
+        status: "RESOLVED",
+      },
+      where: { id: ticketId },
+    });
+    await tx.webSession.update({
+      data: { status: "CLOSED" },
+      where: { id: ticket.webSessionId },
+    });
+    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
+    const content = ticket.workspace.closingMessage ?? "This conversation has been resolved.";
+    const message = await tx.message.create({
+      data: {
+        content,
+        deliveryStatus: "PENDING",
+        externalMessageId: `resolution:${randomUUID()}`,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content },
+        position: updated.messageSeq,
+        role: "system",
+        runId: randomUUID(),
+        senderType: "SYSTEM",
+        ticketId,
+        turn: updated.messageSeq,
+        workspaceId: ticket.workspaceId,
+      },
+    });
+    await tx.aiActivity.create({
+      data: {
+        eventType: "RESOLVED",
+        id: randomUUID(),
+        metadata: { reason: "HUMAN_RESOLVED" },
+        ticketId,
+        workspaceId: ticket.workspaceId,
+      },
+    });
+    return message;
+  });
+  const delivered = await deliverMessage(closing);
+  await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "resolved" } });
+  await publishTicketQueueEvent(closing.workspaceId);
+  return delivered;
+}
+
+async function deliverMessage(message: Awaited<ReturnType<typeof unscopedPrisma.message.create>>) {
+  let attempts = 0;
+  while (attempts < 3) {
+    attempts += 1;
+    try {
+      await publishWidgetEvent(message.ticketId, { type: "message.created", data: message });
+      return unscopedPrisma.message.update({
+        data: { deliveryAttempts: attempts, deliveryStatus: "SENT" }, where: { id: message.id },
+      });
+    } catch {
+      // The message remains durable and will also replay when the Widget reconnects.
+    }
+  }
+  return unscopedPrisma.message.update({
+    data: { deliveryAttempts: attempts, deliveryStatus: "FAILED" }, where: { id: message.id },
+  });
 }

@@ -668,14 +668,14 @@ async function createTicketAndFirstMessage(
 export async function getMessagesAfter(accessToken: string, afterPosition: number) {
   const session = await unscopedPrisma.webSession.findUnique({
     where: { accessToken },
-    select: { ticket: { select: { id: true } } },
+    select: { status: true, ticket: { select: { id: true, status: true } } },
   });
   if (!session?.ticket) return null;
   const messages = await unscopedPrisma.message.findMany({
     where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } },
     orderBy: { position: "asc" },
   });
-  return { messages, ticketId: session.ticket.id };
+  return { messages, sessionStatus: session.status, ticketId: session.ticket.id, ticketStatus: session.ticket.status };
 }
 
 export function toPublicWidgetConfig(config: PublicWidgetConfig): PublicWidgetConfig {
