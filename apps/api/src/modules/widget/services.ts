@@ -519,6 +519,7 @@ async function generateAiReplyRun(
   } catch (error) {
     const reason =
       error instanceof BusinessToolError ? "BUSINESS_TOOL_FAILURE" : "AI_GENERATION_FAILED";
+    run.recordException(error instanceof Error ? error : new Error(String(error)));
     run.setAttributes({ "ai_agent.decision": "ESCALATE", "ai_agent.escalation_reason": reason });
     await escalate(ticketId, workspaceId, reason, customerMessage);
   } finally {

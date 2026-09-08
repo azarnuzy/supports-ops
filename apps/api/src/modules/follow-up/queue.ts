@@ -17,10 +17,10 @@ function getQueue() {
 
 export async function scheduleFollowUp(job: FollowUpJob, delaySeconds: number) {
   const jobs = getQueue();
-  await jobs.remove(`follow-up:${job.ticketId}`).catch(() => undefined);
+  await jobs.remove(`follow-up-${job.ticketId}`).catch(() => undefined);
   await jobs.add("follow-up", job, {
     delay: delaySeconds * 1_000,
-    jobId: `follow-up:${job.ticketId}`,
+    jobId: `follow-up-${job.ticketId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
   });
@@ -28,10 +28,10 @@ export async function scheduleFollowUp(job: FollowUpJob, delaySeconds: number) {
 
 export async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: number) {
   const jobs = getQueue();
-  await jobs.remove(`auto-resolve:${job.ticketId}`).catch(() => undefined);
+  await jobs.remove(`auto-resolve-${job.ticketId}`).catch(() => undefined);
   await jobs.add("auto-resolve", job, {
     delay: delaySeconds * 1_000,
-    jobId: `auto-resolve:${job.ticketId}`,
+    jobId: `auto-resolve-${job.ticketId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
   });
@@ -40,7 +40,7 @@ export async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: num
 export async function cancelFollowUpTimers(ticketId: string) {
   const jobs = getQueue();
   await Promise.all([
-    jobs.remove(`follow-up:${ticketId}`).catch(() => undefined),
-    jobs.remove(`auto-resolve:${ticketId}`).catch(() => undefined),
+    jobs.remove(`follow-up-${ticketId}`).catch(() => undefined),
+    jobs.remove(`auto-resolve-${ticketId}`).catch(() => undefined),
   ]);
 }
