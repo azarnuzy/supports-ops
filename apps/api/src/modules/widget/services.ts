@@ -1,5 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { unscopedPrisma } from "../../utils/prisma";
+import { classifyMessage, createClassificationModel } from "@repo/ai-agent";
+import { classificationConfig } from "../../config";
+import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
 
@@ -11,6 +13,17 @@ export type PublicWidgetConfig = {
 
 export class WidgetNotFoundError extends Error {}
 export class UnapprovedWidgetOriginError extends Error {}
+
+export class ClassificationNotConfiguredError extends Error {
+  constructor() {
+    super("Configure OPENROUTER_API_KEY to classify Tickets.");
+    this.name = "ClassificationNotConfiguredError";
+  }
+}
+
+export type CreateCustomerMessageResult =
+  | { kind: "message"; created: boolean; message: Message }
+  | { kind: "reply"; reply: string };
 
 export async function getApprovedWidget(widgetKey: string, origin: string) {
   const config = await unscopedPrisma.webWidgetConfig.findUnique({
@@ -85,57 +98,134 @@ export async function getWebSession(accessToken: string) {
   });
 }
 
-export async function createCustomerMessage(accessToken: string, input: CustomerMessageInput) {
-  const result = await unscopedPrisma.$transaction(async (tx) => {
-    const session = await tx.webSession.findUnique({
-      where: { accessToken },
-      include: { ticket: { include: { conversation: true } } },
-    });
-    if (!session || session.status !== "ACTIVE") return null;
+export async function createCustomerMessage(
+  accessToken: string,
+  input: CustomerMessageInput,
+): Promise<CreateCustomerMessageResult | null> {
+  const session = await unscopedPrisma.webSession.findUnique({
+    where: { accessToken },
+    include: { ticket: true },
+  });
+  if (!session || session.status !== "ACTIVE") return null;
 
+  if (session.ticket) {
+    const message = await appendMessage(session.ticket.id, session.workspaceId, input);
+    return { created: message.created, kind: "message", message: message.message };
+  }
+
+  const apiKey = classificationConfig.apiKey;
+  if (!apiKey) throw new ClassificationNotConfiguredError();
+
+  const model = createClassificationModel({ ...classificationConfig, apiKey });
+  const decision = await classifyMessage({ content: input.content, model });
+
+  if (!decision.qualifies) {
+    return { kind: "reply", reply: decision.reply };
+  }
+
+  try {
+    const message = await createTicketAndFirstMessage(session.id, decision, input);
+    return { created: true, kind: "message", message };
+  } catch (error) {
+    // Two concurrent first messages on the same Web Session race to create
+    // the Ticket; webSessionId is unique, so the loser appends to whichever
+    // Ticket won instead of surfacing a spurious failure.
+    if (isUniqueConstraintError(error, "webSessionId")) {
+      const winner = await unscopedPrisma.webSession.findUniqueOrThrow({
+        where: { accessToken },
+        include: { ticket: true },
+      });
+      if (!winner.ticket) throw error;
+      const message = await appendMessage(winner.ticket.id, winner.workspaceId, input);
+      return { created: message.created, kind: "message", message: message.message };
+    }
+    throw error;
+  }
+}
+
+async function appendMessage(ticketId: string, workspaceId: string, input: CustomerMessageInput) {
+  return unscopedPrisma.$transaction(async (tx) => {
     const existing = await tx.message.findUnique({
-      where: { workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId: session.workspaceId } },
+      where: { workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId } },
     });
     if (existing) return { created: false, message: existing };
 
-    let ticket = session.ticket;
-    let conversation = ticket?.conversation;
-    if (!ticket) {
-      const ticketId = randomUUID();
-      ticket = await tx.ticket.create({
-        data: {
-          channelId: session.channelId,
-          customerIdentityId: session.customerIdentityId,
-          id: ticketId,
-          messageSeq: 1,
-          title: input.content.slice(0, 120),
-          webSessionId: session.id,
-          workspaceId: session.workspaceId,
-        },
-      });
-      conversation = await tx.conversation.create({
-        data: {
-          id: randomUUID(), metadata: {}, scopeKey: `ticket:${ticketId}`, sessionId: ticketId,
-          ticketId, userId: session.customerIdentityId, workspaceId: session.workspaceId,
-        },
-      });
-    } else {
-      ticket = await tx.ticket.update({
-        where: { id: ticket.id }, data: { messageSeq: { increment: 1 } },
-      });
-    }
+    const ticket = await tx.ticket.update({
+      data: { messageSeq: { increment: 1 } },
+      where: { id: ticketId },
+    });
+    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
 
     const message = await tx.message.create({
       data: {
         content: input.content, externalMessageId: input.idempotencyKey, id: randomUUID(),
-        memorySessionId: conversation!.id, message: { content: input.content }, position: ticket.messageSeq,
+        memorySessionId: conversation.id, message: { content: input.content }, position: ticket.messageSeq,
         role: "user", runId: randomUUID(), senderType: "CUSTOMER", ticketId: ticket.id,
-        turn: ticket.messageSeq, workspaceId: session.workspaceId,
+        turn: ticket.messageSeq, workspaceId,
       },
     });
     return { created: true, message };
   });
-  return result;
+}
+
+async function createTicketAndFirstMessage(
+  webSessionId: string,
+  decision: Extract<Awaited<ReturnType<typeof classifyMessage>>, { qualifies: true }>,
+  input: CustomerMessageInput,
+) {
+  return unscopedPrisma.$transaction(async (tx) => {
+    const session = await tx.webSession.findUniqueOrThrow({ where: { id: webSessionId } });
+    const ticketId = randomUUID();
+    const ticket = await tx.ticket.create({
+      data: {
+        category: decision.category,
+        channelId: session.channelId,
+        customerIdentityId: session.customerIdentityId,
+        id: ticketId,
+        messageSeq: 1,
+        priority: decision.priority,
+        title: decision.title,
+        webSessionId,
+        workspaceId: session.workspaceId,
+      },
+    });
+    const conversation = await tx.conversation.create({
+      data: {
+        id: randomUUID(), metadata: {}, scopeKey: `ticket:${ticketId}`, sessionId: ticketId,
+        ticketId, userId: session.customerIdentityId, workspaceId: session.workspaceId,
+      },
+    });
+
+    const message = await tx.message.create({
+      data: {
+        content: input.content, externalMessageId: input.idempotencyKey, id: randomUUID(),
+        memorySessionId: conversation.id, message: { content: input.content }, position: 1,
+        role: "user", runId: randomUUID(), senderType: "CUSTOMER", ticketId: ticket.id,
+        turn: 1, workspaceId: session.workspaceId,
+      },
+    });
+
+    await tx.aiActivity.createMany({
+      data: [
+        {
+          eventType: "CLASSIFIED",
+          id: randomUUID(),
+          metadata: { category: decision.category, isSupportRequest: true, priority: decision.priority, title: decision.title },
+          ticketId: ticket.id,
+          workspaceId: session.workspaceId,
+        },
+        {
+          eventType: "TICKET_CREATED",
+          id: randomUUID(),
+          metadata: { category: decision.category, priority: decision.priority, title: decision.title },
+          ticketId: ticket.id,
+          workspaceId: session.workspaceId,
+        },
+      ],
+    });
+
+    return message;
+  });
 }
 
 export async function getMessagesAfter(accessToken: string, afterPosition: number) {
@@ -164,4 +254,18 @@ function isAllowedOrigin(origin: string, allowedDomains: string[]) {
   } catch {
     return false;
   }
+}
+
+function isUniqueConstraintError(error: unknown, target: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002" &&
+    "meta" in error &&
+    typeof error.meta === "object" &&
+    error.meta !== null &&
+    "target" in error.meta &&
+    JSON.stringify(error.meta.target).includes(target)
+  );
 }
