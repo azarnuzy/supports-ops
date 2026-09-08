@@ -13,9 +13,14 @@
   "dependencies": {
     "@anvia/core": "1.1.2",
     "@anvia/openai": "1.1.2",
+    "@anvia/otel": "1.1.2",
+    "@repo/logger": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/context-async-hooks": "^2.11.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
