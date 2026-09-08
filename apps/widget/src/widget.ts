@@ -120,7 +120,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     if (open) input?.focus();
   };
 
-  launcher?.addEventListener("click", () => setOpen(panel?.hidden ?? true));
+  launcher?.addEventListener("click", () => setOpen(panel?.hidden !== false));
   close?.addEventListener("click", () => setOpen(false));
   preChat?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -156,7 +156,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     const accessToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
     const content = input?.value.trim() ?? "";
     const file = attachmentInput?.files?.[0];
-    if (!accessToken || (!content && !file)) return;
+    if (!accessToken || (!content && !file) || !input) return;
     input.disabled = true;
     try {
       if (file) {

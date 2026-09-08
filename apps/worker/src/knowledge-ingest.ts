@@ -64,9 +64,8 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
           ? await extractUrl(owned.id)
           : job.data.content;
     if (!content?.trim()) throw new Error("The source did not contain readable text.");
-    const source = await prisma.knowledgeSource.findFirst({ where: { id: knowledgeSourceId } });
-    if (!source) throw new Error("Knowledge Source no longer exists.");
-    const visibility = source.visibility;
+    const { visibility } = job.data;
+    if (!visibility) throw new Error("Knowledge Source is missing a visibility.");
     if (!embeddingConfig.apiKey) {
       throw new Error("Configure OPENROUTER_API_KEY to publish Knowledge Sources.");
     }
