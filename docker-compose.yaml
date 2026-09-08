@@ -1,18 +1,18 @@
-name: monorepo-template
+name: supportops
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: monorepo-template-postgres
+    container_name: supportops-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: monorepo_template
+      POSTGRES_DB: supportops
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d monorepo_template"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d supportops"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,8 +20,8 @@ services:
   api:
     build:
       context: .
-    image: monorepo-template-api
-    container_name: monorepo-template-api
+    image: supportops-api
+    container_name: supportops-api
     restart: unless-stopped
     environment:
       NODE_ENV: "${NODE_ENV:-production}"
@@ -29,14 +29,14 @@ services:
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}"
       BETTER_AUTH_URL: "${BETTER_AUTH_URL:-http://localhost:8000}"
       CLIENT_ORIGINS: "${CLIENT_ORIGINS:-http://localhost:3000,http://localhost:4000}"
-      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/monorepo_template?schema=public}"
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/supportops?schema=public}"
       ENABLE_TELEMETRY: "${ENABLE_TELEMETRY:-false}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
       TELEMETRY_API_KEY: "${TELEMETRY_API_KEY:-}"
       TELEMETRY_API_KEY_HEADER: "${TELEMETRY_API_KEY_HEADER:-authorization}"
       TELEMETRY_EXPORTER: "${TELEMETRY_EXPORTER:-console}"
       TELEMETRY_EXPORTER_OTLP_ENDPOINT: "${TELEMETRY_EXPORTER_OTLP_ENDPOINT:-}"
-      TELEMETRY_SERVICE_NAMESPACE: "${TELEMETRY_SERVICE_NAMESPACE:-monorepo-template}"
+      TELEMETRY_SERVICE_NAMESPACE: "${TELEMETRY_SERVICE_NAMESPACE:-supportops}"
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     depends_on:
