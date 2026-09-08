@@ -15,6 +15,18 @@ model Workspace {
   attachments        Attachment[]
   knowledgeSources   KnowledgeSource[]
   chunks             Chunk[]
+  aiSettings         AiSettings?
+}
+
+model AiSettings {
+  id                      String    @id
+  workspaceId             String    @unique
+  followUpAfterSeconds    Int       @default(900)
+  autoResolveAfterSeconds Int       @default(3600)
+  autoResolveEnabled      Boolean   @default(true)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  workspace               Workspace @relation(fields: [workspaceId], references: [id])
 }
 
 model AiAgent {

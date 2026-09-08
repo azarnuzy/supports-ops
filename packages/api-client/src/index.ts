@@ -16,6 +16,26 @@ export type UpdateProfileInput = {
   name: string;
 };
 
+export type AiSettings = {
+  followUpAfterSeconds: number;
+  autoResolveAfterSeconds: number;
+  autoResolveEnabled: boolean;
+};
+
+export async function fetchAiSettings(client: ApiClient) {
+  const response = await client["ai-settings"].$get();
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only an Admin can manage AI settings.");
+  if (!response.ok) throw new Error("Failed to load AI settings.");
+  return (await response.json()) as { aiSettings: AiSettings };
+}
+
+export async function updateAiSettings(client: ApiClient, input: AiSettings) {
+  const response = await client["ai-settings"].$patch({ json: input });
+  if (!response.ok) throw new Error("Failed to save AI settings.");
+  return (await response.json()) as { aiSettings: AiSettings };
+}
+
 export type WorkspaceUser = {
   createdAt: string;
   email: string;

@@ -16,6 +16,7 @@ import {
   publishTicketQueueEvent,
   publishWidgetEvent,
 } from "../widget/realtime";
+import { cancelFollowUpTimers } from "../follow-up/queue";
 
 const ticketSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
@@ -114,6 +115,7 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
     return { message, ticket: await tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: ticketSelect }) };
   });
   await publishWidgetEvent(ticketId, { type: "message.created", data: result.message });
+  await cancelFollowUpTimers(ticketId);
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "ready" } });
   await publishTicketQueueEvent(workspaceId);
   return result.ticket;
@@ -134,6 +136,7 @@ export async function claimTicket(ticketId: string, humanAgentId: string, worksp
     return tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: ticketSelect });
   });
   await publishTicketQueueEvent(workspaceId);
+  await cancelFollowUpTimers(ticketId);
   return claimed;
 }
 
@@ -275,6 +278,7 @@ export async function reassignTicket(ticketId: string, humanAgentId: string, wor
     where: { id: ticketId },
   });
   await publishTicketQueueEvent(workspaceId);
+  await cancelFollowUpTimers(ticketId);
   return ticket;
 }
 
@@ -486,6 +490,7 @@ export async function resolveTicket(ticketId: string, humanAgentId: string) {
     return message;
   });
   const delivered = await deliverMessage(closing);
+  await cancelFollowUpTimers(ticketId);
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "resolved" } });
   await publishTicketQueueEvent(closing.workspaceId);
   return delivered;

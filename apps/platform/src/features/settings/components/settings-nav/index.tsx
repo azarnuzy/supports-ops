@@ -4,6 +4,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 const settingsLinks = [
   { label: "Human Agents", to: "/settings/agents" },
   { label: "Web Widget", to: "/settings/widget" },
+  { label: "AI Agent", to: "/settings/ai" },
 ] as const;
 
 export function SettingsNav() {
