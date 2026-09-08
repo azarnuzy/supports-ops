@@ -27,15 +27,24 @@ export async function migrateBusinessSystem() {
     );
     INSERT INTO business_system.customers (id, name, email) VALUES
       ('cus_102', 'Budi Santoso', 'budi@example.com'),
-      ('cus_103', 'Siti Aminah', 'siti@example.com')
+      ('cus_103', 'Siti Aminah', 'siti@example.com'),
+      ('cus_104', 'Made Wirawan', 'made@example.com'),
+      ('cus_105', 'Dewi Lestari', 'dewi@example.com'),
+      ('cus_106', 'Andi Firmansyah', 'andi@example.com')
     ON CONFLICT (id) DO NOTHING;
     INSERT INTO business_system.subscriptions (id, customer_id, plan, status, renewal_date) VALUES
       ('sub_102', 'cus_102', 'Pro', 'ACTIVE', '2026-10-01'),
-      ('sub_103', 'cus_103', 'Starter', 'PAST_DUE', '2026-09-01')
+      ('sub_103', 'cus_103', 'Starter', 'PAST_DUE', '2026-09-01'),
+      ('sub_104', 'cus_104', 'Pro', 'ACTIVE', '2026-11-15'),
+      ('sub_105', 'cus_105', 'Starter', 'CANCELLED', '2026-08-01'),
+      ('sub_106', 'cus_106', 'Pro', 'PAST_DUE', '2026-09-10')
     ON CONFLICT (id) DO NOTHING;
     INSERT INTO business_system.invoices (id, customer_id, amount, status, due_date) VALUES
       ('inv_102', 'cus_102', 49.00, 'PAID', '2026-09-01'),
-      ('inv_103', 'cus_103', 19.00, 'OVERDUE', '2026-09-01')
+      ('inv_103', 'cus_103', 19.00, 'OVERDUE', '2026-09-01'),
+      ('inv_104', 'cus_104', 49.00, 'PAID', '2026-10-15'),
+      ('inv_105', 'cus_105', 19.00, 'PAID', '2026-07-01'),
+      ('inv_106', 'cus_106', 49.00, 'OVERDUE', '2026-09-10')
     ON CONFLICT (id) DO NOTHING;
   `);
 }
