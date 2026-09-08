@@ -43,6 +43,7 @@ const { processKnowledgeIngestJob } = await import("./knowledge-ingest");
 const baseJob = {
   data: {
     content: "Click the forgot password link.",
+    kind: "CONTENT" as const,
     knowledgeSourceId: "ks-1",
     title: "How to reset password",
     visibility: "CUSTOMER_SAFE" as const,
