@@ -76,7 +76,6 @@ const ticketListSelect = {
 
 const ticketDetailSelect = {
   ...ticketListSelect,
-  channel: { select: { channelType: true, id: true } },
   escalatedAt: true,
   escalationReason: true,
   escalationSummary: true,
@@ -97,7 +96,6 @@ const ticketDetailSelect = {
           mimeType: true,
           processingStatus: true,
           sizeBytes: true,
-          storageKey: true,
         },
       },
       content: true,
@@ -109,6 +107,7 @@ const ticketDetailSelect = {
       senderUserId: true,
     },
   },
+  webSession: { select: { createdAt: true } },
 } as const;
 
 /** An Admin sees the whole Workspace; a Human Agent sees the queue, their own
