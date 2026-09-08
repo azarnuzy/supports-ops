@@ -26,8 +26,11 @@ import {
   TableRow,
 } from "@repo/ui/components/table";
 import { Textarea } from "@repo/ui/components/textarea";
+import { toast } from "@repo/ui/components/sonner";
 import { SearchIcon } from "lucide-react";
+import { useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
+import { useCreateDocumentationUrlMutation, useCreatePdfKnowledgeSourceMutation } from "../../knowledge.hooks";
 import { useKnowledgeSourcesForm, useRetrievalTestPanel } from "./knowledge.hooks";
 import {
   canEdit,
@@ -40,6 +43,10 @@ import {
 } from "./knowledge.services";
 
 const KnowledgeView = () => {
+  const addDocumentationUrl = useCreateDocumentationUrlMutation();
+  const addPdf = useCreatePdfKnowledgeSourceMutation();
+  const [documentationUrl, setDocumentationUrl] = useState("");
+  const [pdf, setPdf] = useState<File | null>(null);
   const {
     content,
     editingId,
@@ -131,6 +138,23 @@ const KnowledgeView = () => {
                   ) : null}
                 </CardFooter>
               </form>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Import documentation</CardTitle>
+                <CardDescription>PDFs and same-domain documentation pages are prepared in the worker.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); if (pdf) addPdf.mutate({ file: pdf, visibility }, { onSuccess: () => { setPdf(null); toast.success("PDF uploaded as a draft."); }, onError: (error) => toast.error(error instanceof Error ? error.message : "PDF upload failed.") }); }}>
+                  <Input accept="application/pdf" aria-label="PDF Knowledge Source" type="file" onChange={(event) => setPdf(event.target.files?.[0] ?? null)} />
+                  <Button disabled={!pdf || addPdf.isPending} type="submit">{addPdf.isPending ? "Uploading..." : "Upload PDF"}</Button>
+                </form>
+                <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); if (documentationUrl.trim()) addDocumentationUrl.mutate({ url: documentationUrl.trim(), visibility }, { onSuccess: () => { setDocumentationUrl(""); toast.success("Documentation crawl started."); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Crawl failed to start.") }); }}>
+                  <Input aria-label="Documentation URL" placeholder="https://docs.example.com" type="url" value={documentationUrl} onChange={(event) => setDocumentationUrl(event.target.value)} />
+                  <Button disabled={!documentationUrl.trim() || addDocumentationUrl.isPending} type="submit">{addDocumentationUrl.isPending ? "Starting..." : "Crawl documentation"}</Button>
+                </form>
+              </CardContent>
             </Card>
 
             <Card>

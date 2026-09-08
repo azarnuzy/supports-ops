@@ -213,6 +213,8 @@ export type KnowledgeSource = {
   sourceType: KnowledgeSourceType;
   title: string;
   content: string | null;
+  parentId: string | null;
+  sourceUrl: string | null;
   visibility: KnowledgeVisibility;
   status: KnowledgeStatus;
   failureReason: string | null;
@@ -226,6 +228,8 @@ export type ManualFaqInput = {
   content: string;
   visibility: KnowledgeVisibility;
 };
+
+export type DocumentationUrlInput = { url: string; visibility: KnowledgeVisibility };
 
 export type RetrievalTestResult = {
   knowledgeSourceId: string;
@@ -284,6 +288,21 @@ export async function createManualFaq(client: ApiClient, input: ManualFaqInput) 
     throw new Error("Failed to create the Knowledge Source.");
   }
 
+  return (await response.json()) as { knowledgeSource: KnowledgeSource };
+}
+
+export async function createDocumentationUrl(client: ApiClient, input: DocumentationUrlInput) {
+  const response = await client.knowledge.url.$post({ json: input });
+  if (!response.ok) throw new Error("Failed to start documentation crawl.");
+  return (await response.json()) as { knowledgeSource: KnowledgeSource };
+}
+
+export async function createPdfKnowledgeSource(client: ApiClient, file: File, visibility: KnowledgeVisibility) {
+  const response = await client.knowledge.pdf.$post({ form: { file, visibility } });
+  if (!response.ok) {
+    const data = (await response.json()) as { message?: string };
+    throw new Error(data.message ?? "Failed to upload PDF.");
+  }
   return (await response.json()) as { knowledgeSource: KnowledgeSource };
 }
 

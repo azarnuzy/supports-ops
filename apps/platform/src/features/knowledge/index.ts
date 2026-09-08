@@ -2,6 +2,8 @@ export { default as KnowledgeView } from "./views/knowledge/knowledge";
 export {
   knowledgeSourcesQueryOptions,
   useCreateManualFaqMutation,
+  useCreateDocumentationUrlMutation,
+  useCreatePdfKnowledgeSourceMutation,
   useDeleteKnowledgeSourceMutation,
   usePublishKnowledgeSourceMutation,
   useUpdateManualFaqMutation,

@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createOpenAiEmbeddingClient, searchChunks } from "@repo/knowledge";
-import { embeddingConfig } from "../../config";
+import { createStorage } from "@repo/storage";
+import { embeddingConfig, storageConfig } from "../../config";
 import { prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { enqueueKnowledgeIngest } from "./queue";
-import type { CreateManualFaqInput, UpdateManualFaqInput } from "./schema";
+import type { CreateDocumentationUrlInput, CreateManualFaqInput, UpdateManualFaqInput } from "./schema";
 import type { KnowledgeSourceDto, KnowledgeSourcesResponse, RetrievalTestResponse } from "./types";
 
 export class KnowledgeSourceNotFoundError extends Error {
@@ -48,6 +49,30 @@ export async function createManualFaq(input: CreateManualFaqInput): Promise<Know
     },
   });
 
+  return toDto(knowledgeSource);
+}
+
+const maxPdfSizeBytes = 25 * 1024 * 1024;
+
+export async function createPdfKnowledgeSource(file: File, visibility: KnowledgeSourceDto["visibility"]) {
+  if (file.type !== "application/pdf") throw new Error("Upload a PDF file.");
+  if (file.size === 0 || file.size > maxPdfSizeBytes) throw new Error("PDF must be between 1 byte and 25 MB.");
+  const workspaceId = requireWorkspaceId();
+  const id = randomUUID();
+  const storageKey = `knowledge/${workspaceId}/${id}.pdf`;
+  await createStorage(storageConfig).putObject({ body: Buffer.from(await file.arrayBuffer()), contentType: file.type, key: storageKey });
+  const knowledgeSource = await prisma.knowledgeSource.create({
+    data: { id, sourceType: "PDF", sourceUrl: storageKey, status: "DRAFT", title: file.name, visibility, workspaceId },
+  });
+  return toDto(knowledgeSource);
+}
+
+export async function createDocumentationUrl(input: CreateDocumentationUrlInput) {
+  const workspaceId = requireWorkspaceId();
+  const knowledgeSource = await prisma.knowledgeSource.create({
+    data: { id: randomUUID(), sourceType: "HELP_CENTER", sourceUrl: input.url, status: "PROCESSING", title: new URL(input.url).hostname, visibility: input.visibility, workspaceId },
+  });
+  await enqueueKnowledgeIngest({ kind: "CRAWL", knowledgeSourceId: knowledgeSource.id, workspaceId });
   return toDto(knowledgeSource);
 }
 
@@ -105,7 +130,12 @@ export async function updateManualFaq(
 export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourceDto> {
   const existing = await findEditableKnowledgeSource(id);
 
-  if (!existing.content) {
+  if (existing.sourceType === "HELP_CENTER") {
+    const knowledgeSource = await prisma.knowledgeSource.update({ data: { failureReason: null, status: "PROCESSING" }, where: { id: existing.id } });
+    await enqueueKnowledgeIngest({ kind: "CRAWL", knowledgeSourceId: existing.id, workspaceId: requireWorkspaceId() });
+    return toDto(knowledgeSource);
+  }
+  if (existing.sourceType === "MANUAL_FAQ" && !existing.content) {
     throw new KnowledgeSourceMissingContentError();
   }
 
@@ -117,7 +147,8 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
   });
 
   await enqueueKnowledgeIngest({
-    content: existing.content,
+    kind: existing.sourceType === "PDF" ? "PDF" : existing.sourceType === "URL" ? "URL" : "CONTENT",
+    content: existing.content ?? undefined,
     knowledgeSourceId: existing.id,
     title: existing.title,
     visibility: existing.visibility,
@@ -212,9 +243,11 @@ function isNotNull<Value>(value: Value | null): value is Value {
 
 function toDto(knowledgeSource: {
   id: string;
+  parentId: string | null;
   sourceType: KnowledgeSourceDto["sourceType"];
   title: string;
   content: string | null;
+  sourceUrl: string | null;
   visibility: KnowledgeSourceDto["visibility"];
   status: KnowledgeSourceDto["status"];
   failureReason: string | null;
@@ -227,8 +260,10 @@ function toDto(knowledgeSource: {
     createdAt: knowledgeSource.createdAt,
     failureReason: knowledgeSource.failureReason,
     id: knowledgeSource.id,
+    parentId: knowledgeSource.parentId,
     publishedAt: knowledgeSource.publishedAt,
     sourceType: knowledgeSource.sourceType,
+    sourceUrl: knowledgeSource.sourceUrl,
     status: knowledgeSource.status,
     title: knowledgeSource.title,
     updatedAt: knowledgeSource.updatedAt,

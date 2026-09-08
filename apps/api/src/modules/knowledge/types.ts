@@ -5,6 +5,8 @@ export type KnowledgeSourceDto = {
   sourceType: KnowledgeSourceType;
   title: string;
   content: string | null;
+  parentId: string | null;
+  sourceUrl: string | null;
   visibility: KnowledgeVisibility;
   status: KnowledgeStatus;
   failureReason: string | null;
