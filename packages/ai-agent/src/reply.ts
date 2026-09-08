@@ -7,17 +7,19 @@ export type ReplyModel = CompletionModel;
 const replyOutputSchema = z.object({
   decision: z.enum(["REPLY", "CLARIFY", "ESCALATE"]),
   content: z.string().trim().min(1).nullable(),
-  escalationReason: z.enum([
-    "LOW_KNOWLEDGE_CONFIDENCE",
-    "NO_RELEVANT_KNOWLEDGE",
-    "CUSTOMER_REQUESTED_HUMAN",
-    "AI_FAILED_ATTEMPTS",
-    "INTERNAL_ACTION_REQUIRED",
-    "BUSINESS_TOOL_FAILURE",
-    "CONFLICTING_KNOWLEDGE",
-    "AI_GENERATION_FAILED",
-    "AI_TIMEOUT",
-  ]).nullable(),
+  escalationReason: z
+    .enum([
+      "LOW_KNOWLEDGE_CONFIDENCE",
+      "NO_RELEVANT_KNOWLEDGE",
+      "CUSTOMER_REQUESTED_HUMAN",
+      "AI_FAILED_ATTEMPTS",
+      "INTERNAL_ACTION_REQUIRED",
+      "BUSINESS_TOOL_FAILURE",
+      "CONFLICTING_KNOWLEDGE",
+      "AI_GENERATION_FAILED",
+      "AI_TIMEOUT",
+    ])
+    .nullable(),
 });
 
 export type ReplyDecision = z.infer<typeof replyOutputSchema>;
@@ -29,7 +31,11 @@ export class ReplyGenerationFailedError extends Error {
   }
 }
 
-export function createReplyModel(options: { apiKey: string; modelId: string; baseUrl?: string }): ReplyModel {
+export function createReplyModel(options: {
+  apiKey: string;
+  modelId: string;
+  baseUrl?: string;
+}): ReplyModel {
   const client = new OpenAIClient({ apiKey: options.apiKey, baseUrl: options.baseUrl });
   return client.completionModel({ api: "chat", modelId: options.modelId });
 }

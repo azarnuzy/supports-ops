@@ -5,7 +5,11 @@ import { embeddingConfig, storageConfig } from "../../config";
 import { prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { enqueueKnowledgeIngest } from "./queue";
-import type { CreateDocumentationUrlInput, CreateManualFaqInput, UpdateManualFaqInput } from "./schema";
+import type {
+  CreateDocumentationUrlInput,
+  CreateManualFaqInput,
+  UpdateManualFaqInput,
+} from "./schema";
 import type { KnowledgeSourceDto, KnowledgeSourcesResponse, RetrievalTestResponse } from "./types";
 
 export class KnowledgeSourceNotFoundError extends Error {
@@ -54,15 +58,31 @@ export async function createManualFaq(input: CreateManualFaqInput): Promise<Know
 
 const maxPdfSizeBytes = 25 * 1024 * 1024;
 
-export async function createPdfKnowledgeSource(file: File, visibility: KnowledgeSourceDto["visibility"]) {
+export async function createPdfKnowledgeSource(
+  file: File,
+  visibility: KnowledgeSourceDto["visibility"],
+) {
   if (file.type !== "application/pdf") throw new Error("Upload a PDF file.");
-  if (file.size === 0 || file.size > maxPdfSizeBytes) throw new Error("PDF must be between 1 byte and 25 MB.");
+  if (file.size === 0 || file.size > maxPdfSizeBytes)
+    throw new Error("PDF must be between 1 byte and 25 MB.");
   const workspaceId = requireWorkspaceId();
   const id = randomUUID();
   const storageKey = `knowledge/${workspaceId}/${id}.pdf`;
-  await createStorage(storageConfig).putObject({ body: Buffer.from(await file.arrayBuffer()), contentType: file.type, key: storageKey });
+  await createStorage(storageConfig).putObject({
+    body: Buffer.from(await file.arrayBuffer()),
+    contentType: file.type,
+    key: storageKey,
+  });
   const knowledgeSource = await prisma.knowledgeSource.create({
-    data: { id, sourceType: "PDF", sourceUrl: storageKey, status: "DRAFT", title: file.name, visibility, workspaceId },
+    data: {
+      id,
+      sourceType: "PDF",
+      sourceUrl: storageKey,
+      status: "DRAFT",
+      title: file.name,
+      visibility,
+      workspaceId,
+    },
   });
   return toDto(knowledgeSource);
 }
@@ -70,9 +90,21 @@ export async function createPdfKnowledgeSource(file: File, visibility: Knowledge
 export async function createDocumentationUrl(input: CreateDocumentationUrlInput) {
   const workspaceId = requireWorkspaceId();
   const knowledgeSource = await prisma.knowledgeSource.create({
-    data: { id: randomUUID(), sourceType: "HELP_CENTER", sourceUrl: input.url, status: "PROCESSING", title: new URL(input.url).hostname, visibility: input.visibility, workspaceId },
+    data: {
+      id: randomUUID(),
+      sourceType: "HELP_CENTER",
+      sourceUrl: input.url,
+      status: "PROCESSING",
+      title: new URL(input.url).hostname,
+      visibility: input.visibility,
+      workspaceId,
+    },
   });
-  await enqueueKnowledgeIngest({ kind: "CRAWL", knowledgeSourceId: knowledgeSource.id, workspaceId });
+  await enqueueKnowledgeIngest({
+    kind: "CRAWL",
+    knowledgeSourceId: knowledgeSource.id,
+    workspaceId,
+  });
   return toDto(knowledgeSource);
 }
 
@@ -131,8 +163,15 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
   const existing = await findEditableKnowledgeSource(id);
 
   if (existing.sourceType === "HELP_CENTER") {
-    const knowledgeSource = await prisma.knowledgeSource.update({ data: { failureReason: null, status: "PROCESSING" }, where: { id: existing.id } });
-    await enqueueKnowledgeIngest({ kind: "CRAWL", knowledgeSourceId: existing.id, workspaceId: requireWorkspaceId() });
+    const knowledgeSource = await prisma.knowledgeSource.update({
+      data: { failureReason: null, status: "PROCESSING" },
+      where: { id: existing.id },
+    });
+    await enqueueKnowledgeIngest({
+      kind: "CRAWL",
+      knowledgeSourceId: existing.id,
+      workspaceId: requireWorkspaceId(),
+    });
     return toDto(knowledgeSource);
   }
   if (existing.sourceType === "MANUAL_FAQ" && !existing.content) {

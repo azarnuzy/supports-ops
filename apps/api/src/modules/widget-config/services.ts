@@ -23,7 +23,10 @@ export async function getWebWidgetConfig(): Promise<WebWidgetConfigResponse> {
     throw new WebWidgetConfigNotFoundError();
   }
 
-  return { webWidgetConfig: toDto(webWidgetConfig), closingMessage: workspace?.closingMessage ?? null };
+  return {
+    webWidgetConfig: toDto(webWidgetConfig),
+    closingMessage: workspace?.closingMessage ?? null,
+  };
 }
 
 export async function updateWebWidgetConfig(

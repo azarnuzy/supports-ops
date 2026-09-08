@@ -13,15 +13,26 @@ export async function sendSessionLinkEmail({ customerName, email, sessionLink }:
 
   if (emailConfig.resendApiKey) {
     const response = await fetch("https://api.resend.com/emails", {
-      body: JSON.stringify({ from: emailConfig.from, html: `<p>Hi ${escapeHtml(customerName)},</p><p><a href="${escapeHtml(sessionLink)}">Return to your support chat</a></p>`, subject, text, to: [email] }),
-      headers: { Authorization: `Bearer ${emailConfig.resendApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: emailConfig.from,
+        html: `<p>Hi ${escapeHtml(customerName)},</p><p><a href="${escapeHtml(sessionLink)}">Return to your support chat</a></p>`,
+        subject,
+        text,
+        to: [email],
+      }),
+      headers: {
+        Authorization: `Bearer ${emailConfig.resendApiKey}`,
+        "Content-Type": "application/json",
+      },
       method: "POST",
     });
-    if (!response.ok) throw new Error(`Resend rejected the Session Link email (${response.status}).`);
+    if (!response.ok)
+      throw new Error(`Resend rejected the Session Link email (${response.status}).`);
     return;
   }
 
-  if (!emailConfig.smtpUrl) throw new Error("Configure RESEND_API_KEY or SMTP_URL to deliver Session Link emails.");
+  if (!emailConfig.smtpUrl)
+    throw new Error("Configure RESEND_API_KEY or SMTP_URL to deliver Session Link emails.");
   await sendSmtpMessage(emailConfig.smtpUrl, email, subject, text);
 }
 
@@ -37,7 +48,11 @@ async function sendSmtpMessage(smtpUrl: string, recipient: string, subject: stri
   await command(socket, read, `MAIL FROM:<${emailAddress(emailConfig.from)}>`);
   await command(socket, read, `RCPT TO:<${recipient}>`);
   await command(socket, read, "DATA");
-  await command(socket, read, `From: ${emailConfig.from}\r\nTo: ${recipient}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${text.replace(/^\./gm, "..")}\r\n.`);
+  await command(
+    socket,
+    read,
+    `From: ${emailConfig.from}\r\nTo: ${recipient}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${text.replace(/^\./gm, "..")}\r\n.`,
+  );
   await command(socket, read, "QUIT");
   socket.end();
 }
@@ -65,7 +80,11 @@ function createSmtpReader(socket: ReturnType<typeof createConnection>) {
     });
 }
 
-async function command(socket: ReturnType<typeof createConnection>, read: () => Promise<string>, value: string) {
+async function command(
+  socket: ReturnType<typeof createConnection>,
+  read: () => Promise<string>,
+  value: string,
+) {
   socket.write(`${value}\r\n`);
   const response = await read();
   if (!/^2\d\d|^3\d\d/.test(response)) throw new Error(`SMTP rejected command: ${response}`);
@@ -83,5 +102,10 @@ function emailAddress(from: string) {
 }
 
 function escapeHtml(value: string) {
-  return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
+  return value.replace(
+    /[&<>'"]/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ??
+      character,
+  );
 }

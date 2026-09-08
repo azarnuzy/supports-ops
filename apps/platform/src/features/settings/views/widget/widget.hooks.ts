@@ -5,7 +5,12 @@ import {
   useUpdateWebWidgetConfigMutation,
   webWidgetConfigQueryOptions,
 } from "../../widget-config.hooks";
-import { buildEmbedSnippet, domainPattern, domainsAreEqual, validateWidgetConfig } from "./widget.services";
+import {
+  buildEmbedSnippet,
+  domainPattern,
+  domainsAreEqual,
+  validateWidgetConfig,
+} from "./widget.services";
 
 export function useWidgetSettingsForm() {
   const config = useQuery(webWidgetConfigQueryOptions);

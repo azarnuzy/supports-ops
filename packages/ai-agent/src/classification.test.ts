@@ -80,7 +80,10 @@ describe("classifyMessage", () => {
       },
     });
 
-    const decision = await classifyMessage({ content: "halo", model: { id: "fake-model" } as never });
+    const decision = await classifyMessage({
+      content: "halo",
+      model: { id: "fake-model" } as never,
+    });
 
     expect(decision).toEqual({ qualifies: false, reply: "Hai! Ada yang bisa saya bantu?" });
   });
@@ -118,7 +121,10 @@ describe("classifyMessage", () => {
       },
     });
 
-    const decision = await classifyMessage({ content: "thanks!", model: { id: "fake-model" } as never });
+    const decision = await classifyMessage({
+      content: "thanks!",
+      model: { id: "fake-model" } as never,
+    });
 
     expect(decision.qualifies).toBe(false);
     if (!decision.qualifies) {

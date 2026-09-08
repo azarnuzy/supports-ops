@@ -16,12 +16,19 @@ import { ticketsRouter } from "./modules/tickets/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   .post("/internal/tickets/:ticketId/generate", async (c) => {
-    if (!apiConfig.internalWorkerToken || c.req.header("x-supportops-worker-token") !== apiConfig.internalWorkerToken) {
+    if (
+      !apiConfig.internalWorkerToken ||
+      c.req.header("x-supportops-worker-token") !== apiConfig.internalWorkerToken
+    ) {
       return c.json({ error: "unauthorized" }, 401);
     }
     const body = await c.req.json<{ workspaceId?: string }>();
     if (!body.workspaceId) return c.json({ error: "invalid_request" }, 422);
-    void generateAiReply(c.req.param("ticketId"), body.workspaceId, "Please use the attached file to answer the Customer.");
+    void generateAiReply(
+      c.req.param("ticketId"),
+      body.workspaceId,
+      "Please use the attached file to answer the Customer.",
+    );
     return c.body(null, 202);
   })
   .route("/widget", widgetRouter)
@@ -54,10 +61,10 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   })
   .route("/knowledge", knowledgeRouter)
   .route("/attachments", attachmentRouter)
+  .route("/tickets", ticketsRouter)
   .route("/profile", profileRouter)
   .route("/register", registrationRouter)
   .route("/users", usersRouter)
   .route("/widget-config", widgetConfigRouter);
 
 export type AppType = typeof app;
-  .route("/tickets", ticketsRouter)

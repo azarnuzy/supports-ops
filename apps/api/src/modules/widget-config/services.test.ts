@@ -47,9 +47,9 @@ function resetMocks() {
   mocks.webWidgetConfigUpdate.mockReset();
   mocks.workspaceFindUnique.mockReset();
   mocks.workspaceUpdate.mockReset();
-  mocks.transaction.mockReset().mockImplementation((operations: Promise<unknown>[]) =>
-    Promise.all(operations),
-  );
+  mocks.transaction
+    .mockReset()
+    .mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
   mocks.requireWorkspaceId.mockReset().mockReturnValue("workspace-1");
 }
 

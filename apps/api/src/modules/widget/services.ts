@@ -7,10 +7,19 @@ import {
   ReplyGenerationFailedError,
   streamReply,
 } from "@repo/ai-agent";
-import { createOpenAiEmbeddingClient as createEmbeddingClient, searchChunks as findKnowledgeChunks } from "@repo/knowledge";
+import {
+  createOpenAiEmbeddingClient as createEmbeddingClient,
+  searchChunks as findKnowledgeChunks,
+} from "@repo/knowledge";
 import { BusinessToolError, createBusinessTools } from "@repo/tools";
 import { createStorage } from "@repo/storage";
-import { aiAgentConfig, apiConfig, classificationConfig, embeddingConfig, storageConfig } from "../../config";
+import {
+  aiAgentConfig,
+  apiConfig,
+  classificationConfig,
+  embeddingConfig,
+  storageConfig,
+} from "../../config";
 import { type Message, unscopedPrisma } from "../../utils/prisma";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
@@ -66,7 +75,9 @@ export type CreateCustomerMessageResult =
   | { kind: "reply"; reply: string };
 
 export function customerRequestedHuman(content: string) {
-  return /\b(?:human|real (?:person|agent)|live (?:agent|person)|customer service|representative|(?:speak|talk) (?:to|with) (?:a )?(?:human|person|someone|agent)|connect (?:me )?to (?:a )?(?:human|person|agent)|(?:bicara|ngobrol) (?:dengan|sama) (?:human|manusia|orang|cs|customer service)|hubungkan (?:saya|aku) (?:ke|dengan) (?:human|manusia|orang|cs|customer service)|orangnya|cs)\b/i.test(content);
+  return /\b(?:human|real (?:person|agent)|live (?:agent|person)|customer service|representative|(?:speak|talk) (?:to|with) (?:a )?(?:human|person|someone|agent)|connect (?:me )?to (?:a )?(?:human|person|agent)|(?:bicara|ngobrol) (?:dengan|sama) (?:human|manusia|orang|cs|customer service)|hubungkan (?:saya|aku) (?:ke|dengan) (?:human|manusia|orang|cs|customer service)|orangnya|cs)\b/i.test(
+    content,
+  );
 }
 
 export async function getApprovedWidget(widgetKey: string, origin: string) {
@@ -140,7 +151,11 @@ export async function getWebSession(accessToken: string) {
       createdAt: true,
       status: true,
       customerIdentity: { select: { name: true } },
-      channel: { select: { webWidgetConfig: { select: { botName: true, primaryColor: true, welcomeMessage: true } } } },
+      channel: {
+        select: {
+          webWidgetConfig: { select: { botName: true, primaryColor: true, welcomeMessage: true } },
+        },
+      },
     },
   });
 }
@@ -153,7 +168,7 @@ export async function createCustomerMessage(
     where: { accessToken },
     include: { ticket: true },
   });
-  if (!session || session.status !== "ACTIVE") return null;
+  if (session?.status !== "ACTIVE") return null;
 
   if (session.ticket) {
     const message = await appendMessage(session.ticket.id, session.workspaceId, input);
@@ -190,7 +205,10 @@ export async function createCustomerMessage(
   }
 }
 
-export async function createCustomerAttachment(accessToken: string, input: { content?: string; file: File }) {
+export async function createCustomerAttachment(
+  accessToken: string,
+  input: { content?: string; file: File },
+) {
   if (!attachmentTypes.has(input.file.type)) {
     throw new InvalidAttachmentError("Attach a PDF, plain text, JPEG, or PNG file.");
   }
@@ -199,7 +217,10 @@ export async function createCustomerAttachment(accessToken: string, input: { con
   }
 
   const content = input.content?.trim() || `I need help with the attached file: ${input.file.name}`;
-  const result = await createCustomerMessage(accessToken, { content, idempotencyKey: randomUUID() });
+  const result = await createCustomerMessage(accessToken, {
+    content,
+    idempotencyKey: randomUUID(),
+  });
   if (!result) return null;
   if (result.kind === "reply") {
     throw new InvalidAttachmentError("Please describe the support problem with the attachment.");
@@ -224,14 +245,20 @@ export async function createCustomerAttachment(accessToken: string, input: { con
       workspaceId: result.message.workspaceId,
     },
   });
-  await enqueueAttachmentProcess({ attachmentId: id, ticketId: attachment.ticketId, workspaceId: attachment.workspaceId });
+  await enqueueAttachmentProcess({
+    attachmentId: id,
+    ticketId: attachment.ticketId,
+    workspaceId: attachment.workspaceId,
+  });
   return { attachment, message: result.message };
 }
 
 async function appendMessage(ticketId: string, workspaceId: string, input: CustomerMessageInput) {
   return unscopedPrisma.$transaction(async (tx) => {
     const existing = await tx.message.findUnique({
-      where: { workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId } },
+      where: {
+        workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId },
+      },
     });
     if (existing) return { created: false, message: existing };
 
@@ -243,10 +270,18 @@ async function appendMessage(ticketId: string, workspaceId: string, input: Custo
 
     const message = await tx.message.create({
       data: {
-        content: input.content, externalMessageId: input.idempotencyKey, id: randomUUID(),
-        memorySessionId: conversation.id, message: { content: input.content }, position: ticket.messageSeq,
-        role: "user", runId: randomUUID(), senderType: "CUSTOMER", ticketId: ticket.id,
-        turn: ticket.messageSeq, workspaceId,
+        content: input.content,
+        externalMessageId: input.idempotencyKey,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content: input.content },
+        position: ticket.messageSeq,
+        role: "user",
+        runId: randomUUID(),
+        senderType: "CUSTOMER",
+        ticketId: ticket.id,
+        turn: ticket.messageSeq,
+        workspaceId,
       },
     });
     return { created: true, message };
@@ -255,12 +290,19 @@ async function appendMessage(ticketId: string, workspaceId: string, input: Custo
 
 /** Starts after the Customer message has been committed. Streaming fragments
  * never acquire a Message position; only the completed AI Agent reply does. */
-export async function generateAiReply(ticketId: string, workspaceId: string, customerMessage: string) {
+export async function generateAiReply(
+  ticketId: string,
+  workspaceId: string,
+  customerMessage: string,
+) {
   const ticket = await unscopedPrisma.ticket.findUnique({
-    select: { customerIdentity: { select: { email: true, externalCustomerId: true, id: true } }, status: true },
+    select: {
+      customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
+      status: true,
+    },
     where: { id: ticketId },
   });
-  if (!ticket || ticket.status !== "AI_HANDLING") return;
+  if (ticket?.status !== "AI_HANDLING") return;
   if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey) {
     await escalate(ticketId, workspaceId, "AI_GENERATION_FAILED", customerMessage);
     return;
@@ -271,10 +313,17 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "generating" } });
 
   try {
-    const embeddingClient = createEmbeddingClient({ ...embeddingConfig, apiKey: embeddingConfig.apiKey });
+    const embeddingClient = createEmbeddingClient({
+      ...embeddingConfig,
+      apiKey: embeddingConfig.apiKey,
+    });
     const [embedding] = await embeddingClient.embed([customerMessage]);
     const sources = embedding
-      ? await findKnowledgeChunks(unscopedPrisma, { embedding, workspaceId, retrievalMode: "CUSTOMER" })
+      ? await findKnowledgeChunks(unscopedPrisma, {
+          embedding,
+          workspaceId,
+          retrievalMode: "CUSTOMER",
+        })
       : [];
     const attachments = await unscopedPrisma.attachment.findMany({
       select: { extractedText: true, id: true },
@@ -285,7 +334,10 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
       data: {
         eventType: "KNOWLEDGE_RETRIEVED",
         id: randomUUID(),
-        metadata: { chunkIds: sources.map((source) => source.chunkId), knowledgeSourceIds: sources.map((source) => source.knowledgeSourceId) },
+        metadata: {
+          chunkIds: sources.map((source) => source.chunkId),
+          knowledgeSourceIds: sources.map((source) => source.knowledgeSourceId),
+        },
         ticketId,
         workspaceId,
       },
@@ -308,13 +360,16 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
           clarificationCount,
           customerMessage,
           model,
-          onDelta: (delta) => publishWidgetEvent(ticketId, { type: "message.delta", data: { delta, provisionalId } }),
+          onDelta: (delta) =>
+            publishWidgetEvent(ticketId, { type: "message.delta", data: { delta, provisionalId } }),
           businessData,
           sources: [
             ...sources.map((source) => ({ id: source.chunkId, content: source.content })),
-            ...attachments.flatMap((attachment) => attachment.extractedText
-              ? [{ id: `attachment:${attachment.id}`, content: attachment.extractedText }]
-              : []),
+            ...attachments.flatMap((attachment) =>
+              attachment.extractedText
+                ? [{ id: `attachment:${attachment.id}`, content: attachment.extractedText }]
+                : [],
+            ),
           ],
         });
         break;
@@ -324,11 +379,16 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
     }
     if (!decision) throw lastError ?? new ReplyGenerationFailedError();
 
-    if (decision.decision === "ESCALATE" || (decision.decision === "CLARIFY" && clarificationCount >= 2)) {
+    if (
+      decision.decision === "ESCALATE" ||
+      (decision.decision === "CLARIFY" && clarificationCount >= 2)
+    ) {
       await escalate(
         ticketId,
         workspaceId,
-        decision.decision === "CLARIFY" ? "AI_FAILED_ATTEMPTS" : decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE",
+        decision.decision === "CLARIFY"
+          ? "AI_FAILED_ATTEMPTS"
+          : (decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE"),
         customerMessage,
       );
       return;
@@ -339,7 +399,10 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
     await unscopedPrisma.aiActivity.create({
       data: {
         eventType: decision.decision === "CLARIFY" ? "CLARIFICATION_ASKED" : "AI_REPLIED",
-        id: randomUUID(), metadata: { provisionalId }, ticketId, workspaceId,
+        id: randomUUID(),
+        metadata: { provisionalId },
+        ticketId,
+        workspaceId,
       },
     });
     await publishWidgetEvent(ticketId, { type: "message.created", data: message });
@@ -352,7 +415,10 @@ export async function generateAiReply(ticketId: string, workspaceId: string, cus
     );
   } finally {
     setTicketGenerating(ticketId, false);
-    const finalTicket = await unscopedPrisma.ticket.findUnique({ select: { status: true }, where: { id: ticketId } });
+    const finalTicket = await unscopedPrisma.ticket.findUnique({
+      select: { status: true },
+      where: { id: ticketId },
+    });
     await publishWidgetEvent(ticketId, {
       type: "ticket.status",
       data: { status: finalTicket?.status === "ESCALATED" ? "escalated" : "ready" },
@@ -392,8 +458,20 @@ async function getBusinessToolData(
     ]);
     await unscopedPrisma.aiActivity.createMany({
       data: [
-        { eventType: "TOOL_CALLED", id: randomUUID(), metadata: { outcome: "SUCCESS", tool: "getSubscriptionStatus" }, ticketId, workspaceId },
-        { eventType: "TOOL_CALLED", id: randomUUID(), metadata: { outcome: "SUCCESS", tool: "getInvoiceStatus" }, ticketId, workspaceId },
+        {
+          eventType: "TOOL_CALLED",
+          id: randomUUID(),
+          metadata: { outcome: "SUCCESS", tool: "getSubscriptionStatus" },
+          ticketId,
+          workspaceId,
+        },
+        {
+          eventType: "TOOL_CALLED",
+          id: randomUUID(),
+          metadata: { outcome: "SUCCESS", tool: "getInvoiceStatus" },
+          ticketId,
+          workspaceId,
+        },
       ],
     });
     return JSON.stringify({ invoice, subscription });
@@ -407,43 +485,85 @@ async function getBusinessToolData(
         workspaceId,
       },
     });
-    throw error instanceof BusinessToolError ? error : new BusinessToolError("Business Tool failed.", { cause: error });
+    throw error instanceof BusinessToolError
+      ? error
+      : new BusinessToolError("Business Tool failed.", { cause: error });
   }
 }
 
 async function appendAiMessage(ticketId: string, workspaceId: string, content: string) {
   return unscopedPrisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({ data: { messageSeq: { increment: 1 } }, where: { id: ticketId } });
+    const ticket = await tx.ticket.update({
+      data: { messageSeq: { increment: 1 } },
+      where: { id: ticketId },
+    });
     const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     return tx.message.create({
       data: {
-        content, externalMessageId: `ai:${randomUUID()}`, id: randomUUID(), memorySessionId: conversation.id,
-        message: { content }, position: ticket.messageSeq, role: "assistant", runId: randomUUID(),
-        senderType: "AI_AGENT", ticketId, turn: ticket.messageSeq, workspaceId,
+        content,
+        externalMessageId: `ai:${randomUUID()}`,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content },
+        position: ticket.messageSeq,
+        role: "assistant",
+        runId: randomUUID(),
+        senderType: "AI_AGENT",
+        ticketId,
+        turn: ticket.messageSeq,
+        workspaceId,
       },
     });
   });
 }
 
-export async function escalate(ticketId: string, workspaceId: string, reason: EscalationReason, customerMessage: string) {
+export async function escalate(
+  ticketId: string,
+  workspaceId: string,
+  reason: EscalationReason,
+  customerMessage: string,
+) {
   const acknowledgement = acknowledgementFor(customerMessage);
   const result = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
-      data: { escalatedAt: new Date(), escalationReason: reason, messageSeq: { increment: 1 }, status: "ESCALATED" },
+      data: {
+        escalatedAt: new Date(),
+        escalationReason: reason,
+        messageSeq: { increment: 1 },
+        status: "ESCALATED",
+      },
       where: { id: ticketId, status: "AI_HANDLING" },
     });
     if (!transition.count) return null;
-    const ticket = await tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: { messageSeq: true } });
+    const ticket = await tx.ticket.findUniqueOrThrow({
+      where: { id: ticketId },
+      select: { messageSeq: true },
+    });
     const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     const acknowledgementMessage = await tx.message.create({
       data: {
-        content: acknowledgement, externalMessageId: `escalation:${randomUUID()}`, id: randomUUID(),
-        memorySessionId: conversation.id, message: { content: acknowledgement }, position: ticket.messageSeq,
-        role: "system", runId: randomUUID(), senderType: "SYSTEM", ticketId, turn: ticket.messageSeq, workspaceId,
+        content: acknowledgement,
+        externalMessageId: `escalation:${randomUUID()}`,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content: acknowledgement },
+        position: ticket.messageSeq,
+        role: "system",
+        runId: randomUUID(),
+        senderType: "SYSTEM",
+        ticketId,
+        turn: ticket.messageSeq,
+        workspaceId,
       },
     });
     await tx.aiActivity.create({
-      data: { eventType: "ESCALATED", id: randomUUID(), metadata: { reason }, ticketId, workspaceId },
+      data: {
+        eventType: "ESCALATED",
+        id: randomUUID(),
+        metadata: { reason },
+        ticketId,
+        workspaceId,
+      },
     });
     return acknowledgementMessage;
   });
@@ -454,7 +574,10 @@ export async function escalate(ticketId: string, workspaceId: string, reason: Es
 }
 
 function acknowledgementFor(customerMessage: string) {
-  const indonesian = /\b(?:saya|aku|mau|tolong|dengan|bicara|hubungkan|masalah|langganan|tagihan)\b/i.test(customerMessage);
+  const indonesian =
+    /\b(?:saya|aku|mau|tolong|dengan|bicara|hubungkan|masalah|langganan|tagihan)\b/i.test(
+      customerMessage,
+    );
   return indonesian
     ? "Percakapan Anda sudah diteruskan kepada tim kami. Human Agent akan membantu Anda secepatnya."
     : "Your conversation has been passed to our team. A Human Agent will help you as soon as possible.";
@@ -483,17 +606,30 @@ async function createTicketAndFirstMessage(
     });
     const conversation = await tx.conversation.create({
       data: {
-        id: randomUUID(), metadata: {}, scopeKey: `ticket:${ticketId}`, sessionId: ticketId,
-        ticketId, userId: session.customerIdentityId, workspaceId: session.workspaceId,
+        id: randomUUID(),
+        metadata: {},
+        scopeKey: `ticket:${ticketId}`,
+        sessionId: ticketId,
+        ticketId,
+        userId: session.customerIdentityId,
+        workspaceId: session.workspaceId,
       },
     });
 
     const message = await tx.message.create({
       data: {
-        content: input.content, externalMessageId: input.idempotencyKey, id: randomUUID(),
-        memorySessionId: conversation.id, message: { content: input.content }, position: 1,
-        role: "user", runId: randomUUID(), senderType: "CUSTOMER", ticketId: ticket.id,
-        turn: 1, workspaceId: session.workspaceId,
+        content: input.content,
+        externalMessageId: input.idempotencyKey,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content: input.content },
+        position: 1,
+        role: "user",
+        runId: randomUUID(),
+        senderType: "CUSTOMER",
+        ticketId: ticket.id,
+        turn: 1,
+        workspaceId: session.workspaceId,
       },
     });
 
@@ -502,14 +638,23 @@ async function createTicketAndFirstMessage(
         {
           eventType: "CLASSIFIED",
           id: randomUUID(),
-          metadata: { category: decision.category, isSupportRequest: true, priority: decision.priority, title: decision.title },
+          metadata: {
+            category: decision.category,
+            isSupportRequest: true,
+            priority: decision.priority,
+            title: decision.title,
+          },
           ticketId: ticket.id,
           workspaceId: session.workspaceId,
         },
         {
           eventType: "TICKET_CREATED",
           id: randomUUID(),
-          metadata: { category: decision.category, priority: decision.priority, title: decision.title },
+          metadata: {
+            category: decision.category,
+            priority: decision.priority,
+            title: decision.title,
+          },
           ticketId: ticket.id,
           workspaceId: session.workspaceId,
         },
@@ -522,11 +667,13 @@ async function createTicketAndFirstMessage(
 
 export async function getMessagesAfter(accessToken: string, afterPosition: number) {
   const session = await unscopedPrisma.webSession.findUnique({
-    where: { accessToken }, select: { ticket: { select: { id: true } } },
+    where: { accessToken },
+    select: { ticket: { select: { id: true } } },
   });
   if (!session?.ticket) return null;
   const messages = await unscopedPrisma.message.findMany({
-    where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } }, orderBy: { position: "asc" },
+    where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } },
+    orderBy: { position: "asc" },
   });
   return { messages, ticketId: session.ticket.id };
 }
@@ -542,7 +689,9 @@ export function toPublicWidgetConfig(config: PublicWidgetConfig): PublicWidgetCo
 function isAllowedOrigin(origin: string, allowedDomains: string[]) {
   try {
     const url = new URL(origin);
-    return (url.protocol === "http:" || url.protocol === "https:") && allowedDomains.includes(url.host);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") && allowedDomains.includes(url.host)
+    );
   } catch {
     return false;
   }

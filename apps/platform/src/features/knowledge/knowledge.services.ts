@@ -26,7 +26,10 @@ export async function createDocumentationUrl(input: DocumentationUrlInput) {
   return createDocumentationUrlRequest(apiClient, input);
 }
 
-export async function createPdfKnowledgeSource(file: File, visibility: DocumentationUrlInput["visibility"]) {
+export async function createPdfKnowledgeSource(
+  file: File,
+  visibility: DocumentationUrlInput["visibility"],
+) {
   return createPdfKnowledgeSourceRequest(apiClient, file, visibility);
 }
 

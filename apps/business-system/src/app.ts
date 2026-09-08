@@ -13,7 +13,13 @@ export const app = new Hono()
     return result.rowCount ? c.json(result.rows[0]) : c.body(null, 404);
   })
   .get("/customers/:customerId/subscription", async (c) => {
-    const result = await pool.query<{ id: string; customerId: string; plan: string; status: string; renewalDate: string }>(
+    const result = await pool.query<{
+      id: string;
+      customerId: string;
+      plan: string;
+      status: string;
+      renewalDate: string;
+    }>(
       `SELECT id, customer_id AS "customerId", plan, status, renewal_date::text AS "renewalDate"
        FROM business_system.subscriptions WHERE customer_id = $1 ORDER BY renewal_date DESC LIMIT 1`,
       [c.req.param("customerId")],
@@ -22,7 +28,13 @@ export const app = new Hono()
   })
   .get("/customers/:customerId/invoices", async (c) => {
     const invoiceId = c.req.query("invoiceId");
-    const result = await pool.query<{ id: string; customerId: string; amount: string; status: string; dueDate: string }>(
+    const result = await pool.query<{
+      id: string;
+      customerId: string;
+      amount: string;
+      status: string;
+      dueDate: string;
+    }>(
       invoiceId
         ? `SELECT id, customer_id AS "customerId", amount::text AS amount, status, due_date::text AS "dueDate"
            FROM business_system.invoices WHERE customer_id = $1 AND id = $2`

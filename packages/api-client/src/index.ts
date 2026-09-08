@@ -43,11 +43,7 @@ export type SupportTicket = {
   customerIdentity: { name: string };
 };
 
-export class TicketAlreadyClaimedApiError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
+export class TicketAlreadyClaimedApiError extends Error {}
 
 export async function listSharedHumanQueue(client: ApiClient) {
   const response = await client.tickets.queue.$get();
@@ -76,7 +72,10 @@ export async function claimTicket(client: ApiClient, id: string) {
 }
 
 export async function reassignTicket(client: ApiClient, id: string, humanAgentId: string) {
-  const response = await client.tickets[":id"].assignee.$patch({ param: { id }, json: { humanAgentId } });
+  const response = await client.tickets[":id"].assignee.$patch({
+    param: { id },
+    json: { humanAgentId },
+  });
   if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only an Admin can reassign Tickets.");
   if (response.status === 422) throw new Error("Choose an active Human Agent in this Workspace.");
@@ -350,7 +349,11 @@ export async function createDocumentationUrl(client: ApiClient, input: Documenta
   return (await response.json()) as { knowledgeSource: KnowledgeSource };
 }
 
-export async function createPdfKnowledgeSource(client: ApiClient, file: File, visibility: KnowledgeVisibility) {
+export async function createPdfKnowledgeSource(
+  client: ApiClient,
+  file: File,
+  visibility: KnowledgeVisibility,
+) {
   const response = await client.knowledge.pdf.$post({ form: { file, visibility } });
   if (!response.ok) {
     const data = (await response.json()) as { message?: string };

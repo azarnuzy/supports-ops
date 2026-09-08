@@ -1,7 +1,12 @@
 import Redis from "ioredis";
 
 export type WidgetEvent = {
-  type: "attachment.updated" | "message.created" | "message.delta" | "message.updated" | "ticket.status";
+  type:
+    | "attachment.updated"
+    | "message.created"
+    | "message.delta"
+    | "message.updated"
+    | "ticket.status";
   data: unknown;
 };
 
@@ -23,10 +28,10 @@ let publisher: Redis | undefined;
 
 function channel(ticketId: string) {
   return `supportops:ticket:${ticketId}`;
-function queueChannel(workspaceId: string) {
-  return `supportops:ticket-queue:${workspaceId}`;
 }
 
+function queueChannel(workspaceId: string) {
+  return `supportops:ticket-queue:${workspaceId}`;
 }
 
 export async function publishWidgetEvent(ticketId: string, event: WidgetEvent) {
@@ -34,21 +39,30 @@ export async function publishWidgetEvent(ticketId: string, event: WidgetEvent) {
   await publisher.publish(channel(ticketId), JSON.stringify(event));
 }
 
-export async function subscribeToWidgetEvents(ticketId: string, onEvent: (event: WidgetEvent) => void) {
+export async function subscribeToWidgetEvents(
+  ticketId: string,
+  onEvent: (event: WidgetEvent) => void,
+) {
   const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
   subscriber.on("message", (_channel, payload) => onEvent(JSON.parse(payload) as WidgetEvent));
   await subscriber.subscribe(channel(ticketId));
+  return () => subscriber.disconnect();
+}
 
 export async function publishTicketQueueEvent(workspaceId: string) {
   publisher ??= new Redis(redisUrl, { maxRetriesPerRequest: null });
-  await publisher.publish(queueChannel(workspaceId), JSON.stringify({ type: "ticket.queue.changed" } satisfies TicketQueueEvent));
+  await publisher.publish(
+    queueChannel(workspaceId),
+    JSON.stringify({ type: "ticket.queue.changed" } satisfies TicketQueueEvent),
+  );
 }
 
-export async function subscribeToTicketQueueEvents(workspaceId: string, onEvent: (event: TicketQueueEvent) => void) {
+export async function subscribeToTicketQueueEvents(
+  workspaceId: string,
+  onEvent: (event: TicketQueueEvent) => void,
+) {
   const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
   subscriber.on("message", (_channel, payload) => onEvent(JSON.parse(payload) as TicketQueueEvent));
   await subscriber.subscribe(queueChannel(workspaceId));
-  return () => subscriber.disconnect();
-}
   return () => subscriber.disconnect();
 }

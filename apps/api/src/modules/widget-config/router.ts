@@ -3,7 +3,11 @@ import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
 import { updateWebWidgetConfigSchema } from "./schema";
-import { getWebWidgetConfig, updateWebWidgetConfig, WebWidgetConfigNotFoundError } from "./services";
+import {
+  getWebWidgetConfig,
+  updateWebWidgetConfig,
+  WebWidgetConfigNotFoundError,
+} from "./services";
 
 export const widgetConfigRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/", async (c) => {

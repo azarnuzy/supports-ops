@@ -2,7 +2,13 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { createDocumentationUrlSchema, createManualFaqSchema, createPdfKnowledgeSourceSchema, retrievalTestSchema, updateManualFaqSchema } from "./schema";
+import {
+  createDocumentationUrlSchema,
+  createManualFaqSchema,
+  createPdfKnowledgeSourceSchema,
+  retrievalTestSchema,
+  updateManualFaqSchema,
+} from "./schema";
 import {
   createManualFaq,
   createDocumentationUrl,
@@ -48,7 +54,10 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
     try {
       return c.json({ knowledgeSource: await createPdfKnowledgeSource(file, visibility) }, 201);
     } catch (error) {
-      return c.json({ error: "invalid_pdf", message: error instanceof Error ? error.message : "Invalid PDF." }, 422);
+      return c.json(
+        { error: "invalid_pdf", message: error instanceof Error ? error.message : "Invalid PDF." },
+        422,
+      );
     }
   })
   .post("/url", zValidator("json", createDocumentationUrlSchema), async (c) => {
