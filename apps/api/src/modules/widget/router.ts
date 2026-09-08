@@ -7,6 +7,7 @@ import { customerMessageSchema, preChatSchema } from "./schema";
 import { publishWidgetEvent, subscribeToWidgetEvents } from "./realtime";
 import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import {
+  ClassificationNotConfiguredError,
   createWebSession,
   getApprovedWidget,
   createCustomerMessage,
@@ -87,12 +88,22 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       c.header("Retry-After", String(limit.retryAfterSeconds));
       return c.json({ error: "rate_limited", retryAfterSeconds: limit.retryAfterSeconds }, 429);
     }
-    const result = await createCustomerMessage(accessToken, c.req.valid("json"));
-    if (!result) return c.json({ error: "unauthorized" }, 401);
-    if (result.created) {
-      void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+    try {
+      const result = await createCustomerMessage(accessToken, c.req.valid("json"));
+      if (!result) return c.json({ error: "unauthorized" }, 401);
+      if (result.kind === "reply") {
+        return c.json({ reply: result.reply }, 200);
+      }
+      if (result.created) {
+        void publishWidgetEvent(result.message.ticketId, { type: "message.created", data: result.message });
+      }
+      return c.json(result.message, result.created ? 201 : 200);
+    } catch (error) {
+      if (error instanceof ClassificationNotConfiguredError) {
+        return c.json({ error: "classification_not_configured", message: error.message }, 503);
+      }
+      throw error;
     }
-    return c.json(result.message, result.created ? 201 : 200);
   })
   .get("/events", async (c) => {
     const accessToken = c.req.query("token");

@@ -52,6 +52,7 @@ const apiEnvSchema = z
     DATABASE_URL: z.string().trim().min(1).default(defaultDatabaseUrl),
     EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
     ENABLE_TELEMETRY: booleanSchema.default(false),
+    LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
     LOG_LEVEL: logLevelSchema,
     OPENROUTER_API_KEY: optionalStringSchema,
     S3_ACCESS_KEY_ID: optionalStringSchema,
@@ -121,6 +122,12 @@ export const embeddingConfig = {
   apiKey: env.OPENROUTER_API_KEY,
   baseUrl: modelGatewayBaseUrl,
   modelId: env.EMBEDDING_MODEL,
+} as const;
+
+export const classificationConfig = {
+  apiKey: env.OPENROUTER_API_KEY,
+  baseUrl: modelGatewayBaseUrl,
+  modelId: env.LLM_MODEL_FAST,
 } as const;
 
 export const storageConfig = {
