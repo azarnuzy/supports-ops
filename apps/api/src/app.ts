@@ -12,8 +12,9 @@ import { widgetRouter } from "./modules/widget/router";
 import { widgetConfigRouter } from "./modules/widget-config/router";
 import { generateAiReply } from "./modules/widget/services";
 import { attachmentRouter } from "./modules/attachments/router";
-import { ticketsRouter } from "./modules/tickets/router";
 import { aiSettingsRouter } from "./modules/ai-settings/router";
+import { analyticsRouter } from "./modules/analytics/router";
+import { ticketsRouter } from "./modules/tickets/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   .post("/internal/tickets/:ticketId/generate", async (c) => {
@@ -63,6 +64,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/knowledge", knowledgeRouter)
   .route("/attachments", attachmentRouter)
   .route("/tickets", ticketsRouter)
+  .route("/analytics", analyticsRouter)
   .route("/profile", profileRouter)
   .route("/register", registrationRouter)
   .route("/users", usersRouter)
