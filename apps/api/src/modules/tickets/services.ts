@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { createReplyModel, generateEscalationSummary } from "@repo/ai-agent";
-import { aiAgentConfig } from "../../config";
+import {
+  createReplyModel,
+  generateEscalationSummary,
+  generateSuggestedReply,
+} from "@repo/ai-agent";
+import {
+  createOpenAiEmbeddingClient as createEmbeddingClient,
+  searchChunks as findKnowledgeChunks,
+} from "@repo/knowledge";
+import { BusinessToolError, createBusinessTools } from "@repo/tools";
+import { aiAgentConfig, apiConfig, embeddingConfig } from "../../config";
 import { prisma, unscopedPrisma } from "../../utils/prisma";
 import { publishTicketQueueEvent, publishWidgetEvent } from "../widget/realtime";
 
@@ -34,6 +43,7 @@ export class TicketAlreadyClaimedError extends Error {
 
 export class HumanAgentNotFoundError extends Error {}
 export class TicketNotOwnedError extends Error {}
+export class SuggestedReplyNotConfiguredError extends Error {}
 
 export function listSharedHumanQueue() {
   return prisma.ticket.findMany({
@@ -243,6 +253,127 @@ export async function sendHumanReply(ticketId: string, humanAgentId: string, con
   const delivered = await deliverMessage(message);
   await publishTicketQueueEvent(message.workspaceId);
   return delivered;
+}
+
+export async function suggestReply(ticketId: string, humanAgentId: string, workspaceId: string) {
+  if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey) throw new SuggestedReplyNotConfiguredError();
+  const ticket = await unscopedPrisma.ticket.findFirst({
+    select: {
+      customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
+      id: true,
+      messages: {
+        orderBy: { position: "asc" },
+        select: { content: true, senderType: true },
+      },
+    },
+    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING", workspaceId },
+  });
+  if (!ticket) throw new TicketNotOwnedError();
+
+  const customerMessage = [...ticket.messages].reverse().find((message) => message.senderType === "CUSTOMER")?.content;
+  if (!customerMessage) throw new Error("A Customer message is required to draft a reply.");
+
+  const embeddingClient = createEmbeddingClient({ ...embeddingConfig, apiKey: embeddingConfig.apiKey });
+  const [embedding] = await embeddingClient.embed([customerMessage]);
+  const sources = embedding
+    ? await findKnowledgeChunks(unscopedPrisma, { embedding, retrievalMode: "COPILOT", workspaceId })
+    : [];
+  const previousTickets = await unscopedPrisma.ticket.findMany({
+    orderBy: { resolvedAt: "desc" },
+    select: {
+      messages: { orderBy: { position: "asc" }, select: { content: true, senderType: true } },
+      title: true,
+    },
+    take: 3,
+    where: {
+      customerIdentityId: ticket.customerIdentity.id,
+      id: { not: ticketId },
+      resolvedAt: { not: null },
+      workspaceId,
+    },
+  });
+  const businessData = await getCopilotBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
+  const draft = await generateSuggestedReply({
+    businessData,
+    customerMessage,
+    customerSafeSources: sources.filter((source) => source.visibility === "CUSTOMER_SAFE").map((source) => source.content),
+    currentConversation: ticket.messages.map((message) => `${message.senderType}: ${message.content}`).join("\n"),
+    internalOnlySources: sources.filter((source) => source.visibility === "INTERNAL_ONLY").map((source) => source.content),
+    model: createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }),
+    previousTicketContext: previousTickets
+      .map((previous) => `${previous.title}\n${previous.messages.map((message) => `${message.senderType}: ${message.content}`).join("\n")}`)
+      .join("\n\n"),
+  });
+  await unscopedPrisma.aiActivity.createMany({
+    data: [
+      {
+        eventType: "KNOWLEDGE_RETRIEVED",
+        id: randomUUID(),
+        metadata: {
+          chunkIds: sources.map((source) => source.chunkId),
+          knowledgeSourceIds: sources.map((source) => source.knowledgeSourceId),
+          retrievalMode: "COPILOT",
+        },
+        ticketId,
+        workspaceId,
+      },
+      {
+        eventType: "SUGGESTED_REPLY_GENERATED",
+        id: randomUUID(),
+        metadata: { outcome: "SUCCESS" },
+        ticketId,
+        workspaceId,
+      },
+    ],
+  });
+  return { content: draft };
+}
+
+async function getCopilotBusinessToolData(
+  ticketId: string,
+  workspaceId: string,
+  identity: { email: string; externalCustomerId: string | null; id: string },
+) {
+  const tools = createBusinessTools(apiConfig.businessSystemUrl);
+  try {
+    let customerId = identity.externalCustomerId;
+    if (!customerId) {
+      const customer = await tools.getCustomerByEmail(identity.email);
+      if (!customer) return undefined;
+      customerId = customer.id;
+      await unscopedPrisma.customerIdentity.update({
+        data: { externalCustomerId: customerId },
+        where: { id: identity.id },
+      });
+    }
+    const [subscription, invoice] = await Promise.all([
+      tools.getSubscriptionStatus(customerId),
+      tools.getInvoiceStatus(customerId),
+    ]);
+    await unscopedPrisma.aiActivity.createMany({
+      data: ["getSubscriptionStatus", "getInvoiceStatus"].map((tool) => ({
+        eventType: "TOOL_CALLED" as const,
+        id: randomUUID(),
+        metadata: { outcome: "SUCCESS", tool },
+        ticketId,
+        workspaceId,
+      })),
+    });
+    return JSON.stringify({ invoice, subscription });
+  } catch (error) {
+    await unscopedPrisma.aiActivity.create({
+      data: {
+        eventType: "TOOL_FAILED",
+        id: randomUUID(),
+        metadata: { outcome: "FAILED", tool: "Business System" },
+        ticketId,
+        workspaceId,
+      },
+    });
+    throw error instanceof BusinessToolError
+      ? error
+      : new BusinessToolError("Business Tool failed.", { cause: error });
+  }
 }
 
 export async function resolveTicket(ticketId: string, humanAgentId: string) {

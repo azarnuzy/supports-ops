@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { queryKeys } from "../../lib/query-keys";
 import {
   claimTicket,
+  generateSuggestedReply,
   getMyTickets,
   getSharedHumanQueue,
   reassignTicket,
@@ -52,6 +53,10 @@ export function useReassignTicketMutation() {
 export function useSendHumanReplyMutation() {
   const invalidate = useTicketInvalidation();
   return useMutation({ mutationFn: sendHumanReply, onSuccess: invalidate });
+}
+
+export function useGenerateSuggestedReplyMutation() {
+  return useMutation({ mutationFn: generateSuggestedReply });
 }
 
 export function useResolveHumanTicketMutation() {

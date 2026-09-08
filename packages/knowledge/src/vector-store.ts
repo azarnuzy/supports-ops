@@ -76,6 +76,7 @@ export type ChunkSearchResult = {
   content: string;
   position: number;
   similarity: number;
+  visibility: KnowledgeVisibility;
 };
 
 type RawChunkRow = {
@@ -84,6 +85,7 @@ type RawChunkRow = {
   content: string;
   position: number;
   similarity: number | string;
+  visibility: KnowledgeVisibility;
 };
 
 const DEFAULT_SEARCH_LIMIT = 5;
@@ -107,7 +109,7 @@ export async function searchChunks(
   const retrievalMode = params.retrievalMode ?? "CUSTOMER";
 
   const rows = await db.$queryRaw<RawChunkRow[]>`
-    SELECT "id", "knowledgeSourceId", "content", "position",
+    SELECT "id", "knowledgeSourceId", "content", "position", "visibility",
            1 - ("embedding" <=> ${queryVector}::vector) AS similarity
     FROM "Chunk"
     WHERE "workspaceId" = ${params.workspaceId}
@@ -130,6 +132,7 @@ export async function searchChunks(
       knowledgeSourceId: row.knowledgeSourceId,
       position: row.position,
       similarity: Number(row.similarity),
+      visibility: row.visibility,
     }))
     .filter((result) => result.similarity >= minSimilarity);
 }

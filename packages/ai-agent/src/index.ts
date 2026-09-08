@@ -9,6 +9,8 @@ export { createReplyModel, ReplyGenerationFailedError, streamReply } from "./rep
 export {
   EscalationSummaryGenerationFailedError,
   generateEscalationSummary,
+  generateSuggestedReply,
+  SuggestedReplyGenerationFailedError,
 } from "./handoff";
 export type {
   ClassificationDecision,

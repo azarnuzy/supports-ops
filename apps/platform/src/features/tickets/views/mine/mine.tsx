@@ -8,6 +8,7 @@ import { PlatformAppShell } from "../../../app-shell";
 import {
   myTicketsQueryOptions,
   useResolveHumanTicketMutation,
+  useGenerateSuggestedReplyMutation,
   useSendHumanReplyMutation,
   useTicketEvents,
 } from "../../tickets.hooks";
@@ -16,6 +17,7 @@ const MyTicketsView = () => {
   const tickets = useQuery(myTicketsQueryOptions);
   const reply = useSendHumanReplyMutation();
   const resolve = useResolveHumanTicketMutation();
+  const suggestedReply = useGenerateSuggestedReplyMutation();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   useTicketEvents();
   return (
@@ -82,10 +84,23 @@ const MyTicketsView = () => {
                     value={drafts[ticket.id] ?? ""}
                   />
                   <div className="flex gap-2">
+                    <Button
+                      disabled={suggestedReply.isPending}
+                      onClick={() =>
+                        suggestedReply.mutate(ticket.id, {
+                          onSuccess: ({ suggestedReply: draft }) =>
+                            setDrafts((value) => ({ ...value, [ticket.id]: draft.content })),
+                        })
+                      }
+                      type="button"
+                      variant="outline"
+                    >
+                      {suggestedReply.isPending ? "Drafting…" : "Draft suggested reply"}
+                    </Button>
                     <Button disabled={reply.isPending || !drafts[ticket.id]?.trim()} type="submit">Send reply</Button>
                     <Button disabled={resolve.isPending} onClick={() => resolve.mutate(ticket.id)} type="button" variant="outline">Resolve Ticket</Button>
                   </div>
-                  {reply.isError || resolve.isError ? <p className="text-destructive">Unable to update this Ticket. Please try again.</p> : null}
+                  {reply.isError || resolve.isError || suggestedReply.isError ? <p className="text-destructive">Unable to update this Ticket. Please try again.</p> : null}
                 </form>
               </div>
             ))}

@@ -1,6 +1,7 @@
 import {
   claimTicket as claimTicketRequest,
   createApiClient,
+  generateSuggestedReply as generateSuggestedReplyRequest,
   listMyTickets as listMyTicketsRequest,
   listSharedHumanQueue as listSharedHumanQueueRequest,
   reassignTicket as reassignTicketRequest,
@@ -29,6 +30,10 @@ export function reassignTicket(input: { id: string; humanAgentId: string }) {
 
 export function sendHumanReply(input: { id: string; content: string }) {
   return sendHumanReplyRequest(apiClient, input.id, input.content);
+}
+
+export function generateSuggestedReply(id: string) {
+  return generateSuggestedReplyRequest(apiClient, id);
 }
 
 export function resolveHumanTicket(id: string) {
