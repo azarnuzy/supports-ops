@@ -10,7 +10,8 @@ import {
 } from "@repo/knowledge";
 import { BusinessToolError, createBusinessTools } from "@repo/tools";
 import { aiAgentConfig, apiConfig, embeddingConfig } from "../../config";
-import { prisma, unscopedPrisma } from "../../utils/prisma";
+import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
+import type { ListTicketsQuery } from "./schema";
 import {
   cancelTicketGeneration,
   publishTicketQueueEvent,
@@ -52,6 +53,141 @@ export class TicketNotOwnedError extends Error {}
 export class SuggestedReplyNotConfiguredError extends Error {}
 export class TicketNotAvailableForTakeoverError extends Error {}
 export class TicketNotFoundError extends Error {}
+export class InvalidTicketsCursorError extends Error {
+  constructor() {
+    super("Invalid Tickets cursor.");
+  }
+}
+
+type InboxUser = { id: string; role: "ADMIN" | "HUMAN_AGENT" };
+
+const ticketListSelect = {
+  assignedHumanAgent: { select: { id: true, name: true } },
+  category: true,
+  createdAt: true,
+  customerIdentity: { select: { email: true, id: true, name: true } },
+  id: true,
+  priority: true,
+  resolvedAt: true,
+  status: true,
+  title: true,
+  updatedAt: true,
+} as const;
+
+const ticketDetailSelect = {
+  ...ticketListSelect,
+  channel: { select: { channelType: true, id: true } },
+  escalatedAt: true,
+  escalationReason: true,
+  escalationSummary: true,
+  escalationSummaryStatus: true,
+  resolutionReason: true,
+  resolvedBy: true,
+  aiActivities: {
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true, eventType: true, id: true, metadata: true },
+  },
+  messages: {
+    orderBy: { position: "asc" },
+    select: {
+      attachments: {
+        select: {
+          fileName: true,
+          id: true,
+          mimeType: true,
+          processingStatus: true,
+          sizeBytes: true,
+          storageKey: true,
+        },
+      },
+      content: true,
+      createdAt: true,
+      deliveryStatus: true,
+      id: true,
+      position: true,
+      senderType: true,
+      senderUserId: true,
+    },
+  },
+} as const;
+
+/** An Admin sees the whole Workspace; a Human Agent sees the queue, their own
+ * Tickets, and Tickets they previously resolved — never the whole Workspace. */
+function ticketVisibilityWhere(user: InboxUser): Prisma.TicketWhereInput {
+  if (user.role === "ADMIN") return {};
+  return {
+    OR: [
+      { assignedHumanAgentId: null, status: "ESCALATED" },
+      { assignedHumanAgentId: user.id },
+      { resolvedBy: user.id },
+    ],
+  };
+}
+
+export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
+  const cursorTicket = filters.cursor
+    ? await prisma.ticket.findUnique({
+        select: { createdAt: true, id: true },
+        where: { id: filters.cursor },
+      })
+    : null;
+  if (filters.cursor && !cursorTicket) throw new InvalidTicketsCursorError();
+
+  const where: Prisma.TicketWhereInput = {
+    AND: [
+      ticketVisibilityWhere(user),
+      { deletedAt: null },
+      ...(filters.status?.length ? [{ status: { in: filters.status } }] : []),
+      ...(filters.category?.length ? [{ category: { in: filters.category } }] : []),
+      ...(filters.priority?.length ? [{ priority: { in: filters.priority } }] : []),
+      ...(filters.assigneeId ? [{ assignedHumanAgentId: filters.assigneeId }] : []),
+      ...(filters.search
+        ? [
+            {
+              customerIdentity: {
+                OR: [
+                  { name: { contains: filters.search, mode: "insensitive" as const } },
+                  { email: { contains: filters.search, mode: "insensitive" as const } },
+                ],
+              },
+            },
+          ]
+        : []),
+      ...(cursorTicket
+        ? [
+            {
+              OR: [
+                { createdAt: { lt: cursorTicket.createdAt } },
+                { AND: [{ createdAt: cursorTicket.createdAt }, { id: { lt: cursorTicket.id } }] },
+              ],
+            },
+          ]
+        : []),
+    ],
+  };
+
+  const tickets = await prisma.ticket.findMany({
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: ticketListSelect,
+    take: filters.limit + 1,
+    where,
+  });
+
+  const visibleTickets = tickets.slice(0, filters.limit);
+  return {
+    nextCursor: tickets.length > filters.limit ? (visibleTickets.at(-1)?.id ?? null) : null,
+    tickets: visibleTickets,
+  };
+}
+
+export async function getTicketDetail(ticketId: string, user: InboxUser) {
+  const ticket = await prisma.ticket.findFirst({
+    select: ticketDetailSelect,
+    where: { AND: [{ deletedAt: null, id: ticketId }, ticketVisibilityWhere(user)] },
+  });
+  if (!ticket) throw new TicketNotFoundError();
+  return ticket;
+}
 
 export function listSharedHumanQueue() {
   return prisma.ticket.findMany({

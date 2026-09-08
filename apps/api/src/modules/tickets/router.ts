@@ -4,15 +4,18 @@ import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
 import { subscribeToTicketQueueEvents } from "../widget/realtime";
-import { humanReplySchema, reassignTicketSchema } from "./schema";
+import { humanReplySchema, listTicketsQuerySchema, reassignTicketSchema } from "./schema";
 import {
   claimTicket,
   completeHandoff,
   deleteTicket,
+  getTicketDetail,
   HumanAgentNotFoundError,
+  InvalidTicketsCursorError,
   listMyTickets,
   listAiHandlingTickets,
   listSharedHumanQueue,
+  listTickets,
   reassignTicket,
   suggestReply,
   SuggestedReplyNotConfiguredError,
@@ -26,6 +29,17 @@ import {
 } from "./services";
 
 export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
+  .get("/", zValidator("query", listTicketsQuerySchema), async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    try {
+      return c.json(await listTickets(user, c.req.valid("query")), 200);
+    } catch (error) {
+      if (error instanceof InvalidTicketsCursorError)
+        return c.json({ error: "invalid_cursor" }, 400);
+      throw error;
+    }
+  })
   .get("/queue", async (c) => {
     if (!c.get("user")) return c.json({ error: "unauthorized" }, 401);
     return c.json({ tickets: await listSharedHumanQueue() }, 200);
@@ -39,6 +53,16 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     const user = requireAdmin(c);
     if (!user) return c.json({ error: "forbidden" }, 403);
     return c.json({ tickets: await listAiHandlingTickets(user.workspaceId) }, 200);
+  })
+  .get("/:id", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    try {
+      return c.json({ ticket: await getTicketDetail(c.req.param("id"), user) }, 200);
+    } catch (error) {
+      if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
+      throw error;
+    }
   })
   .get("/queue/events", async (c) => {
     const user = c.get("user");
