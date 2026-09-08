@@ -52,6 +52,8 @@ export type CreateHumanAgentInput = {
 };
 
 export type TicketPriority = "LOW" | "NORMAL" | "HIGH";
+export type TicketStatus = "AI_HANDLING" | "ESCALATED" | "HUMAN_HANDLING" | "RESOLVED";
+export type TicketCategory = "ACCOUNT" | "BILLING" | "SUBSCRIPTION" | "TECHNICAL" | "GENERAL";
 export type TicketMessage = {
   content: string;
   createdAt: string;
@@ -73,7 +75,96 @@ export type SupportTicket = {
   messages: TicketMessage[];
 };
 
+export type TicketListItem = {
+  assignedHumanAgent: { id: string; name: string } | null;
+  category: TicketCategory;
+  createdAt: string;
+  customerIdentity: { email: string; id: string; name: string };
+  id: string;
+  priority: TicketPriority;
+  resolvedAt: string | null;
+  status: TicketStatus;
+  title: string;
+  updatedAt: string;
+};
+
+export type TicketAttachment = {
+  fileName: string;
+  id: string;
+  mimeType: string;
+  processingStatus: "PROCESSING" | "READY" | "FAILED";
+  sizeBytes: number;
+  storageKey: string;
+};
+
+export type TicketDetailMessage = TicketMessage & {
+  attachments: TicketAttachment[];
+  id: string;
+  senderUserId: string | null;
+};
+
+export type TicketActivity = {
+  createdAt: string;
+  eventType: string;
+  id: string;
+  metadata: Record<string, unknown>;
+};
+
+export type TicketDetail = TicketListItem & {
+  aiActivities: TicketActivity[];
+  channel: { channelType: "WEB" | "WHATSAPP"; id: string };
+  escalatedAt: string | null;
+  escalationReason: string | null;
+  escalationSummary: string | null;
+  escalationSummaryStatus: "PENDING" | "READY" | "FAILED";
+  messages: TicketDetailMessage[];
+  resolutionReason: string | null;
+  resolvedBy: string | null;
+};
+
+export type ListTicketsFilters = {
+  assigneeId?: string;
+  category?: TicketCategory[];
+  cursor?: string;
+  limit?: number;
+  priority?: TicketPriority[];
+  search?: string;
+  status?: TicketStatus[];
+};
+
 export class TicketAlreadyClaimedApiError extends Error {}
+
+export async function listTickets(client: ApiClient, filters: ListTicketsFilters = {}) {
+  const response = await client.tickets.$get({
+    query: {
+      ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
+      ...(filters.category?.length ? { category: filters.category.join(",") } : {}),
+      ...(filters.cursor ? { cursor: filters.cursor } : {}),
+      ...(filters.limit ? { limit: String(filters.limit) } : {}),
+      ...(filters.priority?.length ? { priority: filters.priority.join(",") } : {}),
+      ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
+    },
+  });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (!response.ok) throw new Error("Failed to load Tickets.");
+  return (await response.json()) as { nextCursor: string | null; tickets: TicketListItem[] };
+}
+
+export class TicketNotFoundApiError extends Error {
+  constructor() {
+    super("This Ticket no longer exists.");
+    this.name = "TicketNotFoundApiError";
+  }
+}
+
+export async function getTicketDetail(client: ApiClient, id: string) {
+  const response = await client.tickets[":id"].$get({ param: { id } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 404) throw new TicketNotFoundApiError();
+  if (!response.ok) throw new Error("Failed to load the Ticket.");
+  return (await response.json()) as { ticket: TicketDetail };
+}
 
 export async function listSharedHumanQueue(client: ApiClient) {
   const response = await client.tickets.queue.$get();
