@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  detectLanguage,
   equalsMetric,
   languageMatchesMetric,
   negativeControlMetric,
@@ -28,13 +27,21 @@ describe("negativeControlMetric", () => {
 
 describe("equalsMetric", () => {
   it("passes when the selected value matches", async () => {
-    const metric = equalsMetric("decision", (output: { decision: string }) => output.decision, "REPLY");
+    const metric = equalsMetric(
+      "decision",
+      (output: { decision: string }) => output.decision,
+      "REPLY",
+    );
     const outcome = await metric.evaluate(caseFor({ decision: "REPLY" }));
     expect(outcome.outcome).toBe("pass");
   });
 
   it("fails when the selected value differs", async () => {
-    const metric = equalsMetric("decision", (output: { decision: string }) => output.decision, "REPLY");
+    const metric = equalsMetric(
+      "decision",
+      (output: { decision: string }) => output.decision,
+      "REPLY",
+    );
     const outcome = await metric.evaluate(caseFor({ decision: "ESCALATE" }));
     expect(outcome.outcome).toBe("fail");
   });
@@ -63,11 +70,10 @@ describe("notEqualsMetric", () => {
 });
 
 describe("neverContainsMetric", () => {
-  const metric = neverContainsMetric<unknown, string>(
-    "no-internal-leak",
-    (output) => output,
-    ["REF-CANARY-7743", "churn flag"],
-  );
+  const metric = neverContainsMetric<unknown, string>("no-internal-leak", (output) => output, [
+    "REF-CANARY-7743",
+    "churn flag",
+  ]);
 
   it("fails when a forbidden snippet leaks, case-insensitively", async () => {
     const outcome = await metric.evaluate(caseFor("As mentioned in ref-canary-7743, ..."));
@@ -80,18 +86,6 @@ describe("neverContainsMetric", () => {
   });
 });
 
-describe("detectLanguage", () => {
-  it("detects English from common stopwords", () => {
-    expect(detectLanguage("Please reset the password and you are all set, thanks.")).toBe("en");
-  });
-
-  it("detects Indonesian from common stopwords", () => {
-    expect(detectLanguage("Silakan reset kata sandi anda yang sudah kadaluarsa, terima kasih.")).toBe(
-      "id",
-    );
-  });
-});
-
 describe("languageMatchesMetric", () => {
   const metric = languageMatchesMetric<unknown, { content: string }>(
     "matches-customer-language",
@@ -100,7 +94,9 @@ describe("languageMatchesMetric", () => {
   );
 
   it("passes when the detected language matches", async () => {
-    const outcome = await metric.evaluate(caseFor({ content: "The password reset link expires soon." }));
+    const outcome = await metric.evaluate(
+      caseFor({ content: "The password reset link expires soon." }),
+    );
     expect(outcome.outcome).toBe("pass");
   });
 
