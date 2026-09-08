@@ -1,8 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { createOpenAiEmbeddingClient, chunkText, replaceChunks } from "../packages/knowledge/src/index";
+import {
+  createOpenAiEmbeddingClient,
+  chunkText,
+  replaceChunks,
+} from "../packages/knowledge/src/index";
 import { embeddingConfig } from "../apps/api/src/config";
 import { updateWebWidgetConfig } from "../apps/api/src/modules/widget-config/services";
-import { EmailAlreadyInUseError, registerAdminWorkspace } from "../apps/api/src/modules/registration/services";
+import {
+  EmailAlreadyInUseError,
+  registerAdminWorkspace,
+} from "../apps/api/src/modules/registration/services";
 import {
   HumanAgentEmailAlreadyInUseError,
   createHumanAgent,

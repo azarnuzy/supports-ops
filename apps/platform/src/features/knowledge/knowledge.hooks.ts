@@ -22,8 +22,9 @@ export function useKnowledgeSourceEvents() {
 
   useEffect(
     () =>
-      subscribeToKnowledgeSourceEvents(() =>
-        void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
+      subscribeToKnowledgeSourceEvents(
+        () =>
+          void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
       ),
     [queryClient],
   );

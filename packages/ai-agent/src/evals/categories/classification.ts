@@ -18,9 +18,12 @@ const categoryMatchesExpected = defineMetric<
   dataType: "CATEGORICAL",
   evaluate({ output, case: testCase }) {
     if (!output.qualifies) {
-      return EvalOutcome.invalid("message did not qualify as a support request; no category to check", {
-        kind: "target",
-      });
+      return EvalOutcome.invalid(
+        "message did not qualify as a support request; no category to check",
+        {
+          kind: "target",
+        },
+      );
     }
     const expected = testCase.expected?.category;
     if (!expected) {

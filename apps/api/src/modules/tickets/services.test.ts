@@ -166,7 +166,6 @@ describe("getTicketDetail", () => {
     // opened through the download endpoint, so no storage key is exposed.
     expect(call.select.webSession).toEqual({ select: { createdAt: true } });
     expect(call.select.messages.select.attachments.select.storageKey).toBeUndefined();
-
   });
   it("throws when the Ticket does not exist or is not visible", async () => {
     mocks.ticketFindFirst.mockResolvedValue(null);

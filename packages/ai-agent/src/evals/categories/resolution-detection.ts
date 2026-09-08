@@ -58,11 +58,17 @@ export function buildResolutionDetectionBareThanksSuite(
     cases: [
       {
         id: "bare-thanks-does-not-resolve",
-        input: { customerMessage: "thanks", sources: sourcesFrom(customerSafeKnowledge.passwordReset) },
+        input: {
+          customerMessage: "thanks",
+          sources: sourcesFrom(customerSafeKnowledge.passwordReset),
+        },
       },
       {
         id: "bare-ok-does-not-resolve",
-        input: { customerMessage: "oke", sources: sourcesFrom(customerSafeKnowledge.passwordReset) },
+        input: {
+          customerMessage: "oke",
+          sources: sourcesFrom(customerSafeKnowledge.passwordReset),
+        },
       },
     ],
   };

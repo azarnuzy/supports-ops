@@ -50,7 +50,9 @@ const MyTicketsView = () => {
                   <p>Preparing the Escalation Summary…</p>
                 ) : null}
                 {ticket.escalationSummaryStatus === "FAILED" ? (
-                  <p>The Escalation Summary could not be generated. Review the conversation directly.</p>
+                  <p>
+                    The Escalation Summary could not be generated. Review the conversation directly.
+                  </p>
                 ) : null}
                 {ticket.escalationSummaryStatus === "READY" && ticket.escalationSummary ? (
                   <article className="whitespace-pre-wrap rounded-md bg-muted p-3 text-foreground">
@@ -59,11 +61,18 @@ const MyTicketsView = () => {
                 ) : null}
                 <div className="grid gap-2 rounded-md bg-muted p-3 text-foreground">
                   {ticket.messages.map((message) => (
-                    <p key={message.position} className={message.senderType === "CUSTOMER" ? "font-medium" : ""}>
-                      <span className="text-muted-foreground">{message.senderType.replace("_", " ")}: </span>
+                    <p
+                      key={message.position}
+                      className={message.senderType === "CUSTOMER" ? "font-medium" : ""}
+                    >
+                      <span className="text-muted-foreground">
+                        {message.senderType.replace("_", " ")}:{" "}
+                      </span>
                       {message.content}
                       {message.senderType === "HUMAN_AGENT" && message.deliveryStatus !== "SENT" ? (
-                        <span className="ml-2 text-xs text-muted-foreground">{message.deliveryStatus.toLowerCase()}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {message.deliveryStatus.toLowerCase()}
+                        </span>
                       ) : null}
                     </p>
                   ))}
@@ -74,12 +83,17 @@ const MyTicketsView = () => {
                     event.preventDefault();
                     const content = drafts[ticket.id]?.trim();
                     if (!content) return;
-                    reply.mutate({ id: ticket.id, content }, { onSuccess: () => setDrafts((value) => ({ ...value, [ticket.id]: "" })) });
+                    reply.mutate(
+                      { id: ticket.id, content },
+                      { onSuccess: () => setDrafts((value) => ({ ...value, [ticket.id]: "" })) },
+                    );
                   }}
                 >
                   <Textarea
                     aria-label={`Reply to ${ticket.customerIdentity.name}`}
-                    onChange={(event) => setDrafts((value) => ({ ...value, [ticket.id]: event.target.value }))}
+                    onChange={(event) =>
+                      setDrafts((value) => ({ ...value, [ticket.id]: event.target.value }))
+                    }
                     placeholder="Write a reply…"
                     value={drafts[ticket.id] ?? ""}
                   />
@@ -97,10 +111,23 @@ const MyTicketsView = () => {
                     >
                       {suggestedReply.isPending ? "Drafting…" : "Draft suggested reply"}
                     </Button>
-                    <Button disabled={reply.isPending || !drafts[ticket.id]?.trim()} type="submit">Send reply</Button>
-                    <Button disabled={resolve.isPending} onClick={() => resolve.mutate(ticket.id)} type="button" variant="outline">Resolve Ticket</Button>
+                    <Button disabled={reply.isPending || !drafts[ticket.id]?.trim()} type="submit">
+                      Send reply
+                    </Button>
+                    <Button
+                      disabled={resolve.isPending}
+                      onClick={() => resolve.mutate(ticket.id)}
+                      type="button"
+                      variant="outline"
+                    >
+                      Resolve Ticket
+                    </Button>
                   </div>
-                  {reply.isError || resolve.isError || suggestedReply.isError ? <p className="text-destructive">Unable to update this Ticket. Please try again.</p> : null}
+                  {reply.isError || resolve.isError || suggestedReply.isError ? (
+                    <p className="text-destructive">
+                      Unable to update this Ticket. Please try again.
+                    </p>
+                  ) : null}
                 </form>
               </div>
             ))}

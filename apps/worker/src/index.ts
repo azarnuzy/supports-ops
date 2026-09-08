@@ -7,7 +7,10 @@ import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
 import { processAutoResolveJob, processFollowUpJob } from "./follow-up";
 import type { AutoResolveJob, FollowUpJob } from "./follow-up";
-import { processTicketKnowledgeIndexJob, type TicketKnowledgeIndexJob } from "./ticket-knowledge-index";
+import {
+  processTicketKnowledgeIndexJob,
+  type TicketKnowledgeIndexJob,
+} from "./ticket-knowledge-index";
 
 export type { ExampleJob } from "./types";
 
@@ -73,10 +76,14 @@ export function startAttachmentProcessWorker() {
 }
 
 export function startFollowUpWorker() {
-  return new Worker<FollowUpJob | AutoResolveJob>("ticket-follow-up", async (job) => {
-    if (job.name === "follow-up") return processFollowUpJob({ data: job.data as FollowUpJob });
-    return processAutoResolveJob({ data: job.data as AutoResolveJob });
-  }, { connection });
+  return new Worker<FollowUpJob | AutoResolveJob>(
+    "ticket-follow-up",
+    async (job) => {
+      if (job.name === "follow-up") return processFollowUpJob({ data: job.data as FollowUpJob });
+      return processAutoResolveJob({ data: job.data as AutoResolveJob });
+    },
+    { connection },
+  );
 }
 
 export function startTicketKnowledgeIndexWorker() {

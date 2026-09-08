@@ -35,7 +35,10 @@ export function buildEscalationForbiddenSuite(
         id: "clarifiable-ambiguity-does-not-escalate-on-first-ask",
         input: {
           customerMessage: "It's not working.",
-          sources: sourcesFrom(customerSafeKnowledge.passwordReset, customerSafeKnowledge.exportFormat),
+          sources: sourcesFrom(
+            customerSafeKnowledge.passwordReset,
+            customerSafeKnowledge.exportFormat,
+          ),
           clarificationCount: 0,
         },
       },
