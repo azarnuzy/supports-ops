@@ -66,7 +66,14 @@ describe("searchChunks", () => {
   it("scopes the query to the given Workspace and embedding", async () => {
     const db = createDb();
     db.$queryRaw.mockResolvedValue([
-      { content: "Answer.", id: "ks1:0", knowledgeSourceId: "ks1", position: 0, similarity: 0.9 },
+      {
+        content: "Answer.",
+        id: "ks1:0",
+        knowledgeSourceId: "ks1",
+        position: 0,
+        similarity: 0.9,
+        visibility: "CUSTOMER_SAFE",
+      },
     ]);
 
     const results = await searchChunks(db, { embedding: [0.1, 0.2], workspaceId: "ws1" });
@@ -82,6 +89,7 @@ describe("searchChunks", () => {
         knowledgeSourceId: "ks1",
         position: 0,
         similarity: 0.9,
+        visibility: "CUSTOMER_SAFE",
       },
     ]);
   });
@@ -107,6 +115,7 @@ describe("searchChunks", () => {
         knowledgeSourceId: "ks1",
         position: 0,
         similarity: 0.5,
+        visibility: "CUSTOMER_SAFE",
       },
       {
         content: "Unrelated.",
@@ -114,6 +123,7 @@ describe("searchChunks", () => {
         knowledgeSourceId: "ks2",
         position: 0,
         similarity: 0.05,
+        visibility: "CUSTOMER_SAFE",
       },
     ]);
 

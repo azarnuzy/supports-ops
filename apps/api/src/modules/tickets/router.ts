@@ -12,6 +12,8 @@ import {
   listMyTickets,
   listSharedHumanQueue,
   reassignTicket,
+  suggestReply,
+  SuggestedReplyNotConfiguredError,
   TicketAlreadyClaimedError,
   TicketNotOwnedError,
   resolveTicket,
@@ -61,6 +63,19 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ message: await sendHumanReply(c.req.param("id"), user.id, c.req.valid("json").content) }, 201);
     } catch (error) {
       if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
+      throw error;
+    }
+  })
+  .post("/:id/suggested-reply", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    try {
+      return c.json({ suggestedReply: await suggestReply(c.req.param("id"), user.id, user.workspaceId) }, 200);
+    } catch (error) {
+      if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
+      if (error instanceof SuggestedReplyNotConfiguredError)
+        return c.json({ error: "copilot_not_configured" }, 503);
       throw error;
     }
   })
