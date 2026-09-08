@@ -17,6 +17,7 @@ import {
   publishWidgetEvent,
 } from "../widget/realtime";
 import { cancelFollowUpTimers } from "../follow-up/queue";
+import { enqueueTicketKnowledgeIndex } from "./queue";
 
 const ticketSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
@@ -491,6 +492,7 @@ export async function resolveTicket(ticketId: string, humanAgentId: string) {
   });
   const delivered = await deliverMessage(closing);
   await cancelFollowUpTimers(ticketId);
+  await enqueueTicketKnowledgeIndex({ ticketId, workspaceId: closing.workspaceId });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "resolved" } });
   await publishTicketQueueEvent(closing.workspaceId);
   return delivered;

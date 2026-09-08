@@ -10,6 +10,7 @@ import {
 import {
   createOpenAiEmbeddingClient as createEmbeddingClient,
   searchChunks as findKnowledgeChunks,
+  searchTicketChunks as findTicketKnowledgeChunks,
 } from "@repo/knowledge";
 import { BusinessToolError, createBusinessTools } from "@repo/tools";
 import { createStorage } from "@repo/storage";
@@ -31,6 +32,7 @@ import {
 } from "./realtime";
 import { enqueueAttachmentProcess } from "./attachment-queue";
 import { cancelFollowUpTimers, scheduleFollowUp } from "../follow-up/queue";
+import { enqueueTicketKnowledgeIndex } from "../tickets/queue";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -314,6 +316,7 @@ export async function generateAiReply(
 ) {
   const ticket = await unscopedPrisma.ticket.findUnique({
     select: {
+      channel: { select: { type: true } },
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
       status: true,
     },
@@ -346,6 +349,15 @@ export async function generateAiReply(
       select: { extractedText: true, id: true },
       where: { deletedAt: null, extractedText: { not: null }, processingStatus: "READY", ticketId },
     });
+    const ticketKnowledge = embedding
+      ? await findTicketKnowledgeChunks(unscopedPrisma, {
+          channelType: ticket.channel.type,
+          customerIdentityId: ticket.customerIdentity.id,
+          embedding,
+          excludeTicketId: ticketId,
+          workspaceId,
+        })
+      : [];
 
     await unscopedPrisma.aiActivity.create({
       data: {
@@ -359,6 +371,20 @@ export async function generateAiReply(
         workspaceId,
       },
     });
+    if (ticketKnowledge.length) {
+      await unscopedPrisma.aiActivity.create({
+        data: {
+          eventType: "TICKET_KNOWLEDGE_RETRIEVED",
+          id: randomUUID(),
+          metadata: {
+            chunkIds: ticketKnowledge.map((chunk) => chunk.chunkId),
+            ticketIds: ticketKnowledge.map((chunk) => chunk.ticketId),
+          },
+          ticketId,
+          workspaceId,
+        },
+      });
+    }
 
     const clarificationCount = await unscopedPrisma.aiActivity.count({
       where: { eventType: "CLARIFICATION_ASKED", ticketId },
@@ -393,6 +419,10 @@ export async function generateAiReply(
                 : [],
             ),
           ],
+          ticketContext: ticketKnowledge.map((chunk) => ({
+            id: chunk.chunkId,
+            content: chunk.content,
+          })),
         });
         break;
       } catch (error) {
@@ -669,6 +699,7 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
   });
   if (!closing) return;
   await cancelFollowUpTimers(ticketId);
+  await enqueueTicketKnowledgeIndex({ ticketId, workspaceId });
   await publishWidgetEvent(ticketId, { type: "message.created", data: closing });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "resolved" } });
   await publishTicketQueueEvent(workspaceId);
