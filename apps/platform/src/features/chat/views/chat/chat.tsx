@@ -45,7 +45,7 @@ import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
 import { cn } from "@repo/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   CalendarIcon,
@@ -122,7 +122,23 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const claim = useClaimTicketMutation();
   const tickets = scope === "unassigned" ? unassignedTickets : mineTickets;
 
-  const [search, setSearch] = useState("");
+  const routeSearch = useSearch({ strict: false });
+  const search = routeSearch.q ?? "";
+  const currentLocation = ticketId
+    ? {
+        params: { ticketId },
+        to:
+          scope === "unassigned"
+            ? ("/chat/unassigned/tickets/$ticketId" as const)
+            : ("/chat/tickets/$ticketId" as const),
+      }
+    : { to: scope === "unassigned" ? ("/chat/unassigned" as const) : ("/chat" as const) };
+  const setSearch = (value: string) =>
+    void navigate({
+      ...currentLocation,
+      replace: true,
+      search: (prev: { q?: string }) => ({ ...prev, q: value || undefined }),
+    });
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
@@ -141,8 +157,18 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     if (first) {
       void navigate(
         scope === "unassigned"
-          ? { params: { ticketId: first.id }, replace: true, to: "/chat/unassigned/tickets/$ticketId" }
-          : { params: { ticketId: first.id }, replace: true, to: "/chat/tickets/$ticketId" },
+          ? {
+              params: { ticketId: first.id },
+              replace: true,
+              search: (prev) => prev,
+              to: "/chat/unassigned/tickets/$ticketId",
+            }
+          : {
+              params: { ticketId: first.id },
+              replace: true,
+              search: (prev) => prev,
+              to: "/chat/tickets/$ticketId",
+            },
       );
     }
   }, [navigate, scope, ticketId, tickets.data]);
@@ -217,6 +243,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
           <div className="border-b p-3">
             <InputGroup>
               <InputGroupInput
+                aria-label="Search Tickets by customer name"
                 placeholder="Search by customer name..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -253,8 +280,16 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                   onSelect={() =>
                     void navigate(
                       scope === "unassigned"
-                        ? { params: { ticketId: row.id }, to: "/chat/unassigned/tickets/$ticketId" }
-                        : { params: { ticketId: row.id }, to: "/chat/tickets/$ticketId" },
+                        ? {
+                            params: { ticketId: row.id },
+                            search: (prev) => prev,
+                            to: "/chat/unassigned/tickets/$ticketId",
+                          }
+                        : {
+                            params: { ticketId: row.id },
+                            search: (prev) => prev,
+                            to: "/chat/tickets/$ticketId",
+                          },
                     )
                   }
                   ticket={row}
