@@ -108,6 +108,7 @@ export type SupportTicket = {
   title: string;
   customerIdentity: { name: string };
   messages: TicketMessage[];
+  unreadCount: number;
 };
 
 export type TicketListItem = {
@@ -120,6 +121,7 @@ export type TicketListItem = {
   resolvedAt: string | null;
   status: TicketStatus;
   title: string;
+  unreadCount: number;
   updatedAt: string;
 };
 
@@ -198,6 +200,24 @@ export async function getTicketDetail(client: ApiClient, id: string) {
   if (response.status === 404) throw new TicketNotFoundApiError();
   if (!response.ok) throw new Error("Failed to load the Ticket.");
   return (await response.json()) as { ticket: TicketDetail };
+}
+
+export async function markTicketRead(client: ApiClient, id: string, position: number) {
+  const response = await client.tickets[":id"].read.$post({ param: { id }, json: { position } });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 404) throw new TicketNotFoundApiError();
+  if (!response.ok) throw new Error("Failed to update read state.");
+  return (await response.json()) as { lastReadPosition: number };
+}
+
+/** Streams realtime updates for one Ticket (new Messages, delivery and
+ * status changes). The event name matches the payload's `type`, so
+ * `addEventListener` handlers stay untyped and generic. */
+export function subscribeToTicketEvents(baseUrl: string, ticketId: string, onEvent: () => void) {
+  const events = new EventSource(`${baseUrl}/tickets/${ticketId}/events`, { withCredentials: true });
+  for (const type of ["message.created", "message.updated", "message.delta", "ticket.status", "attachment.updated"])
+    events.addEventListener(type, onEvent);
+  return events;
 }
 
 /** Attachments open through the signed download URL, never through the raw
