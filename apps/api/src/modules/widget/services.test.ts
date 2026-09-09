@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   webSessionFindUnique: vi.fn(),
   webSessionFindUniqueOrThrow: vi.fn(),
   webSessionUpdate: vi.fn(),
+  getObjectUrl: vi.fn(),
 }));
 
 class FakePrismaKnownRequestError extends Error {
@@ -48,6 +49,11 @@ vi.mock("../../utils/prisma", () => ({
 
 vi.mock("../../config", () => ({
   classificationConfig: mocks.classificationConfig,
+  storageConfig: {},
+}));
+
+vi.mock("@repo/storage", () => ({
+  createStorage: () => ({ getObjectUrl: mocks.getObjectUrl }),
 }));
 
 vi.mock("@repo/ai-agent", () => ({
@@ -65,6 +71,7 @@ const {
   createCustomerMessage,
   customerRequestedHuman,
   resolveByAi,
+  toPublicWidgetConfig,
 } = await import("./services");
 
 const txMock = {
@@ -107,6 +114,7 @@ function resetMocks() {
   mocks.webSessionFindUnique.mockReset();
   mocks.webSessionFindUniqueOrThrow.mockReset();
   mocks.webSessionUpdate.mockReset();
+  mocks.getObjectUrl.mockReset();
   mocks.classificationConfig.apiKey = "sk-test";
 }
 
@@ -268,6 +276,31 @@ describe("customerRequestedHuman", () => {
 
   it("does not treat an ordinary support question as an escalation request", () => {
     expect(customerRequestedHuman("Where can I download my invoice?")).toBe(false);
+  });
+});
+
+describe("toPublicWidgetConfig", () => {
+  beforeEach(resetMocks);
+
+  const baseConfig = {
+    botName: "Support Bot",
+    primaryColor: "#2563eb",
+    welcomeMessage: "Hi! How can we help you today?",
+  };
+
+  it("includes the logo URL when a logo reference is set", () => {
+    mocks.getObjectUrl.mockReturnValue("https://cdn.example.com/logo.png");
+
+    expect(toPublicWidgetConfig({ ...baseConfig, logoKey: "web-widget-logos/w1/logo.png" })).toEqual(
+      { ...baseConfig, logoUrl: "https://cdn.example.com/logo.png" },
+    );
+  });
+
+  it("returns a null logo URL when no logo reference is set", () => {
+    expect(toPublicWidgetConfig({ ...baseConfig, logoKey: null })).toEqual({
+      ...baseConfig,
+      logoUrl: null,
+    });
   });
 });
 

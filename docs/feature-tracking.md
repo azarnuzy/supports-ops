@@ -37,7 +37,7 @@ Status yang dipakai:
 
 | Kemampuan | Status | Yang dapat dicoba | Batasan saat ini |
 | --- | --- | --- | --- |
-| Memuat widget dari embed snippet | Siap dicoba | Pasang snippet pada domain yang diizinkan, lalu buka launcher. | Widget ditolak dari domain di luar allowlist. |
+| Memuat widget dari embed snippet | Siap dicoba | Pasang snippet pada domain yang diizinkan, lalu buka launcher. Header Widget menampilkan logo Workspace bila sudah diunggah di `/settings/widget`, atau ikon chat generik bila belum. | Widget ditolak dari domain di luar allowlist. Ikon pada tombol launcher tetap ikon generik terlepas dari status logo. |
 | Pre-Chat dan Web Session | Siap dicoba | Customer mengisi nama dan email untuk memulai Web Session. | Email Session Link membutuhkan Redis, Worker, dan konfigurasi layanan email. |
 | Mengirim pesan Customer dan balasan AI Agent | Siap dicoba | Pesan pertama membuat Ticket; AI Agent mengambil Knowledge Source Customer-Safe yang sudah dipublish lalu membalas dalam bahasa Customer. Balasan muncul bertahap melalui SSE dan input terkunci selama generasi. Saat Customer mengonfirmasi masalahnya sudah selesai, dalam bahasa apa pun, AI Agent melakukan Resolution otomatis; sekadar ucapan terima kasih tidak dianggap konfirmasi, dan bila maksud Customer tidak jelas AI Agent bertanya dulu apakah masalahnya sudah selesai. | Jika tidak ada sumber yang mendukung jawaban, generasi gagal dua kali, atau permintaan tetap ambigu setelah dua klarifikasi, Ticket dieskalasi; belum ada UI Human Agent untuk menanganinya. Membutuhkan `OPENROUTER_API_KEY`, Postgres, Redis, Worker, dan Knowledge Source Customer-Safe yang dipublish. |
 
