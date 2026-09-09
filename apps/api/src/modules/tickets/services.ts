@@ -93,6 +93,7 @@ const ticketDetailSelect = {
       attachments: {
         select: {
           fileName: true,
+          failureReason: true,
           id: true,
           mimeType: true,
           processingStatus: true,
@@ -113,7 +114,7 @@ const ticketDetailSelect = {
 
 /** An Admin sees the whole Workspace; a Human Agent sees the queue, their own
  * Tickets, and Tickets they previously resolved — never the whole Workspace. */
-function ticketVisibilityWhere(user: InboxUser): Prisma.TicketWhereInput {
+export function ticketVisibilityWhere(user: InboxUser): Prisma.TicketWhereInput {
   if (user.role === "ADMIN") return {};
   return {
     OR: [
