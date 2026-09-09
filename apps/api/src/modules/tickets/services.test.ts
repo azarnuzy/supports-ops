@@ -250,4 +250,38 @@ describe("markTicketRead", () => {
     ).rejects.toBeInstanceOf(TicketNotFoundError);
     expect(mocks.executeRaw).not.toHaveBeenCalled();
   });
+
+  it("persists per-user, and never regresses a stored position, via a GREATEST upsert", async () => {
+    mocks.ticketFindFirst.mockResolvedValue({ messageSeq: 10, workspaceId: "workspace-1" });
+
+    await markTicketRead("t-1", { id: "agent-1", role: "HUMAN_AGENT" }, 3);
+
+    const sql = mocks.executeRaw.mock.calls[0]?.[0] as unknown as { join: (sep: string) => string };
+    expect(sql.join(" ")).toContain("GREATEST");
+    const values = mocks.executeRaw.mock.calls[0]?.slice(1);
+    expect(values).toEqual(expect.arrayContaining(["agent-1", "t-1", 3]));
+  });
+});
+
+describe("unread counts", () => {
+  beforeEach(resetMocks);
+
+  it("scopes the unread query to the requesting user, so one user's read state cannot leak into another's count", async () => {
+    mocks.ticketFindMany.mockResolvedValue([{ createdAt: new Date(), id: "t-1" }]);
+
+    await listTickets({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
+    await listTickets({ id: "agent-2", role: "HUMAN_AGENT" }, { limit: 20 });
+
+    const userIdsQueried = mocks.queryRaw.mock.calls.map((call) => call.slice(1)[0]);
+    expect(userIdsQueried).toEqual(["agent-1", "agent-2"]);
+  });
+
+  it("reports zero unread without querying when no Tickets are visible", async () => {
+    mocks.ticketFindMany.mockResolvedValue([]);
+
+    const result = await listTickets({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
+
+    expect(result.tickets).toEqual([]);
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
 });
