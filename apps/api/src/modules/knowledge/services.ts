@@ -42,16 +42,30 @@ export class EmbeddingNotConfiguredError extends Error {
 }
 
 export async function createManualFaq(input: CreateManualFaqInput): Promise<KnowledgeSourceDto> {
+  const workspaceId = requireWorkspaceId();
   const knowledgeSource = await prisma.knowledgeSource.create({
     data: {
       content: input.content,
       id: randomUUID(),
       sourceType: "MANUAL_FAQ",
-      status: "DRAFT",
+      status: "PROCESSING",
       title: input.title,
       visibility: input.visibility,
-      workspaceId: requireWorkspaceId(),
+      workspaceId,
     },
+  });
+
+  await publishKnowledgeSourceEvent(workspaceId, {
+    knowledgeSourceId: knowledgeSource.id,
+    status: "PROCESSING",
+  });
+  await enqueueKnowledgeIngest({
+    content: input.content,
+    kind: "CONTENT",
+    knowledgeSourceId: knowledgeSource.id,
+    title: input.title,
+    visibility: input.visibility,
+    workspaceId,
   });
 
   return toDto(knowledgeSource);
@@ -79,11 +93,22 @@ export async function createPdfKnowledgeSource(
       id,
       sourceType: "PDF",
       sourceUrl: storageKey,
-      status: "DRAFT",
+      status: "PROCESSING",
       title: file.name,
       visibility,
       workspaceId,
     },
+  });
+  await publishKnowledgeSourceEvent(workspaceId, {
+    knowledgeSourceId: id,
+    status: "PROCESSING",
+  });
+  await enqueueKnowledgeIngest({
+    kind: "PDF",
+    knowledgeSourceId: id,
+    title: file.name,
+    visibility,
+    workspaceId,
   });
   return toDto(knowledgeSource);
 }

@@ -1,10 +1,21 @@
 import { chunkText, createOpenAiEmbeddingClient, replaceChunks } from "@repo/knowledge";
 import { createStorage } from "@repo/storage";
+import { Queue, type ConnectionOptions } from "bullmq";
 import Redis from "ioredis";
 import { embeddingConfig, ingestionConfig, storageConfig } from "./config";
 import { prisma } from "./prisma";
 
 let publisher: Redis | undefined;
+let ingestQueue: Queue<KnowledgeIngestJob> | undefined;
+
+function getIngestQueue() {
+  const connection: ConnectionOptions = {
+    maxRetriesPerRequest: null,
+    url: process.env.REDIS_URL ?? "redis://localhost:16379",
+  };
+  ingestQueue ??= new Queue<KnowledgeIngestJob>("knowledge-ingest", { connection });
+  return ingestQueue;
+}
 
 type KnowledgeIngestStage =
   | "UPLOADING"
@@ -202,20 +213,38 @@ async function crawlDocumentation(parentId: string, workspaceId: string) {
   if (!parent?.sourceUrl) throw new Error("Documentation URL is missing.");
   const pages = await crawlPages(parent.sourceUrl, 1, 25);
   await Promise.allSettled(
-    pages.map((page) =>
-      prisma.knowledgeSource.create({
+    pages.map(async (page) => {
+      const child = await prisma.knowledgeSource.create({
         data: {
           id: crypto.randomUUID(),
           parentId,
           sourceType: "URL",
           sourceUrl: page.url,
-          status: "DRAFT",
+          status: "PROCESSING",
           title: page.title,
           visibility: parent.visibility,
           workspaceId,
         },
-      }),
-    ),
+      });
+      await publishStatus(workspaceId, child.id, "PROCESSING");
+      await getIngestQueue().add(
+        "ingest",
+        {
+          content: page.content,
+          kind: "CONTENT",
+          knowledgeSourceId: child.id,
+          title: page.title,
+          visibility: parent.visibility,
+          workspaceId,
+        },
+        {
+          attempts: 3,
+          backoff: { delay: 2_000, type: "exponential" },
+          removeOnComplete: 100,
+          removeOnFail: 500,
+        },
+      );
+    }),
   );
   await prisma.knowledgeSource.update({
     data: { failureReason: null, status: "READY" },

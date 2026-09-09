@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   knowledgeSourceFindFirst: vi.fn(),
   knowledgeSourceFindMany: vi.fn(),
   knowledgeSourceUpdate: vi.fn(),
+  putObject: vi.fn(),
   requireWorkspaceId: vi.fn(),
   searchChunks: vi.fn(),
   transaction: vi.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
@@ -20,6 +21,11 @@ vi.mock("../../config", () => ({
     baseUrl: "https://openrouter.ai/api/v1",
     modelId: "openai/text-embedding-3-small",
   },
+  storageConfig: { bucket: "test-bucket" },
+}));
+
+vi.mock("@repo/storage", () => ({
+  createStorage: () => ({ putObject: mocks.putObject }),
 }));
 
 vi.mock("../../utils/prisma", () => ({
@@ -50,6 +56,7 @@ vi.mock("@repo/knowledge", () => ({
 
 const {
   createManualFaq,
+  createPdfKnowledgeSource,
   deleteKnowledgeSource,
   KnowledgeSourceMissingContentError,
   KnowledgeSourceNotFoundError,
@@ -82,6 +89,7 @@ function resetMocks() {
   mocks.knowledgeSourceFindFirst.mockReset();
   mocks.knowledgeSourceFindMany.mockReset();
   mocks.knowledgeSourceUpdate.mockReset();
+  mocks.putObject.mockReset().mockResolvedValue(undefined);
   mocks.requireWorkspaceId.mockReset().mockReturnValue("ws-1");
   mocks.searchChunks.mockReset();
   mocks.transaction
@@ -92,8 +100,8 @@ function resetMocks() {
 describe("createManualFaq", () => {
   beforeEach(resetMocks);
 
-  it("creates a DRAFT Knowledge Source scoped to the current Workspace", async () => {
-    mocks.knowledgeSourceCreate.mockResolvedValue(draftSource);
+  it("creates a PROCESSING Knowledge Source and immediately enqueues ingestion", async () => {
+    mocks.knowledgeSourceCreate.mockResolvedValue({ ...draftSource, status: "PROCESSING" });
 
     const result = await createManualFaq({
       content: "Click forgot password.",
@@ -105,13 +113,72 @@ describe("createManualFaq", () => {
       data: expect.objectContaining({
         content: "Click forgot password.",
         sourceType: "MANUAL_FAQ",
-        status: "DRAFT",
+        status: "PROCESSING",
         title: "How to reset password",
         visibility: "CUSTOMER_SAFE",
         workspaceId: "ws-1",
       }),
     });
-    expect(result.status).toBe("DRAFT");
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith({
+      content: "Click forgot password.",
+      kind: "CONTENT",
+      knowledgeSourceId: "ks-1",
+      title: "How to reset password",
+      visibility: "CUSTOMER_SAFE",
+      workspaceId: "ws-1",
+    });
+    expect(result.status).toBe("PROCESSING");
+  });
+});
+
+describe("createPdfKnowledgeSource", () => {
+  beforeEach(resetMocks);
+
+  function pdfFile() {
+    return new File([new Uint8Array([1, 2, 3])], "manual.pdf", { type: "application/pdf" });
+  }
+
+  it("stores the file, creates a PROCESSING source, and immediately enqueues ingestion", async () => {
+    mocks.knowledgeSourceCreate.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PROCESSING",
+      title: "manual.pdf",
+    });
+
+    const result = await createPdfKnowledgeSource(pdfFile(), "CUSTOMER_SAFE");
+
+    expect(mocks.putObject).toHaveBeenCalledTimes(1);
+    expect(mocks.knowledgeSourceCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sourceType: "PDF",
+        status: "PROCESSING",
+        title: "manual.pdf",
+        visibility: "CUSTOMER_SAFE",
+        workspaceId: "ws-1",
+      }),
+    });
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "PDF",
+        title: "manual.pdf",
+        visibility: "CUSTOMER_SAFE",
+        workspaceId: "ws-1",
+      }),
+    );
+    expect(result.status).toBe("PROCESSING");
+  });
+
+  it("rejects a non-PDF file without touching storage or the queue", async () => {
+    const file = new File([new Uint8Array([1])], "manual.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    await expect(createPdfKnowledgeSource(file, "CUSTOMER_SAFE")).rejects.toThrow(
+      "Upload a PDF file.",
+    );
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.enqueueKnowledgeIngest).not.toHaveBeenCalled();
   });
 });
 
