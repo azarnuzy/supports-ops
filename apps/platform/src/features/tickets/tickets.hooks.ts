@@ -1,6 +1,6 @@
-import type { ListTicketsFilters } from "@repo/api-client";
+import type { ListTicketsFilters, TicketDetail } from "@repo/api-client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { queryKeys } from "../../lib/query-keys";
 import {
   claimTicket,
@@ -10,11 +10,13 @@ import {
   getSharedHumanQueue,
   getTicketDetail,
   getTickets,
+  markTicketRead,
   reassignTicket,
   resolveHumanTicket,
   retryHumanReply,
   sendHumanReply,
   sendHumanAttachments,
+  subscribeToTicketEvents,
   takeOverTicket,
   subscribeToSharedHumanQueue,
 } from "./tickets.services";
@@ -66,6 +68,68 @@ export function useSharedHumanQueueEvents() {
 export function useTicketEvents() {
   const invalidate = useTicketInvalidation();
   useEffect(() => subscribeToSharedHumanQueue(() => void invalidate()), [invalidate]);
+}
+
+/** Realtime for the currently open Ticket: new Messages, delivery, and
+ * status changes refetch the detail query rather than patching the cache in
+ * place, so duplicate or out-of-order SSE delivery can never duplicate or
+ * misorder rendered Messages — the refetch always reflects the database. */
+export function useTicketDetailEvents(ticketId: string | undefined) {
+  const queryClient = useQueryClient();
+  const invalidateLists = useTicketInvalidation();
+  const [reconnecting, setReconnecting] = useState(false);
+
+  useEffect(() => {
+    if (!ticketId) return;
+    setReconnecting(false);
+    const onEvent = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.ticket(ticketId) });
+      void invalidateLists();
+    };
+    return subscribeToTicketEvents(ticketId, onEvent, setReconnecting);
+  }, [invalidateLists, queryClient, ticketId]);
+
+  return { reconnecting };
+}
+
+/** Marks a Ticket read only while its view is active, the browser is
+ * focused, and there is a newest position to advance to — never while
+ * backgrounded or on a different Ticket.
+ * ponytail: assumes the transcript is scrolled to the newest Message (the
+ * scroller already pins to bottom), rather than tracking visibility of the
+ * last bubble with an IntersectionObserver — add that if the scroller ever
+ * stops auto-pinning. */
+export function useMarkTicketReadOnView(ticket: TicketDetail | undefined) {
+  const queryClient = useQueryClient();
+  const lastSent = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!ticket) return;
+    const latestPosition = ticket.messages.at(-1)?.position;
+    if (latestPosition === undefined) return;
+    const key = `${ticket.id}:${latestPosition}`;
+
+    const attempt = () => {
+      if (lastSent.current === key) return;
+      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+      lastSent.current = key;
+      void markTicketRead({ id: ticket.id, position: latestPosition }).then(() =>
+        queryClient.setQueryData(
+          queryKeys.workspace.ticket(ticket.id),
+          (current: { ticket: TicketDetail } | undefined) =>
+            current ? { ticket: { ...current.ticket, unreadCount: 0 } } : current,
+        ),
+      );
+    };
+
+    attempt();
+    document.addEventListener("visibilitychange", attempt);
+    window.addEventListener("focus", attempt);
+    return () => {
+      document.removeEventListener("visibilitychange", attempt);
+      window.removeEventListener("focus", attempt);
+    };
+  }, [queryClient, ticket]);
 }
 
 export function useClaimTicketMutation() {
