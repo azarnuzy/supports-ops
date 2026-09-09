@@ -16,6 +16,10 @@ export const resolveTicketSchema = z.object({
   resolutionReason: z.literal("HUMAN_RESOLVED"),
 });
 
+export const markTicketReadSchema = z.object({
+  position: z.number().int().min(0),
+});
+
 function commaSeparatedEnum<T extends [string, ...string[]]>(values: T) {
   return z
     .string()

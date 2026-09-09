@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  executeRaw: vi.fn(),
+  queryRaw: vi.fn(),
   ticketFindFirst: vi.fn(),
   ticketFindMany: vi.fn(),
   ticketFindUnique: vi.fn(),
@@ -14,6 +16,8 @@ vi.mock("../../utils/prisma", async () => {
   return {
     Prisma: actual.Prisma,
     prisma: {
+    $executeRaw: mocks.executeRaw,
+    $queryRaw: mocks.queryRaw,
     ticket: {
       findFirst: mocks.ticketFindFirst,
       findMany: mocks.ticketFindMany,
@@ -67,6 +71,7 @@ const {
   getTicketDetail,
   InvalidTicketsCursorError,
   listTickets,
+  markTicketRead,
   reassignTicket,
   TicketNotAvailableForAssignmentError,
   TicketNotFoundError,
@@ -74,6 +79,8 @@ const {
   await import("./services");
 
 function resetMocks() {
+  mocks.executeRaw.mockReset().mockResolvedValue(1);
+  mocks.queryRaw.mockReset().mockResolvedValue([]);
   mocks.ticketFindFirst.mockReset();
   mocks.ticketFindMany.mockReset().mockResolvedValue([]);
   mocks.ticketFindUnique.mockReset();
@@ -206,7 +213,7 @@ describe("getTicketDetail", () => {
 
     const result = await getTicketDetail("t-1", { id: "admin-1", role: "ADMIN" });
 
-    expect(result).toEqual({ id: "t-1" });
+    expect(result).toEqual({ id: "t-1", unreadCount: 0 });
     const call = mocks.ticketFindFirst.mock.calls[0]?.[0];
     expect(call.where).toEqual({ AND: [{ deletedAt: null, id: "t-1" }, {}] });
     // The timeline opens with the Web Session's creation, and attachments are
@@ -220,5 +227,27 @@ describe("getTicketDetail", () => {
     await expect(
       getTicketDetail("t-1", { id: "agent-1", role: "HUMAN_AGENT" }),
     ).rejects.toBeInstanceOf(TicketNotFoundError);
+  });
+});
+
+describe("markTicketRead", () => {
+  beforeEach(resetMocks);
+
+  it("clamps the requested position to the Ticket's current messageSeq", async () => {
+    mocks.ticketFindFirst.mockResolvedValue({ messageSeq: 5, workspaceId: "workspace-1" });
+
+    const result = await markTicketRead("t-1", { id: "agent-1", role: "HUMAN_AGENT" }, 99);
+
+    expect(result).toEqual({ lastReadPosition: 5 });
+    expect(mocks.executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws when the Ticket does not exist or is not visible", async () => {
+    mocks.ticketFindFirst.mockResolvedValue(null);
+
+    await expect(
+      markTicketRead("t-1", { id: "agent-1", role: "HUMAN_AGENT" }, 1),
+    ).rejects.toBeInstanceOf(TicketNotFoundError);
+    expect(mocks.executeRaw).not.toHaveBeenCalled();
   });
 });
