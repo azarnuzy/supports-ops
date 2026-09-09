@@ -2,6 +2,7 @@ type WidgetConfig = {
   botName: string;
   primaryColor: string;
   welcomeMessage: string;
+  logoUrl: string | null;
 };
 
 type WidgetOptions = {
@@ -272,6 +273,9 @@ function renderWidget(config: WidgetConfig) {
     .launcher:hover { filter: brightness(.94); }
     .panel { width: min(360px, calc(100vw - 32px)); margin-bottom: 12px; overflow: hidden; border-radius: 16px; background: white; box-shadow: 0 16px 50px rgb(0 0 0 / 24%); }
     .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; background: ${escapeCss(config.primaryColor)}; color: white; }
+    .header-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .avatar { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 999px; overflow: hidden; background: rgb(255 255 255 / 18%); }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
     .title { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.25; }
     .close { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 22px; line-height: 1; }
     .content { padding: 16px; }
@@ -288,11 +292,15 @@ function renderWidget(config: WidgetConfig) {
   </style>
   <div class="root">
     <section class="panel" data-panel hidden aria-label="${escapeHtml(config.botName)} support chat">
-      <header class="header"><h2 class="title">${escapeHtml(config.botName)}</h2><button class="close" data-close aria-label="Close chat">×</button></header>
+      <header class="header"><div class="header-title"><div class="avatar">${config.logoUrl ? `<img src="${escapeHtml(config.logoUrl)}" alt="" />` : genericIcon(16)}</div><h2 class="title">${escapeHtml(config.botName)}</h2></div><button class="close" data-close aria-label="Close chat">×</button></header>
       <div class="content"><p class="message">${escapeHtml(config.welcomeMessage)}</p><form class="pre-chat" data-pre-chat><label>Name<input class="input" name="name" autocomplete="name" required /></label><label>Email<input class="input" name="email" type="email" autocomplete="email" required /></label><p class="error" data-pre-chat-error hidden>We could not start your chat. Please try again.</p><button class="start" type="submit">Start chat</button></form><div data-chat hidden><div data-messages></div><p class="session-ready" data-session-ended hidden>This conversation is resolved and is now read-only.</p><button class="start" data-start-new type="button" hidden>Start a new conversation</button><form data-message-form><input class="input" data-input placeholder="Type your message…" aria-label="Message" /><input class="input" data-attachment-input type="file" accept="application/pdf,text/plain,image/jpeg,image/png" aria-label="Attachment" /></form></div></div>
     </section>
-    <button class="launcher" data-launcher aria-label="Open ${escapeHtml(config.botName)} support chat" aria-expanded="false"><svg viewBox="0 0 24 24" width="25" height="25" aria-hidden="true"><path fill="currentColor" d="M4 4.5A2.5 2.5 0 0 1 6.5 2h11A2.5 2.5 0 0 1 20 4.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4.4A2.5 2.5 0 0 1 4 12.5z"/></svg></button>
+    <button class="launcher" data-launcher aria-label="Open ${escapeHtml(config.botName)} support chat" aria-expanded="false">${genericIcon(25)}</button>
   </div>`;
+}
+
+function genericIcon(size: number) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="M4 4.5A2.5 2.5 0 0 1 6.5 2h11A2.5 2.5 0 0 1 20 4.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4.4A2.5 2.5 0 0 1 4 12.5z"/></svg>`;
 }
 
 function escapeHtml(value: string) {

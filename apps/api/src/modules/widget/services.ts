@@ -40,6 +40,7 @@ export type PublicWidgetConfig = {
   botName: string;
   primaryColor: string;
   welcomeMessage: string;
+  logoUrl: string | null;
 };
 
 export class WidgetNotFoundError extends Error {}
@@ -105,6 +106,7 @@ export async function getApprovedWidget(widgetKey: string, origin: string) {
       allowedDomains: true,
       botName: true,
       channelId: true,
+      logoKey: true,
       primaryColor: true,
       welcomeMessage: true,
       workspaceId: true,
@@ -868,11 +870,17 @@ export async function getMessagesAfter(accessToken: string, afterPosition: numbe
   };
 }
 
-export function toPublicWidgetConfig(config: PublicWidgetConfig): PublicWidgetConfig {
+export function toPublicWidgetConfig(config: {
+  botName: string;
+  primaryColor: string;
+  welcomeMessage: string;
+  logoKey: string | null;
+}): PublicWidgetConfig {
   return {
     botName: config.botName,
     primaryColor: config.primaryColor,
     welcomeMessage: config.welcomeMessage,
+    logoUrl: config.logoKey ? createStorage(storageConfig).getObjectUrl(config.logoKey) : null,
   };
 }
 
