@@ -1,10 +1,30 @@
 import { defineMetric, EvalOutcome, type RunEvalSuiteOptions } from "@anvia/core/evals";
 import type { ClassificationDecision } from "../../classification";
-import { equalsMetric, negativeControlSuite } from "../metrics";
+import { negativeControlSuite } from "../metrics";
 import type { AiAgentEvalModels } from "../models";
 import { createClassificationTarget, type ClassificationEvalInput } from "../targets";
 
 type Expected = { category?: string; qualifies: boolean };
+
+/** Checks `qualifies` against each case's own expected value, not a fixed constant. */
+const qualifiesMatchesExpected = defineMetric<
+  ClassificationEvalInput,
+  ClassificationDecision,
+  boolean,
+  Expected
+>({
+  name: "qualifies",
+  required: true,
+  dataType: "BOOLEAN",
+  evaluate({ output, case: testCase }) {
+    const expected = testCase.expected?.qualifies;
+    return output.qualifies === expected
+      ? EvalOutcome.pass(true, { comment: `got ${output.qualifies}` })
+      : EvalOutcome.fail(false, {
+          comment: `expected ${expected}, got ${output.qualifies}`,
+        });
+  },
+});
 
 /** Invalid (not fail) when the message wasn't classified as a support request — there is no category to check. */
 const categoryMatchesExpected = defineMetric<
@@ -44,14 +64,7 @@ export function buildClassificationSuite(
   return {
     name: "classification",
     target: createClassificationTarget(models.classificationModel),
-    metrics: [
-      equalsMetric<ClassificationEvalInput, ClassificationDecision, boolean, Expected>(
-        "qualifies",
-        (output) => output.qualifies,
-        true,
-      ),
-      categoryMatchesExpected,
-    ],
+    metrics: [qualifiesMatchesExpected, categoryMatchesExpected],
     cases: [
       {
         id: "billing-request-qualifies-as-billing",
