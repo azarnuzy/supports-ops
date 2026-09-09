@@ -1,3 +1,4 @@
+import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Badge } from "@repo/ui/components/badge";
 import { Bubble, BubbleContent } from "@repo/ui/components/bubble";
 import { Button } from "@repo/ui/components/button";
@@ -12,12 +13,20 @@ import {
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
 import { Textarea } from "@repo/ui/components/textarea";
-import { CopyIcon, MessageCircleIcon, XIcon } from "lucide-react";
+import { CopyIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsNav } from "../../components/settings-nav";
 import { useWidgetSettingsForm } from "./widget.hooks";
 import { hexColorPattern } from "./widget.services";
+
+// Mirrors apps/widget's genericIcon() so the header avatar and launcher fallback
+// match the real widget pixel-for-pixel.
+const WidgetChatIcon = ({ className }: { className?: string }) => (
+  <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2h11A2.5 2.5 0 0 1 20 4.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4.4A2.5 2.5 0 0 1 4 12.5z" />
+  </svg>
+);
 
 const WebWidgetSettingsView = () => {
   const {
@@ -81,6 +90,55 @@ const WebWidgetSettingsView = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-5">
+                  <Field>
+                    <FieldLabel htmlFor="widget-logo">Logo</FieldLabel>
+                    <div className="flex items-center gap-4">
+                      <Avatar className="size-16 border">
+                        <AvatarImage alt="Web Widget logo" src={current.logoUrl ?? undefined} />
+                        <AvatarFallback>
+                          <WidgetChatIcon className="size-6 text-muted-foreground" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="grid gap-2">
+                        <Input
+                          accept="image/png,image/jpeg,image/svg+xml"
+                          aria-label="Web Widget logo"
+                          className="max-w-64"
+                          id="widget-logo"
+                          type="file"
+                          onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            disabled={!logoFile || uploadLogo.isPending}
+                            size="sm"
+                            type="button"
+                            onClick={() => {
+                              if (!logoFile) return;
+                              handleLogoUpload(logoFile);
+                              setLogoFile(null);
+                            }}
+                          >
+                            {uploadLogo.isPending ? "Uploading..." : "Upload logo"}
+                          </Button>
+                          {current.logoUrl ? (
+                            <Button
+                              disabled={updateConfig.isPending}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                              onClick={handleLogoRemove}
+                            >
+                              Remove
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    <FieldDescription>
+                      Shown on the widget header. PNG, JPG, or SVG.
+                    </FieldDescription>
+                  </Field>
                   <Field>
                     <FieldLabel htmlFor="widget-bot-name">Bot name</FieldLabel>
                     <Input
@@ -185,102 +243,74 @@ const WebWidgetSettingsView = () => {
               </form>
             </Card>
 
-            <div className="grid gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Logo</CardTitle>
-                  <CardDescription>Shown on the widget launcher and header.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  {current.logoUrl ? (
-                    <img
-                      alt="Web Widget logo"
-                      className="h-16 w-16 rounded-md border object-contain"
-                      src={current.logoUrl}
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No logo uploaded yet.</p>
-                  )}
-                  <Input
-                    accept="image/png,image/jpeg,image/svg+xml"
-                    aria-label="Web Widget logo"
-                    type="file"
-                    onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      disabled={!logoFile || uploadLogo.isPending}
-                      onClick={() => {
-                        if (!logoFile) return;
-                        handleLogoUpload(logoFile);
-                        setLogoFile(null);
-                      }}
-                    >
-                      {uploadLogo.isPending ? "Uploading..." : "Upload logo"}
-                    </Button>
-                    {current.logoUrl ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={updateConfig.isPending}
-                        onClick={handleLogoRemove}
-                      >
-                        Remove
-                      </Button>
-                    ) : null}
+            <Card className="border-none bg-[#0b1220] text-white">
+              <CardHeader>
+                <CardTitle className="text-white">Preview</CardTitle>
+                <CardDescription className="text-white/60">
+                  Mirrors how Customers will see the widget on your site.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="overflow-hidden rounded-2xl bg-white text-[#172033] shadow-lg">
+                  <div
+                    className="flex items-center gap-2.5 px-4 py-4"
+                    style={{
+                      backgroundColor: hexColorPattern.test(primaryColor)
+                        ? primaryColor
+                        : "#2563eb",
+                    }}
+                  >
+                    <Avatar className="size-7 border-0 bg-white/20">
+                      <AvatarImage alt="" src={current.logoUrl ?? undefined} />
+                      <AvatarFallback className="bg-transparent">
+                        <WidgetChatIcon className="size-4 text-white" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-sm font-semibold text-white">
+                      {botName || "Support Bot"}
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Embed snippet</CardTitle>
-                  <CardDescription>
-                    Paste this before the closing &lt;/body&gt; tag.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <pre className="overflow-x-auto rounded-md border bg-muted p-3 font-mono text-xs leading-relaxed">
-                    {embedSnippet}
-                  </pre>
-                  <Button type="button" variant="outline" onClick={copySnippet}>
-                    <CopyIcon className="size-4" />
-                    Copy snippet
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Preview</CardTitle>
-                  <CardDescription>A rough idea of how Customers will see it.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-hidden rounded-xl border">
-                    <div
-                      className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-white"
-                      style={{
-                        backgroundColor: hexColorPattern.test(primaryColor)
-                          ? primaryColor
-                          : "#2563eb",
-                      }}
-                    >
-                      <MessageCircleIcon className="size-4" />
-                      <span className="truncate">{botName || "Support Bot"}</span>
-                    </div>
-                    <div className="bg-card p-4">
-                      <Bubble variant="ai">
-                        <BubbleContent>
-                          {welcomeMessage || "Hi! How can we help you today?"}
-                        </BubbleContent>
-                      </Bubble>
-                    </div>
+                  <div className="p-4">
+                    <Bubble variant="ai">
+                      <BubbleContent>
+                        {welcomeMessage || "Hi! How can we help you today?"}
+                      </BubbleContent>
+                    </Bubble>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+                <div className="flex justify-end">
+                  <div
+                    className="grid size-14 shrink-0 place-items-center rounded-full text-white shadow-lg"
+                    style={{
+                      backgroundColor: hexColorPattern.test(primaryColor)
+                        ? primaryColor
+                        : "#2563eb",
+                    }}
+                  >
+                    <WidgetChatIcon className="size-6" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
+        ) : null}
+
+        {current ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Embed snippet</CardTitle>
+              <CardDescription>Paste this before the closing &lt;/body&gt; tag.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <pre className="overflow-x-auto rounded-md border bg-muted p-3 font-mono text-xs leading-relaxed">
+                {embedSnippet}
+              </pre>
+              <Button type="button" variant="outline" onClick={copySnippet}>
+                <CopyIcon className="size-4" />
+                Copy snippet
+              </Button>
+            </CardContent>
+          </Card>
         ) : null}
       </section>
     </PlatformAppShell>
