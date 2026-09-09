@@ -195,7 +195,7 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
   if (existing.sourceType === "HELP_CENTER") {
     const helpCenterWorkspaceId = requireWorkspaceId();
     const knowledgeSource = await prisma.knowledgeSource.update({
-      data: { failureReason: null, status: "PROCESSING" },
+      data: { failedStage: null, failureReason: null, stage: null, status: "PROCESSING" },
       where: { id: existing.id },
     });
     await publishKnowledgeSourceEvent(helpCenterWorkspaceId, {
@@ -216,7 +216,7 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
   const workspaceId = requireWorkspaceId();
 
   const knowledgeSource = await prisma.knowledgeSource.update({
-    data: { failureReason: null, status: "PROCESSING" },
+    data: { failedStage: null, failureReason: null, stage: null, status: "PROCESSING" },
     where: { id: existing.id },
   });
 
@@ -329,6 +329,8 @@ function toDto(knowledgeSource: {
   sourceUrl: string | null;
   visibility: KnowledgeSourceDto["visibility"];
   status: KnowledgeSourceDto["status"];
+  stage?: KnowledgeSourceDto["stage"];
+  failedStage?: KnowledgeSourceDto["failedStage"];
   failureReason: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -337,12 +339,14 @@ function toDto(knowledgeSource: {
   return {
     content: knowledgeSource.content,
     createdAt: knowledgeSource.createdAt,
+    failedStage: knowledgeSource.failedStage ?? null,
     failureReason: knowledgeSource.failureReason,
     id: knowledgeSource.id,
     parentId: knowledgeSource.parentId,
     publishedAt: knowledgeSource.publishedAt,
     sourceType: knowledgeSource.sourceType,
     sourceUrl: knowledgeSource.sourceUrl,
+    stage: knowledgeSource.stage ?? null,
     status: knowledgeSource.status,
     title: knowledgeSource.title,
     updatedAt: knowledgeSource.updatedAt,

@@ -436,6 +436,8 @@ export type WebWidgetConfig = {
   welcomeMessage: string;
   primaryColor: string;
   allowedDomains: string[];
+  logoKey: string | null;
+  logoUrl: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -446,6 +448,7 @@ export type UpdateWebWidgetConfigInput = {
   primaryColor: string;
   closingMessage: string | null;
   allowedDomains: string[];
+  logoKey?: string | null;
 };
 
 export type WebWidgetConfigResult = {
@@ -476,6 +479,21 @@ export async function updateWebWidgetConfig(client: ApiClient, input: UpdateWebW
 
   if (!response.ok) {
     throw new Error("Failed to save the Web Widget configuration.");
+  }
+
+  return (await response.json()) as WebWidgetConfigResult;
+}
+
+export async function uploadWebWidgetLogo(client: ApiClient, file: File) {
+  const response = await client["widget-config"].logo.$post({ form: { file } });
+
+  if (response.status === 403) {
+    throw new Error("You do not have permission to update the Web Widget configuration.");
+  }
+
+  if (!response.ok) {
+    const data = (await response.json()) as { message?: string };
+    throw new Error(data.message ?? "Failed to upload the logo.");
   }
 
   return (await response.json()) as WebWidgetConfigResult;
@@ -515,6 +533,13 @@ export async function registerWorkspaceAdmin(
 export type KnowledgeSourceType = "MANUAL_FAQ" | "PDF" | "URL" | "HELP_CENTER" | "INTERNAL_SOP";
 export type KnowledgeVisibility = "CUSTOMER_SAFE" | "INTERNAL_ONLY";
 export type KnowledgeStatus = "DRAFT" | "PROCESSING" | "READY" | "PUBLISHED" | "FAILED";
+export type KnowledgeIngestStage =
+  | "UPLOADING"
+  | "EXTRACTING"
+  | "CHUNKING"
+  | "EMBEDDING"
+  | "INDEXING"
+  | "PUBLISHED";
 
 export type KnowledgeSource = {
   id: string;
@@ -525,6 +550,8 @@ export type KnowledgeSource = {
   sourceUrl: string | null;
   visibility: KnowledgeVisibility;
   status: KnowledgeStatus;
+  stage: KnowledgeIngestStage | null;
+  failedStage: KnowledgeIngestStage | null;
   failureReason: string | null;
   createdAt: string;
   updatedAt: string;

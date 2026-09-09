@@ -13,6 +13,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/compon
 import { Input } from "@repo/ui/components/input";
 import { Textarea } from "@repo/ui/components/textarea";
 import { CopyIcon, MessageCircleIcon, XIcon } from "lucide-react";
+import { useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsNav } from "../../components/settings-nav";
 import { useWidgetSettingsForm } from "./widget.hooks";
@@ -31,6 +32,8 @@ const WebWidgetSettingsView = () => {
     domainError,
     embedSnippet,
     handleDomainKeyDown,
+    handleLogoRemove,
+    handleLogoUpload,
     handleReset,
     handleSubmit,
     isDirty,
@@ -43,9 +46,11 @@ const WebWidgetSettingsView = () => {
     setPrimaryColor,
     setWelcomeMessage,
     updateConfig,
+    uploadLogo,
     validationError,
     welcomeMessage,
   } = useWidgetSettingsForm();
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   return (
     <PlatformAppShell>
@@ -181,6 +186,53 @@ const WebWidgetSettingsView = () => {
             </Card>
 
             <div className="grid gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Logo</CardTitle>
+                  <CardDescription>Shown on the widget launcher and header.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  {current.logoUrl ? (
+                    <img
+                      alt="Web Widget logo"
+                      className="h-16 w-16 rounded-md border object-contain"
+                      src={current.logoUrl}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No logo uploaded yet.</p>
+                  )}
+                  <Input
+                    accept="image/png,image/jpeg,image/svg+xml"
+                    aria-label="Web Widget logo"
+                    type="file"
+                    onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      disabled={!logoFile || uploadLogo.isPending}
+                      onClick={() => {
+                        if (!logoFile) return;
+                        handleLogoUpload(logoFile);
+                        setLogoFile(null);
+                      }}
+                    >
+                      {uploadLogo.isPending ? "Uploading..." : "Upload logo"}
+                    </Button>
+                    {current.logoUrl ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={updateConfig.isPending}
+                        onClick={handleLogoRemove}
+                      >
+                        Remove
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Embed snippet</CardTitle>
