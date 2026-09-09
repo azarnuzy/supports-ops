@@ -25,6 +25,7 @@ import {
   suggestReply,
   SuggestedReplyNotConfiguredError,
   TicketAlreadyClaimedError,
+  TicketNotAvailableForAssignmentError,
   TicketNotFoundError,
   TicketNotOwnedError,
   TicketNotAvailableForTakeoverError,
@@ -168,7 +169,8 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/:id/resolve", zValidator("json", resolveTicketSchema), async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
-    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN")
+      return c.json({ error: "forbidden" }, 403);
     try {
       return c.json(
         {
@@ -204,6 +206,8 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     } catch (error) {
       if (error instanceof HumanAgentNotFoundError)
         return c.json({ error: "human_agent_not_found" }, 422);
+      if (error instanceof TicketNotAvailableForAssignmentError)
+        return c.json({ error: "ticket_not_available_for_assignment" }, 409);
       throw error;
     }
   })
