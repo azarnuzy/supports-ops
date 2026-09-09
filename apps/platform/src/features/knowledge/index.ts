@@ -6,7 +6,7 @@ export {
   useCreatePdfKnowledgeSourceMutation,
   useDeleteKnowledgeSourceMutation,
   usePublishKnowledgeSourceMutation,
-  useUpdateManualFaqMutation,
+  useUpdateKnowledgeSourceMutation,
 } from "./knowledge.hooks";
 export { testRetrieval } from "./knowledge.services";
 export type {
