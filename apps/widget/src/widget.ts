@@ -5,6 +5,7 @@ type WidgetConfig = {
   botName: string;
   primaryColor: string;
   welcomeMessage: string;
+  logoUrl: string | null;
 };
 
 type WidgetOptions = {
