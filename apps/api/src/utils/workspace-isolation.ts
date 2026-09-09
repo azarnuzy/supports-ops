@@ -12,6 +12,7 @@ const workspaceScopedModels = new Set([
   "CustomerIdentity",
   "WebSession",
   "Ticket",
+  "TicketReadState",
   "AiActivity",
   "Conversation",
   "Message",

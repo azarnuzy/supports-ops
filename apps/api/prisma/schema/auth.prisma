@@ -13,6 +13,7 @@ model User {
   assignedTickets Ticket[] @relation("TicketAssignee")
   sessions      Session[]
   accounts      Account[]
+  ticketReadStates TicketReadState[]
 
   @@index([workspaceId])
 }

@@ -30,10 +30,28 @@ model Ticket {
   messages           Message[]
   attachments        Attachment[]
   aiActivities       AiActivity[]
+  readStates         TicketReadState[]
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, assignedHumanAgentId, createdAt])
   @@index([workspaceId, customerIdentityId])
+}
+
+/** Tracks, per Workspace user, the last Message position they have read on a
+ * Ticket. Position is the same monotonic counter as Ticket.messageSeq, so
+ * unread counts compare directly against it without loading transcripts. */
+model TicketReadState {
+  id               String   @id
+  workspaceId      String
+  ticketId         String
+  userId           String
+  lastReadPosition Int      @default(0)
+  updatedAt        DateTime @updatedAt
+  ticket           Ticket   @relation(fields: [ticketId], references: [id])
+  user             User     @relation(fields: [userId], references: [id])
+
+  @@unique([ticketId, userId])
+  @@index([workspaceId, userId])
 }
 
 model Attachment {
