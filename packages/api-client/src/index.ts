@@ -263,6 +263,7 @@ export async function reassignTicket(client: ApiClient, id: string, humanAgentId
 
   if (response.status === 403) throw new Error("Only an Admin can reassign Tickets.");
   if (response.status === 422) throw new Error("Choose an active Human Agent in this Workspace.");
+  if (response.status === 409) throw new Error("This Ticket can no longer be assigned.");
   if (!response.ok) throw new Error("Failed to reassign the Ticket.");
   return (await response.json()) as { ticket: SupportTicket };
 }
@@ -280,6 +281,20 @@ export async function sendHumanReply(
   if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
   if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
+  if (!response.ok) throw new Error("Failed to send the reply.");
+  return response.json();
+}
+
+export async function sendHumanAttachments(client: ApiClient, id: string, content: string, files: File[], idempotencyKey: string) {
+  const form = new FormData();
+  form.set("content", content);
+  form.set("idempotencyKey", idempotencyKey);
+  files.forEach((file) => form.append("files", file));
+  const response = await client.tickets[":id"].attachments.$post({ param: { id }, form: form as never });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
+  if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
+  if (response.status === 422) throw new Error("Attachments must be PDF, TXT, JPG, or PNG and no larger than 10 MB.");
   if (!response.ok) throw new Error("Failed to send the reply.");
   return response.json();
 }
@@ -313,8 +328,7 @@ export async function resolveHumanTicket(client: ApiClient, id: string) {
     json: { resolutionReason: "HUMAN_RESOLVED" },
   });
   if (response.status === 401) throw new UnauthorizedApiError();
-  if (response.status === 403)
-    throw new Error("Only the assigned Human Agent can resolve this Ticket.");
+  if (response.status === 403) throw new Error("Only the Ticket owner can resolve this Ticket.");
   if (response.status === 409)
     throw new Error("Finish or retry the pending reply before resolving this Ticket.");
   if (!response.ok) throw new Error("Failed to resolve the Ticket.");
