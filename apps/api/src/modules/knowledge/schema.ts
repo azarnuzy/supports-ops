@@ -11,7 +11,7 @@ export const createManualFaqSchema = z.object({
   visibility: knowledgeVisibilitySchema,
 });
 
-export const updateManualFaqSchema = z.object({
+export const updateKnowledgeSourceSchema = z.object({
   content: contentSchema,
   title: titleSchema,
   visibility: knowledgeVisibilitySchema,
@@ -32,6 +32,6 @@ export const createPdfKnowledgeSourceSchema = z.object({
 });
 
 export type CreateManualFaqInput = z.infer<typeof createManualFaqSchema>;
-export type UpdateManualFaqInput = z.infer<typeof updateManualFaqSchema>;
+export type UpdateKnowledgeSourceInput = z.infer<typeof updateKnowledgeSourceSchema>;
 export type RetrievalTestInput = z.infer<typeof retrievalTestSchema>;
 export type CreateDocumentationUrlInput = z.infer<typeof createDocumentationUrlSchema>;
