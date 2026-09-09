@@ -93,13 +93,10 @@ const DashboardView = () => {
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               <Button asChild>
-                <Link to="/tickets">Open Inbox</Link>
+                <Link to="/chat">My tickets</Link>
               </Button>
               <Button asChild variant="outline">
-                <Link to="/tickets/queue">Shared queue</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/tickets/mine">My tickets</Link>
+                <Link to="/chat/unassigned">Shared queue</Link>
               </Button>
             </CardContent>
           </Card>
