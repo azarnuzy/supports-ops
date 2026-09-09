@@ -75,11 +75,11 @@ Jika seed mencetak Knowledge Source `drafted (unpublished)`, API key belum terse
 
 ### Host demo lokal
 
-Untuk mencoba pengalaman Widget tanpa situs lain, buka `http://localhost:3001/demo.html?widgetKey=<widget-key>`. Ambil key dari snippet di halaman Settings tadi. Halaman ini merupakan host nyata pada `localhost:3001`, origin yang disiapkan oleh seed, dan memuat launcher di kanan bawah.
+Untuk mencoba pengalaman Widget tanpa situs lain, buka `http://localhost:3002/demo.html?widgetKey=<widget-key>`. Ambil key dari snippet di halaman Settings tadi. Halaman ini merupakan host nyata pada `localhost:3002`, origin yang disiapkan oleh seed, dan memuat launcher di kanan bawah.
 
 Lalu lakukan Pre-Chat memakai nama bebas dan salah satu email demo (contoh `siti@example.com`). Ticket belum ada pada langkah ini; Ticket hanya dibuat saat pesan support pertama dikirim.
 
-Untuk menguji aturan keamanan origin, buka demo host dari origin yang belum diizinkan atau hapus `localhost:3001` dari allowlist. Launcher tidak akan dimuat karena `GET /widget/config` ditolak. Tambahkan origin tersebut kembali untuk melanjutkan.
+Untuk menguji aturan keamanan origin, buka demo host dari origin yang belum diizinkan atau hapus `localhost:3002` dari allowlist. Launcher tidak akan dimuat karena `GET /widget/config` ditolak. Tambahkan origin tersebut kembali untuk melanjutkan.
 
 ### Menguji logo pada header Widget
 
@@ -134,10 +134,11 @@ Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak
 | W7 | Pertanyaan W2, kemudian `Yes, that solved it` | AI melakukan Resolution sebagai `CUSTOMER_CONFIRMED` | Widget read-only; trace keputusan `RESOLVE` |
 | W8 | Pertanyaan W2, kemudian hanya `thanks` | Tidak boleh langsung Resolution; AI meminta klarifikasi bila perlu | Widget tetap menerima input |
 | W9 | Set Follow-Up dan Auto-Resolution ke beberapa detik di `/settings/ai`; kirim W2 lalu diam | Satu Follow-Up terkirim. Bila Auto-Resolution aktif dan Customer tetap diam, Ticket selesai sebagai `CUSTOMER_INACTIVE` | Log Worker, Widget, dan Ticket status |
-| W10 | Saat Ticket masih `AI_HANDLING`, panggil Takeover lewat API (belum ada UI di `/chat`) | Streaming AI berhenti, Ticket diambil Admin, Customer menerima perkenalan manusia, timer dibatalkan | Response API dan Widget |
+| W10 | Saat Ticket masih `AI_HANDLING`, login Admin → `/chat/ai-live` → Take over | Streaming AI berhenti, Ticket diambil Admin, Customer menerima perkenalan manusia, timer dibatalkan | `/chat/ai-live` dan Widget |
 | W11 | Kirim `.txt` berisi konteks dan pertanyaan terkait | Status Attachment berubah processing → ready dan isinya menjadi konteks Ticket | Widget dan log Worker. PDF/JPEG/PNG memerlukan kredensial Attachment tambahan |
 | W12 | Selesaikan sebuah Ticket sebagai Customer tertentu, lalu buat Web Session baru dengan email yang sama dan tanyakan konteks kasus lama | Ticket Knowledge hanya dapat dipakai pada Customer Identity dan Channel sama | Trace retrieval dan jawaban; jangan gunakan sebagai sumber kebijakan baru |
 | W13 | Login Admin → Dashboard | Angka Resolution AI (confirmed vs inactive), escalation rate, Ticket/channel, dan Ticket aktif per Human Agent terpisah | `http://localhost:3000/` |
+| W14 | Selesaikan sebuah Ticket (lihat W6), lalu buka `/chat/all`, cari nama Customer-nya, dan filter status ke Resolved | Ticket yang sudah Resolved tetap muncul di scope All dengan filter/pencarian; Human Agent hanya melihat Ticket miliknya, Shared Human Queue, dan Ticket yang pernah ia Resolve, sedangkan Admin melihat seluruh Ticket Workspace | `/chat/all` |
 
 Catatan keputusan: bila Admin melakukan Takeover, tetapkan kembali Ticket ke Human Agent sebelum Resolution bila UI/API menolak Admin untuk melakukan Resolution langsung.
 
@@ -159,7 +160,7 @@ pnpm eval:ai-agent -- --category language
 pnpm eval:ai-agent -- --category grounding --case password-reset-answered-from-source
 ```
 
-Eval memakai corpus in-memory yang tetap, bukan Knowledge pada Workspace demo. Jadi gunakan tabel W1–W13 untuk membuktikan integrasi produk, dan eval untuk mencegah regresi perilaku AI.
+Eval memakai corpus in-memory yang tetap, bukan Knowledge pada Workspace demo. Jadi gunakan tabel W1–W14 untuk membuktikan integrasi produk, dan eval untuk mencegah regresi perilaku AI.
 
 ## 6. Telemetry di Langfuse
 
@@ -188,4 +189,4 @@ Trace satu AI Agent run berisi root `ai_agent.run`, dengan child span retrieval,
 
 ## 7. Kriteria selesai
 
-Sebuah run dapat dianggap lengkap bila W1–W10 dan W13 selesai; W11 perlu bila Attachment berada dalam scope release, W12 perlu bila Ticket Knowledge berada dalam scope release; seluruh eval telah dijalankan dan negative control tercatat sebagai gagal yang diharapkan. Simpan tautan trace Langfuse yang relevan dan ID Ticket untuk setiap skenario—keduanya cukup untuk mengulang atau menelusuri kegagalan tanpa menyalin percakapan Customer ke dokumen.
+Sebuah run dapat dianggap lengkap bila W1–W10, W13, dan W14 selesai; W11 perlu bila Attachment berada dalam scope release, W12 perlu bila Ticket Knowledge berada dalam scope release; seluruh eval telah dijalankan dan negative control tercatat sebagai gagal yang diharapkan. Simpan tautan trace Langfuse yang relevan dan ID Ticket untuk setiap skenario—keduanya cukup untuk mengulang atau menelusuri kegagalan tanpa menyalin percakapan Customer ke dokumen.

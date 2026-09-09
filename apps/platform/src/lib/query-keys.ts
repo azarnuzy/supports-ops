@@ -14,6 +14,9 @@ export const queryKeys = {
     widgetConfig: ["workspace", "widget-config"] as const,
     myTickets: ["workspace", "my-tickets"] as const,
     sharedHumanQueue: ["workspace", "shared-human-queue"] as const,
+    liveAiTickets: ["workspace", "live-ai-tickets"] as const,
+    allTickets: (filters: { search?: string; status?: string }) =>
+      ["workspace", "all-tickets", filters] as const,
     analytics: ["workspace", "analytics"] as const,
     ticket: (id: string) => ["workspace", "tickets", id] as const,
   },
