@@ -9,7 +9,7 @@ import {
   createManualFaqSchema,
   createPdfKnowledgeSourceSchema,
   retrievalTestSchema,
-  updateManualFaqSchema,
+  updateKnowledgeSourceSchema,
 } from "./schema";
 import {
   createManualFaq,
@@ -19,12 +19,15 @@ import {
   EmbeddingNotConfiguredError,
   getKnowledgeSource,
   KnowledgeSourceMissingContentError,
+  KnowledgeSourceNotEditableError,
   KnowledgeSourceNotFoundError,
+  KnowledgeSourceNotRefreshableError,
   KnowledgeSourceProcessingError,
   listKnowledgeSources,
   publishKnowledgeSource,
+  refreshKnowledgeSource,
   testRetrieval,
-  updateManualFaq,
+  updateKnowledgeSource,
 } from "./services";
 
 export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
@@ -118,7 +121,7 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
       throw error;
     }
   })
-  .patch("/:id", zValidator("json", updateManualFaqSchema), async (c) => {
+  .patch("/:id", zValidator("json", updateKnowledgeSourceSchema), async (c) => {
     const currentUser = requireAdmin(c);
 
     if (!currentUser) {
@@ -126,7 +129,7 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
     }
 
     try {
-      const knowledgeSource = await updateManualFaq(c.req.param("id"), c.req.valid("json"));
+      const knowledgeSource = await updateKnowledgeSource(c.req.param("id"), c.req.valid("json"));
 
       return c.json({ knowledgeSource }, 200);
     } catch (error) {
@@ -136,6 +139,37 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (error instanceof KnowledgeSourceProcessingError) {
         return c.json({ error: "processing", message: error.message }, 409);
+      }
+
+      if (error instanceof KnowledgeSourceNotEditableError) {
+        return c.json({ error: "not_editable", message: error.message }, 422);
+      }
+
+      throw error;
+    }
+  })
+  .post("/:id/refresh", async (c) => {
+    const currentUser = requireAdmin(c);
+
+    if (!currentUser) {
+      return c.json({ error: "forbidden" }, 403);
+    }
+
+    try {
+      const knowledgeSource = await refreshKnowledgeSource(c.req.param("id"));
+
+      return c.json({ knowledgeSource }, 200);
+    } catch (error) {
+      if (error instanceof KnowledgeSourceNotFoundError) {
+        return c.json({ error: "not_found" }, 404);
+      }
+
+      if (error instanceof KnowledgeSourceProcessingError) {
+        return c.json({ error: "processing", message: error.message }, 409);
+      }
+
+      if (error instanceof KnowledgeSourceNotRefreshableError) {
+        return c.json({ error: "not_refreshable", message: error.message }, 422);
       }
 
       throw error;
