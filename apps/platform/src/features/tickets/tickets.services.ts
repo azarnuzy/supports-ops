@@ -9,11 +9,13 @@ import {
   listMyTickets as listMyTicketsRequest,
   listSharedHumanQueue as listSharedHumanQueueRequest,
   listTickets as listTicketsRequest,
+  markTicketRead as markTicketReadRequest,
   reassignTicket as reassignTicketRequest,
   resolveHumanTicket as resolveHumanTicketRequest,
   retryHumanReply as retryHumanReplyRequest,
   sendHumanReply as sendHumanReplyRequest,
   sendHumanAttachments as sendHumanAttachmentsRequest,
+  subscribeToTicketEvents as subscribeToTicketEventsRequest,
   takeOverTicket as takeOverTicketRequest,
   type ListTicketsFilters,
 } from "@repo/api-client";
@@ -86,5 +88,24 @@ export function resolveHumanTicket(id: string) {
 export function subscribeToSharedHumanQueue(onChange: () => void) {
   const events = new EventSource(`${apiBaseUrl}/tickets/queue/events`, { withCredentials: true });
   events.addEventListener("ticket.queue.changed", onChange);
+  return () => events.close();
+}
+
+export function markTicketRead(input: { id: string; position: number }) {
+  return markTicketReadRequest(apiClient, input.id, input.position);
+}
+
+/** Reconnects transparently on drop; `onReconnectStateChange` lets the UI
+ * show a non-blocking indicator while the browser retries, and callers
+ * should refetch on every re-open since events missed while disconnected
+ * are not replayed. */
+export function subscribeToTicketEvents(
+  ticketId: string,
+  onEvent: () => void,
+  onReconnectStateChange: (reconnecting: boolean) => void,
+) {
+  const events = subscribeToTicketEventsRequest(apiBaseUrl, ticketId, onEvent);
+  events.addEventListener("open", () => onReconnectStateChange(false));
+  events.addEventListener("error", () => onReconnectStateChange(true));
   return () => events.close();
 }

@@ -66,10 +66,12 @@ import {
   ticketDetailQueryOptions,
   useClaimTicketMutation,
   useGenerateSuggestedReplyMutation,
+  useMarkTicketReadOnView,
   useResolveHumanTicketMutation,
   useRetryHumanReplyMutation,
   useSendHumanReplyMutation,
   useSendHumanAttachmentsMutation,
+  useTicketDetailEvents,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
 import { getAttachmentPreviewUrl, openAttachment } from "../../../tickets/tickets.services";
@@ -99,6 +101,8 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     enabled: Boolean(ticketId),
   });
   useTicketEvents();
+  const { reconnecting } = useTicketDetailEvents(ticketId);
+  useMarkTicketReadOnView(ticket.data?.ticket);
 
   const sendReply = useSendHumanReplyMutation();
   const sendAttachments = useSendHumanAttachmentsMutation();
@@ -178,16 +182,22 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
       >
         <aside className="flex min-h-0 flex-col border-r">
           <div className="border-b p-4">
-            <div className="flex gap-3 text-lg font-semibold">
+            <div className="flex items-center gap-3 text-lg font-semibold">
               <Link className={scope === "mine" ? "text-foreground" : "text-muted-foreground"} to="/chat">
                 Mine
               </Link>
+              {scopeUnreadTotal(mineTickets.data) > 0 ? (
+                <Badge className="px-1.5">{scopeUnreadTotal(mineTickets.data)}</Badge>
+              ) : null}
               <Link
                 className={scope === "unassigned" ? "text-foreground" : "text-muted-foreground"}
                 to="/chat/unassigned"
               >
                 Unassigned
               </Link>
+              {scopeUnreadTotal(unassignedTickets.data) > 0 ? (
+                <Badge className="px-1.5">{scopeUnreadTotal(unassignedTickets.data)}</Badge>
+              ) : null}
             </div>
             <p className="text-xs text-muted-foreground">
               {scope === "unassigned" ? "Escalated Tickets waiting to be claimed" : "Tickets assigned to you"}
@@ -243,6 +253,11 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
           </div>
         </aside>
         <section className="flex min-h-0 flex-col">
+          {reconnecting ? (
+            <p className="border-b bg-muted p-2 text-center text-xs text-muted-foreground">
+              Reconnecting…
+            </p>
+          ) : null}
           {claim.isError ? (
             <p className="border-b p-3 text-center text-xs text-destructive">
               {claim.error instanceof Error
@@ -645,9 +660,14 @@ function TicketRow({
       <span className="min-w-0 flex-1">
         <span className="flex justify-between gap-2">
           <b className="truncate text-sm">{ticket.customerIdentity.name}</b>
-          <small className="shrink-0 text-muted-foreground">
-            {new Date(ticket.createdAt).toLocaleDateString()}
-          </small>
+          <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+            <small>{new Date(ticket.createdAt).toLocaleDateString()}</small>
+            {ticket.unreadCount > 0 ? (
+              <Badge aria-label={`${ticket.unreadCount} unread`} className="px-1.5" variant="default">
+                {ticket.unreadCount}
+              </Badge>
+            ) : null}
+          </span>
         </span>
         <span className="mt-1 block truncate text-xs text-muted-foreground">
           {lastMessage?.content ?? ticket.title}
@@ -664,6 +684,10 @@ function TicketRow({
       </span>
     </button>
   );
+}
+
+function scopeUnreadTotal(data: { tickets: SupportTicket[] } | undefined) {
+  return data?.tickets.reduce((total, ticket) => total + ticket.unreadCount, 0) ?? 0;
 }
 
 function formatWaitingDuration(since: string) {
