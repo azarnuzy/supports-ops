@@ -46,7 +46,7 @@ import {
   SparklesIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { getInitials } from "../../../../lib/utils";
 import { meQueryOptions } from "../../../auth";
@@ -56,6 +56,7 @@ import {
   ticketDetailQueryOptions,
   useGenerateSuggestedReplyMutation,
   useResolveHumanTicketMutation,
+  useRetryHumanReplyMutation,
   useSendHumanReplyMutation,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
@@ -86,12 +87,15 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
   const sendReply = useSendHumanReplyMutation();
   const suggestedReply = useGenerateSuggestedReplyMutation();
   const resolve = useResolveHumanTicketMutation();
+  const retryReply = useRetryHumanReplyMutation();
 
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
   const [detailsTab, setDetailsTab] = useState<"details" | "activity">("details");
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+  const [suggestedReplyContent, setSuggestedReplyContent] = useState<string>();
+  const replyKey = useRef<string | undefined>(undefined);
 
   // Entering a populated Mine scope selects the first Ticket so the workspace
   // never opens on an arbitrary blank state.
@@ -240,7 +244,11 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
               <MessageScroller>
                 <MessageScrollerContent>
                   {detail.messages.map((message) => (
-                    <TranscriptMessage key={message.id} message={message} />
+                    <TranscriptMessage
+                      key={message.id}
+                      message={message}
+                      onRetry={() => ticketId && retryReply.mutate({ id: ticketId, messageId: message.id })}
+                    />
                   ))}
                 </MessageScrollerContent>
               </MessageScroller>
@@ -253,15 +261,25 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                       const content = draft.trim();
                       if (!content || !ticketId) return;
                       sendReply.mutate(
-                        { content, id: ticketId },
-                        { onSuccess: () => setDraft("") },
+                        { content, id: ticketId, idempotencyKey: (replyKey.current ??= crypto.randomUUID()) },
+                        {
+                          onSuccess: () =>
+                            setDraft((current) => {
+                              if (current.trim() !== content) return current;
+                              replyKey.current = undefined;
+                              return "";
+                            }),
+                        },
                       );
                     }}
                   >
                     <InputGroup>
                       <InputGroupTextarea
                         aria-label="Reply to Customer"
-                        onChange={(event) => setDraft(event.target.value)}
+                        onChange={(event) => {
+                          replyKey.current = undefined;
+                          setDraft(event.target.value);
+                        }}
                         placeholder="Type your message..."
                         value={draft}
                       />
@@ -271,7 +289,10 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                           onClick={() =>
                             ticketId &&
                             suggestedReply.mutate(ticketId, {
-                              onSuccess: ({ suggestedReply: reply }) => setDraft(reply.content),
+                              onSuccess: ({ suggestedReply: reply }) => {
+                                if (!draft.trim()) setDraft(reply.content);
+                                else setSuggestedReplyContent(reply.content);
+                              },
                             })
                           }
                           size="sm"
@@ -283,7 +304,12 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                         </InputGroupButton>
                         <AlertDialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
                           <AlertDialogTrigger asChild>
-                            <InputGroupButton size="sm" type="button" variant="outline">
+                            <InputGroupButton
+                              disabled={sendReply.isPending}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
                               Resolve Ticket
                             </InputGroupButton>
                           </AlertDialogTrigger>
@@ -291,7 +317,8 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Resolve this Ticket?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                The Customer will no longer be able to receive replies here, and
+                                Resolution reason: Human resolved. The Customer will no longer be
+                                able to receive replies here, this Ticket cannot be reopened, and
                                 the transcript becomes read-only.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
@@ -314,7 +341,7 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                         <InputGroupButton
                           aria-label="Send reply"
                           className="ml-auto"
-                          disabled={sendReply.isPending || !draft.trim()}
+                          disabled={!draft.trim()}
                           size="icon-sm"
                           type="submit"
                           variant="default"
@@ -325,9 +352,44 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                     </InputGroup>
                     {sendReply.isError || suggestedReply.isError || resolve.isError ? (
                       <p className="text-xs text-destructive">
-                        Something went wrong updating this Ticket. Please try again.
+                        {resolve.isError
+                          ? "Finish or retry the pending reply before resolving this Ticket."
+                          : "Something went wrong updating this Ticket. Please try again."}
                       </p>
                     ) : null}
+                    <AlertDialog
+                      open={Boolean(suggestedReplyContent)}
+                      onOpenChange={(open) => !open && setSuggestedReplyContent(undefined)}
+                    >
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Suggested Reply is ready</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Your current draft will not be overwritten. Replace it or insert the
+                            Suggested Reply below it.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep current draft</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => {
+                              setDraft(`${draft}\n\n${suggestedReplyContent}`);
+                              setSuggestedReplyContent(undefined);
+                            }}
+                          >
+                            Insert below
+                          </AlertDialogAction>
+                          <AlertDialogAction
+                            onClick={() => {
+                              setDraft(suggestedReplyContent ?? "");
+                              setSuggestedReplyContent(undefined);
+                            }}
+                          >
+                            Replace draft
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </form>
                 ) : (
                   <p className="p-2 text-center text-xs text-muted-foreground">
@@ -499,7 +561,13 @@ function DetailRow({
   );
 }
 
-function TranscriptMessage({ message }: { message: TicketDetailMessage }) {
+function TranscriptMessage({
+  message,
+  onRetry,
+}: {
+  message: TicketDetailMessage;
+  onRetry: () => void;
+}) {
   if (message.senderType === "SYSTEM") {
     return (
       <Marker>
@@ -531,6 +599,11 @@ function TranscriptMessage({ message }: { message: TicketDetailMessage }) {
             >
               {message.deliveryStatus === "PENDING" ? "Sending…" : "Failed to send"}
             </span>
+          ) : null}
+          {isHuman && message.deliveryStatus === "FAILED" ? (
+            <button className="text-xs underline" onClick={onRetry} type="button">
+              Retry
+            </button>
           ) : null}
         </MessageFooter>
       </MessageContent>

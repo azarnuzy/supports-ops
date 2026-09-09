@@ -10,6 +10,7 @@ import {
   listTickets as listTicketsRequest,
   reassignTicket as reassignTicketRequest,
   resolveHumanTicket as resolveHumanTicketRequest,
+  retryHumanReply as retryHumanReplyRequest,
   sendHumanReply as sendHumanReplyRequest,
   takeOverTicket as takeOverTicketRequest,
   type ListTicketsFilters,
@@ -56,8 +57,12 @@ export function reassignTicket(input: { id: string; humanAgentId: string }) {
   return reassignTicketRequest(apiClient, input.id, input.humanAgentId);
 }
 
-export function sendHumanReply(input: { id: string; content: string }) {
-  return sendHumanReplyRequest(apiClient, input.id, input.content);
+export function sendHumanReply(input: { id: string; content: string; idempotencyKey: string }) {
+  return sendHumanReplyRequest(apiClient, input.id, input.content, input.idempotencyKey);
+}
+
+export function retryHumanReply(input: { id: string; messageId: string }) {
+  return retryHumanReplyRequest(apiClient, input.id, input.messageId);
 }
 
 export function generateSuggestedReply(id: string) {

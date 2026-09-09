@@ -84,7 +84,7 @@ const MyTicketsView = () => {
                     const content = drafts[ticket.id]?.trim();
                     if (!content) return;
                     reply.mutate(
-                      { id: ticket.id, content },
+                      { id: ticket.id, content, idempotencyKey: crypto.randomUUID() },
                       { onSuccess: () => setDrafts((value) => ({ ...value, [ticket.id]: "" })) },
                     );
                   }}

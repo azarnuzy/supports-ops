@@ -2,7 +2,14 @@ import { z } from "zod";
 
 export const reassignTicketSchema = z.object({ humanAgentId: z.string().min(1) });
 
-export const humanReplySchema = z.object({ content: z.string().trim().min(1).max(10_000) });
+export const humanReplySchema = z.object({
+  content: z.string().trim().min(1).max(10_000),
+  idempotencyKey: z.string().uuid(),
+});
+
+export const resolveTicketSchema = z.object({
+  resolutionReason: z.literal("HUMAN_RESOLVED"),
+});
 
 function commaSeparatedEnum<T extends [string, ...string[]]>(values: T) {
   return z
