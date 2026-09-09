@@ -4,6 +4,9 @@ const mocks = vi.hoisted(() => ({
   ticketFindFirst: vi.fn(),
   ticketFindMany: vi.fn(),
   ticketFindUnique: vi.fn(),
+  ticketFindUniqueOrThrow: vi.fn(),
+  ticketUpdateMany: vi.fn(),
+  userFindFirst: vi.fn(),
 }));
 
 vi.mock("../../utils/prisma", async () => {
@@ -11,11 +14,14 @@ vi.mock("../../utils/prisma", async () => {
   return {
     Prisma: actual.Prisma,
     prisma: {
-      ticket: {
-        findFirst: mocks.ticketFindFirst,
-        findMany: mocks.ticketFindMany,
-        findUnique: mocks.ticketFindUnique,
-      },
+    ticket: {
+      findFirst: mocks.ticketFindFirst,
+      findMany: mocks.ticketFindMany,
+      findUnique: mocks.ticketFindUnique,
+      findUniqueOrThrow: mocks.ticketFindUniqueOrThrow,
+      updateMany: mocks.ticketUpdateMany,
+    },
+    user: { findFirst: mocks.userFindFirst },
     },
     unscopedPrisma: {},
   };
@@ -57,13 +63,23 @@ vi.mock("./queue", () => ({
   enqueueTicketKnowledgeIndex: vi.fn(),
 }));
 
-const { getTicketDetail, InvalidTicketsCursorError, listTickets, TicketNotFoundError } =
+const {
+  getTicketDetail,
+  InvalidTicketsCursorError,
+  listTickets,
+  reassignTicket,
+  TicketNotAvailableForAssignmentError,
+  TicketNotFoundError,
+} =
   await import("./services");
 
 function resetMocks() {
   mocks.ticketFindFirst.mockReset();
   mocks.ticketFindMany.mockReset().mockResolvedValue([]);
   mocks.ticketFindUnique.mockReset();
+  mocks.ticketFindUniqueOrThrow.mockReset();
+  mocks.ticketUpdateMany.mockReset();
+  mocks.userFindFirst.mockReset().mockResolvedValue({ id: "agent-2" });
 }
 
 describe("listTickets", () => {
@@ -148,6 +164,37 @@ describe("listTickets", () => {
 
     expect(result.nextCursor).toBe("t-1");
     expect(result.tickets).toHaveLength(1);
+  });
+});
+
+describe("reassignTicket", () => {
+  beforeEach(resetMocks);
+
+  it("only assigns an unassigned escalation or an actively human-handled Ticket", async () => {
+    mocks.ticketUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.ticketFindUniqueOrThrow.mockResolvedValue({ id: "ticket-1" });
+
+    await reassignTicket("ticket-1", "agent-2", "workspace-1");
+
+    expect(mocks.ticketUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "ticket-1",
+          OR: [
+            { assignedHumanAgentId: null, status: "ESCALATED" },
+            { status: "HUMAN_HANDLING" },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("rejects every other lifecycle state", async () => {
+    mocks.ticketUpdateMany.mockResolvedValue({ count: 0 });
+
+    await expect(reassignTicket("ticket-1", "agent-2", "workspace-1")).rejects.toBeInstanceOf(
+      TicketNotAvailableForAssignmentError,
+    );
   });
 });
 
