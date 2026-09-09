@@ -291,7 +291,6 @@ describe("processKnowledgeIngestJob (CRAWL)", () => {
       where: { id: "parent-1" },
     });
   });
-
   it("reconciles an existing child instead of creating a duplicate", async () => {
     mocks.findFirst
       .mockReset()
