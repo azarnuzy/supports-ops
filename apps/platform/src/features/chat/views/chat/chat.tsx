@@ -1,4 +1,4 @@
-import type { SupportTicket, TicketDetailMessage } from "@repo/api-client";
+import type { SupportTicket, TicketAttachment, TicketDetailMessage } from "@repo/api-client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,8 +12,10 @@ import {
 } from "@repo/ui/components/alert-dialog";
 import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
 import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
 import { Bubble, BubbleContent } from "@repo/ui/components/bubble";
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@repo/ui/components/empty";
+import { Dialog, DialogContent, DialogTitle } from "@repo/ui/components/dialog";
 import {
   InputGroup,
   InputGroupAddon,
@@ -39,12 +41,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   CalendarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+  FileTextIcon,
   FlagIcon,
   HistoryIcon,
   MailIcon,
   SendIcon,
   SparklesIcon,
   UserRoundIcon,
+  XIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
@@ -60,6 +67,7 @@ import {
   useSendHumanReplyMutation,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
+import { getAttachmentPreviewUrl, openAttachment } from "../../../tickets/tickets.services";
 
 function senderName(message: TicketDetailMessage) {
   if (message.senderType === "CUSTOMER") return "Customer";
@@ -92,10 +100,11 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
-  const [detailsTab, setDetailsTab] = useState<"details" | "activity">("details");
+  const [detailsTab, setDetailsTab] = useState<"details" | "attachments" | "activity">("details");
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [suggestedReplyContent, setSuggestedReplyContent] = useState<string>();
   const replyKey = useRef<string | undefined>(undefined);
+  const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
 
   // Entering a populated Mine scope selects the first Ticket so the workspace
   // never opens on an arbitrary blank state.
@@ -136,6 +145,12 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
         })),
       ]
     : [];
+  const images =
+    detail?.messages.flatMap((message) =>
+      message.attachments
+        .filter(isImage)
+        .map((attachment) => ({ attachment, messagePosition: message.position })),
+    ) ?? [];
 
   return (
     <PlatformAppShell fullBleed>
@@ -248,6 +263,9 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                       key={message.id}
                       message={message}
                       onRetry={() => ticketId && retryReply.mutate({ id: ticketId, messageId: message.id })}
+                      onOpenImage={(attachment) =>
+                        setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
+                      }
                     />
                   ))}
                 </MessageScrollerContent>
@@ -399,6 +417,12 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                   </p>
                 )}
               </div>
+              <ImageGallery
+                images={images}
+                index={galleryIndex}
+                onOpenChange={(open) => !open && setGalleryIndex(null)}
+                setIndex={setGalleryIndex}
+              />
             </>
           ) : null}
         </section>
@@ -411,6 +435,7 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
             >
               <TabsList className="mx-3 mt-3 w-[calc(100%-1.5rem)]">
                 <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsTrigger value="attachments">Attachments</TabsTrigger>
                 <TabsTrigger value="activity">Activity</TabsTrigger>
               </TabsList>
               {detailsTab === "details" ? (
@@ -461,6 +486,25 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                       />
                     </>
                   ) : null}
+                </div>
+              ) : null}
+              {detailsTab === "attachments" ? (
+                <div className="grid gap-2 p-3">
+                  {detail.messages.flatMap((message) => message.attachments).length ? (
+                    detail.messages.flatMap((message) =>
+                      message.attachments.map((attachment) => (
+                        <AttachmentCard
+                          attachment={attachment}
+                          key={attachment.id}
+                          onOpenImage={() =>
+                            setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
+                          }
+                        />
+                      )),
+                    )
+                  ) : (
+                    <p className="p-3 text-center text-xs text-muted-foreground">No Attachments yet.</p>
+                  )}
                 </div>
               ) : null}
               {detailsTab === "activity" ? (
@@ -561,12 +605,147 @@ function DetailRow({
   );
 }
 
+function isImage(attachment: TicketAttachment) {
+  return attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/png";
+}
+
+function AttachmentCard({
+  attachment,
+  onOpenImage,
+}: {
+  attachment: TicketAttachment;
+  onOpenImage: () => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string>();
+  const isPreviewableDocument =
+    attachment.mimeType === "application/pdf" || attachment.mimeType === "text/plain";
+
+  useEffect(() => {
+    if (!isImage(attachment)) return;
+    void getAttachmentPreviewUrl(attachment.id).then(({ url }) => setPreviewUrl(url));
+  }, [attachment]);
+
+  const readability =
+    attachment.processingStatus === "PROCESSING"
+      ? "AI readability is processing; the original file is available."
+      : attachment.processingStatus === "FAILED"
+        ? `AI could not read this file${attachment.failureReason ? `: ${attachment.failureReason}` : "."} The original file is available.`
+        : "AI-readable.";
+
+  if (isImage(attachment)) {
+    return (
+      <button
+        aria-label={`Open ${attachment.fileName} in gallery`}
+        className="relative aspect-square overflow-hidden rounded-md border bg-muted"
+        onClick={onOpenImage}
+        type="button"
+      >
+        {previewUrl ? (
+          <img alt="" className="size-full object-cover" src={previewUrl} />
+        ) : (
+          <span className="grid size-full place-items-center text-xs text-muted-foreground">Loading…</span>
+        )}
+        {attachment.processingStatus !== "READY" ? (
+          <span className="absolute right-1 bottom-1 rounded bg-background/90 px-1 text-[10px] text-foreground">
+            {attachment.processingStatus === "PROCESSING" ? "AI reading…" : "AI unreadable"}
+          </span>
+        ) : null}
+      </button>
+    );
+  }
+
+  return (
+    <article className="flex items-center gap-3 rounded-md border p-3">
+      <FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{attachment.fileName}</p>
+        <p className="text-xs text-muted-foreground">{formatBytes(attachment.sizeBytes)} · {readability}</p>
+      </div>
+      {isPreviewableDocument ? (
+        <Button onClick={() => void getAttachmentPreviewUrl(attachment.id).then(({ url }) => window.open(url, "_blank", "noopener"))} size="xs" type="button" variant="outline">
+          Preview
+        </Button>
+      ) : null}
+      {isPreviewableDocument ? (
+        <Button aria-label={`Download ${attachment.fileName}`} onClick={() => void openAttachment(attachment.id)} size="icon-xs" type="button" variant="outline">
+          <DownloadIcon />
+        </Button>
+      ) : null}
+    </article>
+  );
+}
+
+function ImageGallery({
+  images,
+  index,
+  onOpenChange,
+  setIndex,
+}: {
+  images: { attachment: TicketAttachment; messagePosition: number }[];
+  index: number | null;
+  onOpenChange: (open: boolean) => void;
+  setIndex: (index: number) => void;
+}) {
+  const image = index === null ? null : images[index];
+  const [url, setUrl] = useState<string>();
+
+  useEffect(() => {
+    setUrl(undefined);
+    if (image) void getAttachmentPreviewUrl(image.attachment.id).then(({ url }) => setUrl(url));
+  }, [image]);
+
+  return (
+    <Dialog open={index !== null} onOpenChange={onOpenChange}>
+      <DialogContent
+        aria-describedby={undefined}
+        className="max-w-5xl bg-background p-4"
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" && index !== null) setIndex((index - 1 + images.length) % images.length);
+          if (event.key === "ArrowRight" && index !== null) setIndex((index + 1) % images.length);
+        }}
+        showCloseButton={false}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <DialogTitle className="truncate text-sm">{image?.attachment.fileName} · {(index ?? 0) + 1} of {images.length}</DialogTitle>
+          <Button aria-label="Close gallery" onClick={() => onOpenChange(false)} size="icon-sm" type="button" variant="ghost"><XIcon /></Button>
+        </div>
+        <div className="relative grid min-h-80 place-items-center bg-muted">
+          {url ? <img alt={image?.attachment.fileName ?? ""} className="max-h-[65vh] max-w-full object-contain" src={url} /> : "Loading…"}
+          {images.length > 1 && index !== null ? (
+            <>
+              <Button aria-label="Previous image" className="absolute left-2" onClick={() => setIndex((index - 1 + images.length) % images.length)} size="icon-sm" type="button" variant="secondary"><ChevronLeftIcon /></Button>
+              <Button aria-label="Next image" className="absolute right-2" onClick={() => setIndex((index + 1) % images.length)} size="icon-sm" type="button" variant="secondary"><ChevronRightIcon /></Button>
+            </>
+          ) : null}
+        </div>
+        <div aria-label="Image filmstrip" className="flex gap-2 overflow-x-auto">
+          {images.map((entry, imageIndex) => (
+            <button aria-label={`View image ${imageIndex + 1}`} className={cn("size-12 shrink-0 overflow-hidden rounded border", index === imageIndex && "ring-2 ring-primary")} key={entry.attachment.id} onClick={() => setIndex(imageIndex)} type="button">
+              <GalleryThumbnail attachment={entry.attachment} />
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GalleryThumbnail({ attachment }: { attachment: TicketAttachment }) {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    void getAttachmentPreviewUrl(attachment.id).then(({ url }) => setUrl(url));
+  }, [attachment]);
+  return url ? <img alt="" className="size-full object-cover" src={url} /> : null;
+}
+
 function TranscriptMessage({
   message,
   onRetry,
+  onOpenImage,
 }: {
   message: TicketDetailMessage;
   onRetry: () => void;
+  onOpenImage: (attachment: TicketAttachment) => void;
 }) {
   if (message.senderType === "SYSTEM") {
     return (
@@ -589,6 +768,9 @@ function TranscriptMessage({
         <Bubble variant={bubbleVariant(message.senderType)}>
           <BubbleContent>{message.content}</BubbleContent>
         </Bubble>
+        {message.attachments.length ? (
+          <MessageAttachments attachments={message.attachments} onOpenImage={onOpenImage} />
+        ) : null}
         <MessageFooter className="flex items-center gap-1.5">
           {new Date(message.createdAt).toLocaleString()}
           {isHuman && message.deliveryStatus !== "SENT" ? (
@@ -608,6 +790,38 @@ function TranscriptMessage({
         </MessageFooter>
       </MessageContent>
     </Message>
+  );
+}
+
+function MessageAttachments({
+  attachments,
+  onOpenImage,
+}: {
+  attachments: TicketAttachment[];
+  onOpenImage: (attachment: TicketAttachment) => void;
+}) {
+  const images = attachments.filter(isImage);
+  const otherAttachments = attachments.filter((attachment) => !isImage(attachment));
+  return (
+    <div className="mt-2 grid max-w-sm gap-1.5">
+      {images.length ? (
+        <div className="grid grid-cols-3 gap-1.5">
+          {images.slice(0, 4).map((attachment, index) => (
+            <div className="relative" key={attachment.id}>
+              <AttachmentCard attachment={attachment} onOpenImage={() => onOpenImage(attachment)} />
+              {index === 3 && images.length > 4 ? (
+                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-black/60 text-sm font-semibold text-white">
+                  +{images.length - 4}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {otherAttachments.map((attachment) => (
+        <AttachmentCard attachment={attachment} key={attachment.id} onOpenImage={() => onOpenImage(attachment)} />
+      ))}
+    </div>
   );
 }
 
