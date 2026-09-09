@@ -16,7 +16,6 @@ function getIngestQueue() {
   ingestQueue ??= new Queue<KnowledgeIngestJob>("knowledge-ingest", { connection });
   return ingestQueue;
 }
-
 type KnowledgeIngestStage =
   | "UPLOADING"
   | "EXTRACTING"
