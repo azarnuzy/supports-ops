@@ -69,14 +69,21 @@ type InboxUser = { id: string; role: "ADMIN" | "HUMAN_AGENT" };
 const ticketListSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
   category: true,
+  channel: { select: { name: true, type: true } },
   createdAt: true,
-  customerIdentity: { select: { email: true, id: true, name: true } },
+  customerIdentity: { select: { email: true, externalCustomerId: true, id: true, name: true } },
+  escalatedAt: true,
   id: true,
   priority: true,
   resolvedAt: true,
   status: true,
   title: true,
   updatedAt: true,
+  messages: {
+    orderBy: { position: "desc" },
+    select: { content: true, createdAt: true },
+    take: 1,
+  },
 } as const;
 
 const ticketDetailSelect = {
@@ -132,19 +139,28 @@ export function ticketVisibilityWhere(user: InboxUser): Prisma.TicketWhereInput 
 export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
   const cursorTicket = filters.cursor
     ? await prisma.ticket.findUnique({
-        select: { createdAt: true, id: true },
+        select: { escalatedAt: true, id: true, updatedAt: true },
         where: { id: filters.cursor },
       })
     : null;
   if (filters.cursor && !cursorTicket) throw new InvalidTicketsCursorError();
 
+  const visible = ticketVisibilityWhere(user);
+  const scopeWhere: Prisma.TicketWhereInput =
+    filters.scope === "MINE"
+      ? { assignedHumanAgentId: user.id, status: "HUMAN_HANDLING" }
+      : filters.scope === "UNASSIGNED"
+        ? { assignedHumanAgentId: null, status: "ESCALATED" }
+        : {};
   const where: Prisma.TicketWhereInput = {
     AND: [
-      ticketVisibilityWhere(user),
+      visible,
+      scopeWhere,
       { deletedAt: null },
       ...(filters.status?.length ? [{ status: { in: filters.status } }] : []),
       ...(filters.category?.length ? [{ category: { in: filters.category } }] : []),
       ...(filters.priority?.length ? [{ priority: { in: filters.priority } }] : []),
+      ...(filters.channel?.length ? [{ channel: { type: { in: filters.channel } } }] : []),
       ...(filters.assigneeId ? [{ assignedHumanAgentId: filters.assigneeId }] : []),
       ...(filters.search
         ? [
@@ -153,34 +169,66 @@ export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
                 OR: [
                   { name: { contains: filters.search, mode: "insensitive" as const } },
                   { email: { contains: filters.search, mode: "insensitive" as const } },
+                  {
+                    externalCustomerId: {
+                      contains: filters.search,
+                      mode: "insensitive" as const,
+                    },
+                  },
                 ],
               },
             },
+            { id: { contains: filters.search, mode: "insensitive" as const } },
+            { title: { contains: filters.search, mode: "insensitive" as const } },
           ]
         : []),
       ...(cursorTicket
-        ? [
-            {
-              OR: [
-                { createdAt: { lt: cursorTicket.createdAt } },
-                { AND: [{ createdAt: cursorTicket.createdAt }, { id: { lt: cursorTicket.id } }] },
-              ],
-            },
-          ]
+        ? filters.scope === "UNASSIGNED"
+          ? [
+              {
+                OR: [
+                  { escalatedAt: { gt: cursorTicket.escalatedAt } },
+                  {
+                    AND: [
+                      { escalatedAt: cursorTicket.escalatedAt },
+                      { id: { gt: cursorTicket.id } },
+                    ],
+                  },
+                ],
+              },
+            ]
+          : [
+              {
+                OR: [
+                  { updatedAt: { lt: cursorTicket.updatedAt } },
+                  { AND: [{ updatedAt: cursorTicket.updatedAt }, { id: { lt: cursorTicket.id } }] },
+                ],
+              },
+            ]
         : []),
     ],
   };
 
   const tickets = await prisma.ticket.findMany({
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    orderBy:
+      filters.scope === "UNASSIGNED"
+        ? [{ escalatedAt: "asc" }, { id: "asc" }]
+        : [{ updatedAt: "desc" }, { id: "desc" }],
     select: ticketListSelect,
     take: filters.limit + 1,
     where,
   });
 
   const visibleTickets = tickets.slice(0, filters.limit);
+  const countWhere = { AND: [visible, { deletedAt: null }] };
+  const [mine, unassigned, all] = await Promise.all([
+    prisma.ticket.count({ where: { AND: [...countWhere.AND, { assignedHumanAgentId: user.id, status: "HUMAN_HANDLING" }] } }),
+    prisma.ticket.count({ where: { AND: [...countWhere.AND, { assignedHumanAgentId: null, status: "ESCALATED" }] } }),
+    prisma.ticket.count({ where: { AND: countWhere.AND } }),
+  ]);
   return {
     nextCursor: tickets.length > filters.limit ? (visibleTickets.at(-1)?.id ?? null) : null,
+    scopeCounts: { all, mine, unassigned },
     tickets: visibleTickets,
   };
 }

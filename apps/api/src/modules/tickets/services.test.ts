@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   ticketFindUniqueOrThrow: vi.fn(),
   ticketUpdateMany: vi.fn(),
   userFindFirst: vi.fn(),
+  ticketCount: vi.fn(),
 }));
 
 vi.mock("../../utils/prisma", async () => {
@@ -15,6 +16,7 @@ vi.mock("../../utils/prisma", async () => {
     Prisma: actual.Prisma,
     prisma: {
     ticket: {
+      count: mocks.ticketCount,
       findFirst: mocks.ticketFindFirst,
       findMany: mocks.ticketFindMany,
       findUnique: mocks.ticketFindUnique,
@@ -22,7 +24,6 @@ vi.mock("../../utils/prisma", async () => {
       updateMany: mocks.ticketUpdateMany,
     },
     user: { findFirst: mocks.userFindFirst },
-    },
     unscopedPrisma: {},
   };
 });
@@ -80,6 +81,7 @@ function resetMocks() {
   mocks.ticketFindUniqueOrThrow.mockReset();
   mocks.ticketUpdateMany.mockReset();
   mocks.userFindFirst.mockReset().mockResolvedValue({ id: "agent-2" });
+  mocks.ticketCount.mockReset().mockResolvedValue(0);
 }
 
 describe("listTickets", () => {
@@ -128,7 +130,7 @@ describe("listTickets", () => {
     );
   });
 
-  it("searches by customer name and email", async () => {
+  it("searches Customer Identity, Ticket number, and title without Messages", async () => {
     await listTickets({ id: "admin-1", role: "ADMIN" }, { limit: 20, search: "olivia" });
 
     const call = mocks.ticketFindMany.mock.calls[0]?.[0];
@@ -139,10 +141,23 @@ describe("listTickets", () => {
             OR: [
               { name: { contains: "olivia", mode: "insensitive" } },
               { email: { contains: "olivia", mode: "insensitive" } },
+              { externalCustomerId: { contains: "olivia", mode: "insensitive" } },
             ],
           },
         },
+        { id: { contains: "olivia", mode: "insensitive" } },
+        { title: { contains: "olivia", mode: "insensitive" } },
       ]),
+    );
+  });
+
+  it("keeps Unassigned in oldest Escalation order", async () => {
+    await listTickets({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20, scope: "UNASSIGNED" });
+
+    const call = mocks.ticketFindMany.mock.calls[0]?.[0];
+    expect(call.orderBy).toEqual([{ escalatedAt: "asc" }, { id: "asc" }]);
+    expect(call.where.AND).toEqual(
+      expect.arrayContaining([{ assignedHumanAgentId: null, status: "ESCALATED" }]),
     );
   });
 

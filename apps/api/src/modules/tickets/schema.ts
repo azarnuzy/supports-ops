@@ -40,10 +40,12 @@ export const listTicketsQuerySchema = z.object({
     "TECHNICAL",
     "GENERAL",
   ] as const),
+  channel: commaSeparatedEnum(["WEB", "WHATSAPP"] as const),
   cursor: z.string().trim().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   priority: commaSeparatedEnum(["LOW", "NORMAL", "HIGH"] as const),
   search: z.string().trim().min(1).max(200).optional(),
+  scope: z.enum(["MINE", "UNASSIGNED", "ALL"]).default("ALL"),
   status: commaSeparatedEnum(["AI_HANDLING", "ESCALATED", "HUMAN_HANDLING", "RESOLVED"] as const),
 });
 

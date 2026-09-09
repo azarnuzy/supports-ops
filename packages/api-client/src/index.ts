@@ -111,14 +111,17 @@ export type SupportTicket = {
 export type TicketListItem = {
   assignedHumanAgent: { id: string; name: string } | null;
   category: TicketCategory;
+  channel: { name: string; type: ChannelType };
   createdAt: string;
-  customerIdentity: { email: string; id: string; name: string };
+  customerIdentity: { email: string; externalCustomerId: string | null; id: string; name: string };
+  escalatedAt: string | null;
   id: string;
   priority: TicketPriority;
   resolvedAt: string | null;
   status: TicketStatus;
   title: string;
   updatedAt: string;
+  messages: { content: string; createdAt: string }[];
 };
 
 export type TicketAttachment = {
@@ -157,10 +160,12 @@ export type TicketDetail = TicketListItem & {
 export type ListTicketsFilters = {
   assigneeId?: string;
   category?: TicketCategory[];
+  channel?: ChannelType[];
   cursor?: string;
   limit?: number;
   priority?: TicketPriority[];
   search?: string;
+  scope?: "MINE" | "UNASSIGNED" | "ALL";
   status?: TicketStatus[];
 };
 
@@ -171,16 +176,22 @@ export async function listTickets(client: ApiClient, filters: ListTicketsFilters
     query: {
       ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
       ...(filters.category?.length ? { category: filters.category.join(",") } : {}),
+      ...(filters.channel?.length ? { channel: filters.channel.join(",") } : {}),
       ...(filters.cursor ? { cursor: filters.cursor } : {}),
       ...(filters.limit ? { limit: String(filters.limit) } : {}),
       ...(filters.priority?.length ? { priority: filters.priority.join(",") } : {}),
       ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.scope ? { scope: filters.scope } : {}),
       ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
     },
   });
   if (response.status === 401) throw new UnauthorizedApiError();
   if (!response.ok) throw new Error("Failed to load Tickets.");
-  return (await response.json()) as { nextCursor: string | null; tickets: TicketListItem[] };
+  return (await response.json()) as {
+    nextCursor: string | null;
+    scopeCounts: { all: number; mine: number; unassigned: number };
+    tickets: TicketListItem[];
+  };
 }
 
 export class TicketNotFoundApiError extends Error {

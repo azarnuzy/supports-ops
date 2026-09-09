@@ -1,4 +1,12 @@
-import type { SupportTicket, TicketAttachment, TicketDetailMessage } from "@repo/api-client";
+import type {
+  ChannelType,
+  TicketAttachment,
+  TicketCategory,
+  TicketDetailMessage,
+  TicketListItem,
+  TicketPriority,
+  TicketStatus,
+} from "@repo/api-client";
 import { webAttachmentCapability } from "@repo/channels";
 import {
   AlertDialog,
@@ -38,7 +46,7 @@ import { Skeleton } from "@repo/ui/components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
 import { cn } from "@repo/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   CalendarIcon,
@@ -55,13 +63,12 @@ import {
   UserRoundIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { getInitials } from "../../../../lib/utils";
 import { meQueryOptions } from "../../../auth";
 import { describeActivity } from "../../../tickets/activity-description";
 import {
-  myTicketsQueryOptions,
   ticketDetailQueryOptions,
   useGenerateSuggestedReplyMutation,
   useResolveHumanTicketMutation,
@@ -70,7 +77,7 @@ import {
   useSendHumanAttachmentsMutation,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
-import { getAttachmentPreviewUrl, openAttachment } from "../../../tickets/tickets.services";
+import { getAttachmentPreviewUrl, getTickets, openAttachment } from "../../../tickets/tickets.services";
 
 function senderName(message: TicketDetailMessage) {
   if (message.senderType === "CUSTOMER") return "Customer";
@@ -88,7 +95,53 @@ function bubbleVariant(senderType: TicketDetailMessage["senderType"]) {
 const ChatView = ({ ticketId }: { ticketId?: string }) => {
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions);
-  const tickets = useQuery(myTicketsQueryOptions);
+  const initialSearch = new URLSearchParams(window.location.search);
+  const [scope, setScope] = useState<"MINE" | "UNASSIGNED" | "ALL">(() => {
+    const value = initialSearch.get("scope");
+    return value === "MINE" || value === "UNASSIGNED" ? value : "ALL";
+  });
+  const [search, setSearch] = useState(() => initialSearch.get("search") ?? "");
+  const [status, setStatus] = useState<TicketStatus | "">(() =>
+    (["AI_HANDLING", "ESCALATED", "HUMAN_HANDLING", "RESOLVED"] as const).includes(
+      initialSearch.get("status") as TicketStatus,
+    )
+      ? (initialSearch.get("status") as TicketStatus)
+      : "",
+  );
+  const [category, setCategory] = useState<TicketCategory | "">(() =>
+    (["ACCOUNT", "BILLING", "SUBSCRIPTION", "TECHNICAL", "GENERAL"] as const).includes(
+      initialSearch.get("category") as TicketCategory,
+    )
+      ? (initialSearch.get("category") as TicketCategory)
+      : "",
+  );
+  const [priority, setPriority] = useState<TicketPriority | "">(() =>
+    (["LOW", "NORMAL", "HIGH"] as const).includes(initialSearch.get("priority") as TicketPriority)
+      ? (initialSearch.get("priority") as TicketPriority)
+      : "",
+  );
+  const [channel, setChannel] = useState<ChannelType | "">(() =>
+    (["WEB", "WHATSAPP"] as const).includes(initialSearch.get("channel") as ChannelType)
+      ? (initialSearch.get("channel") as ChannelType)
+      : "",
+  );
+  const filters = useMemo(
+    () => ({
+      category: category ? [category] : undefined,
+      channel: channel ? [channel] : undefined,
+      priority: priority ? [priority] : undefined,
+      scope,
+      search: search.trim() || undefined,
+      status: status ? [status] : undefined,
+    }),
+    [category, channel, priority, scope, search, status],
+  );
+  const tickets = useInfiniteQuery({
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => getTickets({ ...filters, cursor: pageParam }),
+    queryKey: ["chat-tickets", filters],
+  });
   const ticket = useQuery({
     ...ticketDetailQueryOptions(ticketId ?? ""),
     enabled: Boolean(ticketId),
@@ -101,7 +154,6 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
   const resolve = useResolveHumanTicketMutation();
   const retryReply = useRetryHumanReplyMutation();
 
-  const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
@@ -111,11 +163,22 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
   const replyKey = useRef<string | undefined>(undefined);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
 
-  // Entering a populated Mine scope selects the first Ticket so the workspace
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (scope !== "ALL") params.set("scope", scope);
+    if (search.trim()) params.set("search", search.trim());
+    if (status) params.set("status", status);
+    if (category) params.set("category", category);
+    if (priority) params.set("priority", priority);
+    if (channel) params.set("channel", channel);
+    window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`);
+  }, [category, channel, priority, scope, search, status, ticketId]);
+
+  // Entering a populated scope selects the first Ticket so the workspace
   // never opens on an arbitrary blank state.
   useEffect(() => {
     if (ticketId || !tickets.data) return;
-    const first = tickets.data.tickets[0];
+    const first = tickets.data.pages[0]?.tickets[0];
     if (first) {
       void navigate({
         params: { ticketId: first.id },
@@ -125,9 +188,8 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
     }
   }, [navigate, ticketId, tickets.data]);
 
-  const rows = tickets.data?.tickets.filter((row) =>
-    row.customerIdentity.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const rows = tickets.data?.pages.flatMap((page) => page.tickets) ?? [];
+  const scopeCounts = tickets.data?.pages[0]?.scopeCounts;
 
   const detail = ticket.data?.ticket;
   const canReply =
@@ -169,17 +231,53 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
       >
         <aside className="flex min-h-0 flex-col border-r">
           <div className="border-b p-4">
-            <p className="text-lg font-semibold">Mine</p>
-            <p className="text-xs text-muted-foreground">Tickets assigned to you</p>
+            <div className="flex gap-1">
+              {([
+                ["MINE", "Mine", scopeCounts?.mine],
+                ["UNASSIGNED", "Unassigned", scopeCounts?.unassigned],
+                ["ALL", "All", scopeCounts?.all],
+              ] as const).map(([value, label, count]) => (
+                <Button
+                  key={value}
+                  onClick={() => setScope(value)}
+                  size="sm"
+                  type="button"
+                  variant={scope === value ? "secondary" : "ghost"}
+                >
+                  {label}{typeof count === "number" ? ` (${count})` : ""}
+                </Button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {scope === "UNASSIGNED"
+                ? "Shared Human Queue — oldest Escalation first"
+                : scope === "MINE"
+                  ? "Tickets assigned to you"
+                  : "Tickets you are allowed to see"}
+            </p>
           </div>
           <div className="border-b p-3">
             <InputGroup>
               <InputGroupInput
-                placeholder="Search by customer name..."
+                placeholder="Search name, email, ID, Ticket, title..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
             </InputGroup>
+            <div className="mt-2 grid grid-cols-2 gap-1">
+              <select aria-label="Filter status" className="h-8 rounded border bg-background px-2 text-xs" value={status} onChange={(event) => setStatus(event.target.value as TicketStatus | "")}>
+                <option value="">All statuses</option><option value="AI_HANDLING">AI handling</option><option value="ESCALATED">Escalated</option><option value="HUMAN_HANDLING">Human handling</option><option value="RESOLVED">Resolved</option>
+              </select>
+              <select aria-label="Filter category" className="h-8 rounded border bg-background px-2 text-xs" value={category} onChange={(event) => setCategory(event.target.value as TicketCategory | "")}>
+                <option value="">All categories</option><option value="ACCOUNT">Account</option><option value="BILLING">Billing</option><option value="SUBSCRIPTION">Subscription</option><option value="TECHNICAL">Technical</option><option value="GENERAL">General</option>
+              </select>
+              <select aria-label="Filter priority" className="h-8 rounded border bg-background px-2 text-xs" value={priority} onChange={(event) => setPriority(event.target.value as TicketPriority | "")}>
+                <option value="">All priorities</option><option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option>
+              </select>
+              <select aria-label="Filter channel" className="h-8 rounded border bg-background px-2 text-xs" value={channel} onChange={(event) => setChannel(event.target.value as ChannelType | "")}>
+                <option value="">All channels</option><option value="WEB">Web</option><option value="WHATSAPP">WhatsApp</option>
+              </select>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {tickets.isPending ? (
@@ -191,14 +289,12 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
             ) : null}
             {tickets.isError ? (
               <p className="p-4 text-center text-xs text-destructive">
-                Unable to load your Tickets.
+                Unable to load Tickets.
               </p>
             ) : null}
-            {tickets.data && rows?.length === 0 ? (
+            {tickets.data && rows.length === 0 ? (
               <p className="p-4 text-center text-xs text-muted-foreground">
-                {tickets.data.tickets.length === 0
-                  ? "No Tickets are assigned to you yet. Claim one from the Shared Human Queue to see it here."
-                  : "No Tickets match this search."}
+                No Tickets match this scope and filters.
               </p>
             ) : null}
             <div className="flex flex-col gap-0.5">
@@ -213,13 +309,18 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                 />
               ))}
             </div>
+            {tickets.hasNextPage ? (
+              <Button className="m-2" disabled={tickets.isFetchingNextPage} onClick={() => void tickets.fetchNextPage()} size="sm" type="button" variant="outline">
+                {tickets.isFetchingNextPage ? "Loading…" : "Load more"}
+              </Button>
+            ) : null}
           </div>
         </aside>
         <section className="flex min-h-0 flex-col">
           {!ticketId ? (
             <Empty className="m-auto border-0">
               <EmptyTitle>Select a Ticket</EmptyTitle>
-              <EmptyDescription>Choose a Ticket from Mine to view its transcript.</EmptyDescription>
+              <EmptyDescription>Choose a Ticket to view its transcript.</EmptyDescription>
             </Empty>
           ) : null}
           {ticketId && ticket.isPending ? (
@@ -584,9 +685,9 @@ function TicketRow({
 }: {
   active: boolean;
   onSelect: () => void;
-  ticket: SupportTicket;
+  ticket: TicketListItem;
 }) {
-  const lastMessage = ticket.messages.at(-1);
+  const lastMessage = ticket.messages[0];
   return (
     <button
       type="button"
@@ -603,11 +704,22 @@ function TicketRow({
         <span className="flex justify-between gap-2">
           <b className="truncate text-sm">{ticket.customerIdentity.name}</b>
           <small className="shrink-0 text-muted-foreground">
-            {new Date(ticket.createdAt).toLocaleDateString()}
+            {ticket.escalatedAt
+              ? `${Math.max(0, Math.floor((Date.now() - new Date(ticket.escalatedAt).getTime()) / 60000))}m waiting`
+              : new Date(ticket.updatedAt).toLocaleDateString()}
           </small>
         </span>
         <span className="mt-1 block truncate text-xs text-muted-foreground">
           {lastMessage?.content ?? ticket.title}
+        </span>
+        <span className="mt-1 flex items-center gap-1 overflow-hidden">
+          <StatusBadge status={ticket.status} />
+          <PriorityBadge priority={ticket.priority} />
+          <Badge variant="outline">{ticket.category}</Badge>
+          <Badge variant="outline">{ticket.channel.name}</Badge>
+          <small className="truncate text-muted-foreground">
+            {ticket.assignedHumanAgent?.name ?? "Unassigned"}
+          </small>
         </span>
       </span>
     </button>

@@ -22,8 +22,6 @@ import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
-  AlarmClockIcon,
-  AtSignIcon,
   CameraIcon,
   InboxIcon,
   LayoutDashboardIcon,
@@ -37,13 +35,11 @@ import {
   MonitorIcon,
   PackageIcon,
   PhoneIcon,
-  SendIcon,
   SettingsIcon,
   Share2Icon,
   StarIcon,
   TicketCheckIcon,
   UserRoundIcon,
-  UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth";
@@ -51,12 +47,7 @@ import { getInitials } from "../../lib/utils";
 import { HeaderControls } from "./components/header-controls";
 
 const inboxShortcuts = [
-  { icon: InboxIcon, label: "Inbox", count: 24, active: true },
-  { icon: AtSignIcon, label: "Mentions", count: 3 },
-  { icon: AlarmClockIcon, label: "Snoozed", count: 2 },
-  { icon: SendIcon, label: "Sent" },
-  { icon: MessagesSquareIcon, label: "All conversations" },
-  { icon: UsersIcon, label: "Unassigned", count: 7 },
+  { icon: InboxIcon, label: "My Inbox", to: "/chat?scope=MINE" },
 ];
 
 const channelShortcuts = [
@@ -165,15 +156,12 @@ export function PlatformAppShell({
                   <SidebarMenu>
                     {inboxShortcuts.map((item) => (
                       <SidebarMenuItem key={item.label}>
-                        <SidebarMenuButton
-                          type="button"
-                          isActive={item.active}
-                          tooltip={item.label}
-                        >
+                        <SidebarMenuButton asChild isActive={window.location.search === "?scope=MINE"} tooltip={item.label}>
+                          <a href={item.to}>
                           <item.icon className="size-4 shrink-0" />
                           <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                          </a>
                         </SidebarMenuButton>
-                        {item.count ? <SidebarMenuBadge>{item.count}</SidebarMenuBadge> : null}
                       </SidebarMenuItem>
                     ))}
                   </SidebarMenu>
