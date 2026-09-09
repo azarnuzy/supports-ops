@@ -33,6 +33,13 @@ export const updateWebWidgetConfigSchema = z.object({
     .array(domainSchema)
     .max(20)
     .transform((domains) => Array.from(new Set(domains))),
+  logoKey: z.string().nullable().optional(),
 });
 
 export type UpdateWebWidgetConfigInput = z.infer<typeof updateWebWidgetConfigSchema>;
+
+export const uploadWebWidgetLogoSchema = z.object({
+  file: z.instanceof(File),
+});
+
+export type UploadWebWidgetLogoInput = z.infer<typeof uploadWebWidgetLogoSchema>;

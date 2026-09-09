@@ -5,6 +5,8 @@ export type WebWidgetConfig = {
   welcomeMessage: string;
   primaryColor: string;
   allowedDomains: string[];
+  logoKey: string | null;
+  logoUrl: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -15,6 +17,7 @@ export type UpdateWebWidgetConfigInput = {
   primaryColor: string;
   closingMessage: string | null;
   allowedDomains: string[];
+  logoKey?: string | null;
 };
 
 export type WebWidgetConfigResult = {

@@ -2,6 +2,7 @@ import {
   createApiClient,
   fetchWebWidgetConfig,
   updateWebWidgetConfig as updateWebWidgetConfigRequest,
+  uploadWebWidgetLogo as uploadWebWidgetLogoRequest,
 } from "@repo/api-client";
 import type { UpdateWebWidgetConfigInput } from "./widget-config.types";
 
@@ -14,4 +15,8 @@ export async function getWebWidgetConfig() {
 
 export async function updateWebWidgetConfig(input: UpdateWebWidgetConfigInput) {
   return updateWebWidgetConfigRequest(apiClient, input);
+}
+
+export async function uploadWebWidgetLogo(file: File) {
+  return uploadWebWidgetLogoRequest(apiClient, file);
 }
