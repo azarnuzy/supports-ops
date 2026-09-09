@@ -6,7 +6,7 @@ import {
   useCreateManualFaqMutation,
   useDeleteKnowledgeSourceMutation,
   usePublishKnowledgeSourceMutation,
-  useUpdateManualFaqMutation,
+  useUpdateKnowledgeSourceMutation,
 } from "../../knowledge.hooks";
 import { testRetrieval } from "../../knowledge.services";
 import type { KnowledgeSource, KnowledgeVisibility } from "../../knowledge.types";
@@ -14,7 +14,7 @@ import type { KnowledgeSource, KnowledgeVisibility } from "../../knowledge.types
 export function useKnowledgeSourcesForm() {
   const knowledgeSources = useQuery(knowledgeSourcesQueryOptions);
   const createManualFaq = useCreateManualFaqMutation();
-  const updateManualFaq = useUpdateManualFaqMutation();
+  const updateManualFaq = useUpdateKnowledgeSourceMutation();
   const publishKnowledgeSource = usePublishKnowledgeSourceMutation();
   const deleteKnowledgeSource = useDeleteKnowledgeSourceMutation();
 
