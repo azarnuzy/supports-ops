@@ -5,10 +5,17 @@ const mocks = vi.hoisted(() => ({
   createOpenAiEmbeddingClient: vi.fn(),
   embed: vi.fn(),
   findFirst: vi.fn(),
+  publish: vi.fn(),
   replaceChunks: vi.fn(),
   txKnowledgeSourceFindFirst: vi.fn(),
   txKnowledgeSourceUpdate: vi.fn(),
   update: vi.fn(),
+}));
+
+vi.mock("ioredis", () => ({
+  default: class {
+    publish = mocks.publish;
+  },
 }));
 
 vi.mock("@repo/knowledge", () => ({
@@ -58,6 +65,7 @@ function resetMocks() {
   mocks.createOpenAiEmbeddingClient.mockReset().mockReturnValue({ embed: mocks.embed });
   mocks.embed.mockReset().mockResolvedValue([[0.1, 0.2]]);
   mocks.findFirst.mockReset().mockResolvedValue({ id: "ks-1" });
+  mocks.publish.mockReset().mockResolvedValue(1);
   mocks.txKnowledgeSourceFindFirst.mockReset().mockResolvedValue({ id: "ks-1" });
   mocks.replaceChunks.mockReset().mockResolvedValue(undefined);
   mocks.txKnowledgeSourceUpdate.mockReset().mockResolvedValue(undefined);
@@ -92,9 +100,31 @@ describe("processKnowledgeIngestJob", () => {
       }),
     );
     expect(mocks.txKnowledgeSourceUpdate).toHaveBeenCalledWith({
-      data: { publishedAt: expect.any(Date), status: "PUBLISHED" },
+      data: { publishedAt: expect.any(Date), stage: "PUBLISHED", status: "PUBLISHED" },
       where: { id: "ks-1" },
     });
+  });
+
+  it("persists and publishes each ingest stage in order before its work begins", async () => {
+    await processKnowledgeIngestJob(baseJob);
+
+    expect(mocks.update.mock.calls.map((call) => call[0])).toEqual([
+      { data: { stage: "CHUNKING" }, where: { id: "ks-1" } },
+      { data: { stage: "EMBEDDING" }, where: { id: "ks-1" } },
+      { data: { stage: "INDEXING" }, where: { id: "ks-1" } },
+    ]);
+
+    const [chunkingUpdate, embeddingUpdate, indexingUpdate] = mocks.update.mock.invocationCallOrder;
+    expect(chunkingUpdate).toBeLessThan(mocks.chunkText.mock.invocationCallOrder[0]);
+    expect(embeddingUpdate).toBeLessThan(mocks.createOpenAiEmbeddingClient.mock.invocationCallOrder[0]);
+    expect(indexingUpdate).toBeLessThan(mocks.txKnowledgeSourceFindFirst.mock.invocationCallOrder[0]);
+
+    expect(mocks.publish.mock.calls.map(([, payload]) => JSON.parse(payload as string).data.stage)).toEqual([
+      "CHUNKING",
+      "EMBEDDING",
+      "INDEXING",
+      "PUBLISHED",
+    ]);
   });
 
   it("does not restore chunks when the source was deleted during embedding", async () => {
@@ -119,7 +149,7 @@ describe("processKnowledgeIngestJob", () => {
     await expect(processKnowledgeIngestJob(baseJob)).rejects.toThrow("provider timed out");
 
     expect(mocks.update).toHaveBeenCalledWith({
-      data: { failureReason: "provider timed out", status: "FAILED" },
+      data: { failedStage: "EMBEDDING", failureReason: "provider timed out", status: "FAILED" },
       where: { id: "ks-1" },
     });
     expect(mocks.replaceChunks).not.toHaveBeenCalled();

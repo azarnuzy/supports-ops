@@ -1,4 +1,9 @@
-import type { KnowledgeSourceType, KnowledgeStatus, KnowledgeVisibility } from "../../utils/prisma";
+import type {
+  KnowledgeIngestStage,
+  KnowledgeSourceType,
+  KnowledgeStatus,
+  KnowledgeVisibility,
+} from "../../utils/prisma";
 
 export type KnowledgeSourceDto = {
   id: string;
@@ -9,6 +14,8 @@ export type KnowledgeSourceDto = {
   sourceUrl: string | null;
   visibility: KnowledgeVisibility;
   status: KnowledgeStatus;
+  stage: KnowledgeIngestStage | null;
+  failedStage: KnowledgeIngestStage | null;
   failureReason: string | null;
   createdAt: Date;
   updatedAt: Date;

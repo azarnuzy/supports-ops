@@ -2,6 +2,7 @@ export type {
   KnowledgeSource,
   KnowledgeSourceType,
   KnowledgeStatus,
+  KnowledgeIngestStage,
   KnowledgeVisibility,
   ManualFaqInput,
   DocumentationUrlInput,
