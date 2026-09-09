@@ -39,6 +39,7 @@ import {
   useKnowledgeSourceEvents,
 } from "../../knowledge.hooks";
 import type { KnowledgeSourceType, KnowledgeVisibility } from "../../knowledge.types";
+import { KnowledgeDetailDrawer } from "./knowledge-detail-drawer";
 import { formatUpdatedAt, sourceTypeLabel, statusLabel, statusVariant, visibilityLabel } from "./knowledge.services";
 
 type DialogKind = "file" | "text" | "website" | null;
@@ -54,6 +55,7 @@ const KnowledgeView = () => {
   const addPdf = useCreatePdfKnowledgeSourceMutation();
   const deleteKnowledgeSource = useDeleteKnowledgeSourceMutation();
   const [dialog, setDialog] = useState<DialogKind>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<SourceFilter>("ALL");
   const [query, setQuery] = useState("");
   const [visibility, setVisibility] = useState<KnowledgeVisibility>("CUSTOMER_SAFE");
@@ -63,6 +65,7 @@ const KnowledgeView = () => {
   const [content, setContent] = useState("");
 
   const sources = knowledgeSources.data?.knowledgeSources ?? [];
+  const selectedSource = sources.find((source) => source.id === selectedId) ?? null;
   const visibleSources = sources.filter(
     (source) =>
       (filter === "ALL" || source.sourceType === filter) &&
@@ -194,15 +197,32 @@ const KnowledgeView = () => {
             <p className="p-12 text-center text-sm text-muted-foreground">No Knowledge Sources match this search or type.</p>
           ) : null}
           {visibleSources.map((source) => (
-            <div key={source.id} className="grid gap-3 border-b p-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center">
+            <div
+              key={source.id}
+              className="grid cursor-pointer gap-3 border-b p-4 last:border-b-0 hover:bg-accent/50 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedId(source.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedId(source.id);
+                }
+              }}
+            >
               <div className="min-w-0"><div className="flex items-center gap-2"><FileTextIcon className="size-4 shrink-0 text-muted-foreground" /><p className="truncate font-medium">{source.title}</p></div><p className="mt-1 truncate pl-6 text-sm text-muted-foreground">{source.sourceUrl ?? sourceTypeLabel(source.sourceType)}</p></div>
               <Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>
               <Badge variant={statusVariant(source.status)}>{source.status === "PROCESSING" && source.stage ? statusLabel(source.stage) : statusLabel(source.status)}</Badge>
-              <div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">Last updated {formatUpdatedAt(source.updatedAt)}</span><DropdownMenu><DropdownMenuTrigger asChild><Button aria-label={`Actions for ${source.title}`} size="icon-sm" variant="ghost"><MoreHorizontalIcon className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem variant="destructive" onSelect={() => deleteKnowledgeSource.mutate(source.id, { onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete."), onSuccess: () => toast.success("Knowledge Source deleted.") })}>Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+              <div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">Last updated {formatUpdatedAt(source.updatedAt)}</span><DropdownMenu><DropdownMenuTrigger asChild><Button aria-label={`Actions for ${source.title}`} size="icon-sm" variant="ghost" onClick={(event) => event.stopPropagation()}><MoreHorizontalIcon className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}><DropdownMenuItem variant="destructive" onSelect={() => deleteKnowledgeSource.mutate(source.id, { onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete."), onSuccess: () => toast.success("Knowledge Source deleted.") })}>Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
             </div>
           ))}
         </div>
       </section>
+
+      <KnowledgeDetailDrawer
+        source={selectedSource}
+        onOpenChange={(open) => !open && setSelectedId(null)}
+      />
 
       <Dialog open={dialog === "website"} onOpenChange={(open) => !open && closeDialog()}><DialogContent><form className="grid gap-5" onSubmit={handleWebsite}><DialogHeader><DialogTitle>Add Website</DialogTitle><DialogDescription>Import pages from one documentation website.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor="knowledge-url">Website URL</FieldLabel><Input id="knowledge-url" required placeholder="https://docs.example.com" type="url" value={url} onChange={(event) => setUrl(event.target.value)} /></Field><VisibilitySelect value={visibility} onChange={setVisibility} /><DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button disabled={!url.trim() || addDocumentationUrl.isPending} type="submit">{addDocumentationUrl.isPending ? "Starting..." : "Add Website"}</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={dialog === "file"} onOpenChange={(open) => !open && closeDialog()}><DialogContent><form className="grid gap-5" onSubmit={handleFile}><DialogHeader><DialogTitle>Add File</DialogTitle><DialogDescription>Upload one PDF, up to 25 MB.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor="knowledge-file">PDF file</FieldLabel><Input accept="application/pdf" id="knowledge-file" required type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field><VisibilitySelect value={visibility} onChange={setVisibility} /><DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button disabled={!file || addPdf.isPending} type="submit">{addPdf.isPending ? "Uploading..." : "Add File"}</Button></DialogFooter></form></DialogContent></Dialog>
