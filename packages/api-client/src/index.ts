@@ -261,6 +261,7 @@ export async function reassignTicket(client: ApiClient, id: string, humanAgentId
 
   if (response.status === 403) throw new Error("Only an Admin can reassign Tickets.");
   if (response.status === 422) throw new Error("Choose an active Human Agent in this Workspace.");
+  if (response.status === 409) throw new Error("This Ticket can no longer be assigned.");
   if (!response.ok) throw new Error("Failed to reassign the Ticket.");
   return (await response.json()) as { ticket: SupportTicket };
 }
@@ -311,8 +312,7 @@ export async function resolveHumanTicket(client: ApiClient, id: string) {
     json: { resolutionReason: "HUMAN_RESOLVED" },
   });
   if (response.status === 401) throw new UnauthorizedApiError();
-  if (response.status === 403)
-    throw new Error("Only the assigned Human Agent can resolve this Ticket.");
+  if (response.status === 403) throw new Error("Only the Ticket owner can resolve this Ticket.");
   if (response.status === 409)
     throw new Error("Finish or retry the pending reply before resolving this Ticket.");
   if (!response.ok) throw new Error("Failed to resolve the Ticket.");

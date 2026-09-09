@@ -53,6 +53,7 @@ export class TicketNotOwnedError extends Error {}
 export class PendingMessageDeliveryError extends Error {}
 export class SuggestedReplyNotConfiguredError extends Error {}
 export class TicketNotAvailableForTakeoverError extends Error {}
+export class TicketNotAvailableForAssignmentError extends Error {}
 export class TicketNotFoundError extends Error {}
 export class InvalidTicketsCursorError extends Error {
   constructor() {
@@ -433,8 +434,18 @@ export async function reassignTicket(ticketId: string, humanAgentId: string, wor
     where: { id: humanAgentId, role: "HUMAN_AGENT" },
   });
   if (!humanAgent) throw new HumanAgentNotFoundError();
-  const ticket = await prisma.ticket.update({
+  const transition = await prisma.ticket.updateMany({
     data: { assignedHumanAgentId: humanAgent.id, status: "HUMAN_HANDLING" },
+    where: {
+      id: ticketId,
+      OR: [
+        { assignedHumanAgentId: null, status: "ESCALATED" },
+        { status: "HUMAN_HANDLING" },
+      ],
+    },
+  });
+  if (!transition.count) throw new TicketNotAvailableForAssignmentError();
+  const ticket = await prisma.ticket.findUniqueOrThrow({
     select: ticketSelect,
     where: { id: ticketId },
   });
