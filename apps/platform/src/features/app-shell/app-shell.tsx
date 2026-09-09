@@ -25,11 +25,9 @@ import {
   LayoutDashboardIcon,
   LibraryBigIcon,
   LogOutIcon,
-  MessageSquareIcon,
   MonitorIcon,
   SettingsIcon,
   TicketCheckIcon,
-  UserRoundIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth";
@@ -64,16 +62,14 @@ export function PlatformAppShell({
     user.data.role === "ADMIN"
       ? [
           { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
-          { icon: InboxIcon, label: "Inbox", to: "/tickets" },
-          { icon: MessageSquareIcon, label: "Live tickets", to: "/tickets/queue" },
-          { icon: UserRoundIcon, label: "My tickets", to: "/tickets/mine" },
+          { icon: InboxIcon, label: "My Tickets", to: "/chat" },
+          { icon: TicketCheckIcon, label: "Unassigned", to: "/chat/unassigned" },
           { icon: LibraryBigIcon, label: "Knowledge", to: "/knowledge" },
           { icon: SettingsIcon, label: "Settings", to: "/settings/agents" },
         ]
       : [
-          { icon: InboxIcon, label: "Inbox", to: "/tickets" },
-          { icon: TicketCheckIcon, label: "Shared queue", to: "/tickets/queue" },
-          { icon: UserRoundIcon, label: "My tickets", to: "/tickets/mine" },
+          { icon: InboxIcon, label: "My Tickets", to: "/chat" },
+          { icon: TicketCheckIcon, label: "Unassigned", to: "/chat/unassigned" },
         ];
 
   return (
