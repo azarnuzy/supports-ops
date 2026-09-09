@@ -81,6 +81,12 @@ Lalu lakukan Pre-Chat memakai nama bebas dan salah satu email demo (contoh `siti
 
 Untuk menguji aturan keamanan origin, buka demo host dari origin yang belum diizinkan atau hapus `localhost:3001` dari allowlist. Launcher tidak akan dimuat karena `GET /widget/config` ditolak. Tambahkan origin tersebut kembali untuk melanjutkan.
 
+### Menguji logo pada header Widget
+
+1. Di **Settings → Web Widget**, unggah logo (PNG/JPG/SVG, maks. 2MB).
+2. Muat ulang demo host (`http://localhost:3001/demo.html?widgetKey=<widget-key>`), buka launcher, dan konfirmasi logo tersebut muncul di header panel chat. Tombol launcher tetap memakai ikon generik.
+3. Hapus logo dari Settings, muat ulang demo host lagi, dan konfirmasi header kembali memakai ikon chat generik.
+
 ### Menguji Session Link dengan Mailpit
 
 Mailpit menangkap email lokal; tidak ada email yang dikirim ke inbox sungguhan. Pastikan
