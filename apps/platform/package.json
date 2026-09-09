@@ -9,7 +9,8 @@
     "generate:routes": "node scripts/generate-route-tree.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "pretypecheck": "pnpm generate:routes",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@repo/api-client": "workspace:*",
@@ -22,6 +23,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-generator": "^1.167.27",
     "@tanstack/router-plugin": "^1.168.29",
