@@ -637,7 +637,7 @@ export async function createPdfKnowledgeSource(
   return (await response.json()) as { knowledgeSource: KnowledgeSource };
 }
 
-export async function updateManualFaq(client: ApiClient, id: string, input: ManualFaqInput) {
+export async function updateKnowledgeSource(client: ApiClient, id: string, input: ManualFaqInput) {
   const response = await client.knowledge[":id"].$patch({ json: input, param: { id } });
 
   if (response.status === 404) {
