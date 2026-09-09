@@ -3,11 +3,12 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { subscribeToTicketQueueEvents } from "../widget/realtime";
+import { subscribeToTicketQueueEvents, subscribeToWidgetEvents } from "../widget/realtime";
 import {
   humanReplySchema,
   humanAttachmentReplySchema,
   listTicketsQuerySchema,
+  markTicketReadSchema,
   reassignTicketSchema,
   resolveTicketSchema,
 } from "./schema";
@@ -23,6 +24,7 @@ import {
   listAiHandlingTickets,
   listSharedHumanQueue,
   listTickets,
+  markTicketRead,
   reassignTicket,
   suggestReply,
   SuggestedReplyNotConfiguredError,
@@ -52,8 +54,9 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     }
   })
   .get("/queue", async (c) => {
-    if (!c.get("user")) return c.json({ error: "unauthorized" }, 401);
-    return c.json({ tickets: await listSharedHumanQueue() }, 200);
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    return c.json({ tickets: await listSharedHumanQueue(user.id) }, 200);
   })
   .get("/mine", async (c) => {
     const user = c.get("user");
@@ -70,6 +73,33 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     if (!user) return c.json({ error: "unauthorized" }, 401);
     try {
       return c.json({ ticket: await getTicketDetail(c.req.param("id"), user) }, 200);
+    } catch (error) {
+      if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
+      throw error;
+    }
+  })
+  .get("/:id/events", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    try {
+      await getTicketDetail(c.req.param("id"), user);
+    } catch (error) {
+      if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
+      throw error;
+    }
+    return streamSSE(c, async (stream) => {
+      const unsubscribe = await subscribeToWidgetEvents(c.req.param("id"), async (event) => {
+        await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
+      });
+      stream.onAbort(unsubscribe);
+      await new Promise<void>(() => undefined);
+    });
+  })
+  .post("/:id/read", zValidator("json", markTicketReadSchema), async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    try {
+      return c.json(await markTicketRead(c.req.param("id"), user, c.req.valid("json").position), 200);
     } catch (error) {
       if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
       throw error;

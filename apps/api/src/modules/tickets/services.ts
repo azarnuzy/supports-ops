@@ -183,7 +183,7 @@ export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
   const visibleTickets = tickets.slice(0, filters.limit);
   return {
     nextCursor: tickets.length > filters.limit ? (visibleTickets.at(-1)?.id ?? null) : null,
-    tickets: visibleTickets,
+    tickets: await attachUnreadCounts(user.id, visibleTickets),
   };
 }
 
@@ -193,23 +193,65 @@ export async function getTicketDetail(ticketId: string, user: InboxUser) {
     where: { AND: [{ deletedAt: null, id: ticketId }, ticketVisibilityWhere(user)] },
   });
   if (!ticket) throw new TicketNotFoundError();
-  return ticket;
+  const [withUnread] = await attachUnreadCounts(user.id, [ticket]);
+  return withUnread;
 }
 
-export function listSharedHumanQueue() {
-  return prisma.ticket.findMany({
+/** Unread counts are computed against Ticket.messageSeq positions in one
+ * grouped query rather than by loading every transcript. Only Customer
+ * Messages count, and the count is personal to `userId` — another Human
+ * Agent's read state never affects it. */
+async function attachUnreadCounts<T extends { id: string }>(userId: string, tickets: T[]) {
+  if (!tickets.length) return tickets.map((ticket) => ({ ...ticket, unreadCount: 0 }));
+  const rows = await prisma.$queryRaw<{ ticketId: string; count: bigint }[]>`
+    SELECT m."ticketId" as "ticketId", COUNT(*)::bigint as count
+    FROM "Message" m
+    LEFT JOIN "TicketReadState" r ON r."ticketId" = m."ticketId" AND r."userId" = ${userId}
+    WHERE m."ticketId" = ANY(${tickets.map((ticket) => ticket.id)})
+      AND m."senderType" = 'CUSTOMER'
+      AND m.position > COALESCE(r."lastReadPosition", 0)
+    GROUP BY m."ticketId"
+  `;
+  const counts = new Map(rows.map((row) => [row.ticketId, Number(row.count)]));
+  return tickets.map((ticket) => ({ ...ticket, unreadCount: counts.get(ticket.id) ?? 0 }));
+}
+
+export async function listSharedHumanQueue(viewerId: string) {
+  const tickets = await prisma.ticket.findMany({
     orderBy: { escalatedAt: "asc" },
     select: ticketSelect,
     where: { assignedHumanAgentId: null, status: "ESCALATED" },
   });
+  return attachUnreadCounts(viewerId, tickets);
 }
 
-export function listMyTickets(humanAgentId: string) {
-  return prisma.ticket.findMany({
+export async function listMyTickets(humanAgentId: string) {
+  const tickets = await prisma.ticket.findMany({
     orderBy: { updatedAt: "desc" },
     select: ticketSelect,
     where: { assignedHumanAgentId: humanAgentId, status: "HUMAN_HANDLING" },
   });
+  return attachUnreadCounts(humanAgentId, tickets);
+}
+
+/** Persists the caller's last-read Message position for a Ticket. The
+ * ON CONFLICT clause takes the max of the stored and incoming position, so
+ * an out-of-order or duplicate call can never regress read state. */
+export async function markTicketRead(ticketId: string, user: InboxUser, position: number) {
+  const ticket = await prisma.ticket.findFirst({
+    select: { messageSeq: true, workspaceId: true },
+    where: { AND: [{ deletedAt: null, id: ticketId }, ticketVisibilityWhere(user)] },
+  });
+  if (!ticket) throw new TicketNotFoundError();
+  const clamped = Math.min(Math.max(position, 0), ticket.messageSeq);
+  await prisma.$executeRaw`
+    INSERT INTO "TicketReadState" ("id", "workspaceId", "ticketId", "userId", "lastReadPosition", "updatedAt")
+    VALUES (${randomUUID()}, ${ticket.workspaceId}, ${ticketId}, ${user.id}, ${clamped}, now())
+    ON CONFLICT ("ticketId", "userId") DO UPDATE
+      SET "lastReadPosition" = GREATEST("TicketReadState"."lastReadPosition", EXCLUDED."lastReadPosition"),
+          "updatedAt" = now()
+  `;
+  return { lastReadPosition: clamped };
 }
 
 export function listAiHandlingTickets(workspaceId: string) {
