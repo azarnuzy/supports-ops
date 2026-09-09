@@ -655,6 +655,25 @@ export async function updateKnowledgeSource(client: ApiClient, id: string, input
   return (await response.json()) as { knowledgeSource: KnowledgeSource };
 }
 
+export async function refreshKnowledgeSource(client: ApiClient, id: string) {
+  const response = await client.knowledge[":id"].refresh.$post({ param: { id } });
+
+  if (response.status === 404) {
+    throw new KnowledgeSourceNotFoundApiError();
+  }
+
+  if (response.status === 409 || response.status === 422) {
+    const data = (await response.json()) as { message: string };
+    throw new KnowledgeSourceProcessingApiError(data.message);
+  }
+
+  if (!response.ok) {
+    throw new Error("Failed to update the source.");
+  }
+
+  return (await response.json()) as { knowledgeSource: KnowledgeSource };
+}
+
 export async function publishKnowledgeSource(client: ApiClient, id: string) {
   const response = await client.knowledge[":id"].publish.$post({ param: { id } });
 

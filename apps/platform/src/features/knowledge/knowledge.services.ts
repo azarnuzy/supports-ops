@@ -6,6 +6,7 @@ import {
   deleteKnowledgeSource as deleteKnowledgeSourceRequest,
   listKnowledgeSources,
   publishKnowledgeSource as publishKnowledgeSourceRequest,
+  refreshKnowledgeSource as refreshKnowledgeSourceRequest,
   testKnowledgeRetrieval,
   updateKnowledgeSource as updateKnowledgeSourceRequest,
 } from "@repo/api-client";
@@ -45,6 +46,10 @@ export async function updateKnowledgeSource(id: string, input: ManualFaqInput) {
 
 export async function publishKnowledgeSource(id: string) {
   return publishKnowledgeSourceRequest(apiClient, id);
+}
+
+export async function refreshKnowledgeSource(id: string) {
+  return refreshKnowledgeSourceRequest(apiClient, id);
 }
 
 export async function deleteKnowledgeSource(id: string) {

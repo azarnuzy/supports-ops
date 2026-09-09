@@ -8,6 +8,7 @@ import {
   deleteKnowledgeSource,
   getKnowledgeSources,
   publishKnowledgeSource,
+  refreshKnowledgeSource,
   subscribeToKnowledgeSourceEvents,
   updateKnowledgeSource,
 } from "./knowledge.services";
@@ -85,6 +86,16 @@ export function usePublishKnowledgeSourceMutation() {
 
   return useMutation({
     mutationFn: publishKnowledgeSource,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
+  });
+}
+
+export function useRefreshKnowledgeSourceMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: refreshKnowledgeSource,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
   });
