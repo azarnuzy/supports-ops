@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createOpenAiEmbeddingClient: vi.fn(),
   embed: vi.fn(),
   findFirst: vi.fn(),
+  findMany: vi.fn(),
   publish: vi.fn(),
   queueAdd: vi.fn(),
   replaceChunks: vi.fn(),
@@ -53,7 +54,14 @@ vi.mock("./prisma", () => ({
           update: mocks.txKnowledgeSourceUpdate,
         },
       }),
-    knowledgeSource: { create: mocks.create, findFirst: mocks.findFirst, update: mocks.update },
+    chunk: { updateMany: vi.fn() },
+    knowledgeSource: {
+      create: mocks.create,
+      findFirst: mocks.findFirst,
+      findMany: mocks.findMany,
+      update: mocks.update,
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -78,6 +86,7 @@ function resetMocks() {
   mocks.createOpenAiEmbeddingClient.mockReset().mockReturnValue({ embed: mocks.embed });
   mocks.embed.mockReset().mockResolvedValue([[0.1, 0.2]]);
   mocks.findFirst.mockReset().mockResolvedValue({ id: "ks-1" });
+  mocks.findMany.mockReset().mockResolvedValue([]);
   mocks.publish.mockReset().mockResolvedValue(1);
   mocks.queueAdd.mockReset().mockResolvedValue(undefined);
   mocks.txKnowledgeSourceFindFirst.mockReset().mockResolvedValue({ id: "ks-1" });
@@ -222,11 +231,14 @@ describe("processKnowledgeIngestJob (CRAWL)", () => {
 
   beforeEach(() => {
     resetMocks();
-    mocks.findFirst.mockResolvedValue({
-      id: "parent-1",
-      sourceUrl: "https://docs.example.com",
-      visibility: "CUSTOMER_SAFE",
-    });
+    mocks.findFirst
+      .mockResolvedValueOnce({ id: "parent-1" })
+      .mockResolvedValueOnce({
+        id: "parent-1",
+        sourceUrl: "https://docs.example.com",
+        visibility: "CUSTOMER_SAFE",
+      })
+      .mockResolvedValueOnce(null);
     mocks.create.mockImplementation(({ data }: { data: { id: string } }) =>
       Promise.resolve({ id: data.id }),
     );
@@ -277,5 +289,31 @@ describe("processKnowledgeIngestJob (CRAWL)", () => {
       data: { failureReason: null, status: "READY" },
       where: { id: "parent-1" },
     });
+  });
+
+  it("reconciles an existing child instead of creating a duplicate", async () => {
+    mocks.findFirst
+      .mockReset()
+      .mockResolvedValueOnce({ id: "parent-1" })
+      .mockResolvedValueOnce({
+        id: "parent-1",
+        sourceUrl: "https://docs.example.com",
+        visibility: "CUSTOMER_SAFE",
+      })
+      .mockResolvedValueOnce({ id: "child-1" });
+    mocks.update.mockResolvedValue({ id: "child-1" });
+
+    await processKnowledgeIngestJob(crawlJob);
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledWith({
+      data: expect.objectContaining({ content: "Getting started content.", status: "PROCESSING" }),
+      where: { id: "child-1" },
+    });
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      "ingest",
+      expect.objectContaining({ knowledgeSourceId: "child-1" }),
+      expect.anything(),
+    );
   });
 });

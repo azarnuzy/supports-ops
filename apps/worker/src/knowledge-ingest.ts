@@ -209,23 +209,38 @@ async function extractUrl(id: string) {
 }
 
 async function crawlDocumentation(parentId: string, workspaceId: string) {
-  const parent = await prisma.knowledgeSource.findFirst({ where: { id: parentId } });
+  const parent = await prisma.knowledgeSource.findFirst({
+    where: { deletedAt: null, id: parentId, workspaceId },
+  });
   if (!parent?.sourceUrl) throw new Error("Documentation URL is missing.");
   const pages = await crawlPages(parent.sourceUrl, 1, 25);
-  await Promise.allSettled(
+  await Promise.all(
     pages.map(async (page) => {
-      const child = await prisma.knowledgeSource.create({
-        data: {
-          id: crypto.randomUUID(),
-          parentId,
-          sourceType: "URL",
-          sourceUrl: page.url,
-          status: "PROCESSING",
-          title: page.title,
-          visibility: parent.visibility,
-          workspaceId,
-        },
+      const existing = await prisma.knowledgeSource.findFirst({
+        select: { id: true },
+        where: { deletedAt: null, parentId, sourceUrl: page.url, workspaceId },
       });
+      const data = {
+        content: page.content,
+        failedStage: null,
+        failureReason: null,
+        stage: null,
+        status: "PROCESSING" as const,
+        title: page.title,
+        visibility: parent.visibility,
+      };
+      const child = existing
+        ? await prisma.knowledgeSource.update({ data, where: { id: existing.id } })
+        : await prisma.knowledgeSource.create({
+            data: {
+              ...data,
+              id: crypto.randomUUID(),
+              parentId,
+              sourceType: "URL",
+              sourceUrl: page.url,
+              workspaceId,
+            },
+          });
       await publishStatus(workspaceId, child.id, "PROCESSING");
       await getIngestQueue().add(
         "ingest",
@@ -246,6 +261,19 @@ async function crawlDocumentation(parentId: string, workspaceId: string) {
       );
     }),
   );
+
+  const deletedAt = new Date();
+  const removedChildren = await prisma.knowledgeSource.findMany({
+    select: { id: true },
+    where: { deletedAt: null, parentId, sourceUrl: { notIn: pages.map((page) => page.url) }, workspaceId },
+  });
+  if (removedChildren.length) {
+    const ids = removedChildren.map((child) => child.id);
+    await prisma.$transaction([
+      prisma.knowledgeSource.updateMany({ data: { deletedAt }, where: { id: { in: ids } } }),
+      prisma.chunk.updateMany({ data: { deletedAt }, where: { knowledgeSourceId: { in: ids } } }),
+    ]);
+  }
   await prisma.knowledgeSource.update({
     data: { failureReason: null, status: "READY" },
     where: { id: parentId },
@@ -269,8 +297,19 @@ async function crawlPages(url: string, maxDepth: number, limit: number) {
     results?: Array<{ raw_content?: string; title?: string; url: string }>;
   };
   const origin = new URL(url).origin;
-  return (body.results ?? [])
-    .filter((page) => new URL(page.url).origin === origin)
+  return Array.from(
+    new Map(
+      (body.results ?? [])
+        .filter((page) => {
+          try {
+            return new URL(page.url).origin === origin;
+          } catch {
+            return false;
+          }
+        })
+        .map((page) => [page.url, page]),
+    ).values(),
+  )
     .slice(0, limit)
     .map((page) => ({
       content: page.raw_content ?? "",

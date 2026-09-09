@@ -336,7 +336,7 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
 
 export async function deleteKnowledgeSource(id: string, deletedBy: string): Promise<void> {
   const existing = await prisma.knowledgeSource.findFirst({
-    select: { id: true },
+    select: { id: true, sourceType: true },
     where: { deletedAt: null, id },
   });
 
@@ -345,10 +345,20 @@ export async function deleteKnowledgeSource(id: string, deletedBy: string): Prom
   }
 
   const deletedAt = new Date();
+  const childIds =
+    existing.sourceType === "HELP_CENTER"
+      ? (
+          await prisma.knowledgeSource.findMany({
+            select: { id: true },
+            where: { deletedAt: null, parentId: existing.id },
+          })
+        ).map((child) => child.id)
+      : [];
+  const ids = [existing.id, ...childIds];
 
   await prisma.$transaction([
-    prisma.knowledgeSource.update({ data: { deletedAt, deletedBy }, where: { id: existing.id } }),
-    prisma.chunk.updateMany({ data: { deletedAt }, where: { knowledgeSourceId: existing.id } }),
+    prisma.knowledgeSource.updateMany({ data: { deletedAt, deletedBy }, where: { id: { in: ids } } }),
+    prisma.chunk.updateMany({ data: { deletedAt }, where: { knowledgeSourceId: { in: ids } } }),
   ]);
 }
 
