@@ -1,4 +1,7 @@
 import { Hono, type Context, type Next } from "hono";
+import { createStorage } from "@repo/storage";
+import { storageConfig } from "../../config";
+import { unscopedPrisma } from "../../utils/prisma";
 import { cors } from "hono/cors";
 import type { AuthVariables } from "../auth/types";
 import { zValidator } from "@hono/zod-validator";
@@ -216,6 +219,15 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       stream.onAbort(unsubscribe);
       await new Promise<void>(() => undefined);
     });
+  })
+  .get("/attachments/:id/download", async (c) => {
+    const accessToken = c.req.query("token");
+    if (!accessToken) return c.json({ error: "unauthorized" }, 401);
+    const attachment = await unscopedPrisma.attachment.findFirst({
+      where: { id: c.req.param("id"), deletedAt: null, ticket: { webSession: { accessToken } } },
+    });
+    if (!attachment) return c.json({ error: "not_found" }, 404);
+    return c.json({ url: await createStorage(storageConfig).getSignedGetObjectUrl({ key: attachment.storageKey, responseContentDisposition: `attachment; filename="${attachment.fileName.replaceAll('"', "")}"`, responseContentType: attachment.mimeType }) });
   })
   .get("/session", async (c) => {
     const accessToken = c.req.query("token");
