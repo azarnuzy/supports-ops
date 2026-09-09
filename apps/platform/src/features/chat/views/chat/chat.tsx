@@ -1,4 +1,5 @@
 import type { SupportTicket, TicketAttachment, TicketDetailMessage } from "@repo/api-client";
+import { webAttachmentCapability } from "@repo/channels";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +50,7 @@ import {
   HistoryIcon,
   MailIcon,
   SendIcon,
+  PaperclipIcon,
   SparklesIcon,
   UserRoundIcon,
   XIcon,
@@ -65,6 +67,7 @@ import {
   useResolveHumanTicketMutation,
   useRetryHumanReplyMutation,
   useSendHumanReplyMutation,
+  useSendHumanAttachmentsMutation,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
 import { getAttachmentPreviewUrl, openAttachment } from "../../../tickets/tickets.services";
@@ -93,12 +96,14 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
   useTicketEvents();
 
   const sendReply = useSendHumanReplyMutation();
+  const sendAttachments = useSendHumanAttachmentsMutation();
   const suggestedReply = useGenerateSuggestedReplyMutation();
   const resolve = useResolveHumanTicketMutation();
   const retryReply = useRetryHumanReplyMutation();
 
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
   const [detailsTab, setDetailsTab] = useState<"details" | "attachments" | "activity">("details");
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
@@ -277,18 +282,17 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                     onSubmit={(event) => {
                       event.preventDefault();
                       const content = draft.trim();
-                      if (!content || !ticketId) return;
-                      sendReply.mutate(
-                        { content, id: ticketId, idempotencyKey: (replyKey.current ??= crypto.randomUUID()) },
-                        {
-                          onSuccess: () =>
-                            setDraft((current) => {
-                              if (current.trim() !== content) return current;
-                              replyKey.current = undefined;
-                              return "";
-                            }),
-                        },
-                      );
+                      if ((!content && !files.length) || !ticketId) return;
+                      const input = { content, id: ticketId, idempotencyKey: (replyKey.current ??= crypto.randomUUID()) };
+                      const onSuccess = () =>
+                        setDraft((current) => {
+                          if (current.trim() !== content) return current;
+                          replyKey.current = undefined;
+                          setFiles([]);
+                          return "";
+                        });
+                      if (files.length) sendAttachments.mutate({ ...input, files }, { onSuccess });
+                      else sendReply.mutate(input, { onSuccess });
                     }}
                   >
                     <InputGroup>
@@ -301,6 +305,24 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                         placeholder="Type your message..."
                         value={draft}
                       />
+                      <InputGroupAddon align="block-start">
+                        <label aria-label="Attach files" className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md hover:bg-accent">
+                            <PaperclipIcon />
+                            <input
+                              className="sr-only"
+                              type="file"
+                              multiple
+                              accept={webAttachmentCapability.mimeTypes.join(",")}
+                              onChange={(event) => {
+                                const additions = [...event.target.files].filter(
+                                  (file) => webAttachmentCapability.mimeTypes.includes(file.type) && file.size > 0 && file.size <= webAttachmentCapability.maxFileSizeBytes,
+                                );
+                                setFiles((current) => [...current, ...additions].slice(0, webAttachmentCapability.maxFilesPerMessage));
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                        </label>
+                      </InputGroupAddon>
                       <InputGroupAddon align="block-end">
                         <InputGroupButton
                           disabled={suggestedReply.isPending || !ticketId}
@@ -323,7 +345,7 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                         <AlertDialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
                           <AlertDialogTrigger asChild>
                             <InputGroupButton
-                              disabled={sendReply.isPending}
+                              disabled={sendReply.isPending || sendAttachments.isPending}
                               size="sm"
                               type="button"
                               variant="outline"
@@ -359,7 +381,7 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                         <InputGroupButton
                           aria-label="Send reply"
                           className="ml-auto"
-                          disabled={!draft.trim()}
+                          disabled={(!draft.trim() && !files.length) || sendAttachments.isPending}
                           size="icon-sm"
                           type="submit"
                           variant="default"
@@ -368,6 +390,15 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                         </InputGroupButton>
                       </InputGroupAddon>
                     </InputGroup>
+                    {files.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {files.map((file, index) => (
+                          <Button key={`${file.name}-${file.lastModified}-${index}`} onClick={() => setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))} size="xs" type="button" variant="outline">
+                            {file.name} <XIcon />
+                          </Button>
+                        ))}
+                      </div>
+                    ) : null}
                     {sendReply.isError || suggestedReply.isError || resolve.isError ? (
                       <p className="text-xs text-destructive">
                         {resolve.isError
