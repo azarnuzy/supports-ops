@@ -23,6 +23,7 @@
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "7.9.1",
     "@repo/ai-agent": "workspace:*",
+    "@repo/channels": "workspace:*",
     "@repo/knowledge": "workspace:*",
     "@repo/logger": "workspace:*",
     "@repo/storage": "workspace:*",

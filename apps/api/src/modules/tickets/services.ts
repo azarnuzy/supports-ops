@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { webAttachmentCapability } from "@repo/channels";
+import { createStorage } from "@repo/storage";
 import {
   createReplyModel,
   generateEscalationSummary,
@@ -9,7 +11,7 @@ import {
   searchChunks as findKnowledgeChunks,
 } from "@repo/knowledge";
 import { BusinessToolError, createBusinessTools } from "@repo/tools";
-import { aiAgentConfig, apiConfig, embeddingConfig } from "../../config";
+import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
 import type { ListTicketsQuery } from "./schema";
 import {
@@ -51,6 +53,7 @@ export class TicketAlreadyClaimedError extends Error {
 export class HumanAgentNotFoundError extends Error {}
 export class TicketNotOwnedError extends Error {}
 export class PendingMessageDeliveryError extends Error {}
+export class InvalidHumanAttachmentError extends Error {}
 export class SuggestedReplyNotConfiguredError extends Error {}
 export class TicketNotAvailableForTakeoverError extends Error {}
 export class TicketNotAvailableForAssignmentError extends Error {}
@@ -509,6 +512,54 @@ export async function sendHumanReply(
   const message = result.deliver ? await deliverMessage(result.message) : result.message;
   await publishTicketQueueEvent(message.workspaceId);
   return message;
+}
+
+export async function sendHumanAttachmentReply(
+  ticketId: string,
+  humanAgentId: string,
+  content: string | undefined,
+  files: File[],
+  idempotencyKey: string,
+) {
+  if (!files.length) throw new InvalidHumanAttachmentError();
+  if (files.length > webAttachmentCapability.maxFilesPerMessage) throw new InvalidHumanAttachmentError();
+  if (files.some((file) => !webAttachmentCapability.mimeTypes.includes(file.type) || !file.size || file.size > webAttachmentCapability.maxFileSizeBytes))
+    throw new InvalidHumanAttachmentError();
+  const text = content?.trim() ?? "";
+  const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
+  const owner = await unscopedPrisma.ticket.findFirst({ where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" } });
+  if (!owner) throw new TicketNotOwnedError();
+  const existing = await unscopedPrisma.message.findFirst({ where: { externalMessageId, ticketId } });
+  if (existing) return existing.deliveryStatus === "FAILED" ? deliverMessage(existing) : existing;
+  const uploads = await Promise.all(
+    files.map(async (file) => {
+      const id = randomUUID();
+      const key = `attachments/outbound/${ticketId}/${id}`;
+      await createStorage(storageConfig).putObject({ body: Buffer.from(await file.arrayBuffer()), contentType: file.type, key });
+      return { file, id, key };
+    }),
+  );
+  const message = await unscopedPrisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findFirst({ where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" } });
+    if (!ticket) throw new TicketNotOwnedError();
+    const updated = await tx.ticket.update({ data: { messageSeq: { increment: 1 } }, where: { id: ticketId } });
+    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
+    return tx.message.create({
+      data: {
+        attachments: { create: uploads.map(({ file, id, key }) => ({ fileName: file.name, id, mimeType: file.type, processingStatus: "READY", sizeBytes: file.size, storageKey: key, ticketId, workspaceId: ticket.workspaceId })) },
+        content: text,
+        deliveryStatus: "PENDING",
+        externalMessageId,
+        id: randomUUID(), memorySessionId: conversation.id, message: { content: text }, position: updated.messageSeq,
+        role: "assistant", runId: randomUUID(), senderType: "HUMAN_AGENT", senderUserId: humanAgentId,
+        ticketId, turn: updated.messageSeq, workspaceId: ticket.workspaceId,
+      },
+      include: { attachments: true },
+    });
+  });
+  const delivered = await deliverMessage(message);
+  await publishTicketQueueEvent(delivered.workspaceId);
+  return delivered;
 }
 
 export async function retryHumanReply(ticketId: string, humanAgentId: string, messageId: string) {

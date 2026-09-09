@@ -44,6 +44,9 @@ importers:
       '@repo/ai-agent':
         specifier: workspace:*
         version: link:../../packages/ai-agent
+      '@repo/channels':
+        specifier: workspace:*
+        version: link:../../packages/channels
       '@repo/knowledge':
         specifier: workspace:*
         version: link:../../packages/knowledge
@@ -124,6 +127,9 @@ importers:
       '@repo/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@repo/channels':
+        specifier: workspace:*
+        version: link:../../packages/channels
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui

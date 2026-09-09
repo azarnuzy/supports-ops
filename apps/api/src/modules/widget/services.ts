@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { webAttachmentCapability } from "@repo/channels";
 import {
   ClassificationFailedError,
   classifyMessage,
@@ -76,8 +77,6 @@ const escalationReasons = [
 
 type EscalationReason = (typeof escalationReasons)[number];
 
-const attachmentTypes = new Set(["application/pdf", "image/jpeg", "image/png", "text/plain"]);
-const maxAttachmentSizeBytes = 10 * 1024 * 1024;
 
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }
@@ -229,10 +228,10 @@ export async function createCustomerAttachment(
   accessToken: string,
   input: { content?: string; file: File },
 ) {
-  if (!attachmentTypes.has(input.file.type)) {
+  if (!webAttachmentCapability.mimeTypes.includes(input.file.type)) {
     throw new InvalidAttachmentError("Attach a PDF, plain text, JPEG, or PNG file.");
   }
-  if (input.file.size === 0 || input.file.size > maxAttachmentSizeBytes) {
+  if (input.file.size === 0 || input.file.size > webAttachmentCapability.maxFileSizeBytes) {
     throw new InvalidAttachmentError("Attachment must be between 1 byte and 10 MB.");
   }
 
@@ -849,6 +848,7 @@ export async function getMessagesAfter(accessToken: string, afterPosition: numbe
   });
   if (!session?.ticket) return null;
   const messages = await unscopedPrisma.message.findMany({
+    include: { attachments: { select: { fileName: true, id: true } } },
     where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } },
     orderBy: { position: "asc" },
   });

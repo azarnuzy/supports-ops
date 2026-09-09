@@ -7,6 +7,11 @@ export const humanReplySchema = z.object({
   idempotencyKey: z.string().uuid(),
 });
 
+export const humanAttachmentReplySchema = z.object({
+  content: z.string().trim().max(10_000).optional(),
+  idempotencyKey: z.string().uuid(),
+});
+
 export const resolveTicketSchema = z.object({
   resolutionReason: z.literal("HUMAN_RESOLVED"),
 });

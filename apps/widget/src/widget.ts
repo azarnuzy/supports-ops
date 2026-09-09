@@ -45,13 +45,20 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   const startNew = shadow.querySelector<HTMLButtonElement>("[data-start-new]");
   let eventSource: EventSource | undefined;
 
-  const appendMessage = (message: { content: string; position: number; senderType: string }) => {
+  const appendMessage = (message: { attachments?: { fileName: string; id: string }[]; content: string; position: number; senderType: string }) => {
     if (messages?.querySelector(`[data-position="${message.position}"]`)) return;
     const bubble = document.createElement("p");
     bubble.className = `message ${message.senderType === "CUSTOMER" ? "message-customer" : ""}`;
     bubble.dataset.position = String(message.position);
     bubble.textContent = message.content;
     messages?.append(bubble);
+    for (const attachment of message.attachments ?? []) {
+      const link = document.createElement("a");
+      link.href = `${apiUrl.replace(/\/$/, "")}/widget/attachments/${encodeURIComponent(attachment.id)}/download?token=${encodeURIComponent(sessionStorage.getItem(`supportops:web-session:${widgetKey}`) ?? "")}`;
+      link.textContent = `Download ${attachment.fileName}`;
+      link.target = "_blank";
+      messages?.append(link);
+    }
   };
 
   // Used before a Ticket exists — nothing is persisted yet, so these render
