@@ -283,6 +283,20 @@ export async function sendHumanReply(
   return response.json();
 }
 
+export async function sendHumanAttachments(client: ApiClient, id: string, content: string, files: File[], idempotencyKey: string) {
+  const form = new FormData();
+  form.set("content", content);
+  form.set("idempotencyKey", idempotencyKey);
+  files.forEach((file) => form.append("files", file));
+  const response = await client.tickets[":id"].attachments.$post({ param: { id }, form: form as never });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
+  if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
+  if (response.status === 422) throw new Error("Attachments must be PDF, TXT, JPG, or PNG and no larger than 10 MB.");
+  if (!response.ok) throw new Error("Failed to send the reply.");
+  return response.json();
+}
+
 export async function retryHumanReply(client: ApiClient, id: string, messageId: string) {
   const response = await client.tickets[":id"].messages[":messageId"].retry.$post({
     param: { id, messageId },
