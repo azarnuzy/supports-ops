@@ -188,7 +188,7 @@ describe("publishKnowledgeSource", () => {
     const result = await publishKnowledgeSource("ks-1");
 
     expect(mocks.knowledgeSourceUpdate).toHaveBeenCalledWith({
-      data: { failureReason: null, status: "PROCESSING" },
+      data: { failedStage: null, failureReason: null, stage: null, status: "PROCESSING" },
       where: { id: "ks-1" },
     });
     expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith({

@@ -515,6 +515,13 @@ export async function registerWorkspaceAdmin(
 export type KnowledgeSourceType = "MANUAL_FAQ" | "PDF" | "URL" | "HELP_CENTER" | "INTERNAL_SOP";
 export type KnowledgeVisibility = "CUSTOMER_SAFE" | "INTERNAL_ONLY";
 export type KnowledgeStatus = "DRAFT" | "PROCESSING" | "READY" | "PUBLISHED" | "FAILED";
+export type KnowledgeIngestStage =
+  | "UPLOADING"
+  | "EXTRACTING"
+  | "CHUNKING"
+  | "EMBEDDING"
+  | "INDEXING"
+  | "PUBLISHED";
 
 export type KnowledgeSource = {
   id: string;
@@ -525,6 +532,8 @@ export type KnowledgeSource = {
   sourceUrl: string | null;
   visibility: KnowledgeVisibility;
   status: KnowledgeStatus;
+  stage: KnowledgeIngestStage | null;
+  failedStage: KnowledgeIngestStage | null;
   failureReason: string | null;
   createdAt: string;
   updatedAt: string;
