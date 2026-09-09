@@ -200,6 +200,13 @@ export function KnowledgeDetailDrawer({
               ) : null}
             </dl>
 
+            {source.status === "FAILED" && source.publishedAt ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                Update failed—previous version remains active. The Customer-facing content published
+                on {formatUpdatedAt(source.publishedAt)} is still retrievable by the AI Agent.
+              </p>
+            ) : null}
+
             {stages ? (
               <div>
                 <p className="mb-3 text-sm font-medium">Ingestion progress</p>
