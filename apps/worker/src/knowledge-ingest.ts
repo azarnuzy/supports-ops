@@ -17,11 +17,23 @@ function getIngestQueue() {
   return ingestQueue;
 }
 
+type KnowledgeIngestStage =
+  | "UPLOADING"
+  | "EXTRACTING"
+  | "CHUNKING"
+  | "EMBEDDING"
+  | "INDEXING"
+  | "PUBLISHED";
+
 async function publishStatus(
   workspaceId: string,
   knowledgeSourceId: string,
   status: "DRAFT" | "PROCESSING" | "READY" | "PUBLISHED" | "FAILED",
-  failureReason?: string,
+  options?: {
+    failureReason?: string;
+    stage?: KnowledgeIngestStage;
+    failedStage?: KnowledgeIngestStage;
+  },
 ) {
   publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
     maxRetriesPerRequest: null,
@@ -29,10 +41,22 @@ async function publishStatus(
   await publisher.publish(
     `supportops:knowledge:${workspaceId}`,
     JSON.stringify({
-      data: { failureReason, knowledgeSourceId, status },
+      data: { knowledgeSourceId, status, ...options },
       type: "knowledge.updated",
     }),
   );
+}
+
+/** Persists the stage before its work begins, so a refresh mid-run recovers
+ * the real in-progress stage from the database rather than the last completed
+ * one. */
+async function advanceStage(
+  workspaceId: string,
+  knowledgeSourceId: string,
+  stage: KnowledgeIngestStage,
+) {
+  await prisma.knowledgeSource.update({ data: { stage }, where: { id: knowledgeSourceId } });
+  await publishStatus(workspaceId, knowledgeSourceId, "PROCESSING", { stage });
 }
 
 export type KnowledgeIngestJob = {
@@ -63,10 +87,17 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
     throw new Error(`Knowledge Source ${knowledgeSourceId} not found in Workspace ${workspaceId}.`);
   }
 
+  let stage: KnowledgeIngestStage | undefined;
+
   try {
     if (job.data.kind === "CRAWL") {
       await crawlDocumentation(owned.id, workspaceId);
       return;
+    }
+
+    if (job.data.kind === "PDF" || job.data.kind === "URL") {
+      stage = "EXTRACTING";
+      await advanceStage(workspaceId, knowledgeSourceId, stage);
     }
     const content =
       job.data.kind === "PDF"
@@ -81,7 +112,12 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       throw new Error("Configure OPENROUTER_API_KEY to publish Knowledge Sources.");
     }
 
+    stage = "CHUNKING";
+    await advanceStage(workspaceId, knowledgeSourceId, stage);
     const chunks = chunkText(content);
+
+    stage = "EMBEDDING";
+    await advanceStage(workspaceId, knowledgeSourceId, stage);
     const embeddingClient = createOpenAiEmbeddingClient({
       apiKey: embeddingConfig.apiKey,
       baseUrl: embeddingConfig.baseUrl,
@@ -90,6 +126,9 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
     const vectors = chunks.length
       ? await embeddingClient.embed(chunks.map((chunk) => chunk.content))
       : [];
+
+    stage = "INDEXING";
+    await advanceStage(workspaceId, knowledgeSourceId, stage);
 
     const wasPublished = await prisma.$transaction(async (tx) => {
       // Deletion can happen while embeddings are being generated. Recheck it
@@ -117,7 +156,7 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       });
 
       await tx.knowledgeSource.update({
-        data: { publishedAt: new Date(), status: "PUBLISHED" },
+        data: { publishedAt: new Date(), stage: "PUBLISHED", status: "PUBLISHED" },
         where: { id: knowledgeSourceId },
       });
 
@@ -125,15 +164,15 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
     });
 
     if (wasPublished) {
-      await publishStatus(workspaceId, knowledgeSourceId, "PUBLISHED");
+      await publishStatus(workspaceId, knowledgeSourceId, "PUBLISHED", { stage: "PUBLISHED" });
     }
   } catch (error) {
     const failureReason = error instanceof Error ? error.message : "Knowledge ingest failed.";
     await prisma.knowledgeSource.update({
-      data: { failureReason, status: "FAILED" },
+      data: { failedStage: stage, failureReason, status: "FAILED" },
       where: { id: knowledgeSourceId },
     });
-    await publishStatus(workspaceId, knowledgeSourceId, "FAILED", failureReason);
+    await publishStatus(workspaceId, knowledgeSourceId, "FAILED", { failedStage: stage, failureReason });
 
     throw error;
   }
