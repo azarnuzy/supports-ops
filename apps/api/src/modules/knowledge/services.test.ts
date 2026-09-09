@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   knowledgeSourceFindFirst: vi.fn(),
   knowledgeSourceFindMany: vi.fn(),
   knowledgeSourceUpdate: vi.fn(),
+  knowledgeSourceUpdateMany: vi.fn(),
   putObject: vi.fn(),
   requireWorkspaceId: vi.fn(),
   searchChunks: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("../../utils/prisma", () => ({
       findFirst: mocks.knowledgeSourceFindFirst,
       findMany: mocks.knowledgeSourceFindMany,
       update: mocks.knowledgeSourceUpdate,
+      updateMany: mocks.knowledgeSourceUpdateMany,
     },
   },
 }));
@@ -89,6 +91,7 @@ function resetMocks() {
   mocks.knowledgeSourceFindFirst.mockReset();
   mocks.knowledgeSourceFindMany.mockReset();
   mocks.knowledgeSourceUpdate.mockReset();
+  mocks.knowledgeSourceUpdateMany.mockReset().mockResolvedValue({ count: 0 });
   mocks.putObject.mockReset().mockResolvedValue(undefined);
   mocks.requireWorkspaceId.mockReset().mockReturnValue("ws-1");
   mocks.searchChunks.mockReset();
@@ -290,20 +293,36 @@ describe("publishKnowledgeSource", () => {
 describe("deleteKnowledgeSource", () => {
   beforeEach(resetMocks);
 
-  it("soft-deletes the source and every one of its chunks in one transaction", async () => {
+  it("soft-deletes a child and only its chunks in one transaction", async () => {
     mocks.knowledgeSourceFindFirst.mockResolvedValue({ id: "ks-1" });
     mocks.knowledgeSourceUpdate.mockResolvedValue(draftSource);
 
     await deleteKnowledgeSource("ks-1", "user-1");
 
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
-    expect(mocks.knowledgeSourceUpdate).toHaveBeenCalledWith({
+    expect(mocks.knowledgeSourceUpdateMany).toHaveBeenCalledWith({
       data: { deletedAt: expect.any(Date), deletedBy: "user-1" },
-      where: { id: "ks-1" },
+      where: { id: { in: ["ks-1"] } },
     });
     expect(mocks.chunkUpdateMany).toHaveBeenCalledWith({
       data: { deletedAt: expect.any(Date) },
-      where: { knowledgeSourceId: "ks-1" },
+      where: { knowledgeSourceId: { in: ["ks-1"] } },
+    });
+  });
+
+  it("soft-deletes a website parent and all of its children", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({ id: "parent-1", sourceType: "HELP_CENTER" });
+    mocks.knowledgeSourceFindMany.mockResolvedValue([{ id: "child-1" }, { id: "child-2" }]);
+
+    await deleteKnowledgeSource("parent-1", "user-1");
+
+    expect(mocks.knowledgeSourceFindMany).toHaveBeenCalledWith({
+      select: { id: true },
+      where: { deletedAt: null, parentId: "parent-1" },
+    });
+    expect(mocks.knowledgeSourceUpdateMany).toHaveBeenCalledWith({
+      data: { deletedAt: expect.any(Date), deletedBy: "user-1" },
+      where: { id: { in: ["parent-1", "child-1", "child-2"] } },
     });
   });
 
