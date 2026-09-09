@@ -13,9 +13,10 @@
     }
   },
   "scripts": {
-    "with-env": "dotenv -e ../../.env --",
+    "with-env": "dotenv -e ../../.env.local --",
+    "with-production-env": "dotenv -e ../../.env --",
     "dev": "pnpm with-env tsx watch src/main.ts",
-    "start": "pnpm with-env tsx src/main.ts",
+    "start": "pnpm with-production-env tsx src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

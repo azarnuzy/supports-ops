@@ -9,11 +9,11 @@ Follow these guides in order to take a new environment from nothing to a demoabl
 5. **[Object storage](05-object-storage.md)** — the S3-compatible bucket for attachments and PDF Knowledge Sources, and the internal worker token.
 6. **[Observability](06-observability.md)** — optional OTLP telemetry export for the AI Agent and application traces.
 
-Once every credential above is in `.env` (development) or `env.production`:
+Once every credential above is in `.env.local` (development) or `.env` (root Docker Compose production):
 
 ```sh
 pnpm install
-cp .env.example .env   # fill in the values from steps 1-6
+cp .env.example .env.local   # fill in the values from steps 1-6
 docker compose -f docker-compose.dev.yaml up -d
 pnpm db:generate
 pnpm db:migrate
@@ -32,3 +32,5 @@ pnpm seed:demo
 `pnpm seed:demo` creates an Admin, a Human Agent, a configured Web Widget, and published Knowledge Sources across both visibilities (Customer-Safe and Internal-Only). It prints the Admin and Human Agent credentials on completion. It is idempotent — re-running it leaves existing data untouched and only fills in what is missing. Business System customers, subscriptions, and invoices are seeded automatically the first time the API or worker connects to that database (`apps/business-system/src/database.ts`), also idempotently.
 
 See the root [README](../../README.md) for day-to-day development commands, and [supportops_prd.md](../../supportops_prd.md) section 54 for the full list of MVP success criteria to walk through once a Workspace is seeded.
+
+For the complete local Customer-to-Human-Agent walkthrough, Widget host, Langfuse inspection, and AI eval matrix, use the [end-to-end runbook](../testing/e2e-runbook.md).

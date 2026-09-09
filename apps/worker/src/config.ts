@@ -99,7 +99,9 @@ export const storageConfig = {
 
 export const emailConfig = {
   from: env.EMAIL_FROM,
-  resendApiKey: env.RESEND_API_KEY,
+  // Development mail must stay inside Mailpit even if a developer also has
+  // production Resend credentials in their local environment.
+  resendApiKey: env.NODE_ENV === "production" ? env.RESEND_API_KEY : undefined,
   smtpUrl: env.SMTP_URL ?? (env.NODE_ENV === "production" ? undefined : "smtp://localhost:1025"),
 } as const;
 

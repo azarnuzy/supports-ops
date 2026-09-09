@@ -2,7 +2,7 @@
 
 The model gateway is [OpenRouter](https://openrouter.ai). One API key covers completions (the AI Agent's classification call, and the rest of the AI Agent once built) and embeddings (Knowledge Source publishing, retrieval) — see [docs/planning/spike-anvia.md](../planning/spike-anvia.md), finding 6.
 
-Create an OpenRouter account, add a payment method, then generate a key at [openrouter.ai/keys](https://openrouter.ai/keys). Set it as `OPENROUTER_API_KEY` in `.env` (development) or `env.production`.
+Create an OpenRouter account, add a payment method, then generate a key at [openrouter.ai/keys](https://openrouter.ai/keys). Set it as `OPENROUTER_API_KEY` in `.env.local` (development) or `.env` (root Docker Compose production).
 
 `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small` (1536 dimensions) — OpenRouter's provider-prefixed form, not the bare OpenAI model id. `LLM_MODEL_FAST` defaults to `openai/gpt-4.1-nano` and is the fast model tier — classification, title, category, priority, language (see [tech-stack.md](../planning/tech-stack.md)). Both `apps/api` and `apps/worker` read `OPENROUTER_API_KEY`; the base URL (`https://openrouter.ai/api/v1`) is fixed in code, not configurable per Workspace.
 

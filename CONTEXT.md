@@ -78,6 +78,14 @@ _Avoid_: Cause, Error, Trigger
 The single pool of escalated Tickets waiting to be picked up, ordered oldest first. Every Human Agent sees the same queue; priority is shown but does not reorder it.
 _Avoid_: Inbox, Backlog, Pool
 
+**My Tickets**:
+The active Tickets currently owned by one Human Agent after Claim. Resolved Tickets are history and never remain in My Tickets.
+_Avoid_: Mine, Assigned conversations, Personal queue
+
+**Unread Ticket**:
+A Ticket with Customer Messages newer than a particular Workspace user's last-read position. Read state belongs to each user independently and is not a Ticket lifecycle status.
+_Avoid_: New Ticket, Global unread
+
 **Claim**:
 A Human Agent taking an unassigned Ticket out of the Shared Human Queue and onto themselves. Exactly one Claim can succeed per Ticket; a second, concurrent attempt fails. There is no giving it back.
 _Avoid_: Assign, Pick up, Grab
@@ -149,7 +157,7 @@ The Workspace's own product database, external to SupportOps, holding customers,
 _Avoid_: Backend, Mock API, CRM
 
 **Attachment**:
-A file a Customer sends inside a Ticket. Its extracted content becomes context for that Ticket only, and never joins the Workspace's Knowledge Sources.
+A file carried by a Message inside a Ticket, whether sent by a Customer or a Human Agent. Its allowed direction, format, size, and count depend on the Channel; extracted content becomes context for that Ticket only and never joins the Workspace's Knowledge Sources.
 _Avoid_: Upload, File, Media
 
 **AI Copilot**:

@@ -24,7 +24,7 @@ Runtime-specific environment validation lives with the API and worker that consu
 
 ```sh
 pnpm install
-cp .env.example .env
+cp .env.example .env.local
 docker compose -f docker-compose.dev.yaml up -d
 pnpm db:generate
 pnpm db:migrate
@@ -47,6 +47,10 @@ pnpm test
 
 This runs the base Vitest suites for API, Platform, and Worker.
 
+For a manual end-to-end run through the Web Widget, AI Agent, Human Agent,
+Langfuse telemetry, and the AI eval matrix, see the
+[local end-to-end runbook](docs/testing/e2e-runbook.md).
+
 ## Auth and API Client
 
 The API uses Better Auth for email/password auth, session cookies, and admin roles. Better Auth is mounted at `/api/auth/*`; custom API routes use Hono RPC types through `packages/api-client`.
@@ -56,7 +60,7 @@ Frontend apps should use:
 - Better Auth client methods for sign-in, sign-up, and sign-out.
 - `createApiClient()` from `@repo/api-client` for typed API routes such as `/session` and `/users`.
 
-Configure auth with `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `CLIENT_ORIGINS` in `.env`.
+Configure auth with `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `CLIENT_ORIGINS` in `.env.local` for development or `.env` for root Docker Compose production.
 Use a unique `BETTER_AUTH_SECRET`; production environments reject the default value and secrets
 shorter than 32 characters.
 
@@ -88,7 +92,7 @@ await storage.putObject({
 });
 ```
 
-Configure it with `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and optional endpoint/path-style/public URL variables in `.env`.
+Configure it with `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and optional endpoint/path-style/public URL variables in `.env.local` for development or `.env` for root Docker Compose production.
 
 ## Logging
 
