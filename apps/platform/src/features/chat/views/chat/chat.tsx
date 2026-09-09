@@ -3,6 +3,8 @@ import type {
   TicketAttachment,
   TicketDetail,
   TicketDetailMessage,
+  TicketListItem,
+  TicketStatus,
 } from "@repo/api-client";
 import { webAttachmentCapability } from "@repo/channels";
 import {
@@ -31,6 +33,7 @@ import {
 } from "@repo/ui/components/input-group";
 import { Item, ItemContent, ItemMedia, ItemTitle } from "@repo/ui/components/item";
 import { Marker, MarkerContent } from "@repo/ui/components/marker";
+import { Markdown } from "@repo/ui/components/markdown";
 import {
   Message,
   MessageAvatar,
@@ -39,6 +42,13 @@ import {
   MessageHeader,
 } from "@repo/ui/components/message";
 import { MessageScroller, MessageScrollerContent } from "@repo/ui/components/message-scroller";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/components/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/components/sheet";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
@@ -65,20 +75,24 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { getInitials } from "../../../../lib/utils";
-import { meQueryOptions } from "../../../auth";
+import { meQueryOptions, workspaceUsersQueryOptions } from "../../../auth";
 import { describeActivity } from "../../../tickets/activity-description";
 import {
+  liveAiTicketsQueryOptions,
   myTicketsQueryOptions,
+  useAllTicketsQuery,
   sharedHumanQueueQueryOptions,
   ticketDetailQueryOptions,
   useClaimTicketMutation,
   useGenerateSuggestedReplyMutation,
   useIsElementVisible,
   useMarkTicketReadOnView,
+  useReassignTicketMutation,
   useResolveHumanTicketMutation,
   useRetryHumanReplyMutation,
   useSendHumanReplyMutation,
   useSendHumanAttachmentsMutation,
+  useTakeOverTicketMutation,
   useTicketDetailEvents,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
@@ -97,13 +111,34 @@ function bubbleVariant(senderType: TicketDetailMessage["senderType"]) {
   return "customer" as const;
 }
 
-type TicketScope = "mine" | "unassigned";
+type TicketScope = "mine" | "unassigned" | "ai-live" | "all";
+
+const scopeRoutes = {
+  "ai-live": { list: "/chat/ai-live" as const, ticket: "/chat/ai-live/tickets/$ticketId" as const },
+  all: { list: "/chat/all" as const, ticket: "/chat/all/tickets/$ticketId" as const },
+  mine: { list: "/chat" as const, ticket: "/chat/tickets/$ticketId" as const },
+  unassigned: {
+    list: "/chat/unassigned" as const,
+    ticket: "/chat/unassigned/tickets/$ticketId" as const,
+  },
+};
+
+const statusFilterOptions: { label: string; value: TicketStatus | "ALL" }[] = [
+  { label: "All statuses", value: "ALL" },
+  { label: "AI handling", value: "AI_HANDLING" },
+  { label: "Escalated", value: "ESCALATED" },
+  { label: "Human handling", value: "HUMAN_HANDLING" },
+  { label: "Resolved", value: "RESOLVED" },
+];
 
 const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?: string }) => {
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions);
+  const isAdmin = me.data?.role === "ADMIN";
   const mineTickets = useQuery(myTicketsQueryOptions);
   const unassignedTickets = useQuery(sharedHumanQueueQueryOptions);
+  const aiLiveTickets = useQuery({ ...liveAiTicketsQueryOptions, enabled: isAdmin });
+  const humanAgents = useQuery({ ...workspaceUsersQueryOptions, enabled: isAdmin });
   const ticket = useQuery({
     ...ticketDetailQueryOptions(ticketId ?? ""),
     enabled: Boolean(ticketId),
@@ -120,25 +155,39 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const resolve = useResolveHumanTicketMutation();
   const retryReply = useRetryHumanReplyMutation();
   const claim = useClaimTicketMutation();
-  const tickets = scope === "unassigned" ? unassignedTickets : mineTickets;
+  const takeover = useTakeOverTicketMutation();
+  const reassign = useReassignTicketMutation();
+  const [assigneeId, setAssigneeId] = useState<string>();
+  const tickets =
+    scope === "unassigned" ? unassignedTickets : scope === "ai-live" ? aiLiveTickets : mineTickets;
 
   const routeSearch = useSearch({ strict: false });
   const search = routeSearch.q ?? "";
+  const statusFilter = (routeSearch.status as TicketStatus | undefined) ?? "ALL";
   const currentLocation = ticketId
-    ? {
-        params: { ticketId },
-        to:
-          scope === "unassigned"
-            ? ("/chat/unassigned/tickets/$ticketId" as const)
-            : ("/chat/tickets/$ticketId" as const),
-      }
-    : { to: scope === "unassigned" ? ("/chat/unassigned" as const) : ("/chat" as const) };
+    ? { params: { ticketId }, to: scopeRoutes[scope].ticket }
+    : { to: scopeRoutes[scope].list };
   const setSearch = (value: string) =>
     void navigate({
       ...currentLocation,
       replace: true,
-      search: (prev: { q?: string }) => ({ ...prev, q: value || undefined }),
+      search: (prev: { q?: string; status?: string }) => ({ ...prev, q: value || undefined }),
     });
+  const setStatusFilter = (value: TicketStatus | "ALL") =>
+    void navigate({
+      ...currentLocation,
+      replace: true,
+      search: (prev: { q?: string; status?: string }) => ({
+        ...prev,
+        status: value === "ALL" ? undefined : value,
+      }),
+    });
+  const allTickets = useAllTicketsQuery({
+    enabled: scope === "all",
+    search: scope === "all" ? search || undefined : undefined,
+    status: scope === "all" && statusFilter !== "ALL" ? [statusFilter] : undefined,
+  });
+  const allTicketRows = allTickets.data?.pages.flatMap((page) => page.tickets) ?? [];
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
@@ -152,24 +201,15 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   // Entering a populated scope selects the first Ticket so the workspace never
   // opens on an arbitrary blank state.
   useEffect(() => {
-    if (ticketId || !tickets.data) return;
+    if (scope === "all" || ticketId || !tickets.data) return;
     const first = tickets.data.tickets[0];
     if (first) {
-      void navigate(
-        scope === "unassigned"
-          ? {
-              params: { ticketId: first.id },
-              replace: true,
-              search: (prev) => prev,
-              to: "/chat/unassigned/tickets/$ticketId",
-            }
-          : {
-              params: { ticketId: first.id },
-              replace: true,
-              search: (prev) => prev,
-              to: "/chat/tickets/$ticketId",
-            },
-      );
+      void navigate({
+        params: { ticketId: first.id },
+        replace: true,
+        search: (prev) => prev,
+        to: scopeRoutes[scope].ticket,
+      });
     }
   }, [navigate, scope, ticketId, tickets.data]);
 
@@ -185,6 +225,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     detail?.assignedHumanAgent?.id === me.data?.id;
   const canClaim =
     scope === "unassigned" && detail?.status === "ESCALATED" && me.data?.role === "HUMAN_AGENT";
+  const canTakeover = scope === "ai-live" && detail?.status === "AI_HANDLING" && isAdmin;
+  const canAssign = scope === "unassigned" && detail?.status === "ESCALATED" && isAdmin;
+  const availableHumanAgents = humanAgents.data?.users.filter((user) => user.role === "HUMAN_AGENT") ?? [];
 
   const timeline = detail
     ? [
@@ -235,9 +278,29 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
               {scopeUnreadTotal(unassignedTickets.data) > 0 ? (
                 <Badge className="px-1.5">{scopeUnreadTotal(unassignedTickets.data)}</Badge>
               ) : null}
+              {isAdmin ? (
+                <Link
+                  className={scope === "ai-live" ? "text-foreground" : "text-muted-foreground"}
+                  to="/chat/ai-live"
+                >
+                  AI-handled
+                </Link>
+              ) : null}
+              <Link
+                className={scope === "all" ? "text-foreground" : "text-muted-foreground"}
+                to="/chat/all"
+              >
+                All
+              </Link>
             </div>
             <p className="text-xs text-muted-foreground">
-              {scope === "unassigned" ? "Escalated Tickets waiting to be claimed" : "Tickets assigned to you"}
+              {scope === "unassigned"
+                ? "Escalated Tickets waiting to be claimed"
+                : scope === "ai-live"
+                  ? "Tickets currently handled by the AI Agent"
+                  : scope === "all"
+                    ? "Every Ticket you can see, including Resolved"
+                    : "Tickets assigned to you"}
             </p>
           </div>
           <div className="border-b p-3">
@@ -249,53 +312,112 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                 onChange={(event) => setSearch(event.target.value)}
               />
             </InputGroup>
+            {scope === "all" ? (
+              <Select onValueChange={(value) => setStatusFilter(value as TicketStatus | "ALL")} value={statusFilter}>
+                <SelectTrigger aria-label="Filter by status" className="mt-2 w-full" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusFilterOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {tickets.isPending ? (
-              <div className="grid gap-2 p-2">
-                <Skeleton className="h-14 w-full" />
-                <Skeleton className="h-14 w-full" />
-                <Skeleton className="h-14 w-full" />
-              </div>
-            ) : null}
-            {tickets.isError ? (
-              <p className="p-4 text-center text-xs text-destructive">
-                Unable to load your Tickets.
-              </p>
-            ) : null}
-            {tickets.data && rows?.length === 0 ? (
-              <p className="p-4 text-center text-xs text-muted-foreground">
-                {tickets.data.tickets.length === 0
-                  ? scope === "unassigned"
-                    ? "No escalated Tickets are waiting."
-                    : "No Tickets are assigned to you yet. Claim one from Unassigned to see it here."
-                  : "No Tickets match this search."}
-              </p>
-            ) : null}
-            <div className="flex flex-col gap-0.5">
-              {rows?.map((row) => (
-                <TicketRow
-                  key={row.id}
-                  active={row.id === ticketId}
-                  onSelect={() =>
-                    void navigate(
-                      scope === "unassigned"
-                        ? {
-                            params: { ticketId: row.id },
-                            search: (prev) => prev,
-                            to: "/chat/unassigned/tickets/$ticketId",
-                          }
-                        : {
-                            params: { ticketId: row.id },
-                            search: (prev) => prev,
-                            to: "/chat/tickets/$ticketId",
-                          },
-                    )
-                  }
-                  ticket={row}
-                />
-              ))}
-            </div>
+            {scope === "all" ? (
+              <>
+                {allTickets.isPending ? (
+                  <div className="grid gap-2 p-2">
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                  </div>
+                ) : null}
+                {allTickets.isError ? (
+                  <p className="p-4 text-center text-xs text-destructive">
+                    Unable to load Tickets.
+                  </p>
+                ) : null}
+                {allTickets.data && allTicketRows.length === 0 ? (
+                  <p className="p-4 text-center text-xs text-muted-foreground">
+                    No Tickets match this search and filter.
+                  </p>
+                ) : null}
+                <div className="flex flex-col gap-0.5">
+                  {allTicketRows.map((row) => (
+                    <AllTicketRow
+                      key={row.id}
+                      active={row.id === ticketId}
+                      onSelect={() =>
+                        void navigate({
+                          params: { ticketId: row.id },
+                          search: (prev) => prev,
+                          to: scopeRoutes.all.ticket,
+                        })
+                      }
+                      ticket={row}
+                    />
+                  ))}
+                </div>
+                {allTickets.hasNextPage ? (
+                  <Button
+                    className="mt-2 w-full"
+                    disabled={allTickets.isFetchingNextPage}
+                    onClick={() => void allTickets.fetchNextPage()}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {allTickets.isFetchingNextPage ? "Loading…" : "Load more"}
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {tickets.isPending ? (
+                  <div className="grid gap-2 p-2">
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                  </div>
+                ) : null}
+                {tickets.isError ? (
+                  <p className="p-4 text-center text-xs text-destructive">
+                    Unable to load your Tickets.
+                  </p>
+                ) : null}
+                {tickets.data && rows?.length === 0 ? (
+                  <p className="p-4 text-center text-xs text-muted-foreground">
+                    {tickets.data.tickets.length === 0
+                      ? scope === "unassigned"
+                        ? "No escalated Tickets are waiting."
+                        : scope === "ai-live"
+                          ? "No Tickets are currently handled by the AI Agent."
+                          : "No Tickets are assigned to you yet. Claim one from Unassigned to see it here."
+                      : "No Tickets match this search."}
+                  </p>
+                ) : null}
+                <div className="flex flex-col gap-0.5">
+                  {rows?.map((row) => (
+                    <TicketRow
+                      key={row.id}
+                      active={row.id === ticketId}
+                      onSelect={() =>
+                        void navigate({
+                          params: { ticketId: row.id },
+                          search: (prev) => prev,
+                          to: scopeRoutes[scope].ticket,
+                        })
+                      }
+                      ticket={row}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </aside>
         <section className={cn("flex min-h-0 flex-col", !ticketId && "hidden md:flex")}>
@@ -309,6 +431,20 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
               {claim.error instanceof Error
                 ? claim.error.message
                 : "This Ticket was just claimed by another Human Agent."}
+            </p>
+          ) : null}
+          {takeover.isError ? (
+            <p className="border-b p-3 text-center text-xs text-destructive">
+              {takeover.error instanceof Error
+                ? takeover.error.message
+                : "This Ticket is no longer handled by the AI Agent."}
+            </p>
+          ) : null}
+          {reassign.isError ? (
+            <p className="border-b p-3 text-center text-xs text-destructive">
+              {reassign.error instanceof Error
+                ? reassign.error.message
+                : "Failed to assign the Ticket."}
             </p>
           ) : null}
           {!ticketId ? (
@@ -338,7 +474,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                   <Link
                     aria-label="Back to Ticket list"
                     className="shrink-0 md:hidden"
-                    to={scope === "unassigned" ? "/chat/unassigned" : "/chat"}
+                    to={scopeRoutes[scope].list}
                   >
                     <ArrowLeftIcon className="size-5" />
                   </Link>
@@ -362,6 +498,45 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                     >
                       {claim.isPending ? "Claiming…" : "Claim"}
                     </Button>
+                  ) : null}
+                  {canTakeover ? (
+                    <Button
+                      disabled={takeover.isPending}
+                      onClick={() => ticketId && takeover.mutate(ticketId)}
+                      size="sm"
+                    >
+                      {takeover.isPending ? "Taking over…" : "Take over"}
+                    </Button>
+                  ) : null}
+                  {canAssign ? (
+                    <>
+                      <Select onValueChange={setAssigneeId} value={assigneeId}>
+                        <SelectTrigger aria-label="Assign to a Human Agent" className="w-40" size="sm">
+                          <SelectValue placeholder="Assign to…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableHumanAgents.map((agent) => (
+                            <SelectItem key={agent.id} value={agent.id}>
+                              {agent.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        disabled={!assigneeId || reassign.isPending}
+                        onClick={() =>
+                          ticketId &&
+                          assigneeId &&
+                          reassign.mutate(
+                            { humanAgentId: assigneeId, id: ticketId },
+                            { onSuccess: () => setAssigneeId(undefined) },
+                          )
+                        }
+                        size="sm"
+                      >
+                        {reassign.isPending ? "Assigning…" : "Assign"}
+                      </Button>
+                    </>
                   ) : null}
                   <InputGroupButton
                     className="hidden xl:inline-flex"
@@ -429,7 +604,14 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                         placeholder="Type your message..."
                         value={draft}
                       />
-                      <InputGroupAddon align="block-start">
+                      <InputGroupAddon align="block-start" className="flex-wrap">
+                        {files.map((file, index) => (
+                          <SelectedFile
+                            file={file}
+                            key={`${file.name}-${file.lastModified}-${index}`}
+                            onRemove={() => setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                          />
+                        ))}
                         <label aria-label="Attach files" className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
                             <PaperclipIcon />
                             <input
@@ -514,16 +696,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                         </InputGroupButton>
                       </InputGroupAddon>
                     </InputGroup>
-                    {files.length ? (
-                      <div className="flex flex-wrap gap-1">
-                        {files.map((file, index) => (
-                          <Button key={`${file.name}-${file.lastModified}-${index}`} onClick={() => setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))} size="xs" type="button" variant="outline">
-                            {file.name} <XIcon />
-                          </Button>
-                        ))}
-                      </div>
-                    ) : null}
-                    {sendReply.isError || suggestedReply.isError || resolve.isError ? (
+                    {sendReply.isError || sendAttachments.isError || suggestedReply.isError || resolve.isError ? (
                       <p className="text-xs text-destructive">
                         {resolve.isError
                           ? "Finish or retry the pending reply before resolving this Ticket."
@@ -794,6 +967,53 @@ function scopeUnreadTotal(data: { tickets: SupportTicket[] } | undefined) {
   return data?.tickets.reduce((total, ticket) => total + ticket.unreadCount, 0) ?? 0;
 }
 
+function AllTicketRow({
+  active,
+  onSelect,
+  ticket,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  ticket: TicketListItem;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full gap-3 rounded-lg p-3 text-left hover:bg-accent",
+        active ? "bg-accent" : "",
+      )}
+    >
+      <Avatar>
+        <AvatarFallback>{getInitials(ticket.customerIdentity.name)}</AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 flex-1">
+        <span className="flex justify-between gap-2">
+          <b className="truncate text-sm">{ticket.customerIdentity.name}</b>
+          <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+            <small>{new Date(ticket.updatedAt).toLocaleDateString()}</small>
+            {ticket.unreadCount > 0 ? (
+              <Badge aria-label={`${ticket.unreadCount} unread`} className="px-1.5" variant="default">
+                {ticket.unreadCount}
+              </Badge>
+            ) : null}
+          </span>
+        </span>
+        <span className="mt-1 block truncate text-xs text-muted-foreground">{ticket.title}</span>
+        <span className="mt-2 flex items-center gap-1.5">
+          <StatusBadge status={ticket.status} />
+          <PriorityBadge priority={ticket.priority} />
+          <Badge variant="outline">{ticket.category}</Badge>
+          {ticket.assignedHumanAgent ? (
+            <small className="truncate text-muted-foreground">{ticket.assignedHumanAgent.name}</small>
+          ) : null}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function formatWaitingDuration(since: string) {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60_000));
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
@@ -825,12 +1045,43 @@ function isImage(attachment: TicketAttachment) {
   return attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/png";
 }
 
+function formatBytes(sizeBytes: number) {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = sizeBytes;
+  let unit = -1;
+  do {
+    value /= 1024;
+    unit += 1;
+  } while (value >= 1024 && unit < units.length - 1);
+  return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
+function SelectedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const [previewUrl, setPreviewUrl] = useState<string>();
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return (
+    <div className="flex min-w-0 max-w-48 items-center gap-2 rounded-md bg-muted p-1.5 text-xs text-foreground">
+      {previewUrl ? <img alt="" className="size-8 rounded object-cover" src={previewUrl} /> : <FileTextIcon className="size-5 shrink-0" />}
+      <span className="truncate">{file.name}</span>
+      <button aria-label={`Remove ${file.name}`} onClick={onRemove} type="button"><XIcon className="size-3.5" /></button>
+    </div>
+  );
+}
+
 function AttachmentCard({
   attachment,
   onOpenImage,
+  showReadability = true,
 }: {
   attachment: TicketAttachment;
   onOpenImage: () => void;
+  showReadability?: boolean;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string>();
   const isPreviewableDocument =
@@ -843,16 +1094,16 @@ function AttachmentCard({
 
   const readability =
     attachment.processingStatus === "PROCESSING"
-      ? "AI readability is processing; the original file is available."
+      ? "AI reading…"
       : attachment.processingStatus === "FAILED"
-        ? `AI could not read this file${attachment.failureReason ? `: ${attachment.failureReason}` : "."} The original file is available.`
-        : "AI-readable.";
+        ? `Could not be read${attachment.failureReason ? `: ${attachment.failureReason}` : ""}`
+        : "✓";
 
   if (isImage(attachment)) {
     return (
       <button
         aria-label={`Open ${attachment.fileName} in gallery`}
-        className="relative aspect-square overflow-hidden rounded-md border bg-muted"
+        className="relative size-28 shrink-0 overflow-hidden rounded-md border bg-muted"
         onClick={onOpenImage}
         type="button"
       >
@@ -861,9 +1112,9 @@ function AttachmentCard({
         ) : (
           <span className="grid size-full place-items-center text-xs text-muted-foreground">Loading…</span>
         )}
-        {attachment.processingStatus !== "READY" ? (
+        {showReadability ? (
           <span className="absolute right-1 bottom-1 rounded bg-background/90 px-1 text-[10px] text-foreground">
-            {attachment.processingStatus === "PROCESSING" ? "AI reading…" : "AI unreadable"}
+            {readability}
           </span>
         ) : null}
       </button>
@@ -871,11 +1122,11 @@ function AttachmentCard({
   }
 
   return (
-    <article className="flex items-center gap-3 rounded-md border p-3">
+    <article className="flex min-w-0 items-center gap-3 rounded-md border p-3">
       <FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{attachment.fileName}</p>
-        <p className="text-xs text-muted-foreground">{formatBytes(attachment.sizeBytes)} · {readability}</p>
+        <p className="text-xs text-muted-foreground">{formatBytes(attachment.sizeBytes)}{showReadability ? ` · ${readability}` : ""}</p>
       </div>
       {isPreviewableDocument ? (
         <Button onClick={() => void getAttachmentPreviewUrl(attachment.id).then(({ url }) => window.open(url, "_blank", "noopener"))} size="xs" type="button" variant="outline">
@@ -972,6 +1223,7 @@ function TranscriptMessage({
   }
 
   const isHuman = message.senderType === "HUMAN_AGENT";
+  const legacyAttachmentText = /^I need help with the attached file: .+$/.test(message.content) && message.attachments.length;
   return (
     <Message align={isHuman ? "end" : "start"}>
       <MessageAvatar>
@@ -982,11 +1234,17 @@ function TranscriptMessage({
       <MessageContent>
         <MessageHeader>{senderName(message)}</MessageHeader>
         <Bubble variant={bubbleVariant(message.senderType)}>
-          <BubbleContent>{message.content}</BubbleContent>
+          <BubbleContent className={message.attachments.length ? "w-fit max-w-full" : undefined}>
+            {message.attachments.length ? (
+              <MessageAttachments attachments={message.attachments} onOpenImage={onOpenImage} showReadability={message.senderType === "CUSTOMER"} />
+            ) : null}
+            {message.content && !legacyAttachmentText ? (
+              <div className={message.attachments.length ? "mt-2" : undefined}>
+                {message.senderType === "CUSTOMER" ? message.content : <Markdown>{message.content}</Markdown>}
+              </div>
+            ) : null}
+          </BubbleContent>
         </Bubble>
-        {message.attachments.length ? (
-          <MessageAttachments attachments={message.attachments} onOpenImage={onOpenImage} />
-        ) : null}
         <MessageFooter className="flex items-center gap-1.5">
           {new Date(message.createdAt).toLocaleString()}
           {isHuman && message.deliveryStatus !== "SENT" ? (
@@ -1012,19 +1270,28 @@ function TranscriptMessage({
 function MessageAttachments({
   attachments,
   onOpenImage,
+  showReadability = true,
 }: {
   attachments: TicketAttachment[];
   onOpenImage: (attachment: TicketAttachment) => void;
+  showReadability?: boolean;
 }) {
   const images = attachments.filter(isImage);
   const otherAttachments = attachments.filter((attachment) => !isImage(attachment));
+  const shownImages = images.slice(0, 4);
+  const imageColumns = Math.min(shownImages.length, 3);
   return (
-    <div className="mt-2 grid max-w-sm gap-1.5">
+    <div className="grid w-fit max-w-sm gap-1.5">
       {images.length ? (
-        <div className="grid grid-cols-3 gap-1.5">
-          {images.slice(0, 4).map((attachment, index) => (
+        <div
+          className={cn(
+            "grid gap-1.5",
+            imageColumns === 1 ? "grid-cols-1" : imageColumns === 2 ? "grid-cols-2" : "grid-cols-3",
+          )}
+        >
+          {shownImages.map((attachment, index) => (
             <div className="relative" key={attachment.id}>
-              <AttachmentCard attachment={attachment} onOpenImage={() => onOpenImage(attachment)} />
+              <AttachmentCard attachment={attachment} onOpenImage={() => onOpenImage(attachment)} showReadability={showReadability} />
               {index === 3 && images.length > 4 ? (
                 <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-black/60 text-sm font-semibold text-white">
                   +{images.length - 4}
@@ -1035,7 +1302,7 @@ function MessageAttachments({
         </div>
       ) : null}
       {otherAttachments.map((attachment) => (
-        <AttachmentCard attachment={attachment} key={attachment.id} onOpenImage={() => onOpenImage(attachment)} />
+        <AttachmentCard attachment={attachment} key={attachment.id} onOpenImage={() => onOpenImage(attachment)} showReadability={showReadability} />
       ))}
     </div>
   );

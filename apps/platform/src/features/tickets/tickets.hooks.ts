@@ -1,20 +1,24 @@
-import type { TicketDetail } from "@repo/api-client";
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import type { ListTicketsFilters, TicketDetail } from "@repo/api-client";
+import { queryOptions, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { queryKeys } from "../../lib/query-keys";
 import {
   claimTicket,
   generateSuggestedReply,
+  getAllTickets,
+  getLiveAiTickets,
   getMyTickets,
   getSharedHumanQueue,
   getTicketDetail,
   markTicketRead,
+  reassignTicket,
   resolveHumanTicket,
   retryHumanReply,
   sendHumanReply,
   sendHumanAttachments,
   subscribeToTicketEvents,
   subscribeToSharedHumanQueue,
+  takeOverTicket,
 } from "./tickets.services";
 
 export const sharedHumanQueueQueryOptions = queryOptions({
@@ -27,6 +31,30 @@ export const myTicketsQueryOptions = queryOptions({
   queryKey: queryKeys.workspace.myTickets,
 });
 
+export const liveAiTicketsQueryOptions = queryOptions({
+  queryFn: getLiveAiTickets,
+  queryKey: queryKeys.workspace.liveAiTickets,
+});
+
+export function useAllTicketsQuery(filters: {
+  enabled: boolean;
+  search?: string;
+  status?: ListTicketsFilters["status"];
+}) {
+  return useInfiniteQuery({
+    enabled: filters.enabled,
+    getNextPageParam: (lastPage: Awaited<ReturnType<typeof getAllTickets>>) =>
+      lastPage.nextCursor ?? undefined,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      getAllTickets({ cursor: pageParam, search: filters.search, status: filters.status }),
+    queryKey: queryKeys.workspace.allTickets({
+      search: filters.search,
+      status: filters.status?.join(","),
+    }),
+  });
+}
+
 export function ticketDetailQueryOptions(id: string) {
   return queryOptions({
     queryFn: () => getTicketDetail(id),
@@ -36,11 +64,32 @@ export function ticketDetailQueryOptions(id: string) {
 
 function useTicketInvalidation() {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.sharedHumanQueue }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.myTickets }),
-    ]);
+  return useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspace.sharedHumanQueue }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspace.myTickets }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspace.liveAiTickets }),
+        queryClient.invalidateQueries({ queryKey: ["workspace", "all-tickets"] }),
+      ]),
+    [queryClient],
+  );
+}
+
+/** Invalidates one Ticket's detail query on top of the shared lists, so the
+ * sender sees its own Message immediately even if the per-Ticket SSE event
+ * was published inside a reconnect window (those events are never replayed). */
+function useInvalidateTicketAndLists() {
+  const queryClient = useQueryClient();
+  const invalidateLists = useTicketInvalidation();
+  return useCallback(
+    (ticketId: string) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspace.ticket(ticketId) }),
+        invalidateLists(),
+      ]),
+    [invalidateLists, queryClient],
+  );
 }
 
 export function useSharedHumanQueueEvents() {
@@ -138,19 +187,29 @@ export function useClaimTicketMutation() {
   return useMutation({ mutationFn: claimTicket, onSettled: invalidate });
 }
 
-export function useSendHumanReplyMutation() {
+export function useTakeOverTicketMutation() {
   const invalidate = useTicketInvalidation();
-  return useMutation({ mutationFn: sendHumanReply, onSuccess: invalidate });
+  return useMutation({ mutationFn: takeOverTicket, onSettled: invalidate });
+}
+
+export function useReassignTicketMutation() {
+  const invalidate = useTicketInvalidation();
+  return useMutation({ mutationFn: reassignTicket, onSettled: invalidate });
+}
+
+export function useSendHumanReplyMutation() {
+  const invalidateTicketAndLists = useInvalidateTicketAndLists();
+  return useMutation({ mutationFn: sendHumanReply, onSuccess: (_m, v) => invalidateTicketAndLists(v.id) });
 }
 
 export function useSendHumanAttachmentsMutation() {
-  const invalidate = useTicketInvalidation();
-  return useMutation({ mutationFn: sendHumanAttachments, onSuccess: invalidate });
+  const invalidateTicketAndLists = useInvalidateTicketAndLists();
+  return useMutation({ mutationFn: sendHumanAttachments, onSuccess: (_m, v) => invalidateTicketAndLists(v.id) });
 }
 
 export function useRetryHumanReplyMutation() {
-  const invalidate = useTicketInvalidation();
-  return useMutation({ mutationFn: retryHumanReply, onSuccess: invalidate });
+  const invalidateTicketAndLists = useInvalidateTicketAndLists();
+  return useMutation({ mutationFn: retryHumanReply, onSuccess: (_m, v) => invalidateTicketAndLists(v.id) });
 }
 
 export function useGenerateSuggestedReplyMutation() {

@@ -1,3 +1,4 @@
+import type { ListTicketsFilters } from "@repo/api-client";
 import {
   claimTicket as claimTicketRequest,
   createApiClient,
@@ -5,14 +6,18 @@ import {
   getAttachmentDownloadUrl,
   getAttachmentUrl,
   getTicketDetail as getTicketDetailRequest,
+  listLiveAiTickets as listLiveAiTicketsRequest,
   listMyTickets as listMyTicketsRequest,
   listSharedHumanQueue as listSharedHumanQueueRequest,
+  listTickets as listTicketsRequest,
   markTicketRead as markTicketReadRequest,
+  reassignTicket as reassignTicketRequest,
   resolveHumanTicket as resolveHumanTicketRequest,
   retryHumanReply as retryHumanReplyRequest,
   sendHumanReply as sendHumanReplyRequest,
   sendHumanAttachments as sendHumanAttachmentsRequest,
   subscribeToTicketEvents as subscribeToTicketEventsRequest,
+  takeOverTicket as takeOverTicketRequest,
 } from "@repo/api-client";
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -42,6 +47,22 @@ export function getMyTickets() {
 
 export function claimTicket(id: string) {
   return claimTicketRequest(apiClient, id);
+}
+
+export function getLiveAiTickets() {
+  return listLiveAiTicketsRequest(apiClient);
+}
+
+export function getAllTickets(filters: ListTicketsFilters) {
+  return listTicketsRequest(apiClient, filters);
+}
+
+export function takeOverTicket(id: string) {
+  return takeOverTicketRequest(apiClient, id);
+}
+
+export function reassignTicket(input: { id: string; humanAgentId: string }) {
+  return reassignTicketRequest(apiClient, input.id, input.humanAgentId);
 }
 
 export function sendHumanReply(input: { id: string; content: string; idempotencyKey: string }) {
