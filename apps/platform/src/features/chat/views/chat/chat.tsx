@@ -66,6 +66,7 @@ import {
   ticketDetailQueryOptions,
   useClaimTicketMutation,
   useGenerateSuggestedReplyMutation,
+  useIsElementVisible,
   useMarkTicketReadOnView,
   useResolveHumanTicketMutation,
   useRetryHumanReplyMutation,
@@ -102,7 +103,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   });
   useTicketEvents();
   const { reconnecting } = useTicketDetailEvents(ticketId);
-  useMarkTicketReadOnView(ticket.data?.ticket);
+  const [lastMessageNode, setLastMessageNode] = useState<HTMLDivElement | null>(null);
+  const newestMessageVisible = useIsElementVisible(lastMessageNode);
+  useMarkTicketReadOnView(ticket.data?.ticket, newestMessageVisible);
 
   const sendReply = useSendHumanReplyMutation();
   const sendAttachments = useSendHumanAttachmentsMutation();
@@ -321,15 +324,19 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
               </header>
               <MessageScroller>
                 <MessageScrollerContent>
-                  {detail.messages.map((message) => (
-                    <TranscriptMessage
+                  {detail.messages.map((message, index) => (
+                    <div
                       key={message.id}
-                      message={message}
-                      onRetry={() => ticketId && retryReply.mutate({ id: ticketId, messageId: message.id })}
-                      onOpenImage={(attachment) =>
-                        setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
-                      }
-                    />
+                      ref={index === detail.messages.length - 1 ? setLastMessageNode : undefined}
+                    >
+                      <TranscriptMessage
+                        message={message}
+                        onRetry={() => ticketId && retryReply.mutate({ id: ticketId, messageId: message.id })}
+                        onOpenImage={(attachment) =>
+                          setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
+                        }
+                      />
+                    </div>
                   ))}
                 </MessageScrollerContent>
               </MessageScroller>

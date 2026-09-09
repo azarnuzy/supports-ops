@@ -93,18 +93,16 @@ export function useTicketDetailEvents(ticketId: string | undefined) {
 }
 
 /** Marks a Ticket read only while its view is active, the browser is
- * focused, and there is a newest position to advance to — never while
- * backgrounded or on a different Ticket.
- * ponytail: assumes the transcript is scrolled to the newest Message (the
- * scroller already pins to bottom), rather than tracking visibility of the
- * last bubble with an IntersectionObserver — add that if the scroller ever
- * stops auto-pinning. */
-export function useMarkTicketReadOnView(ticket: TicketDetail | undefined) {
+ * focused, and the newest Message is visible in the transcript (per
+ * `newestMessageVisible`, driven by an IntersectionObserver on the last
+ * bubble) — never while backgrounded, on a different Ticket, or scrolled
+ * away from the newest Message. */
+export function useMarkTicketReadOnView(ticket: TicketDetail | undefined, newestMessageVisible: boolean) {
   const queryClient = useQueryClient();
   const lastSent = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!ticket) return;
+    if (!ticket || !newestMessageVisible) return;
     const latestPosition = ticket.messages.at(-1)?.position;
     if (latestPosition === undefined) return;
     const key = `${ticket.id}:${latestPosition}`;
@@ -129,7 +127,28 @@ export function useMarkTicketReadOnView(ticket: TicketDetail | undefined) {
       document.removeEventListener("visibilitychange", attempt);
       window.removeEventListener("focus", attempt);
     };
-  }, [queryClient, ticket]);
+  }, [newestMessageVisible, queryClient, ticket]);
+}
+
+/** Reports whether `element` is currently intersecting the viewport, for
+ * gating "the newest Message is visible" — re-observes whenever the
+ * observed node changes (e.g. a new Message becomes the last bubble). */
+export function useIsElementVisible(element: Element | null) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!element) {
+      setVisible(false);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry?.isIntersecting ?? false), {
+      threshold: 0.5,
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+
+  return visible;
 }
 
 export function useClaimTicketMutation() {
