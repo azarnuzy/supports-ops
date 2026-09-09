@@ -2,10 +2,11 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { updateWebWidgetConfigSchema } from "./schema";
+import { updateWebWidgetConfigSchema, uploadWebWidgetLogoSchema } from "./schema";
 import {
   getWebWidgetConfig,
   updateWebWidgetConfig,
+  uploadWebWidgetLogo,
   WebWidgetConfigNotFoundError,
 } from "./services";
 
@@ -46,5 +47,30 @@ export const widgetConfigRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       throw error;
+    }
+  })
+  .post("/logo", zValidator("form", uploadWebWidgetLogoSchema), async (c) => {
+    const currentUser = requireAdmin(c);
+
+    if (!currentUser) {
+      return c.json({ error: "forbidden" }, 403);
+    }
+
+    try {
+      const result = await uploadWebWidgetLogo(c.req.valid("form").file);
+
+      return c.json(result, 200);
+    } catch (error) {
+      if (error instanceof WebWidgetConfigNotFoundError) {
+        return c.json({ error: "not_found", message: error.message }, 404);
+      }
+
+      return c.json(
+        {
+          error: "invalid_logo",
+          message: error instanceof Error ? error.message : "Invalid logo.",
+        },
+        422,
+      );
     }
   });
