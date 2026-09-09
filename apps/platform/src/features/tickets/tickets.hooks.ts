@@ -69,7 +69,7 @@ export function useTicketEvents() {
 
 export function useClaimTicketMutation() {
   const invalidate = useTicketInvalidation();
-  return useMutation({ mutationFn: claimTicket, onSuccess: invalidate });
+  return useMutation({ mutationFn: claimTicket, onSettled: invalidate });
 }
 
 export function useReassignTicketMutation() {

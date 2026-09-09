@@ -22,9 +22,11 @@ import { enqueueTicketKnowledgeIndex } from "./queue";
 
 const ticketSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
+  category: true,
   customerIdentity: { select: { name: true } },
   id: true,
   priority: true,
+  status: true,
   title: true,
   createdAt: true,
   escalatedAt: true,

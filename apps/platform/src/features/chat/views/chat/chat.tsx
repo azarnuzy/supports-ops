@@ -38,7 +38,7 @@ import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
 import { cn } from "@repo/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   CalendarIcon,
   ChevronLeftIcon,
@@ -60,7 +60,9 @@ import { meQueryOptions } from "../../../auth";
 import { describeActivity } from "../../../tickets/activity-description";
 import {
   myTicketsQueryOptions,
+  sharedHumanQueueQueryOptions,
   ticketDetailQueryOptions,
+  useClaimTicketMutation,
   useGenerateSuggestedReplyMutation,
   useResolveHumanTicketMutation,
   useRetryHumanReplyMutation,
@@ -82,10 +84,13 @@ function bubbleVariant(senderType: TicketDetailMessage["senderType"]) {
   return "customer" as const;
 }
 
-const ChatView = ({ ticketId }: { ticketId?: string }) => {
+type TicketScope = "mine" | "unassigned";
+
+const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?: string }) => {
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions);
-  const tickets = useQuery(myTicketsQueryOptions);
+  const mineTickets = useQuery(myTicketsQueryOptions);
+  const unassignedTickets = useQuery(sharedHumanQueueQueryOptions);
   const ticket = useQuery({
     ...ticketDetailQueryOptions(ticketId ?? ""),
     enabled: Boolean(ticketId),
@@ -96,6 +101,8 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
   const suggestedReply = useGenerateSuggestedReplyMutation();
   const resolve = useResolveHumanTicketMutation();
   const retryReply = useRetryHumanReplyMutation();
+  const claim = useClaimTicketMutation();
+  const tickets = scope === "unassigned" ? unassignedTickets : mineTickets;
 
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
@@ -106,19 +113,19 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
   const replyKey = useRef<string | undefined>(undefined);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
 
-  // Entering a populated Mine scope selects the first Ticket so the workspace
-  // never opens on an arbitrary blank state.
+  // Entering a populated scope selects the first Ticket so the workspace never
+  // opens on an arbitrary blank state.
   useEffect(() => {
     if (ticketId || !tickets.data) return;
     const first = tickets.data.tickets[0];
     if (first) {
-      void navigate({
-        params: { ticketId: first.id },
-        replace: true,
-        to: "/chat/tickets/$ticketId",
-      });
+      void navigate(
+        scope === "unassigned"
+          ? { params: { ticketId: first.id }, replace: true, to: "/chat/unassigned/tickets/$ticketId" }
+          : { params: { ticketId: first.id }, replace: true, to: "/chat/tickets/$ticketId" },
+      );
     }
-  }, [navigate, ticketId, tickets.data]);
+  }, [navigate, scope, ticketId, tickets.data]);
 
   const rows = tickets.data?.tickets.filter((row) =>
     row.customerIdentity.name.toLowerCase().includes(search.toLowerCase()),
@@ -130,6 +137,8 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
     Boolean(me.data) &&
     detail?.status === "HUMAN_HANDLING" &&
     detail?.assignedHumanAgent?.id === me.data?.id;
+  const canClaim =
+    scope === "unassigned" && detail?.status === "ESCALATED" && me.data?.role === "HUMAN_AGENT";
 
   const timeline = detail
     ? [
@@ -164,8 +173,20 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
       >
         <aside className="flex min-h-0 flex-col border-r">
           <div className="border-b p-4">
-            <p className="text-lg font-semibold">Mine</p>
-            <p className="text-xs text-muted-foreground">Tickets assigned to you</p>
+            <div className="flex gap-3 text-lg font-semibold">
+              <Link className={scope === "mine" ? "text-foreground" : "text-muted-foreground"} to="/chat">
+                Mine
+              </Link>
+              <Link
+                className={scope === "unassigned" ? "text-foreground" : "text-muted-foreground"}
+                to="/chat/unassigned"
+              >
+                Unassigned
+              </Link>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {scope === "unassigned" ? "Escalated Tickets waiting to be claimed" : "Tickets assigned to you"}
+            </p>
           </div>
           <div className="border-b p-3">
             <InputGroup>
@@ -192,7 +213,9 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
             {tickets.data && rows?.length === 0 ? (
               <p className="p-4 text-center text-xs text-muted-foreground">
                 {tickets.data.tickets.length === 0
-                  ? "No Tickets are assigned to you yet. Claim one from the Shared Human Queue to see it here."
+                  ? scope === "unassigned"
+                    ? "No escalated Tickets are waiting."
+                    : "No Tickets are assigned to you yet. Claim one from Unassigned to see it here."
                   : "No Tickets match this search."}
               </p>
             ) : null}
@@ -202,7 +225,11 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                   key={row.id}
                   active={row.id === ticketId}
                   onSelect={() =>
-                    void navigate({ params: { ticketId: row.id }, to: "/chat/tickets/$ticketId" })
+                    void navigate(
+                      scope === "unassigned"
+                        ? { params: { ticketId: row.id }, to: "/chat/unassigned/tickets/$ticketId" }
+                        : { params: { ticketId: row.id }, to: "/chat/tickets/$ticketId" },
+                    )
                   }
                   ticket={row}
                 />
@@ -211,6 +238,13 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
           </div>
         </aside>
         <section className="flex min-h-0 flex-col">
+          {claim.isError ? (
+            <p className="border-b p-3 text-center text-xs text-destructive">
+              {claim.error instanceof Error
+                ? claim.error.message
+                : "This Ticket was just claimed by another Human Agent."}
+            </p>
+          ) : null}
           {!ticketId ? (
             <Empty className="m-auto border-0">
               <EmptyTitle>Select a Ticket</EmptyTitle>
@@ -247,6 +281,15 @@ const ChatView = ({ ticketId }: { ticketId?: string }) => {
                   <StatusBadge status={detail.status} />
                   <PriorityBadge priority={detail.priority} />
                   <Badge variant="outline">{detail.category}</Badge>
+                  {canClaim ? (
+                    <Button
+                      disabled={claim.isPending}
+                      onClick={() => ticketId && claim.mutate(ticketId)}
+                      size="sm"
+                    >
+                      {claim.isPending ? "Claiming…" : "Claim"}
+                    </Button>
+                  ) : null}
                   <InputGroupButton
                     size="icon-sm"
                     aria-label={infoPanelOpen ? "Hide Ticket details" : "Show Ticket details"}
@@ -578,9 +621,23 @@ function TicketRow({
         <span className="mt-1 block truncate text-xs text-muted-foreground">
           {lastMessage?.content ?? ticket.title}
         </span>
+        <span className="mt-2 flex items-center gap-1.5">
+          <PriorityBadge priority={ticket.priority} />
+          <Badge variant="outline">{ticket.category}</Badge>
+          {ticket.status === "ESCALATED" ? (
+            <small className="text-muted-foreground">
+              Waiting {formatWaitingDuration(ticket.escalatedAt ?? ticket.createdAt)}
+            </small>
+          ) : null}
+        </span>
       </span>
     </button>
   );
+}
+
+function formatWaitingDuration(since: string) {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60_000));
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function DetailRow({

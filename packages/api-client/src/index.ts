@@ -97,12 +97,14 @@ export type TicketMessage = {
 
 export type SupportTicket = {
   assignedHumanAgent: { id: string; name: string } | null;
+  category: TicketCategory;
   createdAt: string;
   escalatedAt: string | null;
   escalationSummary: string | null;
   escalationSummaryStatus: "PENDING" | "READY" | "FAILED";
   id: string;
   priority: TicketPriority;
+  status: TicketStatus;
   title: string;
   customerIdentity: { name: string };
   messages: TicketMessage[];
