@@ -14,6 +14,7 @@ import {
   resolveHumanTicket,
   retryHumanReply,
   sendHumanReply,
+  sendHumanAttachments,
   takeOverTicket,
   subscribeToSharedHumanQueue,
 } from "./tickets.services";
@@ -85,6 +86,11 @@ export function useTakeOverTicketMutation() {
 export function useSendHumanReplyMutation() {
   const invalidate = useTicketInvalidation();
   return useMutation({ mutationFn: sendHumanReply, onSuccess: invalidate });
+}
+
+export function useSendHumanAttachmentsMutation() {
+  const invalidate = useTicketInvalidation();
+  return useMutation({ mutationFn: sendHumanAttachments, onSuccess: invalidate });
 }
 
 export function useRetryHumanReplyMutation() {

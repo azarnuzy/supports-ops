@@ -6,6 +6,7 @@ import type { AuthVariables } from "../auth/types";
 import { subscribeToTicketQueueEvents } from "../widget/realtime";
 import {
   humanReplySchema,
+  humanAttachmentReplySchema,
   listTicketsQuerySchema,
   reassignTicketSchema,
   resolveTicketSchema,
@@ -17,6 +18,7 @@ import {
   getTicketDetail,
   HumanAgentNotFoundError,
   InvalidTicketsCursorError,
+  InvalidHumanAttachmentError,
   listMyTickets,
   listAiHandlingTickets,
   listSharedHumanQueue,
@@ -25,6 +27,7 @@ import {
   suggestReply,
   SuggestedReplyNotConfiguredError,
   TicketAlreadyClaimedError,
+  TicketNotAvailableForAssignmentError,
   TicketNotFoundError,
   TicketNotOwnedError,
   TicketNotAvailableForTakeoverError,
@@ -33,6 +36,7 @@ import {
   takeOverTicket,
   resolveTicket,
   sendHumanReply,
+  sendHumanAttachmentReply,
 } from "./services";
 
 export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -133,6 +137,21 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       throw error;
     }
   })
+  .post("/:id/attachments", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN") return c.json({ error: "forbidden" }, 403);
+    const form = await c.req.formData();
+    const parsed = humanAttachmentReplySchema.safeParse({ content: form.get("content") || undefined, idempotencyKey: form.get("idempotencyKey") });
+    if (!parsed.success) return c.json({ error: "invalid_attachment" }, 422);
+    try {
+      return c.json({ message: await sendHumanAttachmentReply(c.req.param("id"), user.id, parsed.data.content, form.getAll("files").filter((value): value is File => value instanceof File), parsed.data.idempotencyKey) }, 201);
+    } catch (error) {
+      if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
+      if (error instanceof InvalidHumanAttachmentError) return c.json({ error: "invalid_attachment" }, 422);
+      throw error;
+    }
+  })
   .post("/:id/messages/:messageId/retry", async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
@@ -168,7 +187,8 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/:id/resolve", zValidator("json", resolveTicketSchema), async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
-    if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN")
+      return c.json({ error: "forbidden" }, 403);
     try {
       return c.json(
         {
@@ -204,6 +224,8 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     } catch (error) {
       if (error instanceof HumanAgentNotFoundError)
         return c.json({ error: "human_agent_not_found" }, 422);
+      if (error instanceof TicketNotAvailableForAssignmentError)
+        return c.json({ error: "ticket_not_available_for_assignment" }, 409);
       throw error;
     }
   })

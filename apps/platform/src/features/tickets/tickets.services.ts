@@ -13,6 +13,7 @@ import {
   resolveHumanTicket as resolveHumanTicketRequest,
   retryHumanReply as retryHumanReplyRequest,
   sendHumanReply as sendHumanReplyRequest,
+  sendHumanAttachments as sendHumanAttachmentsRequest,
   takeOverTicket as takeOverTicketRequest,
   type ListTicketsFilters,
 } from "@repo/api-client";
@@ -64,6 +65,10 @@ export function reassignTicket(input: { id: string; humanAgentId: string }) {
 
 export function sendHumanReply(input: { id: string; content: string; idempotencyKey: string }) {
   return sendHumanReplyRequest(apiClient, input.id, input.content, input.idempotencyKey);
+}
+
+export function sendHumanAttachments(input: { id: string; content: string; files: File[]; idempotencyKey: string }) {
+  return sendHumanAttachmentsRequest(apiClient, input.id, input.content, input.files, input.idempotencyKey);
 }
 
 export function retryHumanReply(input: { id: string; messageId: string }) {
