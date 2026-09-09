@@ -1,4 +1,4 @@
-import type { KnowledgeStatus, KnowledgeVisibility } from "../../knowledge.types";
+import type { KnowledgeIngestStage, KnowledgeSourceType, KnowledgeStatus, KnowledgeVisibility } from "../../knowledge.types";
 
 const statusLabels: Record<KnowledgeStatus, string> = {
   DRAFT: "Draft",
@@ -22,8 +22,25 @@ const visibilityLabels: Record<KnowledgeVisibility, string> = {
   INTERNAL_ONLY: "Internal-Only",
 };
 
-export function statusLabel(status: KnowledgeStatus) {
-  return statusLabels[status];
+const sourceTypeLabels: Record<KnowledgeSourceType, string> = {
+  HELP_CENTER: "Help Center",
+  INTERNAL_SOP: "Internal SOP",
+  MANUAL_FAQ: "Text",
+  PDF: "PDF",
+  URL: "Website",
+};
+
+const stageLabels: Record<KnowledgeIngestStage, string> = {
+  CHUNKING: "Creating chunks",
+  EMBEDDING: "Generating embeddings",
+  EXTRACTING: "Extracting content",
+  INDEXING: "Indexing",
+  PUBLISHED: "Published",
+  UPLOADING: "Uploading",
+};
+
+export function statusLabel(status: KnowledgeStatus | KnowledgeIngestStage) {
+  return stageLabels[status as KnowledgeIngestStage] ?? statusLabels[status as KnowledgeStatus];
 }
 
 export function statusVariant(status: KnowledgeStatus) {
@@ -34,20 +51,12 @@ export function visibilityLabel(visibility: KnowledgeVisibility) {
   return visibilityLabels[visibility];
 }
 
-export function formatSimilarity(similarity: number) {
-  return `${Math.round(similarity * 100)}%`;
+export function sourceTypeLabel(sourceType: KnowledgeSourceType) {
+  return sourceTypeLabels[sourceType];
 }
 
 export function formatUpdatedAt(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(value),
   );
-}
-
-export function canEdit(status: KnowledgeStatus) {
-  return status !== "PROCESSING";
-}
-
-export function canPublish(status: KnowledgeStatus) {
-  return status !== "PROCESSING";
 }
