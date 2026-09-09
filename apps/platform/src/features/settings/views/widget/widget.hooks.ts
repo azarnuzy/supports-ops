@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import {
   useUpdateWebWidgetConfigMutation,
+  useUploadWebWidgetLogoMutation,
   webWidgetConfigQueryOptions,
 } from "../../widget-config.hooks";
 import {
@@ -15,6 +16,7 @@ import {
 export function useWidgetSettingsForm() {
   const config = useQuery(webWidgetConfigQueryOptions);
   const updateConfig = useUpdateWebWidgetConfigMutation();
+  const uploadLogo = useUploadWebWidgetLogoMutation();
 
   const [botName, setBotName] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
@@ -125,6 +127,42 @@ export function useWidgetSettingsForm() {
     setDomainError(null);
   }
 
+  function handleLogoUpload(file: File) {
+    uploadLogo.mutate(file, {
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : "Failed to upload logo.");
+      },
+      onSuccess: () => {
+        toast.success("Logo uploaded.");
+      },
+    });
+  }
+
+  function handleLogoRemove() {
+    if (!current) {
+      return;
+    }
+
+    updateConfig.mutate(
+      {
+        allowedDomains: current.allowedDomains,
+        botName: current.botName,
+        closingMessage: currentClosingMessage || null,
+        logoKey: null,
+        primaryColor: current.primaryColor,
+        welcomeMessage: current.welcomeMessage,
+      },
+      {
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : "Failed to remove logo.");
+        },
+        onSuccess: () => {
+          toast.success("Logo removed.");
+        },
+      },
+    );
+  }
+
   async function copySnippet() {
     try {
       await navigator.clipboard.writeText(embedSnippet);
@@ -146,6 +184,8 @@ export function useWidgetSettingsForm() {
     domainError,
     embedSnippet,
     handleDomainKeyDown,
+    handleLogoRemove,
+    handleLogoUpload,
     handleReset,
     handleSubmit,
     isDirty,
@@ -158,6 +198,7 @@ export function useWidgetSettingsForm() {
     setPrimaryColor,
     setWelcomeMessage,
     updateConfig,
+    uploadLogo,
     validationError,
     welcomeMessage,
   };
