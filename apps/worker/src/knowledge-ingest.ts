@@ -156,7 +156,7 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       });
 
       await tx.knowledgeSource.update({
-        data: { publishedAt: new Date(), stage: "PUBLISHED", status: "PUBLISHED" },
+        data: { content, publishedAt: new Date(), stage: "PUBLISHED", status: "PUBLISHED" },
         where: { id: knowledgeSourceId },
       });
 

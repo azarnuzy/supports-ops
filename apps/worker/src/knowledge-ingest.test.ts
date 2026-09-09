@@ -123,9 +123,50 @@ describe("processKnowledgeIngestJob", () => {
       }),
     );
     expect(mocks.txKnowledgeSourceUpdate).toHaveBeenCalledWith({
-      data: { publishedAt: expect.any(Date), stage: "PUBLISHED", status: "PUBLISHED" },
+      data: {
+        content: "Click the forgot password link.",
+        publishedAt: expect.any(Date),
+        stage: "PUBLISHED",
+        status: "PUBLISHED",
+      },
       where: { id: "ks-1" },
     });
+  });
+
+  it("persists re-extracted PDF/URL content as the new canonical content on success", async () => {
+    mocks.findFirst.mockResolvedValue({ id: "ks-1", sourceUrl: "https://docs.example.com" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            results: [
+              {
+                raw_content: "Getting started content.",
+                title: "Docs",
+                url: "https://docs.example.com",
+              },
+            ],
+          }),
+        ok: true,
+      }),
+    );
+
+    await processKnowledgeIngestJob({
+      data: {
+        kind: "URL",
+        knowledgeSourceId: "ks-1",
+        title: "Docs",
+        visibility: "CUSTOMER_SAFE",
+        workspaceId: "ws-1",
+      },
+    });
+
+    expect(mocks.txKnowledgeSourceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ content: "Getting started content." }),
+      }),
+    );
   });
 
   it("persists and publishes each ingest stage in order before its work begins", async () => {

@@ -9,7 +9,7 @@ import {
   getKnowledgeSources,
   publishKnowledgeSource,
   subscribeToKnowledgeSourceEvents,
-  updateManualFaq,
+  updateKnowledgeSource,
 } from "./knowledge.services";
 
 export const knowledgeSourcesQueryOptions = queryOptions({
@@ -64,12 +64,17 @@ export function useCreatePdfKnowledgeSourceMutation() {
   });
 }
 
-export function useUpdateManualFaqMutation() {
+export function useUpdateKnowledgeSourceMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: Parameters<typeof updateManualFaq>[1] }) =>
-      updateManualFaq(id, input),
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: Parameters<typeof updateKnowledgeSource>[1];
+    }) => updateKnowledgeSource(id, input),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
   });

@@ -9,7 +9,7 @@ import { enqueueKnowledgeIngest } from "./queue";
 import type {
   CreateDocumentationUrlInput,
   CreateManualFaqInput,
-  UpdateManualFaqInput,
+  UpdateKnowledgeSourceInput,
 } from "./schema";
 import type { KnowledgeSourceDto, KnowledgeSourcesResponse, RetrievalTestResponse } from "./types";
 
@@ -38,6 +38,20 @@ export class EmbeddingNotConfiguredError extends Error {
   constructor() {
     super("Configure OPENROUTER_API_KEY to use retrieval.");
     this.name = "EmbeddingNotConfiguredError";
+  }
+}
+
+export class KnowledgeSourceNotEditableError extends Error {
+  constructor() {
+    super("This Knowledge Source has no directly editable content.");
+    this.name = "KnowledgeSourceNotEditableError";
+  }
+}
+
+export class KnowledgeSourceNotRefreshableError extends Error {
+  constructor() {
+    super("Only PDF and URL Knowledge Sources can be refreshed from their original source.");
+    this.name = "KnowledgeSourceNotRefreshableError";
   }
 }
 
@@ -159,25 +173,104 @@ export async function getKnowledgeSource(id: string): Promise<KnowledgeSourceDto
   return toDto(knowledgeSource);
 }
 
-export async function updateManualFaq(
+/**
+ * Edits title, Visibility, and canonical content for any leaf Knowledge
+ * Source (Create Text, PDF, or URL). A title-only edit just renames the
+ * source. Editing content or Visibility re-indexes automatically: the
+ * previous Published Chunks stay retrievable until `knowledge-ingest`
+ * atomically replaces them, and a failed run leaves them in place with
+ * FAILED status/failureReason exposed. Visibility is additionally synced
+ * onto existing Chunks immediately in the same transaction, because
+ * retrieval cannot join back to KnowledgeSource and hiding a source must
+ * take effect for the Customer-facing retriever right away.
+ */
+export async function updateKnowledgeSource(
   id: string,
-  input: UpdateManualFaqInput,
+  input: UpdateKnowledgeSourceInput,
 ): Promise<KnowledgeSourceDto> {
   const existing = await findEditableKnowledgeSource(id);
 
-  // Visibility is denormalized onto Chunks because retrieval cannot join back
-  // to KnowledgeSource. Keep both rows in the same transaction so hiding a
-  // source takes effect for the Customer-facing retriever immediately.
-  const [knowledgeSource] = await prisma.$transaction([
-    prisma.knowledgeSource.update({
-      data: { content: input.content, title: input.title, visibility: input.visibility },
-      where: { id: existing.id },
-    }),
-    prisma.chunk.updateMany({
-      data: { visibility: input.visibility },
-      where: { knowledgeSourceId: existing.id },
-    }),
-  ]);
+  if (existing.sourceType === "HELP_CENTER") {
+    throw new KnowledgeSourceNotEditableError();
+  }
+
+  const workspaceId = requireWorkspaceId();
+  const contentChanged = input.content !== existing.content;
+  const visibilityChanged = input.visibility !== existing.visibility;
+  const needsReindex = contentChanged || visibilityChanged;
+
+  const sourceUpdate = prisma.knowledgeSource.update({
+    data: {
+      content: input.content,
+      title: input.title,
+      visibility: input.visibility,
+      ...(needsReindex
+        ? { failedStage: null, failureReason: null, status: "PROCESSING" as const }
+        : {}),
+    },
+    where: { id: existing.id },
+  });
+
+  const [knowledgeSource] = visibilityChanged
+    ? await prisma.$transaction([
+        sourceUpdate,
+        prisma.chunk.updateMany({
+          data: { visibility: input.visibility },
+          where: { knowledgeSourceId: existing.id },
+        }),
+      ])
+    : [await sourceUpdate];
+
+  if (needsReindex) {
+    await publishKnowledgeSourceEvent(workspaceId, {
+      knowledgeSourceId: existing.id,
+      status: "PROCESSING",
+    });
+    await enqueueKnowledgeIngest({
+      content: input.content,
+      kind: "CONTENT",
+      knowledgeSourceId: existing.id,
+      title: input.title,
+      visibility: input.visibility,
+      workspaceId,
+    });
+  }
+
+  return toDto(knowledgeSource);
+}
+
+/**
+ * "Update source": re-extracts from the stored PDF or source URL, replacing
+ * any manual content edits. This is the only path that discards edited
+ * content on purpose — Retry resumes from stored content instead so a
+ * manual edit is never silently overwritten by a routine retry.
+ */
+export async function refreshKnowledgeSource(id: string): Promise<KnowledgeSourceDto> {
+  const existing = await findEditableKnowledgeSource(id);
+
+  if (existing.sourceType !== "PDF" && existing.sourceType !== "URL") {
+    throw new KnowledgeSourceNotRefreshableError();
+  }
+
+  const workspaceId = requireWorkspaceId();
+
+  const knowledgeSource = await prisma.knowledgeSource.update({
+    data: { failedStage: null, failureReason: null, stage: null, status: "PROCESSING" },
+    where: { id: existing.id },
+  });
+
+  await publishKnowledgeSourceEvent(workspaceId, {
+    knowledgeSourceId: existing.id,
+    status: "PROCESSING",
+  });
+
+  await enqueueKnowledgeIngest({
+    kind: existing.sourceType,
+    knowledgeSourceId: existing.id,
+    title: existing.title,
+    visibility: existing.visibility,
+    workspaceId,
+  });
 
   return toDto(knowledgeSource);
 }
@@ -225,8 +318,12 @@ export async function publishKnowledgeSource(id: string): Promise<KnowledgeSourc
     status: "PROCESSING",
   });
 
+  // A stored `content` (set on creation for Create Text, or by a prior
+  // successful extraction for PDF/URL) resumes the run from that text, so a
+  // manual edit is never silently discarded by a retry. Only "Update
+  // source" (refreshKnowledgeSource) re-extracts on purpose.
   await enqueueKnowledgeIngest({
-    kind: existing.sourceType === "PDF" ? "PDF" : existing.sourceType === "URL" ? "URL" : "CONTENT",
+    kind: existing.content ? "CONTENT" : existing.sourceType === "PDF" ? "PDF" : "URL",
     content: existing.content ?? undefined,
     knowledgeSourceId: existing.id,
     title: existing.title,

@@ -61,12 +61,15 @@ const {
   createPdfKnowledgeSource,
   deleteKnowledgeSource,
   KnowledgeSourceMissingContentError,
+  KnowledgeSourceNotEditableError,
   KnowledgeSourceNotFoundError,
+  KnowledgeSourceNotRefreshableError,
   KnowledgeSourceProcessingError,
   listKnowledgeSources,
   publishKnowledgeSource,
+  refreshKnowledgeSource,
   testRetrieval,
-  updateManualFaq,
+  updateKnowledgeSource,
 } = await import("./services");
 
 const draftSource = {
@@ -201,14 +204,14 @@ describe("listKnowledgeSources", () => {
   });
 });
 
-describe("updateManualFaq", () => {
+describe("updateKnowledgeSource", () => {
   beforeEach(resetMocks);
 
   it("throws when the source does not exist", async () => {
     mocks.knowledgeSourceFindFirst.mockResolvedValue(null);
 
     await expect(
-      updateManualFaq("missing", {
+      updateKnowledgeSource("missing", {
         content: "New content.",
         title: "New title",
         visibility: "CUSTOMER_SAFE",
@@ -220,7 +223,7 @@ describe("updateManualFaq", () => {
     mocks.knowledgeSourceFindFirst.mockResolvedValue({ ...draftSource, status: "PROCESSING" });
 
     await expect(
-      updateManualFaq("ks-1", {
+      updateKnowledgeSource("ks-1", {
         content: "New content.",
         title: "New title",
         visibility: "CUSTOMER_SAFE",
@@ -230,21 +233,177 @@ describe("updateManualFaq", () => {
     expect(mocks.knowledgeSourceUpdate).not.toHaveBeenCalled();
   });
 
-  it("updates a source and its chunks' visibility in one transaction", async () => {
-    mocks.knowledgeSourceFindFirst.mockResolvedValue({ ...draftSource, status: "PUBLISHED" });
-    mocks.knowledgeSourceUpdate.mockResolvedValue({ ...draftSource, visibility: "INTERNAL_ONLY" });
+  it("refuses to edit a HELP_CENTER parent, which has no leaf content of its own", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({
+      ...draftSource,
+      sourceType: "HELP_CENTER",
+      status: "READY",
+    });
 
-    await updateManualFaq("ks-1", {
-      content: "Click forgot password.",
-      title: "How to reset password",
+    await expect(
+      updateKnowledgeSource("ks-1", {
+        content: "New content.",
+        title: "New title",
+        visibility: "CUSTOMER_SAFE",
+      }),
+    ).rejects.toBeInstanceOf(KnowledgeSourceNotEditableError);
+
+    expect(mocks.knowledgeSourceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("saves a title-only edit without re-indexing", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({ ...draftSource, status: "PUBLISHED" });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({ ...draftSource, title: "New title" });
+
+    const result = await updateKnowledgeSource("ks-1", {
+      content: draftSource.content,
+      title: "New title",
+      visibility: draftSource.visibility,
+    });
+
+    expect(mocks.knowledgeSourceUpdate).toHaveBeenCalledWith({
+      data: { content: draftSource.content, title: "New title", visibility: draftSource.visibility },
+      where: { id: "ks-1" },
+    });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.chunkUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.enqueueKnowledgeIngest).not.toHaveBeenCalled();
+    expect(result.status).not.toBe("PROCESSING");
+  });
+
+  it("re-indexes and syncs Chunk visibility atomically when Visibility changes", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({ ...draftSource, status: "PUBLISHED" });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({
+      ...draftSource,
+      status: "PROCESSING",
       visibility: "INTERNAL_ONLY",
     });
 
+    const result = await updateKnowledgeSource("ks-1", {
+      content: draftSource.content,
+      title: draftSource.title,
+      visibility: "INTERNAL_ONLY",
+    });
+
+    expect(mocks.knowledgeSourceUpdate).toHaveBeenCalledWith({
+      data: {
+        content: draftSource.content,
+        failedStage: null,
+        failureReason: null,
+        status: "PROCESSING",
+        title: draftSource.title,
+        visibility: "INTERNAL_ONLY",
+      },
+      where: { id: "ks-1" },
+    });
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
     expect(mocks.chunkUpdateMany).toHaveBeenCalledWith({
       data: { visibility: "INTERNAL_ONLY" },
       where: { knowledgeSourceId: "ks-1" },
     });
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith({
+      content: draftSource.content,
+      kind: "CONTENT",
+      knowledgeSourceId: "ks-1",
+      title: draftSource.title,
+      visibility: "INTERNAL_ONLY",
+      workspaceId: "ws-1",
+    });
+    expect(result.status).toBe("PROCESSING");
+  });
+
+  it("re-indexes without a Chunk transaction when only content changes", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({ ...draftSource, status: "PUBLISHED" });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({ ...draftSource, status: "PROCESSING" });
+
+    await updateKnowledgeSource("ks-1", {
+      content: "Updated content.",
+      title: draftSource.title,
+      visibility: draftSource.visibility,
+    });
+
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.chunkUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith({
+      content: "Updated content.",
+      kind: "CONTENT",
+      knowledgeSourceId: "ks-1",
+      title: draftSource.title,
+      visibility: draftSource.visibility,
+      workspaceId: "ws-1",
+    });
+  });
+
+  it("allows editing canonical content for a PDF Knowledge Source", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PUBLISHED",
+    });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PROCESSING",
+    });
+
+    await updateKnowledgeSource("ks-1", {
+      content: "Corrected extracted text.",
+      title: draftSource.title,
+      visibility: draftSource.visibility,
+    });
+
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "Corrected extracted text.", kind: "CONTENT" }),
+    );
+  });
+});
+
+describe("refreshKnowledgeSource", () => {
+  beforeEach(resetMocks);
+
+  it("re-extracts a PDF source from its stored file, ignoring any edited content", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PUBLISHED",
+    });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PROCESSING",
+    });
+
+    const result = await refreshKnowledgeSource("ks-1");
+
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith({
+      kind: "PDF",
+      knowledgeSourceId: "ks-1",
+      title: draftSource.title,
+      visibility: draftSource.visibility,
+      workspaceId: "ws-1",
+    });
+    expect(result.status).toBe("PROCESSING");
+  });
+
+  it("refuses to refresh a Create Text source, which has no original source to re-extract", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({ ...draftSource, status: "PUBLISHED" });
+
+    await expect(refreshKnowledgeSource("ks-1")).rejects.toBeInstanceOf(
+      KnowledgeSourceNotRefreshableError,
+    );
+    expect(mocks.enqueueKnowledgeIngest).not.toHaveBeenCalled();
+  });
+
+  it("refuses to refresh a source that is still processing", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PROCESSING",
+    });
+
+    await expect(refreshKnowledgeSource("ks-1")).rejects.toBeInstanceOf(
+      KnowledgeSourceProcessingError,
+    );
   });
 });
 
@@ -286,6 +445,46 @@ describe("publishKnowledgeSource", () => {
 
     await expect(publishKnowledgeSource("ks-1")).rejects.toBeInstanceOf(
       KnowledgeSourceProcessingError,
+    );
+  });
+
+  it("retries a PDF source from its stored content instead of silently re-extracting an edit away", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({
+      ...draftSource,
+      content: "Manually corrected text.",
+      sourceType: "PDF",
+      status: "FAILED",
+    });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PROCESSING",
+    });
+
+    await publishKnowledgeSource("ks-1");
+
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "Manually corrected text.", kind: "CONTENT" }),
+    );
+  });
+
+  it("retries a PDF source by re-extracting when it never produced content", async () => {
+    mocks.knowledgeSourceFindFirst.mockResolvedValue({
+      ...draftSource,
+      content: null,
+      sourceType: "PDF",
+      status: "FAILED",
+    });
+    mocks.knowledgeSourceUpdate.mockResolvedValue({
+      ...draftSource,
+      sourceType: "PDF",
+      status: "PROCESSING",
+    });
+
+    await publishKnowledgeSource("ks-1");
+
+    expect(mocks.enqueueKnowledgeIngest).toHaveBeenCalledWith(
+      expect.objectContaining({ content: undefined, kind: "PDF" }),
     );
   });
 });

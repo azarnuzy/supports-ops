@@ -7,7 +7,7 @@ import {
   listKnowledgeSources,
   publishKnowledgeSource as publishKnowledgeSourceRequest,
   testKnowledgeRetrieval,
-  updateManualFaq as updateManualFaqRequest,
+  updateKnowledgeSource as updateKnowledgeSourceRequest,
 } from "@repo/api-client";
 import type { DocumentationUrlInput, ManualFaqInput } from "./knowledge.types";
 
@@ -39,8 +39,8 @@ export async function createPdfKnowledgeSource(
   return createPdfKnowledgeSourceRequest(apiClient, file, visibility);
 }
 
-export async function updateManualFaq(id: string, input: ManualFaqInput) {
-  return updateManualFaqRequest(apiClient, id, input);
+export async function updateKnowledgeSource(id: string, input: ManualFaqInput) {
+  return updateKnowledgeSourceRequest(apiClient, id, input);
 }
 
 export async function publishKnowledgeSource(id: string) {
