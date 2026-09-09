@@ -17,5 +17,5 @@ export type CustomerMessageInput = z.infer<typeof customerMessageSchema>;
 
 export const customerAttachmentSchema = z.object({
   content: z.string().trim().max(10_000).optional(),
-  file: z.instanceof(File),
+  files: z.array(z.instanceof(File)).min(1).max(10),
 });

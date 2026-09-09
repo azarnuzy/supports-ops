@@ -59,7 +59,21 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
     await publishStatus(attachment.ticketId, attachment.id, "FAILED", failureReason);
   }
 
-  await requestReply(attachment.ticketId, attachment.workspaceId);
+  const pending = await prisma.attachment.count({
+    where: { messageId: attachment.messageId, processingStatus: "PROCESSING" },
+  });
+  if (!pending) {
+    publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", { maxRetriesPerRequest: null });
+    const replyKey = `supportops:attachment-reply:${attachment.messageId}`;
+    if (await publisher.set(replyKey, "1", "EX", 300, "NX")) {
+      try {
+        await requestReply(attachment.ticketId, attachment.workspaceId);
+      } catch (error) {
+        await publisher.del(replyKey);
+        throw error;
+      }
+    }
+  }
 }
 
 async function extractAttachment(storageKey: string, mimeType: string) {

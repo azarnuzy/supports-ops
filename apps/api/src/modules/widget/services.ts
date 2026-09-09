@@ -226,52 +226,90 @@ export async function createCustomerMessage(
   }
 }
 
-export async function createCustomerAttachment(
+export async function createCustomerAttachments(
   accessToken: string,
-  input: { content?: string; file: File },
+  input: { content?: string; files: File[] },
 ) {
-  if (!webAttachmentCapability.mimeTypes.includes(input.file.type)) {
+  if (
+    !input.files.length ||
+    input.files.length > webAttachmentCapability.maxFilesPerMessage ||
+    input.files.some((file) => !webAttachmentCapability.mimeTypes.includes(file.type))
+  ) {
     throw new InvalidAttachmentError("Attach a PDF, plain text, JPEG, or PNG file.");
   }
-  if (input.file.size === 0 || input.file.size > webAttachmentCapability.maxFileSizeBytes) {
+  if (input.files.some((file) => file.size === 0 || file.size > webAttachmentCapability.maxFileSizeBytes)) {
     throw new InvalidAttachmentError("Attachment must be between 1 byte and 10 MB.");
   }
 
-  const content = input.content?.trim() || `I need help with the attached file: ${input.file.name}`;
-  const result = await createCustomerMessage(accessToken, {
-    content,
-    idempotencyKey: randomUUID(),
+  const content = input.content?.trim() ?? "";
+  const session = await unscopedPrisma.webSession.findUnique({
+    where: { accessToken },
+    include: { ticket: true },
   });
+  if (session?.status !== "ACTIVE") return null;
+  const uploads = await Promise.all(
+    input.files.map(async (file) => {
+      const id = randomUUID();
+      const storageKey = `attachments/inbound/${id}`;
+      await createStorage(storageConfig).putObject({ body: Buffer.from(await file.arrayBuffer()), contentType: file.type, key: storageKey });
+      return { file, id, storageKey };
+    }),
+  );
+  const messageInput = { content, idempotencyKey: randomUUID() };
+  const result = session.ticket
+    ? { created: true as const, kind: "message" as const, message: (await appendMessage(session.ticket.id, session.workspaceId, messageInput)).message }
+    : {
+        created: true as const,
+        kind: "message" as const,
+        message: await createTicketAndFirstMessage(
+          session.id,
+          { category: "GENERAL", priority: "NORMAL", qualifies: true, title: input.files.map((file) => file.name).join(", ").slice(0, 120) },
+          messageInput,
+        ),
+      };
   if (!result) return null;
-  if (result.kind === "reply") {
-    throw new InvalidAttachmentError("Please describe the support problem with the attachment.");
+
+  const attachments = await Promise.all(
+    uploads.map(({ file, id, storageKey }) => unscopedPrisma.attachment.create({
+      data: { fileName: file.name, id, messageId: result.message.id, mimeType: file.type, sizeBytes: file.size, storageKey, ticketId: result.message.ticketId, workspaceId: result.message.workspaceId },
+    })),
+  );
+  await Promise.all(attachments.map((attachment) => enqueueAttachmentProcess({ attachmentId: attachment.id, ticketId: attachment.ticketId, workspaceId: attachment.workspaceId })));
+  return { attachments, message: result.message };
+}
+
+export async function generateAttachmentReply(ticketId: string, workspaceId: string) {
+  const message = await unscopedPrisma.message.findFirst({
+    include: { attachments: true },
+    orderBy: { position: "desc" },
+    where: { attachments: { some: {} }, senderType: "CUSTOMER", ticketId, workspaceId },
+  });
+  if (!message) return;
+  const readable = message.attachments.filter((attachment) => attachment.processingStatus === "READY" && attachment.extractedText);
+  const failed = message.attachments.filter((attachment) => attachment.processingStatus === "FAILED");
+  const context = [message.content, ...readable.map((attachment) => attachment.extractedText)].filter(Boolean).join("\n\n");
+
+  if (message.position === 1 && context) {
+    const apiKey = classificationConfig.apiKey;
+    if (apiKey) {
+      try {
+        const decision = await classifyMessage({ content: context, model: createClassificationModel({ ...classificationConfig, apiKey }) });
+        if (decision.qualifies) {
+          await unscopedPrisma.ticket.update({
+            data: { category: decision.category, priority: decision.priority, title: decision.title },
+            where: { id: ticketId },
+          });
+        }
+      } catch (error) {
+        if (!(error instanceof ClassificationFailedError)) throw error;
+      }
+    }
   }
 
-  const id = randomUUID();
-  const storageKey = `attachments/${result.message.workspaceId}/${result.message.ticketId}/${id}`;
-  await createStorage(storageConfig).putObject({
-    body: Buffer.from(await input.file.arrayBuffer()),
-    contentType: input.file.type,
-    key: storageKey,
-  });
-  const attachment = await unscopedPrisma.attachment.create({
-    data: {
-      fileName: input.file.name,
-      id,
-      messageId: result.message.id,
-      mimeType: input.file.type,
-      sizeBytes: input.file.size,
-      storageKey,
-      ticketId: result.message.ticketId,
-      workspaceId: result.message.workspaceId,
-    },
-  });
-  await enqueueAttachmentProcess({
-    attachmentId: id,
-    ticketId: attachment.ticketId,
-    workspaceId: attachment.workspaceId,
-  });
-  return { attachment, message: result.message };
+  const failureNote = failed.length
+    ? `\n\nThe following attachments could not be read: ${failed.map((attachment) => attachment.fileName).join(", ")}. Tell the Customer which files could not be read.`
+    : "";
+  await generateAiReply(ticketId, workspaceId, `${context || "The Customer sent attachments without a caption."}${failureNote}`);
 }
 
 async function appendMessage(ticketId: string, workspaceId: string, input: CustomerMessageInput) {
@@ -430,7 +468,7 @@ async function generateAiReplyRun(
     });
     const businessData = await getBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
     run.setAttribute("ai_agent.business_tool_data", Boolean(businessData));
-    if (!sources.length && !businessData && !looksLikeResolutionSignal(customerMessage)) {
+    if (!sources.length && !attachments.length && !businessData && !looksLikeResolutionSignal(customerMessage)) {
       run.setAttributes({
         "ai_agent.decision": "ESCALATE",
         "ai_agent.escalation_reason": "NO_RELEVANT_KNOWLEDGE",
@@ -858,7 +896,11 @@ export async function getMessagesAfter(accessToken: string, afterPosition: numbe
     };
   }
   const messages = await unscopedPrisma.message.findMany({
-    include: { attachments: { select: { fileName: true, id: true } } },
+    include: {
+      attachments: {
+        select: { fileName: true, id: true, mimeType: true, processingStatus: true, sizeBytes: true },
+      },
+    },
     where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } },
     orderBy: { position: "asc" },
   });

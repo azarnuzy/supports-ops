@@ -306,11 +306,10 @@ export async function sendHumanReply(
 }
 
 export async function sendHumanAttachments(client: ApiClient, id: string, content: string, files: File[], idempotencyKey: string) {
-  const form = new FormData();
-  form.set("content", content);
-  form.set("idempotencyKey", idempotencyKey);
-  files.forEach((file) => form.append("files", file));
-  const response = await client.tickets[":id"].attachments.$post({ param: { id }, form: form as never });
+  const response = await client.tickets[":id"].attachments.$post({
+    form: { content, files, idempotencyKey } as never,
+    param: { id },
+  });
   if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
   if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
