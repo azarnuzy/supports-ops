@@ -10,6 +10,7 @@ import {
   publishKnowledgeSource,
   refreshKnowledgeSource,
   subscribeToKnowledgeSourceEvents,
+  testRetrieval,
   updateKnowledgeSource,
 } from "./knowledge.services";
 
@@ -98,6 +99,12 @@ export function useRefreshKnowledgeSourceMutation() {
     mutationFn: refreshKnowledgeSource,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.knowledgeSources }),
+  });
+}
+
+export function useTestRetrievalMutation() {
+  return useMutation({
+    mutationFn: testRetrieval,
   });
 }
 

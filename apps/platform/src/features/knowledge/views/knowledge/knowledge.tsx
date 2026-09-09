@@ -27,7 +27,7 @@ import { Skeleton } from "@repo/ui/components/skeleton";
 import { Textarea } from "@repo/ui/components/textarea";
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
-import { FileTextIcon, Globe2Icon, MoreHorizontalIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { FileTextIcon, Globe2Icon, MoreHorizontalIcon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import {
@@ -40,6 +40,7 @@ import {
 } from "../../knowledge.hooks";
 import type { KnowledgeSourceType, KnowledgeVisibility } from "../../knowledge.types";
 import { KnowledgeDetailDrawer } from "./knowledge-detail-drawer";
+import { KnowledgeRetrievalTestDialog } from "./knowledge-retrieval-test-dialog";
 import { formatUpdatedAt, sourceTypeLabel, statusLabel, statusVariant, visibilityLabel } from "./knowledge.services";
 
 type DialogKind = "file" | "text" | "website" | null;
@@ -55,6 +56,7 @@ const KnowledgeView = () => {
   const addPdf = useCreatePdfKnowledgeSourceMutation();
   const deleteKnowledgeSource = useDeleteKnowledgeSourceMutation();
   const [dialog, setDialog] = useState<DialogKind>(null);
+  const [retrievalTestOpen, setRetrievalTestOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<SourceFilter>("ALL");
   const [query, setQuery] = useState("");
@@ -143,9 +145,14 @@ const KnowledgeView = () => {
               Add and manage the Knowledge Sources the AI Agent can use.
             </p>
           </div>
-          <Button variant="outline" onClick={() => setDialog("text")}>
-            <PlusIcon className="size-4" /> Create Text
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setRetrievalTestOpen(true)}>
+              <SparklesIcon className="size-4" /> Test retrieval
+            </Button>
+            <Button variant="outline" onClick={() => setDialog("text")}>
+              <PlusIcon className="size-4" /> Create Text
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -223,6 +230,8 @@ const KnowledgeView = () => {
         source={selectedSource}
         onOpenChange={(open) => !open && setSelectedId(null)}
       />
+
+      <KnowledgeRetrievalTestDialog open={retrievalTestOpen} onOpenChange={setRetrievalTestOpen} />
 
       <Dialog open={dialog === "website"} onOpenChange={(open) => !open && closeDialog()}><DialogContent><form className="grid gap-5" onSubmit={handleWebsite}><DialogHeader><DialogTitle>Add Website</DialogTitle><DialogDescription>Import pages from one documentation website.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor="knowledge-url">Website URL</FieldLabel><Input id="knowledge-url" required placeholder="https://docs.example.com" type="url" value={url} onChange={(event) => setUrl(event.target.value)} /></Field><VisibilitySelect value={visibility} onChange={setVisibility} /><DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button disabled={!url.trim() || addDocumentationUrl.isPending} type="submit">{addDocumentationUrl.isPending ? "Starting..." : "Add Website"}</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={dialog === "file"} onOpenChange={(open) => !open && closeDialog()}><DialogContent><form className="grid gap-5" onSubmit={handleFile}><DialogHeader><DialogTitle>Add File</DialogTitle><DialogDescription>Upload one PDF, up to 25 MB.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor="knowledge-file">PDF file</FieldLabel><Input accept="application/pdf" id="knowledge-file" required type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field><VisibilitySelect value={visibility} onChange={setVisibility} /><DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button disabled={!file || addPdf.isPending} type="submit">{addPdf.isPending ? "Uploading..." : "Add File"}</Button></DialogFooter></form></DialogContent></Dialog>
