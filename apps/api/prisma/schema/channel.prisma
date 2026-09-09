@@ -61,6 +61,7 @@ model WebWidgetConfig {
   welcomeMessage String
   primaryColor   String
   allowedDomains String[]
+  logoKey        String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   channel        Channel  @relation(fields: [channelId], references: [id])
