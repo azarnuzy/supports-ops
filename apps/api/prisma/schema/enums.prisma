@@ -115,6 +115,8 @@ enum KnowledgeIngestStage {
   EMBEDDING
   INDEXING
   PUBLISHED
+
+  @@map("KnowledgeIngestionStage")
 }
 
 enum ChunkKind {
