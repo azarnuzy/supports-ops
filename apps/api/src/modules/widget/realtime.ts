@@ -12,11 +12,21 @@ export type WidgetEvent = {
 
 export type TicketQueueEvent = { type: "ticket.queue.changed" };
 
+export type KnowledgeIngestStage =
+  | "UPLOADING"
+  | "EXTRACTING"
+  | "CHUNKING"
+  | "EMBEDDING"
+  | "INDEXING"
+  | "PUBLISHED";
+
 export type KnowledgeSourceEvent = {
   type: "knowledge.updated";
   data: {
     knowledgeSourceId: string;
     status: "DRAFT" | "PROCESSING" | "READY" | "PUBLISHED" | "FAILED";
+    stage?: KnowledgeIngestStage | null;
+    failedStage?: KnowledgeIngestStage | null;
     failureReason?: string | null;
   };
 };

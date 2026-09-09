@@ -1,5 +1,5 @@
 model KnowledgeSource {
-  id            String              @id
+  id            String                @id
   workspaceId   String
   parentId      String?
   sourceType    KnowledgeSourceType
@@ -7,16 +7,18 @@ model KnowledgeSource {
   content       String?
   sourceUrl     String?
   visibility    KnowledgeVisibility
-  status        KnowledgeStatus     @default(DRAFT)
+  status        KnowledgeStatus       @default(DRAFT)
+  stage         KnowledgeIngestStage?
+  failedStage   KnowledgeIngestStage?
   failureReason String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   publishedAt   DateTime?
   deletedAt     DateTime?
   deletedBy     String?
-  workspace     Workspace           @relation(fields: [workspaceId], references: [id])
-  parent        KnowledgeSource?    @relation("KnowledgeSourceChildren", fields: [parentId], references: [id])
-  children      KnowledgeSource[]   @relation("KnowledgeSourceChildren")
+  workspace     Workspace             @relation(fields: [workspaceId], references: [id])
+  parent        KnowledgeSource?      @relation("KnowledgeSourceChildren", fields: [parentId], references: [id])
+  children      KnowledgeSource[]     @relation("KnowledgeSourceChildren")
   chunks        Chunk[]
 
   @@index([workspaceId, status])
