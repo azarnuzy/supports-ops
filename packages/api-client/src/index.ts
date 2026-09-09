@@ -122,6 +122,7 @@ export type TicketListItem = {
 };
 
 export type TicketAttachment = {
+  failureReason: string | null;
   fileName: string;
   id: string;
   mimeType: string;
@@ -199,12 +200,15 @@ export async function getTicketDetail(client: ApiClient, id: string) {
 
 /** Attachments open through the signed download URL, never through the raw
  * storage key. */
-export async function getAttachmentDownloadUrl(client: ApiClient, id: string) {
-  const response = await client.attachments[":id"].download.$get({ param: { id } });
+export async function getAttachmentUrl(client: ApiClient, id: string, mode: "download" | "preview") {
+  const response = await client.attachments[":id"][":mode"].$get({ param: { id, mode } });
   if (response.status === 401) throw new UnauthorizedApiError();
   if (!response.ok) throw new Error("Failed to open the attachment.");
   return (await response.json()) as { url: string };
 }
+
+export const getAttachmentDownloadUrl = (client: ApiClient, id: string) =>
+  getAttachmentUrl(client, id, "download");
 
 export async function listSharedHumanQueue(client: ApiClient) {
   const response = await client.tickets.queue.$get();
