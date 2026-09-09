@@ -3,6 +3,7 @@ import {
   createApiClient,
   generateSuggestedReply as generateSuggestedReplyRequest,
   getAttachmentDownloadUrl,
+  getAttachmentUrl,
   getTicketDetail as getTicketDetailRequest,
   listLiveAiTickets as listLiveAiTicketsRequest,
   listMyTickets as listMyTicketsRequest,
@@ -34,6 +35,10 @@ export function getTicketDetail(id: string) {
 export async function openAttachment(id: string) {
   const { url } = await getAttachmentDownloadUrl(apiClient, id);
   window.open(url, "_blank", "noopener");
+}
+
+export async function getAttachmentPreviewUrl(id: string) {
+  return getAttachmentUrl(apiClient, id, "preview");
 }
 
 export function getMyTickets() {
