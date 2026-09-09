@@ -68,6 +68,17 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     if (!user) return c.json({ error: "forbidden" }, 403);
     return c.json({ tickets: await listAiHandlingTickets(user.workspaceId) }, 200);
   })
+  .get("/queue/events", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    return streamSSE(c, async (stream) => {
+      const unsubscribe = await subscribeToTicketQueueEvents(user.workspaceId, async (event) => {
+        await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
+      });
+      stream.onAbort(unsubscribe);
+      await new Promise<void>(() => undefined);
+    });
+  })
   .get("/:id", async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
@@ -104,17 +115,6 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
       throw error;
     }
-  })
-  .get("/queue/events", async (c) => {
-    const user = c.get("user");
-    if (!user) return c.json({ error: "unauthorized" }, 401);
-    return streamSSE(c, async (stream) => {
-      const unsubscribe = await subscribeToTicketQueueEvents(user.workspaceId, async (event) => {
-        await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
-      });
-      stream.onAbort(unsubscribe);
-      await new Promise<void>(() => undefined);
-    });
   })
   .post("/:id/claim", async (c) => {
     const user = c.get("user");
