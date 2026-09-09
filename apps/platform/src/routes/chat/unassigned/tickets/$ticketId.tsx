@@ -4,5 +4,8 @@ import { ChatView } from "../../../../features/chat";
 
 export const Route = createFileRoute("/chat/unassigned/tickets/$ticketId")({
   beforeLoad: requireAuth,
+  validateSearch: (search: Record<string, unknown>): { q?: string } => ({
+    q: typeof search.q === "string" ? search.q : undefined,
+  }),
   component: () => <ChatView scope="unassigned" ticketId={Route.useParams().ticketId} />,
 });

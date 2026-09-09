@@ -12,6 +12,9 @@ export const Route = createFileRoute("/chat/tickets/$ticketId")({
       path: "/chat",
       noIndex: true,
     }),
+  validateSearch: (search: Record<string, unknown>): { q?: string } => ({
+    q: typeof search.q === "string" ? search.q : undefined,
+  }),
   component: RouteComponent,
 });
 
