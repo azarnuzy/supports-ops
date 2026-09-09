@@ -20,7 +20,7 @@ import {
   createWebSession,
   getApprovedWidget,
   createCustomerMessage,
-  createCustomerAttachment,
+  createCustomerAttachments,
   generateAiReply,
   customerRequestedHuman,
   escalate,
@@ -95,7 +95,16 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     "/attachments",
     cors({
       allowHeaders: ["Content-Type"],
-      allowMethods: ["POST", "OPTIONS"],
+      allowMethods: ["GET", "POST", "OPTIONS"],
+      credentials: false,
+      origin: "*",
+    }),
+  )
+  .use(
+    "/attachments/*",
+    cors({
+      allowHeaders: ["Content-Type"],
+      allowMethods: ["GET", "OPTIONS"],
       credentials: false,
       origin: "*",
     }),
@@ -154,15 +163,21 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       throw error;
     }
   })
-  .post("/attachments", zValidator("form", customerAttachmentSchema), async (c) => {
+  .post("/attachments", async (c) => {
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
     try {
-      const result = await createCustomerAttachment(accessToken, c.req.valid("form"));
+      const form = await c.req.formData();
+      const parsed = customerAttachmentSchema.safeParse({
+        content: form.get("content") || undefined,
+        files: form.getAll("files").filter((value): value is File => value instanceof File),
+      });
+      if (!parsed.success) return c.json({ error: "invalid_attachment" }, 422);
+      const result = await createCustomerAttachments(accessToken, parsed.data);
       if (!result) return c.json({ error: "unauthorized" }, 401);
       void publishWidgetEvent(result.message.ticketId, {
         type: "message.created",
-        data: result.message,
+        data: { ...result.message, attachments: result.attachments },
       });
       if (customerRequestedHuman(result.message.content)) {
         void escalate(
@@ -222,14 +237,16 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       await new Promise<void>(() => undefined);
     });
   })
-  .get("/attachments/:id/download", async (c) => {
+  .get("/attachments/:id/:mode", async (c) => {
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
     const attachment = await unscopedPrisma.attachment.findFirst({
       where: { id: c.req.param("id"), deletedAt: null, ticket: { webSession: { accessToken } } },
     });
     if (!attachment) return c.json({ error: "not_found" }, 404);
-    return c.json({ url: await createStorage(storageConfig).getSignedGetObjectUrl({ key: attachment.storageKey, responseContentDisposition: `attachment; filename="${attachment.fileName.replaceAll('"', "")}"`, responseContentType: attachment.mimeType }) });
+    const preview = c.req.param("mode") === "preview";
+    if (!preview && c.req.param("mode") !== "download") return c.json({ error: "not_found" }, 404);
+    return c.json({ url: await createStorage(storageConfig).getSignedGetObjectUrl({ key: attachment.storageKey, responseContentDisposition: `${preview ? "inline" : "attachment"}; filename="${attachment.fileName.replaceAll('"', "")}"`, responseContentType: attachment.mimeType }) });
   })
   .get("/session", async (c) => {
     const accessToken = c.req.query("token");

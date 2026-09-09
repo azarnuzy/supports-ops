@@ -608,6 +608,7 @@ export async function sendHumanAttachmentReply(
 
 export async function retryHumanReply(ticketId: string, humanAgentId: string, messageId: string) {
   const message = await unscopedPrisma.message.findFirst({
+    include: { attachments: true },
     where: {
       deliveryStatus: "FAILED",
       id: messageId,

@@ -10,7 +10,7 @@ import { registrationRouter } from "./modules/registration/router";
 import { usersRouter } from "./modules/users/router";
 import { widgetRouter } from "./modules/widget/router";
 import { widgetConfigRouter } from "./modules/widget-config/router";
-import { generateAiReply } from "./modules/widget/services";
+import { generateAttachmentReply } from "./modules/widget/services";
 import { attachmentRouter } from "./modules/attachments/router";
 import { aiSettingsRouter } from "./modules/ai-settings/router";
 import { analyticsRouter } from "./modules/analytics/router";
@@ -26,11 +26,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
     }
     const body = await c.req.json<{ workspaceId?: string }>();
     if (!body.workspaceId) return c.json({ error: "invalid_request" }, 422);
-    void generateAiReply(
-      c.req.param("ticketId"),
-      body.workspaceId,
-      "Please use the attached file to answer the Customer.",
-    );
+    void generateAttachmentReply(c.req.param("ticketId"), body.workspaceId);
     return c.body(null, 202);
   })
   .route("/widget", widgetRouter)
