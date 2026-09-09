@@ -1,4 +1,9 @@
-import type { SupportTicket, TicketAttachment, TicketDetailMessage } from "@repo/api-client";
+import type {
+  SupportTicket,
+  TicketAttachment,
+  TicketDetail,
+  TicketDetailMessage,
+} from "@repo/api-client";
 import { webAttachmentCapability } from "@repo/channels";
 import {
   AlertDialog,
@@ -34,6 +39,7 @@ import {
   MessageHeader,
 } from "@repo/ui/components/message";
 import { MessageScroller, MessageScrollerContent } from "@repo/ui/components/message-scroller";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/components/sheet";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
@@ -41,6 +47,7 @@ import { cn } from "@repo/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
+  ArrowLeftIcon,
   CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -119,6 +126,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
+  const [inspectorSheetOpen, setInspectorSheetOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"details" | "attachments" | "activity">("details");
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [suggestedReplyContent, setSuggestedReplyContent] = useState<string>();
@@ -183,7 +191,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
             : "md:grid-cols-[20rem_minmax(0,1fr)]",
         )}
       >
-        <aside className="flex min-h-0 flex-col border-r">
+        <aside className={cn("flex min-h-0 flex-col border-r", ticketId && "hidden md:flex")}>
           <div className="border-b p-4">
             <div className="flex items-center gap-3 text-lg font-semibold">
               <Link className={scope === "mine" ? "text-foreground" : "text-muted-foreground"} to="/chat">
@@ -255,7 +263,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
             </div>
           </div>
         </aside>
-        <section className="flex min-h-0 flex-col">
+        <section className={cn("flex min-h-0 flex-col", !ticketId && "hidden md:flex")}>
           {reconnecting ? (
             <p className="border-b bg-muted p-2 text-center text-xs text-muted-foreground">
               Reconnecting…
@@ -292,6 +300,13 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
             <>
               <header className="flex items-center justify-between gap-3 border-b p-4">
                 <div className="flex min-w-0 items-center gap-3">
+                  <Link
+                    aria-label="Back to Ticket list"
+                    className="shrink-0 md:hidden"
+                    to={scope === "unassigned" ? "/chat/unassigned" : "/chat"}
+                  >
+                    <ArrowLeftIcon className="size-5" />
+                  </Link>
                   <Avatar>
                     <AvatarFallback>{getInitials(detail.customerIdentity.name)}</AvatarFallback>
                   </Avatar>
@@ -314,9 +329,18 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                     </Button>
                   ) : null}
                   <InputGroupButton
+                    className="hidden xl:inline-flex"
                     size="icon-sm"
                     aria-label={infoPanelOpen ? "Hide Ticket details" : "Show Ticket details"}
                     onClick={() => setInfoPanelOpen((open) => !open)}
+                  >
+                    <UserRoundIcon />
+                  </InputGroupButton>
+                  <InputGroupButton
+                    className="xl:hidden"
+                    size="icon-sm"
+                    aria-label="Show Ticket details"
+                    onClick={() => setInspectorSheetOpen(true)}
                   >
                     <UserRoundIcon />
                   </InputGroupButton>
@@ -524,123 +548,161 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
         </section>
         {infoPanelOpen && detail ? (
           <aside className="hidden min-h-0 flex-col overflow-y-auto border-l xl:flex">
-            <Tabs
-              value={detailsTab}
-              onValueChange={(value) => setDetailsTab(value as typeof detailsTab)}
-              className="min-h-0 flex-1 gap-0"
-            >
-              <TabsList className="mx-3 mt-3 w-[calc(100%-1.5rem)]">
-                <TabsTrigger value="details">Details</TabsTrigger>
-                <TabsTrigger value="attachments">Attachments</TabsTrigger>
-                <TabsTrigger value="activity">Activity</TabsTrigger>
-              </TabsList>
-              {detailsTab === "details" ? (
-                <div className="flex flex-col gap-1 p-3">
-                  <DetailRow icon={MailIcon} label="Email" value={detail.customerIdentity.email} />
-                  <DetailRow
-                    icon={UserRoundIcon}
-                    label="Owner"
-                    value={detail.assignedHumanAgent?.name ?? "Unassigned"}
-                  />
-                  <DetailRow icon={FlagIcon} label="Priority" value={detail.priority} />
-                  <DetailRow icon={CalendarIcon} label="Category" value={detail.category} />
-                  {detail.escalationReason ? (
-                    <DetailRow
-                      icon={FlagIcon}
-                      label="Escalation reason"
-                      value={detail.escalationReason}
-                    />
-                  ) : null}
-                  {detail.escalationSummaryStatus === "PENDING" ? (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                      Preparing the Escalation Summary…
-                    </p>
-                  ) : null}
-                  {detail.escalationSummaryStatus === "FAILED" ? (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                      The Escalation Summary could not be generated.
-                    </p>
-                  ) : null}
-                  {detail.escalationSummaryStatus === "READY" && detail.escalationSummary ? (
-                    <article className="mx-2 mt-1 whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">
-                      {detail.escalationSummary}
-                    </article>
-                  ) : null}
-                  {detail.status === "RESOLVED" ? (
-                    <>
-                      <DetailRow
-                        icon={FlagIcon}
-                        label="Resolution reason"
-                        value={detail.resolutionReason ?? "—"}
-                      />
-                      <DetailRow
-                        icon={CalendarIcon}
-                        label="Resolved at"
-                        value={
-                          detail.resolvedAt ? new Date(detail.resolvedAt).toLocaleString() : "—"
-                        }
-                      />
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-              {detailsTab === "attachments" ? (
-                <div className="grid gap-2 p-3">
-                  {detail.messages.flatMap((message) => message.attachments).length ? (
-                    detail.messages.flatMap((message) =>
-                      message.attachments.map((attachment) => (
-                        <AttachmentCard
-                          attachment={attachment}
-                          key={attachment.id}
-                          onOpenImage={() =>
-                            setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
-                          }
-                        />
-                      )),
-                    )
-                  ) : (
-                    <p className="p-3 text-center text-xs text-muted-foreground">No Attachments yet.</p>
-                  )}
-                </div>
-              ) : null}
-              {detailsTab === "activity" ? (
-                timeline.length === 0 ? (
-                  <Empty className="border-0 p-6">
-                    <EmptyMedia variant="icon">
-                      <HistoryIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>No activity yet</EmptyTitle>
-                  </Empty>
-                ) : (
-                  <ol className="grid gap-3 p-3">
-                    {timeline.map((entry) => (
-                      <li key={entry.id} className="flex items-baseline gap-3 text-sm">
-                        <span className="w-16 shrink-0 text-xs text-muted-foreground">
-                          {new Date(entry.createdAt).toLocaleTimeString()}
-                        </span>
-                        <span>
-                          {entry.description.text}
-                          {entry.description.mono ? (
-                            <>
-                              {" "}
-                              <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-                                {entry.description.mono}
-                              </code>
-                            </>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                )
-              ) : null}
-            </Tabs>
+            <TicketInspector
+              detail={detail}
+              detailsTab={detailsTab}
+              images={images}
+              setDetailsTab={setDetailsTab}
+              setGalleryIndex={setGalleryIndex}
+              timeline={timeline}
+            />
           </aside>
+        ) : null}
+        {detail ? (
+          <Sheet onOpenChange={setInspectorSheetOpen} open={inspectorSheetOpen}>
+            <SheetContent className="flex flex-col gap-0 p-0 xl:hidden">
+              <SheetHeader className="border-b">
+                <SheetTitle>Ticket details</SheetTitle>
+              </SheetHeader>
+              <TicketInspector
+                detail={detail}
+                detailsTab={detailsTab}
+                images={images}
+                setDetailsTab={setDetailsTab}
+                setGalleryIndex={setGalleryIndex}
+                timeline={timeline}
+              />
+            </SheetContent>
+          </Sheet>
         ) : null}
       </div>
     </PlatformAppShell>
   );
 };
+
+function TicketInspector({
+  detail,
+  detailsTab,
+  images,
+  setDetailsTab,
+  setGalleryIndex,
+  timeline,
+}: {
+  detail: TicketDetail;
+  detailsTab: "details" | "attachments" | "activity";
+  images: { attachment: TicketAttachment; messagePosition: number }[];
+  setDetailsTab: (value: "details" | "attachments" | "activity") => void;
+  setGalleryIndex: (index: number) => void;
+  timeline: { createdAt: string; description: { mono?: string; text: string }; id: string }[];
+}) {
+  return (
+    <Tabs
+      value={detailsTab}
+      onValueChange={(value) => setDetailsTab(value as typeof detailsTab)}
+      className="min-h-0 flex-1 gap-0"
+    >
+      <TabsList className="mx-3 mt-3 w-[calc(100%-1.5rem)]">
+        <TabsTrigger value="details">Details</TabsTrigger>
+        <TabsTrigger value="attachments">Attachments</TabsTrigger>
+        <TabsTrigger value="activity">Activity</TabsTrigger>
+      </TabsList>
+      {detailsTab === "details" ? (
+        <div className="flex flex-col gap-1 p-3">
+          <DetailRow icon={MailIcon} label="Email" value={detail.customerIdentity.email} />
+          <DetailRow
+            icon={UserRoundIcon}
+            label="Owner"
+            value={detail.assignedHumanAgent?.name ?? "Unassigned"}
+          />
+          <DetailRow icon={FlagIcon} label="Priority" value={detail.priority} />
+          <DetailRow icon={CalendarIcon} label="Category" value={detail.category} />
+          {detail.escalationReason ? (
+            <DetailRow icon={FlagIcon} label="Escalation reason" value={detail.escalationReason} />
+          ) : null}
+          {detail.escalationSummaryStatus === "PENDING" ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              Preparing the Escalation Summary…
+            </p>
+          ) : null}
+          {detail.escalationSummaryStatus === "FAILED" ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              The Escalation Summary could not be generated.
+            </p>
+          ) : null}
+          {detail.escalationSummaryStatus === "READY" && detail.escalationSummary ? (
+            <article className="mx-2 mt-1 whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">
+              {detail.escalationSummary}
+            </article>
+          ) : null}
+          {detail.status === "RESOLVED" ? (
+            <>
+              <DetailRow
+                icon={FlagIcon}
+                label="Resolution reason"
+                value={detail.resolutionReason ?? "—"}
+              />
+              <DetailRow
+                icon={CalendarIcon}
+                label="Resolved at"
+                value={detail.resolvedAt ? new Date(detail.resolvedAt).toLocaleString() : "—"}
+              />
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      {detailsTab === "attachments" ? (
+        <div className="grid gap-2 p-3">
+          {detail.messages.flatMap((message) => message.attachments).length ? (
+            detail.messages.flatMap((message) =>
+              message.attachments.map((attachment) => (
+                <AttachmentCard
+                  attachment={attachment}
+                  key={attachment.id}
+                  onOpenImage={() =>
+                    setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
+                  }
+                />
+              )),
+            )
+          ) : (
+            <p className="p-3 text-center text-xs text-muted-foreground">No Attachments yet.</p>
+          )}
+        </div>
+      ) : null}
+      {detailsTab === "activity" ? (
+        timeline.length === 0 ? (
+          <Empty className="border-0 p-6">
+            <EmptyMedia variant="icon">
+              <HistoryIcon />
+            </EmptyMedia>
+            <EmptyTitle>No activity yet</EmptyTitle>
+          </Empty>
+        ) : (
+          <ol className="grid gap-3 p-3">
+            {timeline.map((entry) => (
+              <li key={entry.id} className="flex items-baseline gap-3 text-sm">
+                <span className="w-16 shrink-0 text-xs text-muted-foreground">
+                  {new Date(entry.createdAt).toLocaleTimeString()}
+                </span>
+                <span>
+                  {entry.description.text}
+                  {entry.description.mono ? (
+                    <>
+                      {" "}
+                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                        {entry.description.mono}
+                      </code>
+                    </>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )
+      ) : null}
+    </Tabs>
+  );
+}
 
 function TicketRow({
   active,
