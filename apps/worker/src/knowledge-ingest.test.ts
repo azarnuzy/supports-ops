@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   chunkText: vi.fn(),
+  create: vi.fn(),
   createOpenAiEmbeddingClient: vi.fn(),
   embed: vi.fn(),
   findFirst: vi.fn(),
+  queueAdd: vi.fn(),
   replaceChunks: vi.fn(),
   txKnowledgeSourceFindFirst: vi.fn(),
   txKnowledgeSourceUpdate: vi.fn(),
@@ -17,11 +19,21 @@ vi.mock("@repo/knowledge", () => ({
   replaceChunks: mocks.replaceChunks,
 }));
 
+vi.mock("bullmq", () => ({
+  Queue: class {
+    add = mocks.queueAdd;
+  },
+}));
+
 vi.mock("./config", () => ({
   embeddingConfig: {
     apiKey: "sk-test",
     baseUrl: "https://openrouter.ai/api/v1",
     modelId: "openai/text-embedding-3-small",
+  },
+  ingestionConfig: {
+    mistralApiKey: "mistral-test",
+    tavilyApiKey: "tavily-test",
   },
 }));
 
@@ -34,7 +46,7 @@ vi.mock("./prisma", () => ({
           update: mocks.txKnowledgeSourceUpdate,
         },
       }),
-    knowledgeSource: { findFirst: mocks.findFirst, update: mocks.update },
+    knowledgeSource: { create: mocks.create, findFirst: mocks.findFirst, update: mocks.update },
   },
 }));
 
@@ -55,9 +67,11 @@ function resetMocks() {
   mocks.chunkText
     .mockReset()
     .mockReturnValue([{ content: "Click the forgot password link.", position: 0 }]);
+  mocks.create.mockReset();
   mocks.createOpenAiEmbeddingClient.mockReset().mockReturnValue({ embed: mocks.embed });
   mocks.embed.mockReset().mockResolvedValue([[0.1, 0.2]]);
   mocks.findFirst.mockReset().mockResolvedValue({ id: "ks-1" });
+  mocks.queueAdd.mockReset().mockResolvedValue(undefined);
   mocks.txKnowledgeSourceFindFirst.mockReset().mockResolvedValue({ id: "ks-1" });
   mocks.replaceChunks.mockReset().mockResolvedValue(undefined);
   mocks.txKnowledgeSourceUpdate.mockReset().mockResolvedValue(undefined);
@@ -123,5 +137,74 @@ describe("processKnowledgeIngestJob", () => {
       where: { id: "ks-1" },
     });
     expect(mocks.replaceChunks).not.toHaveBeenCalled();
+  });
+});
+
+describe("processKnowledgeIngestJob (CRAWL)", () => {
+  const crawlJob = {
+    data: {
+      kind: "CRAWL" as const,
+      knowledgeSourceId: "parent-1",
+      workspaceId: "ws-1",
+    },
+  };
+
+  beforeEach(() => {
+    resetMocks();
+    mocks.findFirst.mockResolvedValue({
+      id: "parent-1",
+      sourceUrl: "https://docs.example.com",
+      visibility: "CUSTOMER_SAFE",
+    });
+    mocks.create.mockImplementation(({ data }: { data: { id: string } }) =>
+      Promise.resolve({ id: data.id }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            results: [
+              {
+                raw_content: "Getting started content.",
+                title: "Getting Started",
+                url: "https://docs.example.com/start",
+              },
+            ],
+          }),
+        ok: true,
+      }),
+    );
+  });
+
+  it("immediately enqueues ingestion for each crawled page as its own Knowledge Source", async () => {
+    await processKnowledgeIngestJob(crawlJob);
+
+    expect(mocks.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        parentId: "parent-1",
+        sourceType: "URL",
+        sourceUrl: "https://docs.example.com/start",
+        status: "PROCESSING",
+        title: "Getting Started",
+        visibility: "CUSTOMER_SAFE",
+        workspaceId: "ws-1",
+      }),
+    });
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      "ingest",
+      expect.objectContaining({
+        content: "Getting started content.",
+        kind: "CONTENT",
+        title: "Getting Started",
+        visibility: "CUSTOMER_SAFE",
+        workspaceId: "ws-1",
+      }),
+      expect.anything(),
+    );
+    expect(mocks.update).toHaveBeenCalledWith({
+      data: { failureReason: null, status: "READY" },
+      where: { id: "parent-1" },
+    });
   });
 });
