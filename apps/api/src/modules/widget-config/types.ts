@@ -5,6 +5,8 @@ export type WebWidgetConfigDto = {
   welcomeMessage: string;
   primaryColor: string;
   allowedDomains: string[];
+  logoKey: string | null;
+  logoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
