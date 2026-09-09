@@ -4,7 +4,12 @@ import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
 import { subscribeToTicketQueueEvents } from "../widget/realtime";
-import { humanReplySchema, listTicketsQuerySchema, reassignTicketSchema } from "./schema";
+import {
+  humanReplySchema,
+  listTicketsQuerySchema,
+  reassignTicketSchema,
+  resolveTicketSchema,
+} from "./schema";
 import {
   claimTicket,
   completeHandoff,
@@ -23,6 +28,8 @@ import {
   TicketNotFoundError,
   TicketNotOwnedError,
   TicketNotAvailableForTakeoverError,
+  PendingMessageDeliveryError,
+  retryHumanReply,
   takeOverTicket,
   resolveTicket,
   sendHumanReply,
@@ -111,8 +118,30 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "forbidden" }, 403);
     try {
       return c.json(
-        { message: await sendHumanReply(c.req.param("id"), user.id, c.req.valid("json").content) },
+        {
+          message: await sendHumanReply(
+            c.req.param("id"),
+            user.id,
+            c.req.valid("json").content,
+            c.req.valid("json").idempotencyKey,
+          ),
+        },
         201,
+      );
+    } catch (error) {
+      if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
+      throw error;
+    }
+  })
+  .post("/:id/messages/:messageId/retry", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN")
+      return c.json({ error: "forbidden" }, 403);
+    try {
+      return c.json(
+        { message: await retryHumanReply(c.req.param("id"), user.id, c.req.param("messageId")) },
+        200,
       );
     } catch (error) {
       if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
@@ -136,14 +165,25 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       throw error;
     }
   })
-  .post("/:id/resolve", async (c) => {
+  .post("/:id/resolve", zValidator("json", resolveTicketSchema), async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
     if (user.role !== "HUMAN_AGENT") return c.json({ error: "forbidden" }, 403);
     try {
-      return c.json({ message: await resolveTicket(c.req.param("id"), user.id) }, 200);
+      return c.json(
+        {
+          message: await resolveTicket(
+            c.req.param("id"),
+            user.id,
+            c.req.valid("json").resolutionReason,
+          ),
+        },
+        200,
+      );
     } catch (error) {
       if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
+      if (error instanceof PendingMessageDeliveryError)
+        return c.json({ error: "pending_message_delivery" }, 409);
       throw error;
     }
   })

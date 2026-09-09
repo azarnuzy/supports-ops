@@ -12,6 +12,7 @@ import {
   getTickets,
   reassignTicket,
   resolveHumanTicket,
+  retryHumanReply,
   sendHumanReply,
   takeOverTicket,
   subscribeToSharedHumanQueue,
@@ -84,6 +85,11 @@ export function useTakeOverTicketMutation() {
 export function useSendHumanReplyMutation() {
   const invalidate = useTicketInvalidation();
   return useMutation({ mutationFn: sendHumanReply, onSuccess: invalidate });
+}
+
+export function useRetryHumanReplyMutation() {
+  const invalidate = useTicketInvalidation();
+  return useMutation({ mutationFn: retryHumanReply, onSuccess: invalidate });
 }
 
 export function useGenerateSuggestedReplyMutation() {

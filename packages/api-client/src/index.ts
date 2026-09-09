@@ -261,12 +261,31 @@ export async function reassignTicket(client: ApiClient, id: string, humanAgentId
   return (await response.json()) as { ticket: SupportTicket };
 }
 
-export async function sendHumanReply(client: ApiClient, id: string, content: string) {
-  const response = await client.tickets[":id"].messages.$post({ param: { id }, json: { content } });
+export async function sendHumanReply(
+  client: ApiClient,
+  id: string,
+  content: string,
+  idempotencyKey: string,
+) {
+  const response = await client.tickets[":id"].messages.$post({
+    param: { id },
+    json: { content, idempotencyKey },
+  });
   if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
   if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
   if (!response.ok) throw new Error("Failed to send the reply.");
+  return response.json();
+}
+
+export async function retryHumanReply(client: ApiClient, id: string, messageId: string) {
+  const response = await client.tickets[":id"].messages[":messageId"].retry.$post({
+    param: { id, messageId },
+  });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (response.status === 403) throw new Error("Only the assigned Human Agent can retry a reply.");
+  if (response.status === 409) throw new Error("This reply can no longer be retried.");
+  if (!response.ok) throw new Error("Failed to retry the reply.");
   return response.json();
 }
 
@@ -283,11 +302,15 @@ export async function generateSuggestedReply(client: ApiClient, id: string) {
 }
 
 export async function resolveHumanTicket(client: ApiClient, id: string) {
-  const response = await client.tickets[":id"].resolve.$post({ param: { id } });
+  const response = await client.tickets[":id"].resolve.$post({
+    param: { id },
+    json: { resolutionReason: "HUMAN_RESOLVED" },
+  });
   if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403)
     throw new Error("Only the assigned Human Agent can resolve this Ticket.");
-  if (response.status === 409) throw new Error("This Ticket is already resolved.");
+  if (response.status === 409)
+    throw new Error("Finish or retry the pending reply before resolving this Ticket.");
   if (!response.ok) throw new Error("Failed to resolve the Ticket.");
   return response.json();
 }
