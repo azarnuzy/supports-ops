@@ -107,22 +107,22 @@ export function runWorker() {
   });
 
   worker.on("failed", (job, error) => {
-    logger.error({ error, jobId: job?.id }, "Job failed");
+    logger.error({ err: error, jobId: job?.id }, "Job failed");
   });
   sessionEmailWorker.on("failed", (job, error) => {
-    logger.error({ error, jobId: job?.id }, "Session Link email failed");
+    logger.error({ err: error, jobId: job?.id }, "Session Link email failed");
   });
   knowledgeIngestWorker.on("failed", (job, error) => {
-    logger.error({ error, jobId: job?.id }, "Knowledge ingest failed");
+    logger.error({ err: error, jobId: job?.id }, "Knowledge ingest failed");
   });
   attachmentProcessWorker.on("failed", (job, error) => {
-    logger.error({ error, jobId: job?.id }, "Attachment processing failed");
+    logger.error({ err: error, jobId: job?.id }, "Attachment processing failed");
   });
   followUpWorker.on("failed", (job, error) => {
-    logger.error({ error, jobId: job?.id }, "Ticket Follow-Up failed");
+    logger.error({ err: error, jobId: job?.id }, "Ticket Follow-Up failed");
   });
   ticketKnowledgeIndexWorker.on("failed", (job, error) => {
-    logger.error({ error, jobId: job?.id }, "Ticket Knowledge indexing failed");
+    logger.error({ err: error, jobId: job?.id }, "Ticket Knowledge indexing failed");
   });
 
   return {

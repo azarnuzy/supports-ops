@@ -16,7 +16,7 @@ The default backend is [Langfuse Cloud](https://langfuse.com):
    printf '%s' "pk-lf-…:sk-lf-…" | base64
    ```
 
-4. Set the variables in `.env` (development) or `env.production`:
+4. Set the variables in `.env.local` (development) or `.env` (root Docker Compose production):
 
    ```sh
    ENABLE_TELEMETRY="true"

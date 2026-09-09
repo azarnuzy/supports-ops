@@ -197,26 +197,28 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
           id: String(message.position),
         });
       }
-      const unsubscribe = await subscribeToWidgetEvents(replay.ticketId, async (event) => {
-        const data = event.data as { position?: number };
-        await stream.writeSSE({
-          data: JSON.stringify(event.data),
-          event: event.type,
-          id: data.position ? String(data.position) : undefined,
-        });
-      });
+      const unsubscribe = replay.ticketId
+        ? await subscribeToWidgetEvents(replay.ticketId, async (event) => {
+            const data = event.data as { position?: number };
+            await stream.writeSSE({
+              data: JSON.stringify(event.data),
+              event: event.type,
+              id: data.position ? String(data.position) : undefined,
+            });
+          })
+        : undefined;
       await stream.writeSSE({
         data: JSON.stringify({
           status:
             replay.sessionStatus === "CLOSED" || replay.ticketStatus === "RESOLVED"
               ? "resolved"
-              : isTicketGenerating(replay.ticketId)
+              : replay.ticketId && isTicketGenerating(replay.ticketId)
                 ? "generating"
                 : "ready",
         }),
         event: "ticket.status",
       });
-      stream.onAbort(unsubscribe);
+      if (unsubscribe) stream.onAbort(unsubscribe);
       await new Promise<void>(() => undefined);
     });
   })

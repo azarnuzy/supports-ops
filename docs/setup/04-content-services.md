@@ -2,7 +2,7 @@
 
 Knowledge ingestion uses hosted services so the API and worker do not run OCR or a headless browser locally.
 
-Set both values in `.env` for development and in the production environment:
+Set both values in `.env.local` for development and in `.env` for root Docker Compose production:
 
 ```dotenv
 MISTRAL_API_KEY="..."

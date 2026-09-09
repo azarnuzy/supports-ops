@@ -846,7 +846,15 @@ export async function getMessagesAfter(accessToken: string, afterPosition: numbe
     where: { accessToken },
     select: { status: true, ticket: { select: { id: true, status: true } } },
   });
-  if (!session?.ticket) return null;
+  if (!session) return null;
+  if (!session.ticket) {
+    return {
+      messages: [],
+      sessionStatus: session.status,
+      ticketId: null,
+      ticketStatus: null,
+    };
+  }
   const messages = await unscopedPrisma.message.findMany({
     include: { attachments: { select: { fileName: true, id: true } } },
     where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } },

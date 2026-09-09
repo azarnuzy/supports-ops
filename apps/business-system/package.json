@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
+    "with-env": "dotenv -e ../../.env.local --",
+    "with-production-env": "dotenv -e ../../.env --",
+    "dev": "pnpm with-env tsx watch src/main.ts",
+    "start": "pnpm with-production-env tsx src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

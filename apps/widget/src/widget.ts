@@ -13,7 +13,7 @@ const elementName = "supportops-widget";
 
 export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   if (document.querySelector(elementName)) {
-    return;
+    return true;
   }
 
   const response = await fetch(
@@ -21,7 +21,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   );
 
   if (!response.ok) {
-    return;
+    return false;
   }
 
   const config = (await response.json()) as WidgetConfig;
@@ -72,10 +72,17 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
 
   const connect = (accessToken: string) => {
     eventSource?.close();
-    eventSource = new EventSource(
+    const source = new EventSource(
       `${apiUrl.replace(/\/$/, "")}/widget/events?token=${encodeURIComponent(accessToken)}`,
     );
-    eventSource.addEventListener("message.created", (event) => {
+    eventSource = source;
+    source.onerror = () => {
+      if (eventSource !== source) return;
+      source.close();
+      eventSource = undefined;
+      if (input) input.disabled = false;
+    };
+    source.addEventListener("message.created", (event) => {
       const message = JSON.parse((event as MessageEvent<string>).data) as {
         content: string;
         position: number;
@@ -84,7 +91,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       messages?.querySelector(`[data-provisional-id]`)?.remove();
       appendMessage(message);
     });
-    eventSource.addEventListener("message.delta", (event) => {
+    source.addEventListener("message.delta", (event) => {
       const delta = JSON.parse((event as MessageEvent<string>).data) as {
         delta: string;
         provisionalId: string;
@@ -100,7 +107,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       }
       bubble.textContent += delta.delta;
     });
-    eventSource.addEventListener("ticket.status", (event) => {
+    source.addEventListener("ticket.status", (event) => {
       const status = JSON.parse((event as MessageEvent<string>).data) as { status: string };
       if (input) input.disabled = status.status === "generating" || status.status === "resolved";
       if (status.status === "resolved") {
@@ -108,7 +115,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
         startNew?.removeAttribute("hidden");
       }
     });
-    eventSource.addEventListener("attachment.updated", (event) => {
+    source.addEventListener("attachment.updated", (event) => {
       const update = JSON.parse((event as MessageEvent<string>).data) as {
         attachmentId: string;
         processingStatus: string;
@@ -200,6 +207,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     chat?.removeAttribute("hidden");
     connect(accessToken);
   }
+
+  return true;
 }
 
 async function startSession(
