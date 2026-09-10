@@ -1,6 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Button } from "@repo/ui/components/button";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/ui/components/collapsible";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -21,18 +26,42 @@ import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
+  ChevronRightIcon,
   InboxIcon,
   LayoutDashboardIcon,
+  LayoutListIcon,
   LibraryBigIcon,
   LogOutIcon,
   MonitorIcon,
   SettingsIcon,
   TicketCheckIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth";
 import { getInitials } from "../../lib/utils";
 import { HeaderControls } from "./components/header-controls";
+
+type NavItem = { icon: LucideIcon; label: string; to: string };
+
+type NavSection = { collapsible?: boolean; items: NavItem[]; label?: string };
+
+/** Root needs an exact match; every other item also matches its nested routes. */
+function isNavActive(pathname: string, to: string) {
+  if (to === "/") return pathname === "/";
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+function NavMenuButton({ item, pathname }: { item: NavItem; pathname: string }) {
+  return (
+    <SidebarMenuButton asChild isActive={isNavActive(pathname, item.to)} tooltip={item.label}>
+      <Link to={item.to}>
+        <item.icon className="size-4 shrink-0" />
+        <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+      </Link>
+    </SidebarMenuButton>
+  );
+}
 
 export function PlatformAppShell({
   children,
@@ -58,19 +87,30 @@ export function PlatformAppShell({
     return null;
   }
 
-  const navItems =
+  const conversationItems: NavItem[] = [
+    { icon: InboxIcon, label: "Mine", to: "/chat" },
+    { icon: TicketCheckIcon, label: "Unassigned", to: "/chat/unassigned" },
+  ];
+  const navSections: NavSection[] =
     user.data.role === "ADMIN"
       ? [
-          { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
-          { icon: InboxIcon, label: "My Tickets", to: "/chat" },
-          { icon: TicketCheckIcon, label: "Unassigned", to: "/chat/unassigned" },
-          { icon: LibraryBigIcon, label: "Knowledge", to: "/knowledge" },
-          { icon: SettingsIcon, label: "Settings", to: "/settings/agents" },
+          { items: [{ icon: LayoutDashboardIcon, label: "Dashboard", to: "/" }] },
+          {
+            collapsible: true,
+            items: [
+              ...conversationItems,
+              { icon: LayoutListIcon, label: "All Conversations", to: "/chat/all" },
+            ],
+            label: "Conversations",
+          },
+          {
+            items: [
+              { icon: LibraryBigIcon, label: "Knowledge", to: "/knowledge" },
+              { icon: SettingsIcon, label: "Settings", to: "/settings/agents" },
+            ],
+          },
         ]
-      : [
-          { icon: InboxIcon, label: "My Tickets", to: "/chat" },
-          { icon: TicketCheckIcon, label: "Unassigned", to: "/chat/unassigned" },
-        ];
+      : [{ collapsible: true, items: conversationItems, label: "Conversations" }];
 
   return (
     <SidebarProvider>
@@ -80,10 +120,10 @@ export function PlatformAppShell({
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild tooltip="Platform">
                 <Link to="/">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-                    <MonitorIcon className="size-4" />
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
+                    <MonitorIcon className="size-3.5" />
                   </span>
-                  <span className="font-semibold group-data-[collapsible=icon]:hidden">
+                  <span className="text-[13px] font-semibold group-data-[collapsible=icon]:hidden">
                     Platform
                   </span>
                 </Link>
@@ -92,27 +132,41 @@ export function PlatformAppShell({
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {navItems.map((item) => (
-                  <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location.pathname === item.to}
-                      tooltip={item.label}
-                    >
-                      <Link to={item.to}>
-                        <item.icon className="size-4 shrink-0" />
-                        <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {navSections.map((section) => {
+            const items = section.items.map((item) => (
+              <SidebarMenuItem key={item.to}>
+                <NavMenuButton item={item} pathname={location.pathname} />
+              </SidebarMenuItem>
+            ));
+            return (
+              <SidebarGroup key={section.label ?? section.items[0]?.to}>
+                {section.collapsible ? (
+                  <Collapsible className="group/collapsible" defaultOpen>
+                    <SidebarGroupLabel asChild>
+                      <CollapsibleTrigger className="w-full">
+                        {section.label}
+                        <ChevronRightIcon className="ml-auto size-3.5 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                      </CollapsibleTrigger>
+                    </SidebarGroupLabel>
+                    <CollapsibleContent>
+                      <SidebarGroupContent>
+                        <div className="ml-3.5 border-l pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0">
+                          <SidebarMenu>{items}</SidebarMenu>
+                        </div>
+                      </SidebarGroupContent>
+                    </CollapsibleContent>
+                  </Collapsible>
+                ) : (
+                  <>
+                    {section.label ? <SidebarGroupLabel>{section.label}</SidebarGroupLabel> : null}
+                    <SidebarGroupContent>
+                      <SidebarMenu>{items}</SidebarMenu>
+                    </SidebarGroupContent>
+                  </>
+                )}
+              </SidebarGroup>
+            );
+          })}
         </SidebarContent>
         <SidebarSeparator />
         <SidebarFooter>
@@ -139,7 +193,8 @@ export function PlatformAppShell({
             </SidebarMenuItem>
           </SidebarMenu>
           <Button
-            className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+            className="h-8 w-full justify-start text-[13px] text-muted-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 hover:text-foreground"
+            size="sm"
             type="button"
             variant="ghost"
             disabled={logoutMutation.isPending}
@@ -154,18 +209,18 @@ export function PlatformAppShell({
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-          <div className="flex items-center gap-2">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b px-3">
+          <div className="flex items-center gap-1.5">
             <SidebarTrigger />
-            <span className="text-sm font-medium text-muted-foreground">Platform</span>
+            <span className="text-[13px] font-medium text-muted-foreground">Platform</span>
           </div>
           <HeaderControls />
         </header>
         <div
           className={
             fullBleed
-              ? "flex min-h-0 w-full flex-1 flex-col"
-              : "mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-8 lg:px-8"
+              ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+              : "mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 overflow-y-auto px-6 py-8 lg:px-8"
           }
         >
           {children}
