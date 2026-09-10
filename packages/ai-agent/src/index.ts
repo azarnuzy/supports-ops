@@ -6,6 +6,7 @@ export {
   ticketPrioritySchema,
 } from "./classification";
 export { createReplyModel, ReplyGenerationFailedError, streamReply } from "./reply";
+export { createAssignedTools } from "./tools";
 export {
   EscalationSummaryGenerationFailedError,
   generateEscalationSummary,
@@ -19,3 +20,4 @@ export type {
   TicketPriority,
 } from "./classification";
 export type { ReplyDecision, ReplyModel } from "./reply";
+export type { AgentTools, AssignedToolDescriptor, AssignedToolExecutor } from "./tools";

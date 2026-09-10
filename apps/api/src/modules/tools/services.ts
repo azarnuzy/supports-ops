@@ -18,7 +18,7 @@ export class TicketNotFoundError extends Error {}
 
 const builtInNames = ["searchKnowledge", "searchCustomerTicketHistory"] as const;
 type BuiltInName = (typeof builtInNames)[number];
-type TicketCategory = "ACCOUNT" | "BILLING" | "SUBSCRIPTION" | "TECHNICAL" | "GENERAL";
+export type TicketCategory = "ACCOUNT" | "BILLING" | "SUBSCRIPTION" | "TECHNICAL" | "GENERAL";
 
 const includeHttpConfig = { httpConfig: true } as const;
 
@@ -57,9 +57,9 @@ export async function setToolEnabled(toolId: string, enabled: boolean) {
 }
 
 export async function setToolAssignment(toolId: string, aiAgentId: string, assigned: boolean) {
-  const [tool] = await Promise.all([findTool(toolId), requireAiAgent(aiAgentId)]);
+  const [tool] = await Promise.all([findAssignableTool(toolId), requireAiAgent(aiAgentId)]);
   if (assigned) {
-    if (!tool.enabled || tool.origin !== "BUILT_IN") throw new ToolUnavailableError();
+    if (!tool.enabled || !isAvailable(tool)) throw new ToolUnavailableError();
     const workspaceId = requireWorkspaceId();
     return prisma.toolAssignment.upsert({
       create: { aiAgentId, id: randomUUID(), toolId, workspaceId },
@@ -74,8 +74,8 @@ export async function setToolAssignment(toolId: string, aiAgentId: string, assig
 }
 
 export async function setToolPolicy(aiAgentId: string, category: TicketCategory, toolId: string) {
-  const [tool] = await Promise.all([findTool(toolId), requireAiAgent(aiAgentId)]);
-  if (!tool.enabled || tool.origin !== "BUILT_IN") throw new ToolUnavailableError();
+  const [tool] = await Promise.all([findAssignableTool(toolId), requireAiAgent(aiAgentId)]);
+  if (!tool.enabled || !isAvailable(tool)) throw new ToolUnavailableError();
   const assignment = await prisma.toolAssignment.findFirst({ where: { aiAgentId, toolId } });
   if (!assignment) throw new ToolNotAssignedError();
   const workspaceId = requireWorkspaceId();
@@ -102,6 +102,16 @@ export async function resolveTools(aiAgentId: string) {
     where: { assignments: { some: { aiAgentId } }, enabled: true },
   });
   return tools.filter(isAvailable);
+}
+
+/** The Ticket Category's required Tool, or null when no policy is configured.
+ * Reuses `resolveTools` so a required Tool that is no longer assigned, enabled,
+ * or available cannot be returned. */
+export async function resolveRequiredTool(aiAgentId: string, category: TicketCategory) {
+  const policy = await prisma.toolPolicy.findFirst({ where: { aiAgentId, category } });
+  if (!policy) return null;
+  const tools = await resolveTools(aiAgentId);
+  return tools.find((tool) => tool.id === policy.toolId) ?? null;
 }
 
 /** Ticket context is loaded server-side; model/customer-provided identities never scope retrieval. */
@@ -146,6 +156,18 @@ function isAvailable(tool: {
 
 async function findTool(toolId: string) {
   const tool = await prisma.tool.findFirst({ where: { id: toolId } });
+  if (!tool) throw new ToolNotFoundError();
+  return tool;
+}
+
+async function findAssignableTool(toolId: string) {
+  const tool = await prisma.tool.findFirst({
+    include: {
+      httpConfig: { select: { toolId: true } },
+      mcpTool: { include: { mcpServer: { select: { enabled: true } } } },
+    },
+    where: { id: toolId },
+  });
   if (!tool) throw new ToolNotFoundError();
   return tool;
 }

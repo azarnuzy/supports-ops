@@ -3,6 +3,7 @@ import { webAttachmentCapability } from "@repo/channels";
 import {
   ClassificationFailedError,
   classifyMessage,
+  createAssignedTools,
   createClassificationModel,
   createReplyModel,
   ReplyGenerationFailedError,
@@ -13,7 +14,7 @@ import {
   searchChunks as findKnowledgeChunks,
   searchTicketChunks as findTicketKnowledgeChunks,
 } from "@repo/knowledge";
-import { BusinessToolError, createBusinessTools } from "@repo/tools";
+import { createBusinessTools } from "@repo/tools";
 import { createStorage } from "@repo/storage";
 import { type Span, withSpan } from "@repo/logger/telemetry";
 import {
@@ -35,6 +36,13 @@ import {
 import { enqueueAttachmentProcess } from "./attachment-queue";
 import { cancelFollowUpTimers, scheduleFollowUp } from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "../tickets/queue";
+import { resolveTools } from "../tools/services";
+import {
+  createOptionalToolExecutor,
+  describeOptionalTools,
+  RequiredToolFailedError,
+  runRequiredTool,
+} from "../tools/orchestration";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -432,6 +440,8 @@ async function generateAiReplyRun(
   const ticket = await unscopedPrisma.ticket.findUnique({
     select: {
       aiAgent: { select: { instructions: true } },
+      aiAgentId: true,
+      category: true,
       channel: { select: { type: true } },
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
       status: true,
@@ -527,8 +537,25 @@ async function generateAiReplyRun(
     const clarificationCount = await unscopedPrisma.aiActivity.count({
       where: { eventType: "CLARIFICATION_ASKED", ticketId },
     });
-    const businessData = await getBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
+    const assignedTools = await resolveTools(ticket.aiAgentId);
+    const required = await runRequiredTool({
+      aiAgentId: ticket.aiAgentId,
+      category: ticket.category,
+      ticketId,
+      workspaceId,
+    });
+    const businessData = required?.result;
     run.setAttribute("ai_agent.business_tool_data", Boolean(businessData));
+    run.setAttribute("ai_agent.assigned_tools", assignedTools.length);
+    const tools = createAssignedTools(
+      describeOptionalTools(assignedTools, required?.id),
+      createOptionalToolExecutor({
+        aiAgentId: ticket.aiAgentId,
+        ticketId,
+        tools: assignedTools,
+        workspaceId,
+      }),
+    );
     if (
       !sources.length &&
       !attachments.length &&
@@ -572,6 +599,7 @@ async function generateAiReplyRun(
             id: chunk.chunkId,
             content: chunk.content,
           })),
+          tools,
         });
         break;
       } catch (error) {
@@ -624,7 +652,7 @@ async function generateAiReplyRun(
     await publishTicketQueueEvent(workspaceId);
   } catch (error) {
     const reason =
-      error instanceof BusinessToolError ? "BUSINESS_TOOL_FAILURE" : "AI_GENERATION_FAILED";
+      error instanceof RequiredToolFailedError ? "BUSINESS_TOOL_FAILURE" : "AI_GENERATION_FAILED";
     run.recordException(error instanceof Error ? error : new Error(String(error)));
     run.setAttributes({ "ai_agent.decision": "ESCALATE", "ai_agent.escalation_reason": reason });
     await escalate(ticketId, workspaceId, reason, customerMessage);
@@ -645,71 +673,6 @@ async function generateAiReplyRun(
               : "ready",
       },
     });
-  }
-}
-
-async function getBusinessToolData(
-  ticketId: string,
-  workspaceId: string,
-  identity: { email: string; externalCustomerId: string | null; id: string },
-) {
-  const tools = createBusinessTools(apiConfig.businessSystemUrl);
-  try {
-    let customerId = identity.externalCustomerId;
-    if (!customerId) {
-      const customer = await tools.getCustomerByEmail(identity.email);
-      await unscopedPrisma.aiActivity.create({
-        data: {
-          eventType: "TOOL_CALLED",
-          id: randomUUID(),
-          metadata: { outcome: "SUCCESS", tool: "getCustomerByEmail" },
-          ticketId,
-          workspaceId,
-        },
-      });
-      if (!customer) return undefined;
-      customerId = customer.id;
-      await unscopedPrisma.customerIdentity.update({
-        data: { externalCustomerId: customerId },
-        where: { id: identity.id },
-      });
-    }
-    const [subscription, invoice] = await Promise.all([
-      tools.getSubscriptionStatus(customerId),
-      tools.getInvoiceStatus(customerId),
-    ]);
-    await unscopedPrisma.aiActivity.createMany({
-      data: [
-        {
-          eventType: "TOOL_CALLED",
-          id: randomUUID(),
-          metadata: { outcome: "SUCCESS", tool: "getSubscriptionStatus" },
-          ticketId,
-          workspaceId,
-        },
-        {
-          eventType: "TOOL_CALLED",
-          id: randomUUID(),
-          metadata: { outcome: "SUCCESS", tool: "getInvoiceStatus" },
-          ticketId,
-          workspaceId,
-        },
-      ],
-    });
-    return JSON.stringify({ invoice, subscription });
-  } catch (error) {
-    await unscopedPrisma.aiActivity.create({
-      data: {
-        eventType: "TOOL_FAILED",
-        id: randomUUID(),
-        metadata: { outcome: "FAILED", tool: "Business System" },
-        ticketId,
-        workspaceId,
-      },
-    });
-    throw error instanceof BusinessToolError
-      ? error
-      : new BusinessToolError("Business Tool failed.", { cause: error });
   }
 }
 
