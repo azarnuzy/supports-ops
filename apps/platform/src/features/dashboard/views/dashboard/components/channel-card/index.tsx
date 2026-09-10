@@ -23,21 +23,21 @@ export default function ChannelCard({ counts }: ChannelCardProps) {
 
   return (
     <DashboardCard>
-      <CardHeader>
-        <CardTitle>Tickets by Channel</CardTitle>
-        <CardDescription>Where conversations arrive.</CardDescription>
+      <CardHeader className="gap-1.5">
+        <CardTitle className="text-base leading-5">Tickets by Channel</CardTitle>
+        <CardDescription className="leading-5">Ticket volume by configured Channel.</CardDescription>
         <CardAction>
-          <span className="text-xs tabular-nums text-muted-foreground">{total} total</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{total} Tickets</span>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-2">
+      <CardContent className="grid gap-1.5">
         {counts.map((channel) => {
           const Icon = iconByChannelType[channel.channelType] ?? GlobeIcon;
           const share = total === 0 ? 0 : (channel.ticketCount / total) * 100;
           return (
             <div
               key={channel.channelId}
-              className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/50"
+              className="-mx-2 flex items-center gap-3 px-2 py-2"
             >
               <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Icon className="size-4" />

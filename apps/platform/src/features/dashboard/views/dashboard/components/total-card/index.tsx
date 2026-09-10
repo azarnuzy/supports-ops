@@ -9,18 +9,20 @@ import type { TotalCardProps } from "./index.types";
 export default function TotalCard({ totalTickets }: TotalCardProps) {
   return (
     <DashboardCard>
-      <CardHeader>
-        <div className="flex items-center gap-2.5">
+      <CardHeader className="gap-4">
+        <div className="flex min-h-10 items-center gap-2.5">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <InboxIcon className="size-4" />
           </span>
-          <CardDescription className="font-medium">Total Tickets</CardDescription>
+          <CardDescription className="text-sm font-medium leading-5 text-foreground">
+            Total Tickets
+          </CardDescription>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 aria-label="About Total Tickets"
-                className="ml-auto rounded-full p-1 text-muted-foreground/70 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="ml-auto cursor-help rounded-full p-1 text-muted-foreground transition-colors duration-100 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <InfoIcon className="size-3.5" />
               </button>
@@ -31,12 +33,14 @@ export default function TotalCard({ totalTickets }: TotalCardProps) {
             </TooltipContent>
           </Tooltip>
         </div>
-        <CardTitle className="text-4xl tabular-nums tracking-tight">{totalTickets}</CardTitle>
+        <CardTitle className="text-4xl leading-none tabular-nums tracking-tight">
+          {totalTickets}
+        </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-2.5">
-        <div aria-hidden className="h-1.5 rounded-full bg-primary/15" />
+      <CardContent className="mt-auto grid gap-3">
+        <div aria-hidden className="h-1.5 rounded-full bg-primary" />
         <p className="text-xs leading-5 text-muted-foreground">
-          The denominator for each rate beside it.
+          100% of Workspace Tickets · rate denominator.
         </p>
       </CardContent>
     </DashboardCard>
