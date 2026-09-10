@@ -14,6 +14,11 @@ cp .env.example .env.local
 OPENROUTER_API_KEY="..."
 # wajib untuk login yang konsisten; gunakan nilai acak setidaknya 32 karakter
 BETTER_AUTH_SECRET="..."
+# wajib untuk skenario Tools/MCP (bagian 3a): Business System demo berjalan di
+# http://localhost:8001, sehingga HTTP Tool dan MCP Server lokal perlu diizinkan
+ALLOW_LOCAL_HTTP_TOOLS="true"
+# wajib bila ingin membuat/menyimpan HTTP Tool dengan bearer token atau secret headers
+TOOL_MASTER_KEY="..."
 ```
 
 Untuk Telemetry Langfuse, tambahkan juga konfigurasi pada bagian [Telemetry](#6-telemetry-di-langfuse). Attachment PDF/gambar merupakan skenario opsional yang juga memerlukan S3-compatible storage, `MISTRAL_API_KEY`, dan `INTERNAL_WORKER_TOKEN`.
@@ -51,8 +56,11 @@ Seed ini idempoten dan menyiapkan:
 | Origin Widget yang diizinkan | `localhost:3001`, `localhost:4000` |
 | Knowledge | Lima Customer-Safe dan dua Internal-Only, dipublish bila `OPENROUTER_API_KEY` tersedia |
 | Business System | Customer demo, termasuk `budi@example.com` dan `siti@example.com` |
+| AI Agent | Instructions dan Handoff/AI Resolution Message demo terpasang |
+| HTTP Tool | `getSubscriptionStatus` mengarah ke `/subscription-status` pada Business System, ditetapkan ke AI Agent, dan menjadi Tool Policy wajib untuk kategori `SUBSCRIPTION` |
+| MCP Server | "Business System Demo" (`/mcp` pada Business System) dengan Tool `getInvoiceStatus` ditemukan, direview, diaktifkan, dan ditetapkan ke AI Agent |
 
-Jika seed mencetak Knowledge Source `drafted (unpublished)`, API key belum tersedia; perbaiki `.env.local`, restart API/Worker, kemudian ulangi `pnpm seed:demo`.
+Jika seed mencetak Knowledge Source `drafted (unpublished)`, API key belum tersedia; perbaiki `.env.local`, restart API/Worker, kemudian ulangi `pnpm seed:demo`. Jika seed mencetak peringatan MCP Server tidak terjangkau, pastikan Business System berjalan pada port `8001`, lalu ulangi `pnpm seed:demo` untuk melakukan discovery dan mengaktifkan `getInvoiceStatus`.
 
 ## 3. Implementasi dan mencoba Web Widget
 
@@ -119,6 +127,15 @@ Jika email tidak muncul:
 - Periksa log Worker untuk `Session Link email failed`. Error koneksi biasanya berarti `SMTP_URL` atau container Mailpit tidak tersedia.
 - Kirim Pre-Chat baru setelah Worker diperbaiki. Kegagalan enqueue sengaja tidak menggagalkan pembuatan Web Session.
 
+### Konfigurasi Tools dan MCP Server (demo #94)
+
+`pnpm seed:demo` sudah menyiapkan HTTP Tool dan MCP Server demo di atas melalui application service yang sama dengan langkah manual berikut, sehingga langkah ini opsional — jalankan untuk melihat sendiri alur Admin, atau untuk memahami apa yang sudah diseed:
+
+1. Login sebagai Admin, buka **Settings → Tools** (`/settings/tools`). Tool HTTP `getSubscriptionStatus` (method GET, URL `http://localhost:8001/subscription-status`) sudah ada dari seed; buat manual dengan tombol "New HTTP Tool" bila ingin mengulang dari awal.
+2. Buka **Settings → MCP Servers** (`/settings/mcp`). Tambah server dengan URL `http://localhost:8001/mcp`, klik **Test Connection** (harus sukses selama Business System berjalan dan `ALLOW_LOCAL_HTTP_TOOLS=true`), lalu **Discover Tools**. Tool `getInvoiceStatus` muncul dengan status belum diaktifkan; review lalu aktifkan dengan risk `READ_ONLY`.
+3. Buka **Settings → AI Agent** (`/settings/ai`). Tetapkan (assign) kedua Tool ke AI Agent, lalu buat Tool Policy `SUBSCRIPTION → getSubscriptionStatus` di bagian Tool Policy.
+4. Tool yang baru ditemukan tapi belum diaktifkan/ditetapkan tidak pernah bisa dipanggil AI Agent, termasuk bila Customer menyebut namanya secara eksplisit — resolver runtime hanya mengembalikan Tool yang enabled, tersedia, dan ditetapkan (lihat W3b).
+
 ## 4. Skenario produk end-to-end
 
 Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak tercampur. Kolom bukti menyebut permukaan yang harus diperiksa.
@@ -127,7 +144,10 @@ Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak
 | --- | --- | --- | --- |
 | W1 | Pre-Chat, lalu jangan mengirim pesan | Web Session aktif, tanpa Ticket | Widget terbuka; tidak ada Ticket baru di Platform |
 | W2 | `How do I reset my password?` | AI menjawab dari Knowledge Customer-Safe, bahasa mengikuti Customer | Widget memperlihatkan balasan bertahap; Ticket diklasifikasi |
-| W3 | `What is my subscription and invoice status?` memakai `siti@example.com` | AI mengambil fakta live Business System (Starter/PAST_DUE dan invoice), bukan mengarang | Balasan Widget; trace memiliki span Business Tool |
+| W3 | `Is my subscription active?` | Tool Policy wajib menjalankan HTTP Tool `getSubscriptionStatus` sebelum balasan; AI menjawab dari data live Business System, bukan mengarang | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `HTTP` |
+| W3a | `What's the status of my latest invoice?` | AI memilih sendiri (model-directed) MCP Tool `getInvoiceStatus` karena kategori Ticket ini (Billing) tidak punya Tool Policy wajib | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `MCP` |
+| W3b | Di `/settings/mcp`, discover ulang lalu jangan aktifkan sebuah Tool baru (atau nonaktifkan `getInvoiceStatus`), lalu ulangi W3a | AI Agent tidak pernah memanggil Tool yang belum diaktifkan/ditetapkan, termasuk bila Customer menyebut namanya; AI menjawab dari Knowledge saja atau eskalasi | Tidak ada `TOOL_CALLED` baru untuk Tool tersebut di AI Activity |
+| W3c | Hentikan Business System (`docker compose -f docker-compose.dev.yaml stop business-system` atau matikan proses dev-nya), lalu ulangi W3 | Tool Policy wajib gagal; Ticket `ESCALATED` dengan alasan `BUSINESS_TOOL_FAILURE` | AI Activity mencatat `TOOL_FAILED`; nyalakan lagi Business System setelah selesai |
 | W4 | Minta refund atau `I want to speak to a human` | Ticket `ESCALATED`, acknowledgement dikirim, AI berhenti membalas pesan berikutnya | Admin/Human Agent: `/chat/unassigned` |
 | W5 | Dari W4, login Human Agent → Unassigned → Claim | Hanya satu Claim sukses; Ticket `HUMAN_HANDLING`; Handoff dan Escalation Summary tersedia | `/chat` dan Widget menerima perkenalan Human Agent |
 | W6 | Dari W5, minta Suggested Reply, edit bila perlu, kirim reply, lalu Resolve | Draft tidak terkirim otomatis; Resolution oleh Human Agent mengirim closing message; Widget read-only | `/chat`; Widget menampilkan tombol Start a new conversation |
@@ -183,10 +203,12 @@ Eval memakai corpus in-memory yang tetap, bukan Knowledge pada Workspace demo. J
    TELEMETRY_SERVICE_NAMESPACE="supportops"
    ```
 
-4. Jalankan W2, W3, W4, dan W7. Di Langfuse buka project → **Traces**, filter service `supportops` bila diperlukan, lalu buka trace terbaru.
+4. Jalankan W2, W3, W3a, W4, dan W7. Di Langfuse buka project → **Traces**, filter service `supportops` bila diperlukan, lalu buka trace terbaru.
 
 Trace satu AI Agent run berisi root `ai_agent.run`, dengan child span retrieval, setiap Business Tool, dan generasi model (`gen_ai.*`). Periksa atribut keputusan akhir (`REPLY`, `CLARIFY`, `ESCALATE`, atau `RESOLVE`) dan Escalation Reason bila ada. Prompt dan response body memang tidak dikirim: telemetry berada pada mode redacted/safe. Untuk debug tanpa Langfuse, gunakan `TELEMETRY_EXPORTER="console"` dan lihat stdout API/Worker.
 
 ## 7. Kriteria selesai
 
-Sebuah run dapat dianggap lengkap bila W1–W10, W13, dan W14 selesai; W11 perlu bila Attachment berada dalam scope release, W12 perlu bila Ticket Knowledge berada dalam scope release; seluruh eval telah dijalankan dan negative control tercatat sebagai gagal yang diharapkan. Simpan tautan trace Langfuse yang relevan dan ID Ticket untuk setiap skenario—keduanya cukup untuk mengulang atau menelusuri kegagalan tanpa menyalin percakapan Customer ke dokumen.
+Sebuah run dapat dianggap lengkap bila W1–W10, W13, dan W14 selesai; W3a–W3c perlu bila alur Tools/MCP (#94) berada dalam scope release; W11 perlu bila Attachment berada dalam scope release, W12 perlu bila Ticket Knowledge berada dalam scope release; seluruh eval telah dijalankan dan negative control tercatat sebagai gagal yang diharapkan. Simpan tautan trace Langfuse yang relevan dan ID Ticket untuk setiap skenario—keduanya cukup untuk mengulang atau menelusuri kegagalan tanpa menyalin percakapan Customer ke dokumen.
+
+Alur Tools/MCP (W3–W3c) tidak memerlukan layanan MCP pihak ketiga: Business System yang sama (`apps/business-system`) berperan sebagai HTTP API dan demo MCP Server.
