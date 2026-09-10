@@ -193,7 +193,7 @@ export async function createHttpTool(input: CreateHttpToolInput) {
       description: input.description,
       enabled: input.enabled,
       httpConfig: {
-        create: { ...secretConfig(input), workspaceId },
+        create: secretConfig(input),
       },
       id,
       inputSchema: input.inputSchema,

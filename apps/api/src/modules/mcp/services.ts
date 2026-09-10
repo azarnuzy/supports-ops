@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { toolEncryptionConfig } from "../../config";
+import { httpToolConfig, toolEncryptionConfig } from "../../config";
 import { prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { decryptToolSecret } from "../tools/secrets";
@@ -31,6 +31,7 @@ export async function createMcpServer(input: CreateMcpServerInput) {
       id: randomUUID(),
       name: input.name,
       url: input.url,
+      workspaceId: requireWorkspaceId(),
       ...encryptedCredentials(input),
     },
     select: publicServerSelect,
@@ -66,10 +67,12 @@ export async function deleteMcpServer(id: string) {
 export async function testMcpConnection(id: string) {
   const server = await getServer(id);
   try {
-    return await withMcpClient(server.url, credentials(server), async (client) => ({
-      ok: true as const,
-      server: client.getServerVersion() ?? null,
-    }));
+    return await withMcpClient(
+      server.url,
+      credentials(server),
+      async (client) => ({ ok: true as const, server: client.getServerVersion() ?? null }),
+      { allowPrivateNetwork: httpToolConfig.allowLocalHttp },
+    );
   } catch {
     return { error: "MCP connection failed.", ok: false as const };
   }
@@ -77,8 +80,9 @@ export async function testMcpConnection(id: string) {
 
 export async function discoverMcpTools(id: string) {
   const server = await getServer(id);
-  const workspaceId = requireWorkspaceId();
-  const remote = await withMcpClient(server.url, credentials(server), (client) => client.listTools());
+  const remote = await withMcpClient(server.url, credentials(server), (client) => client.listTools(), {
+    allowPrivateNetwork: httpToolConfig.allowLocalHttp,
+  });
   const seen: string[] = [];
 
   for (const discovered of remote.tools) {
@@ -104,10 +108,13 @@ export async function discoverMcpTools(id: string) {
               discoveredSchema: schema,
               mcpServerId: id,
               remoteName: discovered.name,
-              workspaceId,
             },
           },
-          name: `${server.name}/${discovered.name}`,
+          // ponytail: Tool.name is sent verbatim as the model-facing function/tool
+          // name (packages/ai-agent/src/tools.ts), and OpenAI-style tool-calling
+          // rejects the whole request if a name has anything but [a-zA-Z0-9_-] — a
+          // raw "Server Name/toolName" broke every AI Agent reply, not just this Tool's.
+          name: `${server.name}_${discovered.name}`.replace(/[^a-zA-Z0-9_-]+/g, "_"),
           origin: "MCP",
         },
       });
@@ -177,8 +184,11 @@ export async function executeMcpTool(
   }
 
   const secrets = credentials(record.mcpServer);
-  const result = await withMcpClient(record.mcpServer.url, secrets, (client) =>
-    client.callTool({ arguments: args, name: record.remoteName }),
+  const result = await withMcpClient(
+    record.mcpServer.url,
+    secrets,
+    (client) => client.callTool({ arguments: args, name: record.remoteName }),
+    { allowPrivateNetwork: httpToolConfig.allowLocalHttp },
   );
   const serialized = JSON.stringify(result);
   if (Buffer.byteLength(serialized) > maxResultBytes) {
