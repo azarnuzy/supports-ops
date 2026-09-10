@@ -91,9 +91,9 @@ ALTER TABLE "McpTool" ADD CONSTRAINT "McpTool_workspaceId_toolId_fkey" FOREIGN K
 ALTER TABLE "McpTool" ADD CONSTRAINT "McpTool_workspaceId_mcpServerId_fkey" FOREIGN KEY ("workspaceId", "mcpServerId") REFERENCES "McpServer"("workspaceId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 INSERT INTO "Tool" ("id", "workspaceId", "origin", "name", "description", "inputSchema", "risk", "updatedAt")
-SELECT gen_random_uuid()::text, "id", 'BUILT_IN', 'searchKnowledge', 'Search published Customer-Safe Knowledge Sources.', '{"type":"object"}'::jsonb, 'READ_ONLY', CURRENT_TIMESTAMP FROM "Workspace"
+SELECT gen_random_uuid()::text, "id", 'BUILT_IN'::"ToolOrigin", 'searchKnowledge', 'Search published Customer-Safe Knowledge Sources.', '{"type":"object"}'::jsonb, 'READ_ONLY'::"ToolRisk", CURRENT_TIMESTAMP FROM "Workspace"
 UNION ALL
-SELECT gen_random_uuid()::text, "id", 'BUILT_IN', 'searchCustomerTicketHistory', 'Search resolved Tickets for the same Customer Identity and Channel.', '{"type":"object"}'::jsonb, 'READ_ONLY', CURRENT_TIMESTAMP FROM "Workspace";
+SELECT gen_random_uuid()::text, "id", 'BUILT_IN'::"ToolOrigin", 'searchCustomerTicketHistory', 'Search resolved Tickets for the same Customer Identity and Channel.', '{"type":"object"}'::jsonb, 'READ_ONLY'::"ToolRisk", CURRENT_TIMESTAMP FROM "Workspace";
 
 INSERT INTO "ToolAssignment" ("id", "workspaceId", "aiAgentId", "toolId")
 SELECT gen_random_uuid()::text, tool."workspaceId", agent."id", tool."id"
