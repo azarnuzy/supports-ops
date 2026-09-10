@@ -1,4 +1,4 @@
-import type { TicketStatus } from "@repo/api-client";
+import type { TicketCategory, TicketPriority, TicketStatus } from "@repo/api-client";
 import { webAttachmentCapability } from "@repo/channels";
 import {
   AlertDialog,
@@ -14,6 +14,7 @@ import {
 import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/components/popover";
 import { Empty, EmptyDescription, EmptyTitle } from "@repo/ui/components/empty";
 import {
   InputGroup,
@@ -38,14 +39,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  CheckIcon,
   PaperclipIcon,
   SendIcon,
+  SlidersHorizontalIcon,
   SparklesIcon,
   UserRoundIcon,
+  XIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
-import { getInitials } from "../../../../lib/utils";
+import { formatEnumLabel, getInitials } from "../../../../lib/utils";
 import { meQueryOptions, workspaceUsersQueryOptions } from "../../../auth";
 import { describeActivity } from "../../../tickets/activity-description";
 import {
@@ -67,7 +71,12 @@ import {
   useTicketDetailEvents,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
-import { scopeRoutes, statusFilterOptions } from "./chat.constants";
+import {
+  categoryFilterOptions,
+  priorityFilterOptions,
+  scopeRoutes,
+  statusFilterOptions,
+} from "./chat.constants";
 import type { DetailsTab, TicketScope } from "./chat.types";
 import { isImage, scopeUnreadTotal } from "./chat.utils";
 import {
@@ -78,6 +87,42 @@ import {
   TicketRow,
   TranscriptMessage,
 } from "./components";
+
+/** One labelled option list inside the filter popover; the active option
+ * toggles off, so every dimension can also be cleared from within. */
+function FilterGroup({
+  activeValue,
+  label,
+  onToggle,
+  options,
+}: {
+  activeValue: string;
+  label: string;
+  onToggle: (value: string) => void;
+  options: { label: string; value: string }[];
+}) {
+  return (
+    <div className="py-1">
+      <p className="px-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+      </p>
+      {options.map((option) => (
+        <button
+          className={cn(
+            "flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-[13px] hover:bg-accent",
+            option.value === activeValue && "bg-accent font-medium",
+          )}
+          key={option.value}
+          onClick={() => onToggle(option.value)}
+          type="button"
+        >
+          {option.label}
+          {option.value === activeValue ? <CheckIcon className="size-3.5" /> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?: string }) => {
   const navigate = useNavigate();
@@ -111,7 +156,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
 
   const routeSearch = useSearch({ strict: false });
   const search = routeSearch.q ?? "";
-  const statusFilter = (routeSearch.status as TicketStatus | undefined) ?? "ALL";
+  const statusFilter = routeSearch.status as TicketStatus | undefined;
+  const priorityFilter = routeSearch.priority as TicketPriority | undefined;
+  const categoryFilter = routeSearch.category as TicketCategory | undefined;
   const currentLocation = ticketId
     ? { params: { ticketId }, to: scopeRoutes[scope].ticket }
     : { to: scopeRoutes[scope].list };
@@ -119,21 +166,33 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     void navigate({
       ...currentLocation,
       replace: true,
-      search: (prev: { q?: string; status?: string }) => ({ ...prev, q: value || undefined }),
+      search: (prev: Record<string, string | undefined>) => ({ ...prev, q: value || undefined }),
     });
-  const setStatusFilter = (value: TicketStatus | "ALL") =>
+  const activeFilterEntries = [
+    { key: "status", options: statusFilterOptions, value: statusFilter },
+    { key: "priority", options: priorityFilterOptions, value: priorityFilter },
+    { key: "category", options: categoryFilterOptions, value: categoryFilter },
+  ].filter((entry) => entry.value !== undefined);
+  const activeFilters = activeFilterEntries.map(({ key, options, value }) => ({
+    key,
+    label: options.find((option) => option.value === value)?.label ?? formatEnumLabel(value ?? ""),
+  }));
+  const activeFilterCount = activeFilters.length;
+  const setListFilter = (key: string, value: string | undefined) =>
     void navigate({
       ...currentLocation,
       replace: true,
-      search: (prev: { q?: string; status?: string }) => ({
+      search: (prev: Record<string, string | undefined>) => ({
         ...prev,
-        status: value === "ALL" ? undefined : value,
+        [key]: value || undefined,
       }),
     });
   const allTickets = useAllTicketsQuery({
+    category: scope === "all" ? categoryFilter : undefined,
     enabled: scope === "all",
+    priority: scope === "all" ? priorityFilter : undefined,
     search: scope === "all" ? search || undefined : undefined,
-    status: scope === "all" && statusFilter !== "ALL" ? [statusFilter] : undefined,
+    status: scope === "all" ? statusFilter : undefined,
   });
   const allTicketRows = allTickets.data?.pages.flatMap((page) => page.tickets) ?? [];
   const [draft, setDraft] = useState("");
@@ -175,7 +234,8 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     scope === "unassigned" && detail?.status === "ESCALATED" && me.data?.role === "HUMAN_AGENT";
   const canTakeover = scope === "ai-live" && detail?.status === "AI_HANDLING" && isAdmin;
   const canAssign = scope === "unassigned" && detail?.status === "ESCALATED" && isAdmin;
-  const availableHumanAgents = humanAgents.data?.users.filter((user) => user.role === "HUMAN_AGENT") ?? [];
+  const availableHumanAgents =
+    humanAgents.data?.users.filter((user) => user.role === "HUMAN_AGENT") ?? [];
 
   const timeline = detail
     ? [
@@ -208,81 +268,154 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
             : "md:grid-cols-[20rem_minmax(0,1fr)]",
         )}
       >
-        <aside className={cn("flex min-h-0 flex-col border-r", ticketId && "hidden md:flex")}>
-          <div className="border-b p-4">
-            <div className="flex items-center gap-3 text-lg font-semibold">
-              <Link className={scope === "mine" ? "text-foreground" : "text-muted-foreground"} to="/chat">
-                Mine
-              </Link>
-              {scopeUnreadTotal(mineTickets.data) > 0 ? (
-                <Badge className="px-1.5">{scopeUnreadTotal(mineTickets.data)}</Badge>
-              ) : null}
+        <aside
+          className={cn(
+            "flex min-h-0 flex-col overflow-hidden border-r",
+            ticketId && "hidden md:flex",
+          )}
+        >
+          <div className="border-b px-2">
+            <nav className="flex items-center gap-1">
               <Link
-                className={scope === "unassigned" ? "text-foreground" : "text-muted-foreground"}
+                className={cn(
+                  "flex h-9 items-center gap-1.5 border-b-2 px-2 text-[13px] font-medium transition-colors",
+                  scope === "mine"
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+                to="/chat"
+              >
+                Mine
+                {scopeUnreadTotal(mineTickets.data) > 0 ? (
+                  <span className="rounded-full bg-muted px-1.5 text-[11px] leading-4 font-medium text-muted-foreground tabular-nums">
+                    {scopeUnreadTotal(mineTickets.data)}
+                  </span>
+                ) : null}
+              </Link>
+              <Link
+                className={cn(
+                  "flex h-9 items-center gap-1.5 border-b-2 px-2 text-[13px] font-medium transition-colors",
+                  scope === "unassigned"
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
                 to="/chat/unassigned"
               >
                 Unassigned
+                {scopeUnreadTotal(unassignedTickets.data) > 0 ? (
+                  <span className="rounded-full bg-muted px-1.5 text-[11px] leading-4 font-medium text-muted-foreground tabular-nums">
+                    {scopeUnreadTotal(unassignedTickets.data)}
+                  </span>
+                ) : null}
               </Link>
-              {scopeUnreadTotal(unassignedTickets.data) > 0 ? (
-                <Badge className="px-1.5">{scopeUnreadTotal(unassignedTickets.data)}</Badge>
-              ) : null}
-              {isAdmin ? (
-                <Link
-                  className={scope === "ai-live" ? "text-foreground" : "text-muted-foreground"}
-                  to="/chat/ai-live"
-                >
-                  AI-handled
-                </Link>
-              ) : null}
               <Link
-                className={scope === "all" ? "text-foreground" : "text-muted-foreground"}
+                className={cn(
+                  "flex h-9 items-center border-b-2 px-2 text-[13px] font-medium transition-colors",
+                  scope === "all"
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
                 to="/chat/all"
               >
                 All
               </Link>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {scope === "unassigned"
-                ? "Escalated Tickets waiting to be claimed"
-                : scope === "ai-live"
-                  ? "Tickets currently handled by the AI Agent"
-                  : scope === "all"
-                    ? "Every Ticket you can see, including Resolved"
-                    : "Tickets assigned to you"}
-            </p>
+            </nav>
           </div>
-          <div className="border-b p-3">
-            <InputGroup>
-              <InputGroupInput
-                aria-label="Search Tickets by customer name"
-                placeholder="Search by customer name..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </InputGroup>
-            {scope === "all" ? (
-              <Select onValueChange={(value) => setStatusFilter(value as TicketStatus | "ALL")} value={statusFilter}>
-                <SelectTrigger aria-label="Filter by status" className="mt-2 w-full" size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusFilterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <p className="border-b bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+            {scope === "unassigned"
+              ? "Escalated Tickets waiting to be claimed"
+              : scope === "ai-live"
+                ? "Tickets currently handled by the AI Agent"
+                : scope === "all"
+                  ? "Every Ticket you can see, including Resolved"
+                  : "Tickets assigned to you"}
+          </p>
+          <div className="border-b p-2.5">
+            <div className="flex items-center gap-1.5">
+              <InputGroup className="flex-1">
+                <InputGroupInput
+                  aria-label="Search Tickets by customer name"
+                  placeholder="Search conversations..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </InputGroup>
+              {scope === "all" ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      aria-label="Filter Tickets"
+                      className="relative size-9 shrink-0"
+                      size="icon"
+                      variant="outline"
+                    >
+                      <SlidersHorizontalIcon className="size-4" />
+                      {activeFilterCount > 0 ? (
+                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium leading-none text-primary-foreground tabular-nums">
+                          {activeFilterCount}
+                        </span>
+                      ) : null}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-56 p-1.5">
+                    <FilterGroup
+                      activeValue={statusFilter ?? "ALL"}
+                      label="Status"
+                      onToggle={(value) => setListFilter("status", value)}
+                      options={statusFilterOptions}
+                    />
+                    <FilterGroup
+                      activeValue={priorityFilter ?? "ALL"}
+                      label="Priority"
+                      onToggle={(value) => setListFilter("priority", value)}
+                      options={priorityFilterOptions}
+                    />
+                    <FilterGroup
+                      activeValue={categoryFilter ?? "ALL"}
+                      label="Category"
+                      onToggle={(value) => setListFilter("category", value)}
+                      options={categoryFilterOptions}
+                    />
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+            </div>
+            {scope === "all" && activeFilters.length > 0 ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {activeFilters.map((filter) => (
+                  <button
+                    aria-label={`Remove ${filter.label} filter`}
+                    className="inline-flex items-center gap-1 rounded-full border bg-muted/60 py-0.5 pr-1 pl-2 text-[11px] leading-4 font-medium hover:bg-accent"
+                    key={filter.key}
+                    onClick={() => setListFilter(filter.key, undefined)}
+                    type="button"
+                  >
+                    {filter.label}
+                    <XIcon className="size-3 text-muted-foreground" />
+                  </button>
+                ))}
+                <button
+                  className="px-1 text-[11px] text-muted-foreground underline hover:text-foreground"
+                  onClick={() => {
+                    setListFilter("status", undefined);
+                    setListFilter("priority", undefined);
+                    setListFilter("category", undefined);
+                  }}
+                  type="button"
+                >
+                  Clear all
+                </button>
+              </div>
             ) : null}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {scope === "all" ? (
               <>
                 {allTickets.isPending ? (
-                  <div className="grid gap-2 p-2">
-                    <Skeleton className="h-14 w-full" />
-                    <Skeleton className="h-14 w-full" />
-                    <Skeleton className="h-14 w-full" />
+                  <div className="grid gap-1.5 p-1">
+                    <Skeleton className="h-[4.25rem] w-full" />
+                    <Skeleton className="h-[4.25rem] w-full" />
+                    <Skeleton className="h-[4.25rem] w-full" />
                   </div>
                 ) : null}
                 {allTickets.isError ? (
@@ -326,10 +459,10 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
             ) : (
               <>
                 {tickets.isPending ? (
-                  <div className="grid gap-2 p-2">
-                    <Skeleton className="h-14 w-full" />
-                    <Skeleton className="h-14 w-full" />
-                    <Skeleton className="h-14 w-full" />
+                  <div className="grid gap-1.5 p-1">
+                    <Skeleton className="h-[4.25rem] w-full" />
+                    <Skeleton className="h-[4.25rem] w-full" />
+                    <Skeleton className="h-[4.25rem] w-full" />
                   </div>
                 ) : null}
                 {tickets.isError ? (
@@ -368,7 +501,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
             )}
           </div>
         </aside>
-        <section className={cn("flex min-h-0 flex-col", !ticketId && "hidden md:flex")}>
+        <section
+          className={cn("flex min-h-0 flex-col overflow-hidden", !ticketId && "hidden md:flex")}
+        >
           {reconnecting ? (
             <p className="border-b bg-muted p-2 text-center text-xs text-muted-foreground">
               Reconnecting…
@@ -417,27 +552,35 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
           ) : null}
           {detail ? (
             <>
-              <header className="flex items-center justify-between gap-3 border-b p-4">
-                <div className="flex min-w-0 items-center gap-3">
+              <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5">
+                <div className="flex min-w-0 items-center gap-2.5">
                   <Link
                     aria-label="Back to Ticket list"
                     className="shrink-0 md:hidden"
                     to={scopeRoutes[scope].list}
                   >
-                    <ArrowLeftIcon className="size-5" />
+                    <ArrowLeftIcon className="size-4" />
                   </Link>
-                  <Avatar>
-                    <AvatarFallback>{getInitials(detail.customerIdentity.name)}</AvatarFallback>
+                  <Avatar className="size-9">
+                    <AvatarFallback className="text-xs">
+                      {getInitials(detail.customerIdentity.name)}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold">{detail.customerIdentity.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{detail.title}</p>
+                    <p className="truncate text-sm leading-5 font-semibold">
+                      {detail.customerIdentity.name}
+                    </p>
+                    <p className="truncate text-xs leading-4 text-muted-foreground">
+                      {detail.title}
+                    </p>
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                   <StatusBadge status={detail.status} />
                   <PriorityBadge priority={detail.priority} />
-                  <Badge variant="outline">{detail.category}</Badge>
+                  <Badge className="px-1.5" variant="outline">
+                    {formatEnumLabel(detail.category)}
+                  </Badge>
                   {canClaim ? (
                     <Button
                       disabled={claim.isPending}
@@ -459,7 +602,11 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                   {canAssign ? (
                     <>
                       <Select onValueChange={setAssigneeId} value={assigneeId}>
-                        <SelectTrigger aria-label="Assign to a Human Agent" className="w-40" size="sm">
+                        <SelectTrigger
+                          aria-label="Assign to a Human Agent"
+                          className="w-40"
+                          size="sm"
+                        >
                           <SelectValue placeholder="Assign to…" />
                         </SelectTrigger>
                         <SelectContent>
@@ -505,7 +652,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                 </div>
               </header>
               <MessageScroller>
-                <MessageScrollerContent>
+                <MessageScrollerContent className="gap-4 bg-muted/40 px-4 py-4">
                   {detail.messages.map((message, index) => (
                     <div
                       key={message.id}
@@ -513,16 +660,20 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                     >
                       <TranscriptMessage
                         message={message}
-                        onRetry={() => ticketId && retryReply.mutate({ id: ticketId, messageId: message.id })}
+                        onRetry={() =>
+                          ticketId && retryReply.mutate({ id: ticketId, messageId: message.id })
+                        }
                         onOpenImage={(attachment) =>
-                          setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
+                          setGalleryIndex(
+                            images.findIndex((image) => image.attachment.id === attachment.id),
+                          )
                         }
                       />
                     </div>
                   ))}
                 </MessageScrollerContent>
               </MessageScroller>
-              <div className="border-t p-3">
+              <div className="shrink-0 border-t bg-background p-2.5">
                 {canReply ? (
                   <form
                     className="grid gap-2"
@@ -530,7 +681,11 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                       event.preventDefault();
                       const content = draft.trim();
                       if ((!content && !files.length) || !ticketId) return;
-                      const input = { content, id: ticketId, idempotencyKey: (replyKey.current ??= crypto.randomUUID()) };
+                      const input = {
+                        content,
+                        id: ticketId,
+                        idempotencyKey: (replyKey.current ??= crypto.randomUUID()),
+                      };
                       const onSuccess = () =>
                         setDraft((current) => {
                           if (current.trim() !== content) return current;
@@ -557,24 +712,39 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                           <SelectedFile
                             file={file}
                             key={`${file.name}-${file.lastModified}-${index}`}
-                            onRemove={() => setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                            onRemove={() =>
+                              setFiles((current) =>
+                                current.filter((_, currentIndex) => currentIndex !== index),
+                              )
+                            }
                           />
                         ))}
-                        <label aria-label="Attach files" className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
-                            <PaperclipIcon />
-                            <input
-                              className="sr-only"
-                              type="file"
-                              multiple
-                              accept={webAttachmentCapability.mimeTypes.join(",")}
-                              onChange={(event) => {
-                                const additions = [...event.target.files].filter(
-                                  (file) => webAttachmentCapability.mimeTypes.includes(file.type) && file.size > 0 && file.size <= webAttachmentCapability.maxFileSizeBytes,
-                                );
-                                setFiles((current) => [...current, ...additions].slice(0, webAttachmentCapability.maxFilesPerMessage));
-                                event.currentTarget.value = "";
-                              }}
-                            />
+                        <label
+                          aria-label="Attach files"
+                          className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+                        >
+                          <PaperclipIcon />
+                          <input
+                            className="sr-only"
+                            type="file"
+                            multiple
+                            accept={webAttachmentCapability.mimeTypes.join(",")}
+                            onChange={(event) => {
+                              const additions = [...(event.target.files ?? [])].filter(
+                                (file) =>
+                                  webAttachmentCapability.mimeTypes.includes(file.type) &&
+                                  file.size > 0 &&
+                                  file.size <= webAttachmentCapability.maxFileSizeBytes,
+                              );
+                              setFiles((current) =>
+                                [...current, ...additions].slice(
+                                  0,
+                                  webAttachmentCapability.maxFilesPerMessage,
+                                ),
+                              );
+                              event.currentTarget.value = "";
+                            }}
+                          />
                         </label>
                       </InputGroupAddon>
                       <InputGroupAddon align="block-end">
@@ -644,7 +814,10 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                         </InputGroupButton>
                       </InputGroupAddon>
                     </InputGroup>
-                    {sendReply.isError || sendAttachments.isError || suggestedReply.isError || resolve.isError ? (
+                    {sendReply.isError ||
+                    sendAttachments.isError ||
+                    suggestedReply.isError ||
+                    resolve.isError ? (
                       <p className="text-xs text-destructive">
                         {resolve.isError
                           ? "Finish or retry the pending reply before resolving this Ticket."
