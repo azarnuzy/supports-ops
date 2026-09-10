@@ -534,6 +534,292 @@ describe.skipIf(!databaseReachable)("GET /analytics/overview", () => {
 
   afterAll(async () => {
     await deleteSeededWorkspaces();
+  });
+});
+
+const trafficSlugPrefix = "analytics-traffic-test-";
+
+function hourStartUtc(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours()),
+  );
+}
+
+function hoursBefore(date: Date, hours: number): Date {
+  return new Date(date.getTime() - hours * 60 * 60 * 1000);
+}
+
+type TrafficSeeded = {
+  workspaceId: string;
+  otherWorkspaceId: string;
+  admin: WorkspaceUser;
+  otherAdmin: WorkspaceUser;
+  oldestBucketStart: Date;
+};
+
+async function deleteTrafficWorkspaces() {
+  const workspaces = await unscopedPrisma.workspace.findMany({
+    where: { slug: { startsWith: trafficSlugPrefix } },
+    select: { id: true },
+  });
+  const workspaceIds = workspaces.map((workspace) => workspace.id);
+
+  await unscopedPrisma.ticket.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.webSession.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.customerIdentity.deleteMany({
+    where: { workspaceId: { in: workspaceIds } },
+  });
+  await unscopedPrisma.channel.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.aiAgent.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.user.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
+}
+
+/**
+ * Hand-counted fixture, timestamps relative to the current UTC hour so the
+ * trailing 7x24 window always covers them the same way regardless of when
+ * the suite runs:
+ *
+ * | Ticket          | createdAt          | resolvedAt   | deletedAt | Workspace |
+ * | recent-a        | current hour       | —            | —         | main      |
+ * | recent-b        | current hour + 5m  | current hour | —         | main      |
+ * | oldest-in-window| oldest bucket      | —            | —         | main      |
+ * | before-window   | 1h before oldest   | —            | —         | main      | excluded (outside window)
+ * | soft-deleted    | current hour       | —            | now       | main      | excluded (deletedAt set)
+ * | other-workspace | current hour       | current hour | —         | other     | excluded (Workspace isolation)
+ */
+async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
+  const run = randomUUID();
+  const workspaceId = `ws-traffic-${run}`;
+  const otherWorkspaceId = `ws-traffic-other-${run}`;
+  await unscopedPrisma.workspace.createMany({
+    data: [
+      { id: workspaceId, name: "Traffic Test", slug: `${trafficSlugPrefix}${run}` },
+      { id: otherWorkspaceId, name: "Traffic Other", slug: `${trafficSlugPrefix}other-${run}` },
+    ],
+  });
+
+  const admin: WorkspaceUser = {
+    id: `traffic-admin-${run}`,
+    workspaceId,
+    name: "Adi Admin",
+    role: "ADMIN",
+    email: "",
+  };
+  const otherAdmin: WorkspaceUser = {
+    id: `traffic-other-admin-${run}`,
+    workspaceId: otherWorkspaceId,
+    name: "Ati Admin",
+    role: "ADMIN",
+    email: "",
+  };
+  await unscopedPrisma.user.createMany({
+    data: [admin, otherAdmin].map((user) => ({
+      ...user,
+      email: `${user.id}@analytics.test`,
+      emailVerified: true,
+    })),
+  });
+
+  const aiAgentId = `traffic-aiagent-${run}`;
+  const otherAiAgentId = `traffic-other-aiagent-${run}`;
+  await unscopedPrisma.aiAgent.createMany({
+    data: [
+      { id: aiAgentId, workspaceId, name: "AI Agent" },
+      { id: otherAiAgentId, workspaceId: otherWorkspaceId, name: "AI Agent" },
+    ],
+  });
+
+  const channelId = `traffic-channel-${run}`;
+  const otherChannelId = `traffic-other-channel-${run}`;
+  await unscopedPrisma.channel.createMany({
+    data: [
+      { id: channelId, workspaceId, aiAgentId, name: "Web Widget", type: "WEB" },
+      {
+        id: otherChannelId,
+        workspaceId: otherWorkspaceId,
+        aiAgentId: otherAiAgentId,
+        name: "Web Widget",
+        type: "WEB",
+      },
+    ],
+  });
+
+  const identityId = `traffic-identity-${run}`;
+  const otherIdentityId = `traffic-other-identity-${run}`;
+  await unscopedPrisma.customerIdentity.createMany({
+    data: [
+      { id: identityId, workspaceId, name: "Citra", email: "citra@example.com", channelType: "WEB" },
+      {
+        id: otherIdentityId,
+        workspaceId: otherWorkspaceId,
+        name: "Citra",
+        email: "citra@example.com",
+        channelType: "WEB",
+      },
+    ],
+  });
+
+  const now = new Date();
+  const currentHourStart = hourStartUtc(now);
+  const oldestBucketStart = hoursBefore(currentHourStart, 167);
+
+  type TicketSeed = {
+    key: string;
+    workspaceId: string;
+    channelId: string;
+    customerIdentityId: string;
+    createdAt: Date;
+    resolvedAt?: Date;
+    deletedAt?: Date;
+  };
+
+  const tickets: TicketSeed[] = [
+    {
+      key: "recent-a",
+      workspaceId,
+      channelId,
+      customerIdentityId: identityId,
+      createdAt: currentHourStart,
+    },
+    {
+      key: "recent-b",
+      workspaceId,
+      channelId,
+      customerIdentityId: identityId,
+      createdAt: new Date(currentHourStart.getTime() + 5 * 60 * 1000),
+      resolvedAt: currentHourStart,
+    },
+    {
+      key: "oldest-in-window",
+      workspaceId,
+      channelId,
+      customerIdentityId: identityId,
+      createdAt: oldestBucketStart,
+    },
+    {
+      key: "before-window",
+      workspaceId,
+      channelId,
+      customerIdentityId: identityId,
+      createdAt: hoursBefore(oldestBucketStart, 1),
+    },
+    {
+      key: "soft-deleted",
+      workspaceId,
+      channelId,
+      customerIdentityId: identityId,
+      createdAt: currentHourStart,
+      deletedAt: now,
+    },
+    {
+      key: "other-workspace",
+      workspaceId: otherWorkspaceId,
+      channelId: otherChannelId,
+      customerIdentityId: otherIdentityId,
+      createdAt: currentHourStart,
+      resolvedAt: currentHourStart,
+    },
+  ];
+
+  const sessions = tickets.map((ticket, index) => ({
+    id: `traffic-session-${ticket.key}-${run}`,
+    workspaceId: ticket.workspaceId,
+    channelId: ticket.channelId,
+    customerIdentityId: ticket.customerIdentityId,
+    accessToken: `traffic-token-${run}-${index}`,
+  }));
+  await unscopedPrisma.webSession.createMany({ data: sessions });
+
+  await unscopedPrisma.ticket.createMany({
+    data: tickets.map((ticket, index) => ({
+      id: `traffic-ticket-${ticket.key}-${run}`,
+      workspaceId: ticket.workspaceId,
+      channelId: ticket.channelId,
+      webSessionId: sessions[index].id,
+      customerIdentityId: ticket.customerIdentityId,
+      title: `Ticket ${ticket.key}`,
+      status: "RESOLVED" as const,
+      createdAt: ticket.createdAt,
+      resolvedAt: ticket.resolvedAt,
+      deletedAt: ticket.deletedAt,
+    })),
+  });
+
+  return { workspaceId, otherWorkspaceId, admin, otherAdmin, oldestBucketStart };
+}
+
+function requestTraffic() {
+  return app.request("/analytics/traffic", {
+    headers: { cookie: "better-auth.session_token=unused" },
+  });
+}
+
+type TrafficResponse = {
+  analytics: {
+    traffic: { hourStart: string; count: number }[];
+    resolutions: { hourStart: string; count: number }[];
+  };
+};
+
+describe.skipIf(!databaseReachable)("GET /analytics/traffic", () => {
+  let trafficSeed: TrafficSeeded;
+
+  beforeAll(async () => {
+    await deleteTrafficWorkspaces();
+    trafficSeed = await seedTrafficWorkspace();
+  });
+
+  afterEach(() => {
+    getSession.mockReset();
+  });
+
+  it("buckets Tickets into hourly traffic and resolutions across the trailing 7x24 window", async () => {
+    getSession.mockResolvedValue(sessionFor(trafficSeed.admin));
+
+    const response = await requestTraffic();
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as TrafficResponse;
+
+    expect(body.analytics.traffic).toHaveLength(168);
+    expect(body.analytics.resolutions).toHaveLength(168);
+    expect(body.analytics.traffic[0].hourStart).toBe(trafficSeed.oldestBucketStart.toISOString());
+
+    const totalTraffic = body.analytics.traffic.reduce((sum, bucket) => sum + bucket.count, 0);
+    const totalResolutions = body.analytics.resolutions.reduce((sum, bucket) => sum + bucket.count, 0);
+    expect(totalTraffic).toBe(3);
+    expect(totalResolutions).toBe(1);
+
+    expect(body.analytics.traffic[0].count).toBe(1);
+    expect(body.analytics.traffic[167].count).toBe(2);
+    expect(body.analytics.resolutions[167].count).toBe(1);
+  });
+
+  it("never counts another Workspace's Tickets", async () => {
+    getSession.mockResolvedValue(sessionFor(trafficSeed.otherAdmin));
+
+    const response = await requestTraffic();
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as TrafficResponse;
+
+    const totalTraffic = body.analytics.traffic.reduce((sum, bucket) => sum + bucket.count, 0);
+    const totalResolutions = body.analytics.resolutions.reduce((sum, bucket) => sum + bucket.count, 0);
+    expect(totalTraffic).toBe(1);
+    expect(totalResolutions).toBe(1);
+  });
+
+  it("forbids a non-Admin request", async () => {
+    getSession.mockResolvedValue(sessionFor(seeded.humanAgent));
+
+    const response = await requestTraffic();
+
+    expect(response.status).toBe(403);
+  });
+
+  afterAll(async () => {
+    await deleteTrafficWorkspaces();
     await unscopedPrisma.$disconnect();
   });
 });
