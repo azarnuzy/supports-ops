@@ -5,4 +5,5 @@ import { getAnalyticsOverview } from "./dashboard.services";
 export const analyticsOverviewQueryOptions = queryOptions({
   queryFn: getAnalyticsOverview,
   queryKey: queryKeys.workspace.analytics,
+  refetchInterval: 20_000,
 });
