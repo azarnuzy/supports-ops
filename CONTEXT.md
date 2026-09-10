@@ -185,3 +185,19 @@ _Avoid_: Test suite, Benchmark
 **Judge**:
 A separate model asked to score an AI Agent response against an Eval Case where no deterministic check can. Used only where a requirement genuinely needs it, because judging costs money and its scores vary between runs.
 _Avoid_: Grader, Evaluator, Critic
+
+### Dashboard and reporting
+
+**Live** (dashboard):
+Poll-refreshed data (`react-query` `refetchInterval`), not push-delivered. The platform's SSE/Redis push mechanism (used for Message and Shared Human Queue updates) is reserved for streams needing sub-second latency; dashboard aggregates tolerate tens of seconds of staleness and stay on polling.
+_Avoid_: Real-time, Streaming (both imply push delivery)
+
+**Conversation Traffic**:
+Count of Tickets created per hour, shown as a 7-day hourly heatmap. Counts Ticket creation, never Message volume.
+_Avoid_: Message volume, Chat volume
+
+**Resolutions** (dashboard widget):
+Count of Tickets resolved per hour, shown as a 7-day hourly heatmap. Not split by Resolution Reason.
+_Avoid_: Closures
+
+Ticket status on the dashboard is reported using the actual four `status` values (see Ticket, above) — `AI_HANDLING`, `ESCALATED`, `HUMAN_HANDLING`, `RESOLVED`. There is no "Pending" or "Unattended" status in this domain; "Unassigned" is not a separate status either — it's the Shared Human Queue (an `ESCALATED` Ticket with no assigned Human Agent).
