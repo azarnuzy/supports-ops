@@ -17,9 +17,13 @@ export type UpdateProfileInput = {
 };
 
 export type AiSettings = {
+  aiAgentId: string;
   followUpAfterSeconds: number;
   autoResolveAfterSeconds: number;
   autoResolveEnabled: boolean;
+  instructions: string;
+  handoffMessage: string;
+  resolutionMessage: string;
 };
 
 export async function fetchAiSettings(client: ApiClient) {

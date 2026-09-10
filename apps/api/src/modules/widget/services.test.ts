@@ -334,12 +334,12 @@ describe("toPublicWidgetConfig", () => {
 describe("resolveByAi", () => {
   beforeEach(resetMocks);
 
-  it("resolves the Ticket, closes the Web Session, and sends the workspace closing message", async () => {
+  it("resolves the Ticket, closes the Web Session, and sends the AI Agent Resolution Message", async () => {
     mocks.ticketUpdateMany.mockResolvedValue({ count: 1 });
     mocks.ticketFindUniqueOrThrow.mockResolvedValue({
       messageSeq: 3,
       webSessionId: "session-1",
-      workspace: { closingMessage: "Glad we could help!" },
+      aiAgent: { resolutionMessage: "Glad we could help!" },
     });
     mocks.conversationFindUniqueOrThrow.mockResolvedValue({ id: "conv-1" });
     mocks.messageCreate.mockResolvedValue({
