@@ -15,6 +15,7 @@ import { attachmentRouter } from "./modules/attachments/router";
 import { aiSettingsRouter } from "./modules/ai-settings/router";
 import { analyticsRouter } from "./modules/analytics/router";
 import { ticketsRouter } from "./modules/tickets/router";
+import { mcpRouter } from "./modules/mcp/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   .post("/internal/tickets/:ticketId/generate", async (c) => {
@@ -65,6 +66,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/register", registrationRouter)
   .route("/users", usersRouter)
   .route("/widget-config", widgetConfigRouter)
-  .route("/ai-settings", aiSettingsRouter);
+  .route("/ai-settings", aiSettingsRouter)
+  .route("/mcp-servers", mcpRouter);
 
 export type AppType = typeof app;
