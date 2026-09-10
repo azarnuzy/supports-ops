@@ -804,7 +804,10 @@ export type HttpToolInput = {
 };
 
 export class ToolApiError extends Error {
-  constructor(readonly code: string, message: string) {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
     super(message);
     this.name = "ToolApiError";
   }
@@ -817,7 +820,10 @@ async function readToolError(response: Response, fallback: string) {
     if (data?.error === "tool_required_by_policy")
       return new ToolApiError(data.error, "Remove the Tool Policy that requires this Tool first.");
     if (data?.error === "tool_unavailable")
-      return new ToolApiError(data?.error ?? "tool_unavailable", "This Tool is not available to assign.");
+      return new ToolApiError(
+        data?.error ?? "tool_unavailable",
+        "This Tool is not available to assign.",
+      );
     if (data?.error === "tool_not_assigned")
       return new ToolApiError(
         data?.error ?? "tool_not_assigned",
@@ -843,6 +849,12 @@ export async function listCatalogTools(client: ApiClient, aiAgentId: string) {
   if (response.status === 403) throw new Error("Only an Admin can manage Tools.");
   if (!response.ok) throw new Error("Failed to load Tools.");
   return (await response.json()) as { tools: CatalogTool[] };
+}
+
+export async function getHttpTool(client: ApiClient, id: string) {
+  const response = await client.tools[":id"].$get({ param: { id } });
+  if (!response.ok) throw await readToolError(response, "Failed to load the HTTP Tool.");
+  return (await response.json()) as { tool: HttpTool };
 }
 
 export async function createHttpTool(client: ApiClient, input: HttpToolInput) {
@@ -895,10 +907,16 @@ export async function setToolPolicy(
     param: { aiAgentId, category } as never,
   });
   if (!response.ok) throw await readToolError(response, "Failed to set the Tool Policy.");
-  return (await response.json()) as { policy: { aiAgentId: string; category: TicketCategory; toolId: string } };
+  return (await response.json()) as {
+    policy: { aiAgentId: string; category: TicketCategory; toolId: string };
+  };
 }
 
-export async function removeToolPolicy(client: ApiClient, aiAgentId: string, category: TicketCategory) {
+export async function removeToolPolicy(
+  client: ApiClient,
+  aiAgentId: string,
+  category: TicketCategory,
+) {
   const response = await client.tools.policies[":aiAgentId"][":category"].$delete({
     param: { aiAgentId, category } as never,
   });
@@ -934,17 +952,24 @@ export type McpTool = {
 };
 
 export class McpApiError extends Error {
-  constructor(readonly code: string, message: string) {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
     super(message);
     this.name = "McpApiError";
   }
 }
 
 async function readMcpError(response: Response, fallback: string) {
-  if (response.status === 404) return new McpApiError("not_found", "This MCP Server no longer exists.");
+  if (response.status === 404)
+    return new McpApiError("not_found", "This MCP Server no longer exists.");
   if (response.status === 409) {
     const data = (await response.json().catch(() => null)) as { message?: string } | null;
-    return new McpApiError("tool_denied", data?.message ?? "This MCP Tool can no longer be enabled.");
+    return new McpApiError(
+      "tool_denied",
+      data?.message ?? "This MCP Tool can no longer be enabled.",
+    );
   }
   return new Error(fallback);
 }
@@ -962,7 +987,11 @@ export async function createMcpServer(client: ApiClient, input: McpServerInput) 
   return (await response.json()) as { server: McpServer };
 }
 
-export async function updateMcpServer(client: ApiClient, id: string, input: Partial<McpServerInput>) {
+export async function updateMcpServer(
+  client: ApiClient,
+  id: string,
+  input: Partial<McpServerInput>,
+) {
   const response = await client["mcp-servers"][":id"].$patch({ json: input, param: { id } });
   if (!response.ok) throw await readMcpError(response, "Failed to save the MCP Server.");
   return (await response.json()) as { data: McpServer };
