@@ -4,13 +4,44 @@ import { requireWorkspaceId } from "../../utils/workspace-context";
 import type {
   AnalyticsAgentLoad,
   AnalyticsChannelCount,
+  AnalyticsHourBucket,
   AnalyticsOverview,
+  AnalyticsTraffic,
   ResolutionFigure,
 } from "./types";
 
 /** Fixed order and completeness for the status spread, independent of which
  * statuses currently have rows. */
 const ticketStatuses: TicketStatus[] = ["AI_HANDLING", "ESCALATED", "HUMAN_HANDLING", "RESOLVED"];
+
+const HOURS_IN_WINDOW = 7 * 24;
+const HOUR_MS = 60 * 60 * 1000;
+
+/** Oldest bucket start of the trailing 7x24 window: the current UTC hour,
+ * minus 167 more full hours. */
+function windowStart(now: Date): Date {
+  const currentHourStart = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    now.getUTCHours(),
+  );
+  return new Date(currentHourStart - (HOURS_IN_WINDOW - 1) * HOUR_MS);
+}
+
+/** Buckets timestamps into the 168 hourly slots of the trailing window,
+ * computed here in application code rather than a SQL date_trunc/GROUP BY. */
+function bucketByHour(timestamps: Date[], start: Date): AnalyticsHourBucket[] {
+  const counts = new Array<number>(HOURS_IN_WINDOW).fill(0);
+  for (const timestamp of timestamps) {
+    const index = Math.floor((timestamp.getTime() - start.getTime()) / HOUR_MS);
+    if (index >= 0 && index < HOURS_IN_WINDOW) counts[index] += 1;
+  }
+  return counts.map((count, index) => ({
+    hourStart: new Date(start.getTime() + index * HOUR_MS).toISOString(),
+    count,
+  }));
+}
 
 /** Shares are rounded to four decimals; a Workspace without Tickets has no
  * meaningful rate, so the figure stays null rather than reading as 0%. */
@@ -110,5 +141,39 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
     statusCounts,
     channelCounts,
     activeTicketsPerHumanAgent,
+  };
+}
+
+/**
+ * Hourly Ticket traffic and resolutions for the trailing 7x24 UTC hours,
+ * scoped to the request's Workspace. Buckets are always complete: an hour
+ * with no Tickets still appears with count 0.
+ */
+export async function getAnalyticsTraffic(): Promise<AnalyticsTraffic> {
+  requireWorkspaceId();
+
+  const start = windowStart(new Date());
+  const notDeleted = { deletedAt: null };
+
+  const [createdTickets, resolvedTickets] = await Promise.all([
+    prisma.ticket.findMany({
+      where: { ...notDeleted, createdAt: { gte: start } },
+      select: { createdAt: true },
+    }),
+    prisma.ticket.findMany({
+      where: { ...notDeleted, resolvedAt: { gte: start } },
+      select: { resolvedAt: true },
+    }),
+  ]);
+
+  return {
+    traffic: bucketByHour(
+      createdTickets.map((ticket) => ticket.createdAt),
+      start,
+    ),
+    resolutions: bucketByHour(
+      resolvedTickets.flatMap((ticket) => (ticket.resolvedAt ? [ticket.resolvedAt] : [])),
+      start,
+    ),
   };
 }

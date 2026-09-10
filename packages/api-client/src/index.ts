@@ -69,6 +69,19 @@ export async function fetchAnalyticsOverview(client: ApiClient) {
   return (await response.json()) as { analytics: AnalyticsOverview };
 }
 
+export type AnalyticsHourBucket = { hourStart: string; count: number };
+export type AnalyticsTraffic = {
+  traffic: AnalyticsHourBucket[];
+  resolutions: AnalyticsHourBucket[];
+};
+
+export async function fetchAnalyticsTraffic(client: ApiClient) {
+  const response = await client.analytics.traffic.$get();
+  if (response.status === 403) throw new Error("Only an Admin can view Workspace analytics.");
+  if (!response.ok) throw new Error("Failed to load analytics.");
+  return (await response.json()) as { analytics: AnalyticsTraffic };
+}
+
 export type WorkspaceUser = {
   createdAt: string;
   email: string;
