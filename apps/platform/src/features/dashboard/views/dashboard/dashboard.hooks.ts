@@ -13,3 +13,4 @@ export const analyticsTrafficQueryOptions = queryOptions({
   queryKey: queryKeys.workspace.analyticsTraffic,
   refetchInterval: 60_000,
 });
+
