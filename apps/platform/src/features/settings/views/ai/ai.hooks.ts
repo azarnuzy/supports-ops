@@ -1,8 +1,52 @@
-import type { AiSettings } from "@repo/api-client";
+import type { AiSettings, TicketCategory } from "@repo/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { queryKeys } from "../../../../lib/query-keys";
-import { getAiSettings, saveAiSettings } from "./ai.services";
+import {
+  assignTool,
+  getAgentTools,
+  getAiSettings,
+  removeCategoryPolicy,
+  saveAiSettings,
+  setCategoryPolicy,
+} from "./ai.services";
+
+export function useAgentToolsQuery(aiAgentId: string | undefined) {
+  return useQuery({
+    enabled: Boolean(aiAgentId),
+    queryFn: () => getAgentTools(aiAgentId as string),
+    queryKey: queryKeys.workspace.tools(aiAgentId ?? ""),
+  });
+}
+
+function useInvalidateAgentTools(aiAgentId: string | undefined) {
+  const queryClient = useQueryClient();
+  return () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.workspace.tools(aiAgentId ?? "") });
+}
+
+export function useAssignToolMutation(aiAgentId: string | undefined) {
+  const invalidate = useInvalidateAgentTools(aiAgentId);
+  return useMutation({ mutationFn: assignTool, onSuccess: invalidate });
+}
+
+export function useSetCategoryPolicyMutation(aiAgentId: string | undefined) {
+  const invalidate = useInvalidateAgentTools(aiAgentId);
+  return useMutation({ mutationFn: setCategoryPolicy, onSuccess: invalidate });
+}
+
+export function useRemoveCategoryPolicyMutation(aiAgentId: string | undefined) {
+  const invalidate = useInvalidateAgentTools(aiAgentId);
+  return useMutation({ mutationFn: removeCategoryPolicy, onSuccess: invalidate });
+}
+
+export const ticketCategories: TicketCategory[] = [
+  "ACCOUNT",
+  "BILLING",
+  "SUBSCRIPTION",
+  "TECHNICAL",
+  "GENERAL",
+];
 
 export function useAiSettingsForm() {
   const queryClient = useQueryClient();
