@@ -21,7 +21,7 @@ export function useAiSettingsForm() {
     onSuccess: (result) => queryClient.setQueryData(queryKeys.workspace.aiSettings, result),
   });
 
-  function update(key: keyof AiSettings, value: number | boolean) {
+  function update(key: keyof AiSettings, value: string | number | boolean) {
     setForm((current) => (current ? { ...current, [key]: value } : current));
   }
 

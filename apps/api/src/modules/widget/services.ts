@@ -431,6 +431,7 @@ async function generateAiReplyRun(
 ) {
   const ticket = await unscopedPrisma.ticket.findUnique({
     select: {
+      aiAgent: { select: { instructions: true } },
       channel: { select: { type: true } },
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
       status: true,
@@ -549,6 +550,7 @@ async function generateAiReplyRun(
         decision = await streamReply({
           clarificationCount,
           customerMessage,
+          instructions: ticket.aiAgent.instructions ?? undefined,
           model,
           onDelta: (delta) => {
             if (!isTicketGenerating(ticketId)) return;
@@ -815,11 +817,11 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      include: { workspace: { select: { closingMessage: true } } },
+      include: { aiAgent: { select: { resolutionMessage: true } } },
       where: { id: ticketId },
     });
     const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
-    const content = ticket.workspace.closingMessage ?? "This conversation has been resolved.";
+    const content = ticket.aiAgent.resolutionMessage ?? "This conversation has been resolved.";
     const closingMessage = await tx.message.create({
       data: {
         content,
