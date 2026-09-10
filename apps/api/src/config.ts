@@ -72,6 +72,7 @@ const apiEnvSchema = z
     TELEMETRY_EXPORTER_OTLP_ENDPOINT: optionalStringSchema,
     TELEMETRY_SERVICE_NAMESPACE: optionalStringSchema,
     TOOL_MASTER_KEY: optionalStringSchema,
+    ALLOW_LOCAL_HTTP_TOOLS: booleanSchema.default(false),
   })
   .superRefine((env, context) => {
     const betterAuthSecret = env.BETTER_AUTH_SECRET ?? env.AUTH_SECRET ?? defaultBetterAuthSecret;
@@ -150,6 +151,12 @@ export const toolEncryptionConfig = {
     }
     return env.TOOL_MASTER_KEY;
   },
+} as const;
+
+export const httpToolConfig = {
+  allowLocalHttp: !appConfig.isProduction && env.ALLOW_LOCAL_HTTP_TOOLS,
+  maxResultBytes: 64 * 1024,
+  timeoutMs: 15_000,
 } as const;
 
 export const storageConfig = {
