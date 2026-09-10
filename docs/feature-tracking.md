@@ -23,7 +23,7 @@ Status yang dipakai:
 
 | Halaman | Akses | Status | Yang dapat dicoba | Batasan saat ini |
 | --- | --- | --- | --- | --- |
-| `/register`, `/login` | Publik | Siap dicoba | Membuat akun Workspace, masuk, dan keluar. | — |
+| `/register`, `/login` | Publik | Siap dicoba | Membuat akun Workspace, masuk, dan keluar. Panel brand desktop memakai background terkompresi; metadata, ikon, dan judul halaman Platform juga tersedia. | Background brand tidak dimuat di layar kecil. |
 | `/` | Pengguna masuk | Siap dicoba | Admin melihat angka Workspace di dashboard: resolusi AI terpisah antara konfirmasi Customer dan Customer tidak aktif (tidak pernah digabung menjadi satu angka), tingkat eskalasi ke manusia dengan penyebut yang sama, sebaran status Ticket saat ini, rincian Ticket per Channel, dan jumlah Ticket aktif per Human Agent. Human Agent melihat tautan ke Inbox, Shared Queue, dan My Tickets. | Angka mencakup seluruh Ticket pada Workspace tanpa filter periode; belum ada tren historis. |
 | `/profile` | Pengguna masuk | Siap dicoba | Mengubah nama tampilan dan URL avatar. | — |
 | `/settings/agents` | Admin | Siap dicoba | Membuat Human Agent dan melihat daftar Human Agent dalam Workspace. | Belum ada pengelolaan lanjutan seperti edit/nonaktifkan akun. |

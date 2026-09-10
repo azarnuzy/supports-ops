@@ -22,7 +22,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   }
   return (
     <main className="grid min-h-screen justify-center p-2 lg:grid-cols-2">
-      <section className="relative order-2 hidden h-full rounded-3xl bg-primary lg:flex">
+      <section className="auth-brand-panel relative order-2 hidden h-full overflow-hidden rounded-3xl bg-primary lg:flex">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/20 to-black/55" />
         <div className="absolute top-10 space-y-1 px-10 text-primary-foreground">
           <CommandIcon className="size-10" />
           <h1 className="text-2xl font-medium">SupportOps</h1>
