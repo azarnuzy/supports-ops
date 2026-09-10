@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AssignedTool } from "./orchestration";
 
 const mocks = vi.hoisted(() => ({
   aiActivityCreate: vi.fn(),
@@ -27,21 +28,35 @@ const {
   runRequiredTool,
 } = await import("./orchestration");
 
-const httpTool = {
-  description: "Looks up subscription status.",
-  id: "tool-http-1",
-  inputSchema: { type: "object" },
-  name: "getSubscriptionStatus",
-  origin: "HTTP" as const,
-  risk: "READ_ONLY" as const,
-};
+function makeTool(
+  overrides: Partial<AssignedTool> & Pick<AssignedTool, "id" | "name" | "origin" | "risk">,
+) {
+  return {
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    description: "Looks up subscription status.",
+    enabled: true,
+    httpConfig: overrides.origin === "HTTP" ? { toolId: overrides.id } : null,
+    inputSchema: { type: "object" },
+    mcpTool: null,
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    workspaceId: "workspace-1",
+    ...overrides,
+  } as AssignedTool;
+}
 
-const mutatingTool = {
-  ...httpTool,
+const httpTool = makeTool({
+  id: "tool-http-1",
+  name: "getSubscriptionStatus",
+  origin: "HTTP",
+  risk: "READ_ONLY",
+});
+
+const mutatingTool = makeTool({
   id: "tool-mutating-1",
   name: "cancelSubscription",
-  risk: "MUTATING" as const,
-};
+  origin: "HTTP",
+  risk: "MUTATING",
+});
 
 beforeEach(() => {
   mocks.aiActivityCreate.mockReset();
@@ -161,7 +176,12 @@ describe("createOptionalToolExecutor", () => {
   });
 
   it("dispatches an MCP-origin Tool and normalizes its result to a string", async () => {
-    const mcpTool = { ...httpTool, id: "tool-mcp-1", origin: "MCP" as const };
+    const mcpTool = makeTool({
+      id: "tool-mcp-1",
+      name: httpTool.name,
+      origin: "MCP",
+      risk: "READ_ONLY",
+    });
     mocks.executeMcpTool.mockResolvedValue({ status: "PAID" });
     const executor = createOptionalToolExecutor({
       aiAgentId: "agent-1",
