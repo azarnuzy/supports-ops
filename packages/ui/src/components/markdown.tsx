@@ -41,18 +41,7 @@ const components: Components = {
 function Markdown({ children }: { children: string }) {
   return (
     <ReactMarkdown
-      allowedElements={[
-        "p",
-        "a",
-        "strong",
-        "em",
-        "code",
-        "pre",
-        "ul",
-        "ol",
-        "li",
-        "br",
-      ]}
+      allowedElements={["p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", "br"]}
       unwrapDisallowed
       remarkPlugins={[remarkBreaks]}
       components={components}

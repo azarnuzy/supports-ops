@@ -21,24 +21,36 @@ const priorityStyles: Record<TicketPriority, string> = {
   HIGH: "border-[var(--priority-high)]/40 text-[var(--priority-high)] [&>svg]:fill-[var(--priority-high)] [&>svg]:text-[var(--priority-high)]",
 };
 
+const statusLabels: Record<TicketStatus, string> = {
+  AI_HANDLING: "AI handling",
+  ESCALATED: "Escalated",
+  HUMAN_HANDLING: "Human handling",
+  RESOLVED: "Resolved",
+};
+
 function StatusBadge({ status, className }: { status: TicketStatus; className?: string }) {
   const Icon =
     status === "AI_HANDLING" ? BotIcon : status === "HUMAN_HANDLING" ? UserRoundIcon : CircleIcon;
   return (
-    <Badge variant="outline" className={cn(statusStyles[status], className)}>
+    <Badge variant="outline" className={cn("px-1.5", statusStyles[status], className)}>
       <Icon />
-      {status.replace("_", " ")}
+      {statusLabels[status]}
     </Badge>
   );
 }
+
+const priorityLabels: Record<TicketPriority, string> = {
+  HIGH: "High",
+  LOW: "Low",
+  NORMAL: "Normal",
+};
 
 function PriorityBadge({ priority, className }: { priority: TicketPriority; className?: string }) {
   return (
-    <Badge variant="outline" className={cn(priorityStyles[priority], className)}>
+    <Badge variant="outline" className={cn("px-1.5", priorityStyles[priority], className)}>
       <CircleIcon className="size-2" />
-      {priority}
+      {priorityLabels[priority]}
     </Badge>
   );
 }
-
 export { PriorityBadge, StatusBadge, type TicketPriority, type TicketStatus };
