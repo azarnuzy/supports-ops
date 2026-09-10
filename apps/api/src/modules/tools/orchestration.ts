@@ -126,6 +126,52 @@ export async function runRequiredTool(params: {
   }
 }
 
+/** Executes every READ_ONLY assigned Tool with the same input (used by AI
+ * Copilot's Suggested Reply, which has no model-directed tool-calling loop of
+ * its own). MUTATING Tools are always excluded, defensively, even if the
+ * caller already filtered its Tool list. Returns `{ toolName: result }`. */
+export async function executeReadOnlyAssignedTools(params: {
+  aiAgentId: string;
+  input: unknown;
+  ticketId: string;
+  tools: readonly AssignedTool[];
+  workspaceId: string;
+}): Promise<Record<string, string>> {
+  const readOnlyTools = params.tools.filter((tool) => tool.risk === "READ_ONLY");
+  const entries = await Promise.all(
+    readOnlyTools.map(async (tool) => {
+      const startedAt = Date.now();
+      try {
+        const result = await dispatchTool({
+          aiAgentId: params.aiAgentId,
+          explicitCustomerRequest: false,
+          input: params.input,
+          ticketId: params.ticketId,
+          tool,
+        });
+        await recordToolActivity({
+          latencyMs: Date.now() - startedAt,
+          outcome: "SUCCESS",
+          ticketId: params.ticketId,
+          tool,
+          workspaceId: params.workspaceId,
+        });
+        return [tool.name, result] as const;
+      } catch (error) {
+        await recordToolActivity({
+          latencyMs: Date.now() - startedAt,
+          outcome: "FAILED",
+          ticketId: params.ticketId,
+          tool,
+          workspaceId: params.workspaceId,
+        });
+        throw error;
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 /** Descriptors for every assigned Tool the model may call, excluding the
  * category's required Tool (already executed above). */
 export function describeOptionalTools(tools: readonly AssignedTool[], requiredToolId?: string) {
