@@ -16,6 +16,11 @@ model Workspace {
   knowledgeSources   KnowledgeSource[]
   chunks             Chunk[]
   aiSettings         AiSettings?
+  tools              Tool[]
+  toolAssignments    ToolAssignment[]
+  toolPolicies       ToolPolicy[]
+  mcpServers         McpServer[]
+  mcpTools           McpTool[]
 }
 
 model AiSettings {
@@ -34,10 +39,17 @@ model AiAgent {
   workspaceId String
   name        String
   status      AiAgentStatus @default(ACTIVE)
+  instructions      String?
+  handoffMessage    String?
+  resolutionMessage String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   workspace   Workspace     @relation(fields: [workspaceId], references: [id])
   channels    Channel[]
+  tickets     Ticket[]
+  toolAssignments ToolAssignment[]
+  toolPolicies    ToolPolicy[]
 
   @@index([workspaceId])
+  @@unique([workspaceId, id])
 }

@@ -2,6 +2,7 @@ model Ticket {
   id                 String           @id
   workspaceId        String
   channelId          String
+  aiAgentId          String
   webSessionId       String           @unique
   customerIdentityId String
   title              String
@@ -22,7 +23,8 @@ model Ticket {
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   workspace          Workspace        @relation(fields: [workspaceId], references: [id])
-  channel            Channel          @relation(fields: [channelId], references: [id])
+  channel            Channel          @relation(fields: [workspaceId, channelId], references: [workspaceId, id])
+  aiAgent            AiAgent          @relation(fields: [workspaceId, aiAgentId], references: [workspaceId, id])
   webSession         WebSession       @relation(fields: [webSessionId], references: [id])
   customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
   assignedHumanAgent User?           @relation("TicketAssignee", fields: [assignedHumanAgentId], references: [id])
@@ -35,6 +37,7 @@ model Ticket {
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, assignedHumanAgentId, createdAt])
   @@index([workspaceId, customerIdentityId])
+  @@index([workspaceId, aiAgentId])
 }
 
 /** Tracks, per Workspace user, the last Message position they have read on a

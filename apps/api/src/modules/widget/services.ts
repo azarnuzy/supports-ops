@@ -938,11 +938,15 @@ async function createTicketAndFirstMessage(
   input: CustomerMessageInput,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
-    const session = await tx.webSession.findUniqueOrThrow({ where: { id: webSessionId } });
+    const session = await tx.webSession.findUniqueOrThrow({
+      include: { channel: { select: { aiAgentId: true } } },
+      where: { id: webSessionId },
+    });
     const ticketId = randomUUID();
     const ticket = await tx.ticket.create({
       data: {
         category: decision.category,
+        aiAgentId: session.channel.aiAgentId,
         channelId: session.channelId,
         customerIdentityId: session.customerIdentityId,
         id: ticketId,
