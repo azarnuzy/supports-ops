@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   conversationFindUniqueOrThrow: vi.fn(),
   createClassificationModel: vi.fn().mockReturnValue({ id: "fake-model" }),
   messageCreate: vi.fn(),
+  messageCreateMany: vi.fn(),
+  messageCount: vi.fn(),
   messageFindUnique: vi.fn(),
+  messageUpdateMany: vi.fn(),
   publishTicketQueueEvent: vi.fn(),
   publishWidgetEvent: vi.fn(),
   ticketCreate: vi.fn(),
@@ -80,7 +83,13 @@ const txMock = {
     create: mocks.conversationCreate,
     findUniqueOrThrow: mocks.conversationFindUniqueOrThrow,
   },
-  message: { create: mocks.messageCreate, findUnique: mocks.messageFindUnique },
+  message: {
+    count: mocks.messageCount,
+    create: mocks.messageCreate,
+    createMany: mocks.messageCreateMany,
+    findUnique: mocks.messageFindUnique,
+    updateMany: mocks.messageUpdateMany,
+  },
   ticket: {
     create: mocks.ticketCreate,
     findUniqueOrThrow: mocks.ticketFindUniqueOrThrow,
@@ -88,6 +97,7 @@ const txMock = {
     updateMany: mocks.ticketUpdateMany,
   },
   webSession: {
+    findUnique: mocks.webSessionFindUnique,
     findUniqueOrThrow: mocks.webSessionFindUniqueOrThrow,
     update: mocks.webSessionUpdate,
   },
@@ -101,7 +111,10 @@ function resetMocks() {
   mocks.conversationFindUniqueOrThrow.mockReset();
   mocks.createClassificationModel.mockReset().mockReturnValue({ id: "fake-model" });
   mocks.messageCreate.mockReset();
+  mocks.messageCreateMany.mockReset().mockResolvedValue({ count: 2 });
+  mocks.messageCount.mockReset().mockResolvedValue(0);
   mocks.messageFindUnique.mockReset();
+  mocks.messageUpdateMany.mockReset().mockResolvedValue({ count: 0 });
   mocks.publishTicketQueueEvent.mockReset();
   mocks.publishWidgetEvent.mockReset();
   mocks.ticketCreate.mockReset();
@@ -167,7 +180,7 @@ describe("createCustomerMessage", () => {
     expect(mocks.classifyMessage).not.toHaveBeenCalled();
   });
 
-  it("creates no Ticket and returns a warm reply for a greeting", async () => {
+  it("persists the pre-Ticket exchange and returns a warm reply for a greeting", async () => {
     mocks.webSessionFindUnique.mockResolvedValue({
       status: "ACTIVE",
       ticket: null,
@@ -179,7 +192,19 @@ describe("createCustomerMessage", () => {
 
     expect(result).toEqual({ kind: "reply", reply: "Hi there!" });
     expect(mocks.ticketCreate).not.toHaveBeenCalled();
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.messageCreateMany).toHaveBeenCalledTimes(1);
+    const payload = mocks.messageCreateMany.mock.calls[0]?.[0];
+    expect(payload.data).toHaveLength(2);
+    expect(payload.data[0]).toMatchObject({
+      content: "hi",
+      position: -2,
+      senderType: "CUSTOMER",
+    });
+    expect(payload.data[1]).toMatchObject({
+      content: "Hi there!",
+      position: -1,
+      senderType: "AI_AGENT",
+    });
   });
 
   it("creates a Ticket, its first Message, and two AiActivity rows for a genuine request", async () => {
@@ -291,9 +316,9 @@ describe("toPublicWidgetConfig", () => {
   it("includes the logo URL when a logo reference is set", () => {
     mocks.getObjectUrl.mockReturnValue("https://cdn.example.com/logo.png");
 
-    expect(toPublicWidgetConfig({ ...baseConfig, logoKey: "web-widget-logos/w1/logo.png" })).toEqual(
-      { ...baseConfig, logoUrl: "https://cdn.example.com/logo.png" },
-    );
+    expect(
+      toPublicWidgetConfig({ ...baseConfig, logoKey: "web-widget-logos/w1/logo.png" }),
+    ).toEqual({ ...baseConfig, logoUrl: "https://cdn.example.com/logo.png" });
   });
 
   it("returns a null logo URL when no logo reference is set", () => {

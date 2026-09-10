@@ -46,6 +46,7 @@ model WebSession {
   channel            Channel          @relation(fields: [channelId], references: [id])
   customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
   ticket             Ticket?
+  messages           Message[]
 
   @@index([workspaceId])
   @@index([channelId])

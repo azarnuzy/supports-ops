@@ -14,7 +14,7 @@ model Conversation {
 
 model Message {
   id                String                @id
-  memorySessionId   String
+  memorySessionId   String?
   runId             String
   turn              Int
   position          Int
@@ -22,7 +22,8 @@ model Message {
   message           Json
   createdAt         DateTime              @default(now())
   workspaceId       String
-  ticketId          String
+  ticketId          String?
+  webSessionId      String
   senderType        MessageSenderType
   senderUserId      String?
   content           String
@@ -31,12 +32,14 @@ model Message {
   deliveryAttempts  Int                   @default(0)
   deletedAt         DateTime?
   deletedBy         String?
-  conversation      Conversation          @relation(fields: [memorySessionId], references: [id])
-  ticket            Ticket                @relation(fields: [ticketId], references: [id])
+  conversation      Conversation?         @relation(fields: [memorySessionId], references: [id])
+  ticket            Ticket?               @relation(fields: [ticketId], references: [id])
+  webSession        WebSession            @relation(fields: [webSessionId], references: [id])
   attachments       Attachment[]
 
   @@unique([memorySessionId, position])
   @@unique([workspaceId, externalMessageId])
   @@index([ticketId, position])
+  @@index([webSessionId, position])
   @@index([runId])
 }

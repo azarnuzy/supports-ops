@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   executeRaw: vi.fn(),
+  messageFindMany: vi.fn(),
   queryRaw: vi.fn(),
   ticketFindFirst: vi.fn(),
   ticketFindMany: vi.fn(),
@@ -16,16 +17,17 @@ vi.mock("../../utils/prisma", async () => {
   return {
     Prisma: actual.Prisma,
     prisma: {
-    $executeRaw: mocks.executeRaw,
-    $queryRaw: mocks.queryRaw,
-    ticket: {
-      findFirst: mocks.ticketFindFirst,
-      findMany: mocks.ticketFindMany,
-      findUnique: mocks.ticketFindUnique,
-      findUniqueOrThrow: mocks.ticketFindUniqueOrThrow,
-      updateMany: mocks.ticketUpdateMany,
-    },
-    user: { findFirst: mocks.userFindFirst },
+      $executeRaw: mocks.executeRaw,
+      $queryRaw: mocks.queryRaw,
+      message: { findMany: mocks.messageFindMany },
+      ticket: {
+        findFirst: mocks.ticketFindFirst,
+        findMany: mocks.ticketFindMany,
+        findUnique: mocks.ticketFindUnique,
+        findUniqueOrThrow: mocks.ticketFindUniqueOrThrow,
+        updateMany: mocks.ticketUpdateMany,
+      },
+      user: { findFirst: mocks.userFindFirst },
     },
     unscopedPrisma: {},
   };
@@ -75,8 +77,7 @@ const {
   reassignTicket,
   TicketNotAvailableForAssignmentError,
   TicketNotFoundError,
-} =
-  await import("./services");
+} = await import("./services");
 
 function resetMocks() {
   mocks.executeRaw.mockReset().mockResolvedValue(1);
@@ -84,6 +85,7 @@ function resetMocks() {
   mocks.ticketFindFirst.mockReset();
   mocks.ticketFindMany.mockReset().mockResolvedValue([]);
   mocks.ticketFindUnique.mockReset();
+  mocks.messageFindMany.mockReset().mockResolvedValue([]);
   mocks.ticketFindUniqueOrThrow.mockReset();
   mocks.ticketUpdateMany.mockReset();
   mocks.userFindFirst.mockReset().mockResolvedValue({ id: "agent-2" });
@@ -187,10 +189,7 @@ describe("reassignTicket", () => {
       expect.objectContaining({
         where: {
           id: "ticket-1",
-          OR: [
-            { assignedHumanAgentId: null, status: "ESCALATED" },
-            { status: "HUMAN_HANDLING" },
-          ],
+          OR: [{ assignedHumanAgentId: null, status: "ESCALATED" }, { status: "HUMAN_HANDLING" }],
         },
       }),
     );
@@ -208,18 +207,36 @@ describe("reassignTicket", () => {
 describe("getTicketDetail", () => {
   beforeEach(resetMocks);
 
-  it("returns the Ticket when it is visible to the current user", async () => {
-    mocks.ticketFindFirst.mockResolvedValue({ id: "t-1" });
+  it("returns the Ticket with its session transcript when visible to the current user", async () => {
+    const sessionCreatedAt = new Date("2026-01-01T00:00:00Z");
+    mocks.ticketFindFirst.mockResolvedValue({
+      id: "t-1",
+      webSession: { createdAt: sessionCreatedAt, id: "session-1" },
+    });
+    mocks.messageFindMany.mockResolvedValue([
+      { content: "halo", position: -2, senderType: "CUSTOMER" },
+    ]);
 
     const result = await getTicketDetail("t-1", { id: "admin-1", role: "ADMIN" });
 
-    expect(result).toEqual({ id: "t-1", unreadCount: 0 });
+    // The transcript is keyed by the Ticket's Web Session, so pre-Ticket
+    // Messages are part of the returned history.
+    expect(result).toEqual({
+      id: "t-1",
+      messages: [{ content: "halo", position: -2, senderType: "CUSTOMER" }],
+      unreadCount: 0,
+      webSession: { createdAt: sessionCreatedAt, id: "session-1" },
+    });
+    const messageCall = mocks.messageFindMany.mock.calls[0]?.[0];
+    expect(messageCall.where).toEqual({ deletedAt: null, webSessionId: "session-1" });
+    expect(messageCall.orderBy).toEqual([{ position: "asc" }, { createdAt: "asc" }]);
     const call = mocks.ticketFindFirst.mock.calls[0]?.[0];
     expect(call.where).toEqual({ AND: [{ deletedAt: null, id: "t-1" }, {}] });
     // The timeline opens with the Web Session's creation, and attachments are
     // opened through the download endpoint, so no storage key is exposed.
-    expect(call.select.webSession).toEqual({ select: { createdAt: true } });
-    expect(call.select.messages.select.attachments.select.storageKey).toBeUndefined();
+    expect(call.select.webSession).toEqual({ select: { createdAt: true, id: true } });
+    expect(call.select.messages).toBeUndefined();
+    expect(call.select).not.toHaveProperty("messages");
   });
   it("throws when the Ticket does not exist or is not visible", async () => {
     mocks.ticketFindFirst.mockResolvedValue(null);
