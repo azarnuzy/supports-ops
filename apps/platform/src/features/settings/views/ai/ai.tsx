@@ -10,12 +10,45 @@ import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
 import { Switch } from "@repo/ui/components/switch";
 import { Textarea } from "@repo/ui/components/textarea";
+import { toast } from "@repo/ui/components/sonner";
+import type { TicketCategory } from "@repo/api-client";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsNav } from "../../components/settings-nav";
-import { useAiSettingsForm } from "./ai.hooks";
+import { ToolAssignments, ToolPolicies } from "./components";
+import {
+  useAgentToolsQuery,
+  useAiSettingsForm,
+  useAssignToolMutation,
+  useRemoveCategoryPolicyMutation,
+  useSetCategoryPolicyMutation,
+} from "./ai.hooks";
 
 const AiSettingsView = () => {
   const { form, handleSubmit, save, settings, update } = useAiSettingsForm();
+  const aiAgentId = settings.data?.aiSettings.aiAgentId;
+  const agentTools = useAgentToolsQuery(aiAgentId);
+  const assignTool = useAssignToolMutation(aiAgentId);
+  const setCategoryPolicy = useSetCategoryPolicyMutation(aiAgentId);
+  const removeCategoryPolicy = useRemoveCategoryPolicyMutation(aiAgentId);
+
+  function handleToggleAssignment(toolId: string, assigned: boolean) {
+    if (!aiAgentId) return;
+    assignTool.mutate(
+      { aiAgentId, assigned, toolId },
+      {
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : "Failed to update the assignment."),
+      },
+    );
+  }
+
+  function handlePolicyChange(category: TicketCategory, toolId: string | null) {
+    if (!aiAgentId) return;
+    const onError = (error: unknown) =>
+      toast.error(error instanceof Error ? error.message : "Failed to update the Tool Policy.");
+    if (toolId) setCategoryPolicy.mutate({ aiAgentId, category, toolId }, { onError });
+    else removeCategoryPolicy.mutate({ aiAgentId, category }, { onError });
+  }
 
   return (
     <PlatformAppShell>
@@ -128,6 +161,44 @@ const AiSettingsView = () => {
                     {save.isPending ? "Saving…" : "Save changes"}
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Tool assignments</CardTitle>
+                <CardDescription>
+                  Only assigned Tools can be called for this AI Agent, from any Workspace.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {agentTools.isPending ? (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : (
+                  <ToolAssignments
+                    tools={agentTools.data?.tools ?? []}
+                    onToggle={handleToggleAssignment}
+                    isPending={assignTool.isPending}
+                  />
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Tool Policies</CardTitle>
+                <CardDescription>
+                  A required Tool runs before the response is generated for that Ticket Category.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {agentTools.isPending ? (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : (
+                  <ToolPolicies
+                    tools={agentTools.data?.tools ?? []}
+                    onChange={handlePolicyChange}
+                    isPending={setCategoryPolicy.isPending || removeCategoryPolicy.isPending}
+                  />
+                )}
               </CardContent>
             </Card>
           </div>

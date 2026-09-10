@@ -25,5 +25,7 @@ export const queryKeys = {
     analyticsTraffic: ["workspace", "analytics-traffic"] as const,
     aiSettings: ["workspace", "ai-settings"] as const,
     ticket: (id: string) => ["workspace", "tickets", id] as const,
+    tools: (aiAgentId: string) => ["workspace", "tools", aiAgentId] as const,
+    mcpServers: ["workspace", "mcp-servers"] as const,
   },
 } as const;
