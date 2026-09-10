@@ -5,6 +5,8 @@ const settingsLinks = [
   { label: "Human Agents", to: "/settings/agents" },
   { label: "Web Widget", to: "/settings/widget" },
   { label: "AI Agent", to: "/settings/ai" },
+  { label: "Tools", to: "/settings/tools" },
+  { label: "MCP Servers", to: "/settings/mcp" },
 ] as const;
 
 export function SettingsNav() {
