@@ -148,12 +148,36 @@ _Avoid_: History, Past tickets, Case knowledge
 The requirement that a factual claim about the Workspace's own products or policies trace back to a Customer-Safe Knowledge Source or to live Business Tool data. Conversational turns — greetings, acknowledgements, clarifying questions — need none. Where nothing authoritative exists, the AI Agent escalates rather than answering from its own model knowledge.
 _Avoid_: Citation, Sourcing, RAG
 
-**Business Tool**:
-A fixed, read-only lookup the AI Agent can call against the Business System to fetch live Customer-specific facts. Never writes. Workspaces cannot add or configure them.
-_Avoid_: Function, Action, Integration, Skill
+**Tool**:
+A named capability an AI Agent may invoke to retrieve information or act outside its own reasoning. An AI Agent may use only Tools assigned to it within the same Workspace.
+_Avoid_: Function, Skill
+
+**Built-in Tool**:
+A Tool supplied and operated by SupportOps for a capability inherent to the product. A Built-in Tool exists only where SupportOps itself can provide meaningful functionality; it is not a placeholder category that every Workspace must use.
+_Avoid_: Internal Tool, Native Tool, Business Tool
+
+**HTTP Tool**:
+A Workspace-configured Tool that calls an external HTTP API according to a declared input and request contract.
+_Avoid_: Custom API Tool, REST Tool, Webhook
+
+**MCP Server**:
+An external server a Workspace connects to through the Model Context Protocol so its available Tools can be discovered and selectively enabled.
+_Avoid_: MCP Integration, MCP Provider
+
+**MCP Tool**:
+A Tool discovered from an MCP Server and enabled by an Admin before it can be assigned to an AI Agent.
+_Avoid_: Remote Tool, Server Tool
+
+**Tool Assignment**:
+The Workspace-scoped permission connecting one Tool to one AI Agent. Availability elsewhere in the Workspace never grants the AI Agent permission to use it.
+_Avoid_: Tool Access, Tool Binding
+
+**Tool Policy**:
+A structured rule requiring an AI Agent to use a particular assigned Tool for a defined kind of Customer request. Unlike free-form instructions, it is an enforceable condition rather than guidance to the model.
+_Avoid_: Tool Instruction, Tool Prompt, Tool Rule
 
 **Business System**:
-The Workspace's own product database, external to SupportOps, holding customers, subscriptions, and invoices. Reachable only through Business Tools, and its failure is a first-class case: the AI Agent escalates rather than guessing.
+The Workspace's own product database, external to SupportOps, holding customers, subscriptions, and invoices. Its live facts reach the AI Agent through Tools, and a failed required lookup never permits the AI Agent to guess.
 _Avoid_: Backend, Mock API, CRM
 
 **Attachment**:
