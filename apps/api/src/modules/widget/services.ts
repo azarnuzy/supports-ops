@@ -78,7 +78,6 @@ const escalationReasons = [
 
 type EscalationReason = (typeof escalationReasons)[number];
 
-
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }
   | { kind: "reply"; reply: string };
@@ -203,6 +202,7 @@ export async function createCustomerMessage(
   const decision = await classifyMessage({ content: input.content, model });
 
   if (!decision.qualifies) {
+    await persistSessionExchange(session.id, session.workspaceId, input, decision.reply);
     return { kind: "reply", reply: decision.reply };
   }
 
@@ -237,7 +237,11 @@ export async function createCustomerAttachments(
   ) {
     throw new InvalidAttachmentError("Attach a PDF, plain text, JPEG, or PNG file.");
   }
-  if (input.files.some((file) => file.size === 0 || file.size > webAttachmentCapability.maxFileSizeBytes)) {
+  if (
+    input.files.some(
+      (file) => file.size === 0 || file.size > webAttachmentCapability.maxFileSizeBytes,
+    )
+  ) {
     throw new InvalidAttachmentError("Attachment must be between 1 byte and 10 MB.");
   }
 
@@ -251,30 +255,68 @@ export async function createCustomerAttachments(
     input.files.map(async (file) => {
       const id = randomUUID();
       const storageKey = `attachments/inbound/${id}`;
-      await createStorage(storageConfig).putObject({ body: Buffer.from(await file.arrayBuffer()), contentType: file.type, key: storageKey });
+      await createStorage(storageConfig).putObject({
+        body: Buffer.from(await file.arrayBuffer()),
+        contentType: file.type,
+        key: storageKey,
+      });
       return { file, id, storageKey };
     }),
   );
   const messageInput = { content, idempotencyKey: randomUUID() };
   const result = session.ticket
-    ? { created: true as const, kind: "message" as const, message: (await appendMessage(session.ticket.id, session.workspaceId, messageInput)).message }
+    ? {
+        created: true as const,
+        kind: "message" as const,
+        message: (await appendMessage(session.ticket.id, session.workspaceId, messageInput))
+          .message,
+      }
     : {
         created: true as const,
         kind: "message" as const,
         message: await createTicketAndFirstMessage(
           session.id,
-          { category: "GENERAL", priority: "NORMAL", qualifies: true, title: input.files.map((file) => file.name).join(", ").slice(0, 120) },
+          {
+            category: "GENERAL",
+            priority: "NORMAL",
+            qualifies: true,
+            title: input.files
+              .map((file) => file.name)
+              .join(", ")
+              .slice(0, 120),
+          },
           messageInput,
         ),
       };
   if (!result) return null;
+  const ticketId = result.message.ticketId;
+  if (!ticketId) return null;
 
   const attachments = await Promise.all(
-    uploads.map(({ file, id, storageKey }) => unscopedPrisma.attachment.create({
-      data: { fileName: file.name, id, messageId: result.message.id, mimeType: file.type, sizeBytes: file.size, storageKey, ticketId: result.message.ticketId, workspaceId: result.message.workspaceId },
-    })),
+    uploads.map(({ file, id, storageKey }) =>
+      unscopedPrisma.attachment.create({
+        data: {
+          fileName: file.name,
+          id,
+          messageId: result.message.id,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          storageKey,
+          ticketId,
+          workspaceId: result.message.workspaceId,
+        },
+      }),
+    ),
   );
-  await Promise.all(attachments.map((attachment) => enqueueAttachmentProcess({ attachmentId: attachment.id, ticketId: attachment.ticketId, workspaceId: attachment.workspaceId })));
+  await Promise.all(
+    attachments.map((attachment) =>
+      enqueueAttachmentProcess({
+        attachmentId: attachment.id,
+        ticketId: attachment.ticketId,
+        workspaceId: attachment.workspaceId,
+      }),
+    ),
+  );
   return { attachments, message: result.message };
 }
 
@@ -285,18 +327,31 @@ export async function generateAttachmentReply(ticketId: string, workspaceId: str
     where: { attachments: { some: {} }, senderType: "CUSTOMER", ticketId, workspaceId },
   });
   if (!message) return;
-  const readable = message.attachments.filter((attachment) => attachment.processingStatus === "READY" && attachment.extractedText);
-  const failed = message.attachments.filter((attachment) => attachment.processingStatus === "FAILED");
-  const context = [message.content, ...readable.map((attachment) => attachment.extractedText)].filter(Boolean).join("\n\n");
+  const readable = message.attachments.filter(
+    (attachment) => attachment.processingStatus === "READY" && attachment.extractedText,
+  );
+  const failed = message.attachments.filter(
+    (attachment) => attachment.processingStatus === "FAILED",
+  );
+  const context = [message.content, ...readable.map((attachment) => attachment.extractedText)]
+    .filter(Boolean)
+    .join("\n\n");
 
   if (message.position === 1 && context) {
     const apiKey = classificationConfig.apiKey;
     if (apiKey) {
       try {
-        const decision = await classifyMessage({ content: context, model: createClassificationModel({ ...classificationConfig, apiKey }) });
+        const decision = await classifyMessage({
+          content: context,
+          model: createClassificationModel({ ...classificationConfig, apiKey }),
+        });
         if (decision.qualifies) {
           await unscopedPrisma.ticket.update({
-            data: { category: decision.category, priority: decision.priority, title: decision.title },
+            data: {
+              category: decision.category,
+              priority: decision.priority,
+              title: decision.title,
+            },
             where: { id: ticketId },
           });
         }
@@ -309,7 +364,11 @@ export async function generateAttachmentReply(ticketId: string, workspaceId: str
   const failureNote = failed.length
     ? `\n\nThe following attachments could not be read: ${failed.map((attachment) => attachment.fileName).join(", ")}. Tell the Customer which files could not be read.`
     : "";
-  await generateAiReply(ticketId, workspaceId, `${context || "The Customer sent attachments without a caption."}${failureNote}`);
+  await generateAiReply(
+    ticketId,
+    workspaceId,
+    `${context || "The Customer sent attachments without a caption."}${failureNote}`,
+  );
 }
 
 async function appendMessage(ticketId: string, workspaceId: string, input: CustomerMessageInput) {
@@ -340,6 +399,7 @@ async function appendMessage(ticketId: string, workspaceId: string, input: Custo
         senderType: "CUSTOMER",
         ticketId: ticket.id,
         turn: ticket.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -468,7 +528,12 @@ async function generateAiReplyRun(
     });
     const businessData = await getBusinessToolData(ticketId, workspaceId, ticket.customerIdentity);
     run.setAttribute("ai_agent.business_tool_data", Boolean(businessData));
-    if (!sources.length && !attachments.length && !businessData && !looksLikeResolutionSignal(customerMessage)) {
+    if (
+      !sources.length &&
+      !attachments.length &&
+      !businessData &&
+      !looksLikeResolutionSignal(customerMessage)
+    ) {
       run.setAttributes({
         "ai_agent.decision": "ESCALATE",
         "ai_agent.escalation_reason": "NO_RELEVANT_KNOWLEDGE",
@@ -654,7 +719,7 @@ async function appendAiMessage(ticketId: string, workspaceId: string, content: s
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      select: { messageSeq: true },
+      select: { messageSeq: true, webSessionId: true },
       where: { id: ticketId },
     });
     const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
@@ -671,6 +736,7 @@ async function appendAiMessage(ticketId: string, workspaceId: string, content: s
         senderType: "AI_AGENT",
         ticketId,
         turn: ticket.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -696,8 +762,8 @@ export async function escalate(
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
+      select: { messageSeq: true, webSessionId: true },
       where: { id: ticketId },
-      select: { messageSeq: true },
     });
     const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     const acknowledgementMessage = await tx.message.create({
@@ -713,6 +779,7 @@ export async function escalate(
         senderType: "SYSTEM",
         ticketId,
         turn: ticket.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -766,6 +833,7 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
         senderType: "SYSTEM",
         ticketId,
         turn: ticket.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -797,6 +865,71 @@ function acknowledgementFor(customerMessage: string) {
   return indonesian
     ? "Percakapan Anda sudah diteruskan kepada tim kami. Human Agent akan membantu Anda secepatnya."
     : "Your conversation has been passed to our team. A Human Agent will help you as soon as possible.";
+}
+
+async function persistSessionExchange(
+  webSessionId: string,
+  workspaceId: string,
+  input: CustomerMessageInput,
+  reply: string,
+) {
+  return unscopedPrisma.$transaction(async (tx) => {
+    const existing = await tx.message.findUnique({
+      where: {
+        workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId },
+      },
+    });
+    if (existing) return;
+
+    // Negative positions sort before every Ticket position, so the pre-Ticket
+    // exchange stays at the top of the transcript once a Ticket exists.
+    const count = await tx.message.count({ where: { ticketId: null, webSessionId } });
+    const base = -(count * 2 + 2);
+    const runId = randomUUID();
+    await tx.message.createMany({
+      data: [
+        {
+          content: input.content,
+          externalMessageId: input.idempotencyKey,
+          id: randomUUID(),
+          message: { content: input.content },
+          position: base,
+          role: "user",
+          runId,
+          senderType: "CUSTOMER",
+          turn: 0,
+          webSessionId,
+          workspaceId,
+        },
+        {
+          content: reply,
+          externalMessageId: randomUUID(),
+          id: randomUUID(),
+          message: { content: reply },
+          position: base + 1,
+          role: "assistant",
+          runId,
+          senderType: "AI_AGENT",
+          turn: 0,
+          webSessionId,
+          workspaceId,
+        },
+      ],
+    });
+
+    // A concurrent qualifying message may have created the Ticket while this
+    // exchange was being classified; adopt it so it joins that Ticket's history.
+    const winner = await tx.webSession.findUnique({
+      select: { ticket: { select: { id: true } } },
+      where: { id: webSessionId },
+    });
+    if (winner?.ticket) {
+      await tx.message.updateMany({
+        data: { ticketId: winner.ticket.id },
+        where: { ticketId: null, webSessionId },
+      });
+    }
+  });
 }
 
 async function createTicketAndFirstMessage(
@@ -845,8 +978,16 @@ async function createTicketAndFirstMessage(
         senderType: "CUSTOMER",
         ticketId: ticket.id,
         turn: 1,
+        webSessionId,
         workspaceId: session.workspaceId,
       },
+    });
+
+    // Adopt any pre-Ticket session messages so the transcript shows the full
+    // conversation history, including what came before this Ticket existed.
+    await tx.message.updateMany({
+      data: { ticketId },
+      where: { ticketId: null, webSessionId },
     });
 
     await tx.aiActivity.createMany({
@@ -881,27 +1022,39 @@ async function createTicketAndFirstMessage(
   });
 }
 
-export async function getMessagesAfter(accessToken: string, afterPosition: number) {
+export async function getMessagesAfter(accessToken: string, afterPosition: number | null) {
   const session = await unscopedPrisma.webSession.findUnique({
     where: { accessToken },
-    select: { status: true, ticket: { select: { id: true, status: true } } },
+    select: { id: true, status: true, ticket: { select: { id: true, status: true } } },
   });
   if (!session) return null;
+
+  const attachmentsSelect = {
+    select: { fileName: true, id: true, mimeType: true, processingStatus: true, sizeBytes: true },
+  };
+
   if (!session.ticket) {
+    // A session without a Ticket can still hold pre-Ticket history.
+    const messages = await unscopedPrisma.message.findMany({
+      include: { attachments: attachmentsSelect },
+      where: { deletedAt: null, ticketId: null, webSessionId: session.id },
+      orderBy: { position: "asc" },
+    });
     return {
-      messages: [],
+      messages,
       sessionStatus: session.status,
       ticketId: null,
       ticketStatus: null,
     };
   }
+
   const messages = await unscopedPrisma.message.findMany({
-    include: {
-      attachments: {
-        select: { fileName: true, id: true, mimeType: true, processingStatus: true, sizeBytes: true },
-      },
+    include: { attachments: attachmentsSelect },
+    where: {
+      deletedAt: null,
+      OR: [{ ticketId: session.ticket.id }, { webSessionId: session.id }],
+      ...(afterPosition !== null ? { position: { gt: afterPosition } } : {}),
     },
-    where: { deletedAt: null, ticketId: session.ticket.id, position: { gt: afterPosition } },
     orderBy: { position: "asc" },
   });
   return {

@@ -93,29 +93,27 @@ const ticketDetailSelect = {
     orderBy: { createdAt: "asc" },
     select: { createdAt: true, eventType: true, id: true, metadata: true },
   },
-  messages: {
-    orderBy: { position: "asc" },
+  webSession: { select: { createdAt: true, id: true } },
+} as const;
+
+const transcriptSelect = {
+  attachments: {
     select: {
-      attachments: {
-        select: {
-          fileName: true,
-          failureReason: true,
-          id: true,
-          mimeType: true,
-          processingStatus: true,
-          sizeBytes: true,
-        },
-      },
-      content: true,
-      createdAt: true,
-      deliveryStatus: true,
+      fileName: true,
+      failureReason: true,
       id: true,
-      position: true,
-      senderType: true,
-      senderUserId: true,
+      mimeType: true,
+      processingStatus: true,
+      sizeBytes: true,
     },
   },
-  webSession: { select: { createdAt: true } },
+  content: true,
+  createdAt: true,
+  deliveryStatus: true,
+  id: true,
+  position: true,
+  senderType: true,
+  senderUserId: true,
 } as const;
 
 /** An Admin sees the whole Workspace; a Human Agent sees the queue, their own
@@ -193,7 +191,14 @@ export async function getTicketDetail(ticketId: string, user: InboxUser) {
     where: { AND: [{ deletedAt: null, id: ticketId }, ticketVisibilityWhere(user)] },
   });
   if (!ticket) throw new TicketNotFoundError();
-  const [withUnread] = await attachUnreadCounts(user.id, [ticket]);
+  // The transcript spans the whole Web Session, so Messages persisted before
+  // the Ticket existed are part of the same conversation history.
+  const messages = await prisma.message.findMany({
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: transcriptSelect,
+    where: { deletedAt: null, webSessionId: ticket.webSession.id },
+  });
+  const [withUnread] = await attachUnreadCounts(user.id, [{ ...ticket, messages }]);
   return withUnread;
 }
 
@@ -278,7 +283,10 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
     });
     if (!transition.count) throw new TicketNotAvailableForTakeoverError();
     const [ticket, conversation] = await Promise.all([
-      tx.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: { messageSeq: true } }),
+      tx.ticket.findUniqueOrThrow({
+        select: { messageSeq: true, webSessionId: true },
+        where: { id: ticketId },
+      }),
       tx.conversation.findUniqueOrThrow({ where: { ticketId } }),
     ]);
     const admin = await tx.user.findUniqueOrThrow({
@@ -300,6 +308,7 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
         senderType: "SYSTEM",
         ticketId,
         turn: ticket.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -459,6 +468,7 @@ async function appendHandoffMessage(input: {
         senderType: "SYSTEM",
         ticketId: input.ticketId,
         turn: ticket.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId: input.workspaceId,
       },
     });
@@ -485,10 +495,7 @@ export async function reassignTicket(ticketId: string, humanAgentId: string, wor
     data: { assignedHumanAgentId: humanAgent.id, status: "HUMAN_HANDLING" },
     where: {
       id: ticketId,
-      OR: [
-        { assignedHumanAgentId: null, status: "ESCALATED" },
-        { status: "HUMAN_HANDLING" },
-      ],
+      OR: [{ assignedHumanAgentId: null, status: "ESCALATED" }, { status: "HUMAN_HANDLING" }],
     },
   });
   if (!transition.count) throw new TicketNotAvailableForAssignmentError();
@@ -536,6 +543,7 @@ export async function sendHumanReply(
           senderUserId: humanAgentId,
           ticketId,
           turn: updated.messageSeq,
+          webSessionId: updated.webSessionId,
           workspaceId: ticket.workspaceId,
         },
       });
@@ -566,37 +574,78 @@ export async function sendHumanAttachmentReply(
   idempotencyKey: string,
 ) {
   if (!files.length) throw new InvalidHumanAttachmentError();
-  if (files.length > webAttachmentCapability.maxFilesPerMessage) throw new InvalidHumanAttachmentError();
-  if (files.some((file) => !webAttachmentCapability.mimeTypes.includes(file.type) || !file.size || file.size > webAttachmentCapability.maxFileSizeBytes))
+  if (files.length > webAttachmentCapability.maxFilesPerMessage)
+    throw new InvalidHumanAttachmentError();
+  if (
+    files.some(
+      (file) =>
+        !webAttachmentCapability.mimeTypes.includes(file.type) ||
+        !file.size ||
+        file.size > webAttachmentCapability.maxFileSizeBytes,
+    )
+  )
     throw new InvalidHumanAttachmentError();
   const text = content?.trim() ?? "";
   const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
-  const owner = await unscopedPrisma.ticket.findFirst({ where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" } });
+  const owner = await unscopedPrisma.ticket.findFirst({
+    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+  });
   if (!owner) throw new TicketNotOwnedError();
-  const existing = await unscopedPrisma.message.findFirst({ where: { externalMessageId, ticketId } });
+  const existing = await unscopedPrisma.message.findFirst({
+    where: { externalMessageId, ticketId },
+  });
   if (existing) return existing.deliveryStatus === "FAILED" ? deliverMessage(existing) : existing;
   const uploads = await Promise.all(
     files.map(async (file) => {
       const id = randomUUID();
       const key = `attachments/outbound/${ticketId}/${id}`;
-      await createStorage(storageConfig).putObject({ body: Buffer.from(await file.arrayBuffer()), contentType: file.type, key });
+      await createStorage(storageConfig).putObject({
+        body: Buffer.from(await file.arrayBuffer()),
+        contentType: file.type,
+        key,
+      });
       return { file, id, key };
     }),
   );
   const message = await unscopedPrisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.findFirst({ where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" } });
+    const ticket = await tx.ticket.findFirst({
+      where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+    });
     if (!ticket) throw new TicketNotOwnedError();
-    const updated = await tx.ticket.update({ data: { messageSeq: { increment: 1 } }, where: { id: ticketId } });
+    const updated = await tx.ticket.update({
+      data: { messageSeq: { increment: 1 } },
+      where: { id: ticketId },
+    });
     const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     return tx.message.create({
       data: {
-        attachments: { create: uploads.map(({ file, id, key }) => ({ fileName: file.name, id, mimeType: file.type, processingStatus: "READY", sizeBytes: file.size, storageKey: key, ticketId, workspaceId: ticket.workspaceId })) },
+        attachments: {
+          create: uploads.map(({ file, id, key }) => ({
+            fileName: file.name,
+            id,
+            mimeType: file.type,
+            processingStatus: "READY",
+            sizeBytes: file.size,
+            storageKey: key,
+            ticketId,
+            workspaceId: ticket.workspaceId,
+          })),
+        },
         content: text,
         deliveryStatus: "PENDING",
         externalMessageId,
-        id: randomUUID(), memorySessionId: conversation.id, message: { content: text }, position: updated.messageSeq,
-        role: "assistant", runId: randomUUID(), senderType: "HUMAN_AGENT", senderUserId: humanAgentId,
-        ticketId, turn: updated.messageSeq, workspaceId: ticket.workspaceId,
+        id: randomUUID(),
+        memorySessionId: conversation.id,
+        message: { content: text },
+        position: updated.messageSeq,
+        role: "assistant",
+        runId: randomUUID(),
+        senderType: "HUMAN_AGENT",
+        senderUserId: humanAgentId,
+        ticketId,
+        turn: updated.messageSeq,
+        webSessionId: updated.webSessionId,
+        workspaceId: ticket.workspaceId,
       },
       include: { attachments: true },
     });
@@ -771,7 +820,11 @@ async function getCopilotBusinessToolData(
   }
 }
 
-export async function resolveTicket(ticketId: string, humanAgentId: string, resolutionReason: "HUMAN_RESOLVED") {
+export async function resolveTicket(
+  ticketId: string,
+  humanAgentId: string,
+  resolutionReason: "HUMAN_RESOLVED",
+) {
   const closing = await unscopedPrisma.$transaction(async (tx) => {
     const ticket = await tx.ticket.findFirst({
       include: { workspace: { select: { closingMessage: true } } },
@@ -814,6 +867,7 @@ export async function resolveTicket(ticketId: string, humanAgentId: string, reso
         senderType: "SYSTEM",
         ticketId,
         turn: updated.messageSeq,
+        webSessionId: updated.webSessionId,
         workspaceId: ticket.workspaceId,
       },
     });
@@ -863,6 +917,7 @@ export async function deleteTicket(ticketId: string, adminId: string, workspaceI
 }
 
 async function deliverMessage(message: Awaited<ReturnType<typeof unscopedPrisma.message.create>>) {
+  if (!message.ticketId) return message;
   let attempts = 0;
   while (attempts < 3) {
     attempts += 1;

@@ -41,18 +41,7 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 
 function renderMarkdown(content: string) {
   return DOMPurify.sanitize(marked.parse(content, { async: false }), {
-    ALLOWED_TAGS: [
-      "p",
-      "a",
-      "strong",
-      "em",
-      "code",
-      "pre",
-      "ul",
-      "ol",
-      "li",
-      "br",
-    ],
+    ALLOWED_TAGS: ["p", "a", "strong", "em", "code", "pre", "ul", "ol", "li", "br"],
     ALLOWED_ATTR: ["href"],
     ALLOWED_URI_REGEXP: /^https?:\/\//i,
   }).trim();
@@ -82,41 +71,21 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   const panel = shadow.querySelector<HTMLElement>("[data-panel]");
   const close = shadow.querySelector<HTMLButtonElement>("[data-close]");
   const identityBar = shadow.querySelector<HTMLElement>("[data-identity]");
-  const identityText = shadow.querySelector<HTMLElement>(
-    "[data-identity-text]",
-  );
-  const identityReset = shadow.querySelector<HTMLButtonElement>(
-    "[data-identity-reset]",
-  );
+  const identityText = shadow.querySelector<HTMLElement>("[data-identity-text]");
+  const identityReset = shadow.querySelector<HTMLButtonElement>("[data-identity-reset]");
   const input = shadow.querySelector<HTMLInputElement>("[data-input]");
-  const attachmentInput = shadow.querySelector<HTMLInputElement>(
-    "[data-attachment-input]",
-  );
-  const attachTrigger = shadow.querySelector<HTMLButtonElement>(
-    "[data-attach-trigger]",
-  );
-  const attachmentTray = shadow.querySelector<HTMLElement>(
-    "[data-attachment-tray]",
-  );
+  const attachmentInput = shadow.querySelector<HTMLInputElement>("[data-attachment-input]");
+  const attachTrigger = shadow.querySelector<HTMLButtonElement>("[data-attach-trigger]");
+  const attachmentTray = shadow.querySelector<HTMLElement>("[data-attachment-tray]");
   const sendButton = shadow.querySelector<HTMLButtonElement>("[data-send]");
   const preChat = shadow.querySelector<HTMLFormElement>("[data-pre-chat]");
-  const preChatError = shadow.querySelector<HTMLElement>(
-    "[data-pre-chat-error]",
-  );
-  const preChatSubmit = shadow.querySelector<HTMLButtonElement>(
-    "[data-pre-chat-submit]",
-  );
+  const preChatError = shadow.querySelector<HTMLElement>("[data-pre-chat-error]");
+  const preChatSubmit = shadow.querySelector<HTMLButtonElement>("[data-pre-chat-submit]");
   const chat = shadow.querySelector<HTMLElement>("[data-chat]");
-  const messageForm = shadow.querySelector<HTMLFormElement>(
-    "[data-message-form]",
-  );
-  const messageError = shadow.querySelector<HTMLElement>(
-    "[data-message-error]",
-  );
+  const messageForm = shadow.querySelector<HTMLFormElement>("[data-message-form]");
+  const messageError = shadow.querySelector<HTMLElement>("[data-message-error]");
   const messages = shadow.querySelector<HTMLElement>("[data-messages]");
-  const sessionEnded = shadow.querySelector<HTMLElement>(
-    "[data-session-ended]",
-  );
+  const sessionEnded = shadow.querySelector<HTMLElement>("[data-session-ended]");
   const startNew = shadow.querySelector<HTMLButtonElement>("[data-start-new]");
   const scrollMessages = () =>
     messages?.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
@@ -157,13 +126,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     messages?.querySelector("[data-typing]")?.remove();
   };
 
-  const appendAttachment = (
-    container: HTMLElement,
-    attachment: WidgetAttachment,
-  ) => {
-    const image =
-      attachment.mimeType === "image/jpeg" ||
-      attachment.mimeType === "image/png";
+  const appendAttachment = (container: HTMLElement, attachment: WidgetAttachment) => {
+    const image = attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/png";
     const statusText =
       attachment.processingStatus === "FAILED"
         ? "Could not be read"
@@ -178,12 +142,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       element.dataset.attachmentId = attachment.id;
       element.setAttribute("aria-label", `Open ${attachment.fileName}`);
       element.addEventListener("click", async () => {
-        const url = await getAttachmentUrl(
-          apiUrl,
-          widgetKey,
-          attachment.id,
-          "preview",
-        );
+        const url = await getAttachmentUrl(apiUrl, widgetKey, attachment.id, "preview");
         window.open(url, "_blank", "noopener");
       });
       const preview = document.createElement("img");
@@ -228,12 +187,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     preview.className = "attachment-file-action";
     preview.textContent = "Preview";
     preview.addEventListener("click", async () => {
-      const url = await getAttachmentUrl(
-        apiUrl,
-        widgetKey,
-        attachment.id,
-        "preview",
-      );
+      const url = await getAttachmentUrl(apiUrl, widgetKey, attachment.id, "preview");
       window.open(url, "_blank", "noopener");
     });
     const download = document.createElement("button");
@@ -242,25 +196,18 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     download.setAttribute("aria-label", `Download ${attachment.fileName}`);
     download.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>`;
     download.addEventListener("click", async () => {
-      const url = await getAttachmentUrl(
-        apiUrl,
-        widgetKey,
-        attachment.id,
-        "download",
-      );
+      const url = await getAttachmentUrl(apiUrl, widgetKey, attachment.id, "download");
       window.open(url, "_blank", "noopener");
     });
     element.append(icon, info, preview, download);
     container.append(element);
   };
   const appendMessage = (message: WidgetMessage) => {
-    if (messages?.querySelector(`[data-position="${message.position}"]`))
-      return;
+    if (messages?.querySelector(`[data-position="${message.position}"]`)) return;
     const bubble = document.createElement("div");
     bubble.className = `message ${message.senderType === "CUSTOMER" ? "message-customer" : ""}`;
     bubble.dataset.position = String(message.position);
-    for (const attachment of message.attachments ?? [])
-      appendAttachment(bubble, attachment);
+    for (const attachment of message.attachments ?? []) appendAttachment(bubble, attachment);
     const legacyAttachmentText =
       /^I need help with the attached file: .+$/.test(message.content) &&
       message.attachments?.length;
@@ -268,8 +215,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     if (message.content && !legacyAttachmentText) {
       content = document.createElement("div");
       content.className = "message-copy";
-      if (message.senderType === "CUSTOMER")
-        content.textContent = message.content;
+      if (message.senderType === "CUSTOMER") content.textContent = message.content;
       else content.innerHTML = renderMarkdown(message.content);
       bubble.append(content);
     }
@@ -290,12 +236,10 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     scrollMessages();
   };
 
-  // Used before a Ticket exists — nothing is persisted yet, so these render
-  // locally with no `data-position` to dedupe against.
-  const appendEphemeral = (
-    content: string,
-    senderType: "CUSTOMER" | "AI_AGENT",
-  ) => {
+  // Used before a Ticket exists — the exchange is persisted against the
+  // session by the API, but replays only reach the client after a reload, so
+  // these render locally with no `data-position` to dedupe against.
+  const appendEphemeral = (content: string, senderType: "CUSTOMER" | "AI_AGENT") => {
     const bubble = document.createElement("div");
     bubble.className = `message ${senderType === "CUSTOMER" ? "message-customer" : ""}`;
     if (senderType === "CUSTOMER") {
@@ -377,8 +321,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
         bubble.dataset.provisionalId = delta.provisionalId;
         messages?.append(bubble);
       }
-      const content =
-        (streamedContent.get(delta.provisionalId) ?? "") + delta.delta;
+      const content = (streamedContent.get(delta.provisionalId) ?? "") + delta.delta;
       streamedContent.set(delta.provisionalId, content);
       bubble.innerHTML = renderMarkdown(content);
       scrollMessages();
@@ -387,9 +330,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       const status = JSON.parse((event as MessageEvent<string>).data) as {
         status: string;
       };
-      if (input)
-        input.disabled =
-          status.status === "generating" || status.status === "resolved";
+      if (input) input.disabled = status.status === "generating" || status.status === "resolved";
       if (status.status === "generating") {
         showTyping();
       } else {
@@ -408,8 +349,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       const attachment = messages?.querySelector<HTMLElement>(
         `[data-attachment-id="${update.attachmentId}"]`,
       );
-      const status =
-        attachment?.querySelector<HTMLElement>(".attachment-status");
+      const status = attachment?.querySelector<HTMLElement>(".attachment-status");
       if (status)
         status.textContent =
           update.processingStatus === "FAILED"
@@ -447,9 +387,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     setOpen(false);
   });
 
-  launcher?.addEventListener("click", () =>
-    setOpen(!panel?.hasAttribute("data-open")),
-  );
+  launcher?.addEventListener("click", () => setOpen(!panel?.hasAttribute("data-open")));
   close?.addEventListener("click", () => setOpen(false));
   preChat?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -465,10 +403,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     }
     try {
       const session = await startSession(apiUrl, widgetKey, { email, name });
-      sessionStorage.setItem(
-        `supportops:web-session:${widgetKey}`,
-        session.accessToken,
-      );
+      sessionStorage.setItem(`supportops:web-session:${widgetKey}`, session.accessToken);
       setIdentity(name, email);
       showChat();
       sessionEnded?.setAttribute("hidden", "");
@@ -497,8 +432,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
 
   const updateSendState = () => {
     if (!sendButton) return;
-    const hasContent =
-      Boolean(input?.value.trim()) || Boolean(attachmentInput?.files?.length);
+    const hasContent = Boolean(input?.value.trim()) || Boolean(attachmentInput?.files?.length);
     sendButton.disabled = !hasContent;
   };
   const updateAttachmentTray = () => {
@@ -532,19 +466,14 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       item.append(remove);
       attachmentTray.append(item);
     });
-    attachmentTray.toggleAttribute(
-      "data-visible",
-      Boolean(attachmentInput.files?.length),
-    );
+    attachmentTray.toggleAttribute("data-visible", Boolean(attachmentInput.files?.length));
     updateSendState();
   };
   attachTrigger?.addEventListener("click", () => attachmentInput?.click());
   attachmentInput?.addEventListener("change", () => {
     if (attachmentInput.files && attachmentInput.files.length > 10) {
       const transfer = new DataTransfer();
-      [...attachmentInput.files]
-        .slice(0, 10)
-        .forEach((file) => transfer.items.add(file));
+      [...attachmentInput.files].slice(0, 10).forEach((file) => transfer.items.add(file));
       attachmentInput.files = transfer.files;
     }
     updateAttachmentTray();
@@ -554,9 +483,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
 
   messageForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const accessToken = sessionStorage.getItem(
-      `supportops:web-session:${widgetKey}`,
-    );
+    const accessToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
     const content = input?.value.trim() ?? "";
     const files = [...(attachmentInput?.files ?? [])];
     if (!accessToken || (!content && !files.length) || !input) return;
@@ -581,12 +508,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     let connecting = false;
     try {
       if (files.length) {
-        const result = await sendAttachments(
-          apiUrl,
-          accessToken,
-          content,
-          files,
-        );
+        const result = await sendAttachments(apiUrl, accessToken, content, files);
         optimistic.remove();
         appendMessage({ ...result.message, attachments: result.attachments });
         if (attachmentInput) attachmentInput.value = "";
@@ -610,8 +532,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     } catch {
       hideTyping();
       optimistic.classList.add("message-failed");
-      optimistic.title =
-        "Failed to send — check your connection and try again.";
+      optimistic.title = "Failed to send — check your connection and try again.";
       input.value = content;
       messageError?.removeAttribute("hidden");
     } finally {
@@ -624,9 +545,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     }
   });
 
-  const accessToken = sessionStorage.getItem(
-    `supportops:web-session:${widgetKey}`,
-  );
+  const accessToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
   if (accessToken) {
     restoreIdentity();
     showChat();
@@ -654,11 +573,7 @@ async function startSession(
   return (await response.json()) as { accessToken: string };
 }
 
-async function sendMessage(
-  apiUrl: string,
-  accessToken: string,
-  content: string,
-) {
+async function sendMessage(apiUrl: string, accessToken: string, content: string) {
   const response = await fetch(
     `${apiUrl.replace(/\/$/, "")}/widget/messages?token=${encodeURIComponent(accessToken)}`,
     {
@@ -700,9 +615,7 @@ async function getAttachmentUrl(
   attachmentId: string,
   mode: "download" | "preview",
 ) {
-  const accessToken = sessionStorage.getItem(
-    `supportops:web-session:${widgetKey}`,
-  );
+  const accessToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
   const response = await fetch(
     `${apiUrl.replace(/\/$/, "")}/widget/attachments/${encodeURIComponent(attachmentId)}/${mode}?token=${encodeURIComponent(accessToken ?? "")}`,
   );
@@ -811,9 +724,8 @@ function escapeHtml(value: string) {
   return value.replace(
     /[&<>'"]/g,
     (character) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[
-        character
-      ] ?? character,
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ??
+      character,
   );
 }
 

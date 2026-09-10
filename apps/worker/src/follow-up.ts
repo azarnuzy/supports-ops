@@ -86,6 +86,7 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
         senderType: "AI_AGENT",
         ticketId: ticket.id,
         turn: updated.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId: ticket.workspaceId,
       },
     });
@@ -164,8 +165,8 @@ export async function processAutoResolveJob(job: { data: AutoResolveJob }) {
         role: "system",
         runId: randomUUID(),
         senderType: "SYSTEM",
-        ticketId: ticket.id,
         turn: updated.messageSeq,
+        webSessionId: ticket.webSessionId,
         workspaceId: ticket.workspaceId,
       },
     });

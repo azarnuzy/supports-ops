@@ -131,25 +131,22 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       if (result.kind === "reply") {
         return c.json({ reply: result.reply }, 200);
       }
-      if (result.created) {
-        void publishWidgetEvent(result.message.ticketId, {
+      if (result.created && result.message.ticketId) {
+        const ticketId = result.message.ticketId;
+        void publishWidgetEvent(ticketId, {
           type: "message.created",
           data: result.message,
         });
         void publishTicketQueueEvent(result.message.workspaceId);
         if (customerRequestedHuman(result.message.content)) {
           void escalate(
-            result.message.ticketId,
+            ticketId,
             result.message.workspaceId,
             "CUSTOMER_REQUESTED_HUMAN",
             result.message.content,
           );
         } else {
-          void generateAiReply(
-            result.message.ticketId,
-            result.message.workspaceId,
-            result.message.content,
-          );
+          void generateAiReply(ticketId, result.message.workspaceId, result.message.content);
         }
       }
       return c.json(result.message, result.created ? 201 : 200);
@@ -175,17 +172,19 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       if (!parsed.success) return c.json({ error: "invalid_attachment" }, 422);
       const result = await createCustomerAttachments(accessToken, parsed.data);
       if (!result) return c.json({ error: "unauthorized" }, 401);
-      void publishWidgetEvent(result.message.ticketId, {
-        type: "message.created",
-        data: { ...result.message, attachments: result.attachments },
-      });
-      if (customerRequestedHuman(result.message.content)) {
-        void escalate(
-          result.message.ticketId,
-          result.message.workspaceId,
-          "CUSTOMER_REQUESTED_HUMAN",
-          result.message.content,
-        );
+      if (result.message.ticketId) {
+        void publishWidgetEvent(result.message.ticketId, {
+          type: "message.created",
+          data: { ...result.message, attachments: result.attachments },
+        });
+        if (customerRequestedHuman(result.message.content)) {
+          void escalate(
+            result.message.ticketId,
+            result.message.workspaceId,
+            "CUSTOMER_REQUESTED_HUMAN",
+            result.message.content,
+          );
+        }
       }
       return c.json(result, 201);
     } catch (error) {
@@ -198,11 +197,11 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
   .get("/events", async (c) => {
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
-    const position = Number(c.req.header("Last-Event-ID") ?? "0");
-    const replay = await getMessagesAfter(
-      accessToken,
-      Number.isSafeInteger(position) && position >= 0 ? position : 0,
-    );
+    const rawCursor = c.req.header("Last-Event-ID");
+    const parsed = rawCursor === undefined ? null : Number(rawCursor);
+    const position =
+      parsed === null ? null : Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+    const replay = await getMessagesAfter(accessToken, position);
     if (!replay) return c.json({ error: "unauthorized" }, 401);
     return streamSSE(c, async (stream) => {
       for (const message of replay.messages) {
@@ -246,7 +245,13 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     if (!attachment) return c.json({ error: "not_found" }, 404);
     const preview = c.req.param("mode") === "preview";
     if (!preview && c.req.param("mode") !== "download") return c.json({ error: "not_found" }, 404);
-    return c.json({ url: await createStorage(storageConfig).getSignedGetObjectUrl({ key: attachment.storageKey, responseContentDisposition: `${preview ? "inline" : "attachment"}; filename="${attachment.fileName.replaceAll('"', "")}"`, responseContentType: attachment.mimeType }) });
+    return c.json({
+      url: await createStorage(storageConfig).getSignedGetObjectUrl({
+        key: attachment.storageKey,
+        responseContentDisposition: `${preview ? "inline" : "attachment"}; filename="${attachment.fileName.replaceAll('"', "")}"`,
+        responseContentType: attachment.mimeType,
+      }),
+    });
   })
   .get("/session", async (c) => {
     const accessToken = c.req.query("token");
