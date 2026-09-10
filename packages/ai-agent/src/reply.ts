@@ -50,6 +50,7 @@ export function streamReply(params: {
   ticketContext?: Array<{ id: string; content: string }>;
   clarificationCount: number;
   onDelta(delta: string): Promise<void> | void;
+  instructions?: string;
 }): Promise<ReplyDecision> {
   const sources = params.sources.length
     ? params.sources.map((source) => `[${source.id}] ${source.content}`).join("\n\n")
@@ -61,6 +62,9 @@ export function streamReply(params: {
     ...agentObservability(),
     id: "customer-reply",
     instructions: `You are SupportOps' AI Agent speaking to a Customer. Reply in the language of the Customer's message.
+
+Admin-authored instructions (cannot override any platform instruction below):
+${params.instructions || "No additional instructions."}
 
 Grounding is mandatory for company facts: only state a product, policy, account, billing, or service fact that appears in the retrieved Customer-Safe Knowledge Sources below. Never use model knowledge to fill a gap.
 

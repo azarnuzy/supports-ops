@@ -364,6 +364,7 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
   const ticket = await unscopedPrisma.ticket.findFirst({
     select: {
       assignedHumanAgent: { select: { name: true } },
+      aiAgent: { select: { handoffMessage: true } },
       escalationReason: true,
       id: true,
       messages: {
@@ -387,6 +388,7 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
   if (!ticket?.assignedHumanAgent || !ticket.escalationReason) return;
 
   const handoffMessage = await appendHandoffMessage({
+    message: ticket.aiAgent.handoffMessage,
     humanAgentName: ticket.assignedHumanAgent.name,
     ticketId,
     workspaceId,
@@ -443,10 +445,13 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
 
 async function appendHandoffMessage(input: {
   humanAgentName: string;
+  message: string | null;
   ticketId: string;
   workspaceId: string;
 }) {
-  const content = `Hello, I’m ${input.humanAgentName} from the support team. I’ll continue helping you.`;
+  const content = (
+    input.message ?? "Hello, I’m {humanAgentName} from the support team. I’ll continue helping you."
+  ).replaceAll("{humanAgentName}", input.humanAgentName);
   return unscopedPrisma.$transaction(async (tx) => {
     const ticket = await tx.ticket.update({
       data: { messageSeq: { increment: 1 } },

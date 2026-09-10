@@ -103,6 +103,14 @@ describe("api app", () => {
     expect(mocks.findMany).not.toHaveBeenCalled();
   });
 
+  it("forbids a Human Agent from AI Agent settings", async () => {
+    mocks.getSession.mockResolvedValue(createAuthSession("HUMAN_AGENT"));
+
+    const response = await app.request("/ai-settings");
+
+    expect(response.status).toBe(403);
+  });
+
   it("validates users list limits", async () => {
     mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
 
