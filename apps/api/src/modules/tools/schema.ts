@@ -26,5 +26,18 @@ export const updateHttpToolSchema = z.object({
   enabled: z.boolean(),
 });
 
+const ticketCategorySchema = z.enum([
+  "ACCOUNT",
+  "BILLING",
+  "SUBSCRIPTION",
+  "TECHNICAL",
+  "GENERAL",
+]);
+
+export const toolPolicyParamsSchema = z.object({ category: ticketCategorySchema });
+export const setToolEnabledSchema = z.object({ enabled: z.boolean() });
+export const setToolAssignmentSchema = z.object({ assigned: z.boolean() });
+export const setToolPolicySchema = z.object({ toolId: z.string().trim().min(1) });
+
 export type CreateHttpToolInput = z.infer<typeof createHttpToolSchema>;
 export type UpdateHttpToolInput = z.infer<typeof updateHttpToolSchema>;
