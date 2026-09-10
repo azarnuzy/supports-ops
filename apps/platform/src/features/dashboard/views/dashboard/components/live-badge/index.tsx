@@ -11,7 +11,7 @@ export default function LiveBadge({ className }: LiveBadgeProps) {
       )}
     >
       <span className="relative flex size-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-resolved opacity-60" />
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-status-resolved opacity-60 motion-reduce:animate-none" />
         <span className="relative inline-flex size-1.5 rounded-full bg-status-resolved" />
       </span>
       Live
