@@ -2,8 +2,8 @@ import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
 import { Badge } from "@repo/ui/components/badge";
 import { PriorityBadge } from "@repo/ui/components/ticket-badge";
 import { cn } from "@repo/ui/lib/utils";
-import { getInitials } from "../../../../../../lib/utils";
-import { formatWaitingDuration } from "../../chat.utils";
+import { formatEnumLabel, getInitials } from "../../../../../../lib/utils";
+import { formatShortDate, formatWaitingDuration } from "../../chat.utils";
 import type { TicketRowProps } from "./index.types";
 
 export default function TicketRow({ active, onSelect, ticket }: TicketRowProps) {
@@ -13,35 +13,47 @@ export default function TicketRow({ active, onSelect, ticket }: TicketRowProps) 
       type="button"
       onClick={onSelect}
       className={cn(
-        "flex w-full gap-3 rounded-lg p-3 text-left hover:bg-accent",
-        active ? "bg-accent" : "",
+        "flex w-full items-start gap-2.5 rounded-lg border border-transparent p-2.5 text-left transition-colors",
+        active ? "border-border bg-accent" : "hover:bg-accent/60",
       )}
     >
-      <Avatar>
-        <AvatarFallback>{getInitials(ticket.customerIdentity.name)}</AvatarFallback>
+      <Avatar className="mt-0.5 size-8">
+        <AvatarFallback className="text-[11px] ring-1 ring-border">
+          {getInitials(ticket.customerIdentity.name)}
+        </AvatarFallback>
       </Avatar>
       <span className="min-w-0 flex-1">
-        <span className="flex justify-between gap-2">
-          <b className="truncate text-sm">{ticket.customerIdentity.name}</b>
-          <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-            <small>{new Date(ticket.createdAt).toLocaleDateString()}</small>
+        <span className="flex items-center justify-between gap-2">
+          <span className="truncate text-[13px] font-medium leading-5">
+            {ticket.customerIdentity.name}
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span className="text-[11px] leading-5 text-muted-foreground tabular-nums">
+              {formatShortDate(ticket.createdAt)}
+            </span>
             {ticket.unreadCount > 0 ? (
-              <Badge aria-label={`${ticket.unreadCount} unread`} className="px-1.5" variant="default">
+              <Badge
+                aria-label={`${ticket.unreadCount} unread`}
+                className="min-w-4 justify-center px-1.5"
+                variant="default"
+              >
                 {ticket.unreadCount}
               </Badge>
             ) : null}
           </span>
         </span>
-        <span className="mt-1 block truncate text-xs text-muted-foreground">
+        <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">
           {lastMessage?.content ?? ticket.title}
         </span>
-        <span className="mt-2 flex items-center gap-1.5">
+        <span className="mt-1.5 flex flex-wrap items-center gap-1 gap-y-1">
           <PriorityBadge priority={ticket.priority} />
-          <Badge variant="outline">{ticket.category}</Badge>
+          <Badge className="px-1.5" variant="outline">
+            {formatEnumLabel(ticket.category)}
+          </Badge>
           {ticket.status === "ESCALATED" ? (
-            <small className="text-muted-foreground">
+            <span className="ml-auto truncate text-[11px] text-muted-foreground">
               Waiting {formatWaitingDuration(ticket.escalatedAt ?? ticket.createdAt)}
-            </small>
+            </span>
           ) : null}
         </span>
       </span>

@@ -1,9 +1,13 @@
 import { Empty, EmptyMedia, EmptyTitle } from "@repo/ui/components/empty";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { CalendarIcon, FlagIcon, HistoryIcon, MailIcon, UserRoundIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { formatEnumLabel } from "../../../../../../lib/utils";
+import { formatTimestamp } from "../../chat.utils";
 import type { DetailsTab } from "../../chat.types";
 import AttachmentCard from "../attachment-card";
 import DetailRow from "../detail-row";
+import { Markdown } from "@repo/ui/components/markdown";
 import type { TicketInspectorProps } from "./index.types";
 
 export default function TicketInspector({
@@ -26,17 +30,27 @@ export default function TicketInspector({
         <TabsTrigger value="activity">Activity</TabsTrigger>
       </TabsList>
       {detailsTab === "details" ? (
-        <div className="flex flex-col gap-1 p-3">
+        <div className="flex flex-col p-3">
+          <SectionLabel>Customer</SectionLabel>
           <DetailRow icon={MailIcon} label="Email" value={detail.customerIdentity.email} />
           <DetailRow
             icon={UserRoundIcon}
             label="Owner"
             value={detail.assignedHumanAgent?.name ?? "Unassigned"}
           />
-          <DetailRow icon={FlagIcon} label="Priority" value={detail.priority} />
-          <DetailRow icon={CalendarIcon} label="Category" value={detail.category} />
+          <SectionLabel>Classification</SectionLabel>
+          <DetailRow icon={FlagIcon} label="Priority" value={formatEnumLabel(detail.priority)} />
+          <DetailRow
+            icon={CalendarIcon}
+            label="Category"
+            value={formatEnumLabel(detail.category)}
+          />
           {detail.escalationReason ? (
-            <DetailRow icon={FlagIcon} label="Escalation reason" value={detail.escalationReason} />
+            <DetailRow
+              icon={FlagIcon}
+              label="Escalation reason"
+              value={formatEnumLabel(detail.escalationReason)}
+            />
           ) : null}
           {detail.escalationSummaryStatus === "PENDING" ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">
@@ -49,16 +63,17 @@ export default function TicketInspector({
             </p>
           ) : null}
           {detail.escalationSummaryStatus === "READY" && detail.escalationSummary ? (
-            <article className="mx-2 mt-1 whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">
-              {detail.escalationSummary}
+            <article className="mt-2 rounded-lg bg-muted p-3 text-[13px] leading-relaxed">
+              <Markdown>{detail.escalationSummary}</Markdown>
             </article>
           ) : null}
           {detail.status === "RESOLVED" ? (
             <>
+              <SectionLabel>Resolution</SectionLabel>
               <DetailRow
                 icon={FlagIcon}
                 label="Resolution reason"
-                value={detail.resolutionReason ?? "—"}
+                value={detail.resolutionReason ? formatEnumLabel(detail.resolutionReason) : "—"}
               />
               <DetailRow
                 icon={CalendarIcon}
@@ -78,7 +93,9 @@ export default function TicketInspector({
                   attachment={attachment}
                   key={attachment.id}
                   onOpenImage={() =>
-                    setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
+                    setGalleryIndex(
+                      images.findIndex((image) => image.attachment.id === attachment.id),
+                    )
                   }
                 />
               )),
@@ -97,18 +114,18 @@ export default function TicketInspector({
             <EmptyTitle>No activity yet</EmptyTitle>
           </Empty>
         ) : (
-          <ol className="grid gap-3 p-3">
+          <ol className="grid gap-2.5 p-3">
             {timeline.map((entry) => (
-              <li key={entry.id} className="flex items-baseline gap-3 text-sm">
-                <span className="w-16 shrink-0 text-xs text-muted-foreground">
-                  {new Date(entry.createdAt).toLocaleTimeString()}
+              <li key={entry.id} className="flex items-baseline gap-2.5 text-[13px]">
+                <span className="w-20 shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                  {formatTimestamp(entry.createdAt)}
                 </span>
-                <span>
+                <span className="min-w-0">
                   {entry.description.text}
                   {entry.description.mono ? (
                     <>
                       {" "}
-                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
                         {entry.description.mono}
                       </code>
                     </>
@@ -121,4 +138,8 @@ export default function TicketInspector({
       ) : null}
     </Tabs>
   );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return <p className="px-2 pt-3 pb-1 text-xs font-semibold text-foreground">{children}</p>;
 }

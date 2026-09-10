@@ -34,6 +34,19 @@ export function formatWaitingDuration(since: string) {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+export function formatShortDate(date: string) {
+  return new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+export function formatTimestamp(date: string) {
+  return new Date(date).toLocaleString(undefined, {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+  });
+}
+
 export function scopeUnreadTotal(data: { tickets: SupportTicket[] } | undefined) {
   return data?.tickets.reduce((total, ticket) => total + ticket.unreadCount, 0) ?? 0;
 }
