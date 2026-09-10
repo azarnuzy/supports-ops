@@ -25,6 +25,7 @@ import {
   storageConfig,
 } from "../../config";
 import { type Message, unscopedPrisma } from "../../utils/prisma";
+import { withWorkspaceContext } from "../../utils/workspace-context";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
 import {
@@ -431,7 +432,16 @@ export async function generateAiReply(
 
 /** The run itself. Retrieval, Business Tool calls, generation, and the final
  * decision all nest under the caller's `ai_agent.run` span. */
-async function generateAiReplyRun(
+/** The Widget flow has no per-request auth middleware to set a Workspace context,
+ * but Tool resolution/execution (resolveTools, runRequiredTool, executeHttpTool,
+ * executeMcpTool) run Workspace-scoped Prisma queries that require one. */
+function generateAiReplyRun(run: Span, ticketId: string, workspaceId: string, customerMessage: string) {
+  return withWorkspaceContext(workspaceId, () =>
+    generateAiReplyRunInWorkspace(run, ticketId, workspaceId, customerMessage),
+  );
+}
+
+async function generateAiReplyRunInWorkspace(
   run: Span,
   ticketId: string,
   workspaceId: string,
