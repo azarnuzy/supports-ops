@@ -23,25 +23,40 @@ export type TrafficSummary = {
   peak: { day: string; hour: number; count: number } | null;
 };
 
-export function summarizeBuckets(buckets: AnalyticsHourBucket[]): TrafficSummary {
+export function summarizeBuckets(
+  buckets: AnalyticsHourBucket[],
+  timeZone: string,
+): TrafficSummary {
   const byDayHour = new Map<string, Map<number, number>>();
+  const localParts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+    month: "2-digit",
+    timeZone,
+    year: "numeric",
+  });
   let total = 0;
   let max = 0;
   let peak: TrafficSummary["peak"] = null;
   for (const bucket of buckets) {
     const date = new Date(bucket.hourStart);
-    const day = date.toISOString().slice(0, 10);
-    const hour = date.getUTCHours();
+    const parts = Object.fromEntries(
+      localParts.formatToParts(date).map(({ type, value }) => [type, value]),
+    );
+    const day = `${parts.year}-${parts.month}-${parts.day}`;
+    const hour = Number(parts.hour);
     let byHour = byDayHour.get(day);
     if (!byHour) {
       byHour = new Map();
       byDayHour.set(day, byHour);
     }
-    byHour.set(hour, bucket.count);
+    const count = (byHour.get(hour) ?? 0) + bucket.count;
+    byHour.set(hour, count);
     total += bucket.count;
-    if (bucket.count > max) {
-      max = bucket.count;
-      peak = { day, hour, count: bucket.count };
+    if (count > max) {
+      max = count;
+      peak = { day, hour, count };
     }
   }
   const days = [...byDayHour.keys()].sort((a, b) => a.localeCompare(b));
@@ -66,14 +81,14 @@ export function intensityFor(count: number, max: number) {
 export function dayLabelOf(day: string) {
   const date = new Date(`${day}T00:00:00Z`);
   return {
-    weekday: date.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }),
-    weekdayShort: date.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }),
-    date: date.toLocaleDateString("en-US", {
+    weekday: date.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" }),
+    weekdayShort: date.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }),
+    date: date.toLocaleDateString(undefined, {
       day: "numeric",
       month: "short",
       timeZone: "UTC",
     }),
-    full: date.toLocaleDateString("en-US", {
+    full: date.toLocaleDateString(undefined, {
       weekday: "long",
       day: "numeric",
       month: "long",
