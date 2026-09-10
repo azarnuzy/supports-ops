@@ -8,6 +8,31 @@ enum AiAgentStatus {
   INACTIVE
 }
 
+enum ToolOrigin {
+  BUILT_IN
+  HTTP
+  MCP
+}
+
+enum ToolRisk {
+  READ_ONLY
+  MUTATING
+}
+
+enum HttpMethod {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
+}
+
+enum McpToolDiscoveryStatus {
+  CURRENT
+  CHANGED
+  UNAVAILABLE
+}
+
 enum ChannelType {
   WEB
   WHATSAPP
