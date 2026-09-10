@@ -15,8 +15,12 @@ export const queryKeys = {
     myTickets: ["workspace", "my-tickets"] as const,
     sharedHumanQueue: ["workspace", "shared-human-queue"] as const,
     liveAiTickets: ["workspace", "live-ai-tickets"] as const,
-    allTickets: (filters: { search?: string; status?: string }) =>
-      ["workspace", "all-tickets", filters] as const,
+    allTickets: (filters: {
+      category?: string;
+      priority?: string;
+      search?: string;
+      status?: string;
+    }) => ["workspace", "all-tickets", filters] as const,
     analytics: ["workspace", "analytics"] as const,
     analyticsTraffic: ["workspace", "analytics-traffic"] as const,
     aiSettings: ["workspace", "ai-settings"] as const,
