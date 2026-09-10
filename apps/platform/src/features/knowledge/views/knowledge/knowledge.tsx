@@ -1,20 +1,4 @@
-import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@repo/ui/components/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@repo/ui/components/dropdown-menu";
-import { Field, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
 import {
   Select,
@@ -24,10 +8,9 @@ import {
   SelectValue,
 } from "@repo/ui/components/select";
 import { Skeleton } from "@repo/ui/components/skeleton";
-import { Textarea } from "@repo/ui/components/textarea";
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
-import { FileTextIcon, Globe2Icon, MoreHorizontalIcon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
+import { FileTextIcon, Globe2Icon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import {
@@ -37,16 +20,17 @@ import {
   useCreatePdfKnowledgeSourceMutation,
   useDeleteKnowledgeSourceMutation,
   useKnowledgeSourceEvents,
-} from "../../knowledge.hooks";
-import type { KnowledgeSourceType, KnowledgeVisibility } from "../../knowledge.types";
-import { KnowledgeDetailDrawer } from "./knowledge-detail-drawer";
-import { KnowledgeRetrievalTestDialog } from "./knowledge-retrieval-test-dialog";
-import { formatUpdatedAt, sourceTypeLabel, statusLabel, statusVariant, visibilityLabel } from "./knowledge.services";
-
-type DialogKind = "file" | "text" | "website" | null;
-type SourceFilter = "ALL" | KnowledgeSourceType;
-
-const fileLimit = 25 * 1024 * 1024;
+} from "./knowledge.hooks";
+import { fileLimit } from "./knowledge.constants";
+import type { DialogKind, KnowledgeVisibility, SourceFilter } from "./knowledge.types";
+import {
+  AddFileDialog,
+  AddTextDialog,
+  AddWebsiteDialog,
+  KnowledgeDetailDrawer,
+  KnowledgeSourceRow,
+  RetrievalTestDialog,
+} from "./components";
 
 const KnowledgeView = () => {
   useKnowledgeSourceEvents();
@@ -134,6 +118,13 @@ const KnowledgeView = () => {
     );
   }
 
+  function handleDeleteSource(id: string) {
+    deleteKnowledgeSource.mutate(id, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete."),
+      onSuccess: () => toast.success("Knowledge Source deleted."),
+    });
+  }
+
   return (
     <PlatformAppShell>
       <section className="mx-auto grid w-full max-w-6xl gap-8">
@@ -204,24 +195,12 @@ const KnowledgeView = () => {
             <p className="p-12 text-center text-sm text-muted-foreground">No Knowledge Sources match this search or type.</p>
           ) : null}
           {visibleSources.map((source) => (
-            <div
+            <KnowledgeSourceRow
               key={source.id}
-              className="grid cursor-pointer gap-3 border-b p-4 last:border-b-0 hover:bg-accent/50 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
-              role="button"
-              tabIndex={0}
-              onClick={() => setSelectedId(source.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setSelectedId(source.id);
-                }
-              }}
-            >
-              <div className="min-w-0"><div className="flex items-center gap-2"><FileTextIcon className="size-4 shrink-0 text-muted-foreground" /><p className="truncate font-medium">{source.title}</p></div><p className="mt-1 truncate pl-6 text-sm text-muted-foreground">{source.sourceUrl ?? sourceTypeLabel(source.sourceType)}</p></div>
-              <Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>
-              <Badge variant={statusVariant(source.status)}>{source.status === "PROCESSING" && source.stage ? statusLabel(source.stage) : statusLabel(source.status)}</Badge>
-              <div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">Last updated {formatUpdatedAt(source.updatedAt)}</span><DropdownMenu><DropdownMenuTrigger asChild><Button aria-label={`Actions for ${source.title}`} size="icon-sm" variant="ghost" onClick={(event) => event.stopPropagation()}><MoreHorizontalIcon className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}><DropdownMenuItem variant="destructive" onSelect={() => deleteKnowledgeSource.mutate(source.id, { onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete."), onSuccess: () => toast.success("Knowledge Source deleted.") })}>Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
-            </div>
+              source={source}
+              onSelect={() => setSelectedId(source.id)}
+              onDelete={() => handleDeleteSource(source.id)}
+            />
           ))}
         </div>
       </section>
@@ -231,17 +210,42 @@ const KnowledgeView = () => {
         onOpenChange={(open) => !open && setSelectedId(null)}
       />
 
-      <KnowledgeRetrievalTestDialog open={retrievalTestOpen} onOpenChange={setRetrievalTestOpen} />
+      <RetrievalTestDialog open={retrievalTestOpen} onOpenChange={setRetrievalTestOpen} />
 
-      <Dialog open={dialog === "website"} onOpenChange={(open) => !open && closeDialog()}><DialogContent><form className="grid gap-5" onSubmit={handleWebsite}><DialogHeader><DialogTitle>Add Website</DialogTitle><DialogDescription>Import pages from one documentation website.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor="knowledge-url">Website URL</FieldLabel><Input id="knowledge-url" required placeholder="https://docs.example.com" type="url" value={url} onChange={(event) => setUrl(event.target.value)} /></Field><VisibilitySelect value={visibility} onChange={setVisibility} /><DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button disabled={!url.trim() || addDocumentationUrl.isPending} type="submit">{addDocumentationUrl.isPending ? "Starting..." : "Add Website"}</Button></DialogFooter></form></DialogContent></Dialog>
-      <Dialog open={dialog === "file"} onOpenChange={(open) => !open && closeDialog()}><DialogContent><form className="grid gap-5" onSubmit={handleFile}><DialogHeader><DialogTitle>Add File</DialogTitle><DialogDescription>Upload one PDF, up to 25 MB.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor="knowledge-file">PDF file</FieldLabel><Input accept="application/pdf" id="knowledge-file" required type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field><VisibilitySelect value={visibility} onChange={setVisibility} /><DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button disabled={!file || addPdf.isPending} type="submit">{addPdf.isPending ? "Uploading..." : "Add File"}</Button></DialogFooter></form></DialogContent></Dialog>
-      <Dialog open={dialog === "text"} onOpenChange={(open) => !open && closeDialog()}><DialogContent><form className="grid gap-5" onSubmit={handleText}><DialogHeader><DialogTitle>Create Text</DialogTitle><DialogDescription>Create a Knowledge Source from text.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor="knowledge-title">Title</FieldLabel><Input id="knowledge-title" required value={title} onChange={(event) => setTitle(event.target.value)} /></Field><Field><FieldLabel htmlFor="knowledge-content">Content</FieldLabel><Textarea id="knowledge-content" required rows={7} value={content} onChange={(event) => setContent(event.target.value)} /></Field><VisibilitySelect value={visibility} onChange={setVisibility} /><DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button disabled={!title.trim() || !content.trim() || addManualFaq.isPending} type="submit">{addManualFaq.isPending ? "Creating..." : "Create Text"}</Button></DialogFooter></form></DialogContent></Dialog>
+      <AddWebsiteDialog
+        open={dialog === "website"}
+        onOpenChange={(open) => !open && closeDialog()}
+        url={url}
+        setUrl={setUrl}
+        visibility={visibility}
+        setVisibility={setVisibility}
+        onSubmit={handleWebsite}
+        isPending={addDocumentationUrl.isPending}
+      />
+      <AddFileDialog
+        open={dialog === "file"}
+        onOpenChange={(open) => !open && closeDialog()}
+        file={file}
+        setFile={setFile}
+        visibility={visibility}
+        setVisibility={setVisibility}
+        onSubmit={handleFile}
+        isPending={addPdf.isPending}
+      />
+      <AddTextDialog
+        open={dialog === "text"}
+        onOpenChange={(open) => !open && closeDialog()}
+        title={title}
+        setTitle={setTitle}
+        content={content}
+        setContent={setContent}
+        visibility={visibility}
+        setVisibility={setVisibility}
+        onSubmit={handleText}
+        isPending={addManualFaq.isPending}
+      />
     </PlatformAppShell>
   );
 };
-
-function VisibilitySelect({ value, onChange }: { value: KnowledgeVisibility; onChange: (value: KnowledgeVisibility) => void }) {
-  return <Field><FieldLabel htmlFor="knowledge-visibility">Visibility</FieldLabel><Select value={value} onValueChange={(next) => onChange(next as KnowledgeVisibility)}><SelectTrigger id="knowledge-visibility" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="CUSTOMER_SAFE">Customer-Safe</SelectItem><SelectItem value="INTERNAL_ONLY">Internal-Only</SelectItem></SelectContent></Select></Field>;
-}
 
 export default KnowledgeView;

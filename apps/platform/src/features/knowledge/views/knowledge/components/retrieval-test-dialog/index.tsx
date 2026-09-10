@@ -13,14 +13,9 @@ import { EmbeddingNotConfiguredApiError } from "@repo/api-client";
 import { type FormEvent, useState } from "react";
 import { useTestRetrievalMutation } from "../../knowledge.hooks";
 import type { RetrievalTestResult } from "../../knowledge.types";
+import type { RetrievalTestDialogProps } from "./index.types";
 
-export function KnowledgeRetrievalTestDialog({
-  onOpenChange,
-  open,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+export default function RetrievalTestDialog({ onOpenChange, open }: RetrievalTestDialogProps) {
   const testRetrieval = useTestRetrievalMutation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<RetrievalTestResult[] | null>(null);

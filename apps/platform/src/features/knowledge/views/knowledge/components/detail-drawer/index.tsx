@@ -12,13 +12,6 @@ import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { Field, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@repo/ui/components/select";
 import { Separator } from "@repo/ui/components/separator";
 import {
   Sheet,
@@ -46,18 +39,14 @@ import {
   statusLabel,
   statusVariant,
   visibilityLabel,
-} from "./knowledge.services";
+} from "../../knowledge.utils";
+import VisibilitySelect from "../visibility-select";
+import type { KnowledgeDetailDrawerProps } from "./index.types";
 
 const refreshableTypes = new Set(["PDF", "URL"]);
 const editableTypes = new Set(["MANUAL_FAQ", "PDF", "URL", "INTERNAL_SOP"]);
 
-export function KnowledgeDetailDrawer({
-  onOpenChange,
-  source,
-}: {
-  source: KnowledgeSource | null;
-  onOpenChange: (open: boolean) => void;
-}) {
+export default function KnowledgeDetailDrawer({ onOpenChange, source }: KnowledgeDetailDrawerProps) {
   const updateKnowledgeSource = useUpdateKnowledgeSourceMutation();
   const retryKnowledgeSource = usePublishKnowledgeSourceMutation();
   const refreshKnowledgeSource = useRefreshKnowledgeSourceMutation();
@@ -232,18 +221,7 @@ export function KnowledgeDetailDrawer({
                     <FieldLabel htmlFor="detail-title">Title</FieldLabel>
                     <Input id="detail-title" value={title} onChange={(event) => setTitle(event.target.value)} />
                   </Field>
-                  <Field>
-                    <FieldLabel htmlFor="detail-visibility">Visibility</FieldLabel>
-                    <Select value={visibility} onValueChange={(value) => setVisibility(value as KnowledgeVisibility)}>
-                      <SelectTrigger id="detail-visibility" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CUSTOMER_SAFE">Customer-Safe</SelectItem>
-                        <SelectItem value="INTERNAL_ONLY">Internal-Only</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                  <VisibilitySelect id="detail-visibility" value={visibility} onChange={setVisibility} />
                   <Field>
                     <FieldLabel htmlFor="detail-content">Content</FieldLabel>
                     <Textarea

@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { queryKeys } from "../../lib/query-keys";
+import { queryKeys } from "../../../../lib/query-keys";
 import {
   createManualFaq,
   createDocumentationUrl,
