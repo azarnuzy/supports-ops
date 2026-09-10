@@ -10,3 +10,8 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
+
+/** The AI Agent runtime calls required Tools with no per-Ticket argument, so this
+ * demo Business System falls back to a fixed demo customer for both the HTTP
+ * subscription Tool and the MCP invoice Tool when the caller omits one. */
+export const defaultDemoCustomerId = "cus_102";

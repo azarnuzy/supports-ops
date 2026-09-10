@@ -4,16 +4,30 @@ import {
   chunkText,
   replaceChunks,
 } from "../packages/knowledge/src/index";
-import { embeddingConfig } from "../apps/api/src/config";
-import { updateWebWidgetConfig } from "../apps/api/src/modules/widget-config/services";
+import { apiConfig, embeddingConfig } from "../apps/api/src/config";
+import { getAiSettings, updateAiSettings } from "../apps/api/src/modules/ai-settings/services";
+import {
+  createMcpServer,
+  discoverMcpTools,
+  listMcpServers,
+  reviewMcpTool,
+  testMcpConnection,
+} from "../apps/api/src/modules/mcp/services";
 import {
   EmailAlreadyInUseError,
   registerAdminWorkspace,
 } from "../apps/api/src/modules/registration/services";
 import {
+  createHttpTool,
+  listHttpTools,
+  setToolAssignment,
+  setToolPolicy,
+} from "../apps/api/src/modules/tools/services";
+import {
   HumanAgentEmailAlreadyInUseError,
   createHumanAgent,
 } from "../apps/api/src/modules/users/services";
+import { updateWebWidgetConfig } from "../apps/api/src/modules/widget-config/services";
 import { unscopedPrisma as prisma } from "../apps/api/src/utils/prisma";
 import { withWorkspaceContext } from "../apps/api/src/utils/workspace-context";
 import type { KnowledgeVisibility } from "../apps/api/src/utils/prisma";
@@ -27,6 +41,18 @@ const demoHumanAgentPassword = "DemoAgent123!";
 const demoHumanAgentName = "Rian Wibowo";
 
 const demoWidgetDomains = ["localhost:3001", "localhost:4000"];
+
+const demoAiInstructions =
+  "Always verify the Customer's subscription status with the Business Tool before answering a " +
+  "subscription question. Use the invoice lookup Tool when a Customer asks about a specific " +
+  "invoice or billing charge.";
+const demoHandoffMessage =
+  "Hello, I'm {humanAgentName} from the support team. I'll continue helping you from here.";
+const demoResolutionMessage = "Glad that's sorted — this conversation is now resolved.";
+
+const demoSubscriptionToolName = "getSubscriptionStatus";
+const demoMcpServerName = "Business System Demo";
+const demoInvoiceToolRemoteName = "getInvoiceStatus";
 
 type DemoKnowledgeSource = {
   title: string;
@@ -102,6 +128,76 @@ const demoKnowledgeSources: DemoKnowledgeSource[] = [
   },
 ];
 
+/**
+ * Seeds the #94 demonstration: a required HTTP Tool for subscription status and an
+ * optional MCP Tool for invoice status, both assigned to the Workspace's AI Agent
+ * through the same application services Admin flows use.
+ */
+async function ensureBusinessTools() {
+  const settings = await getAiSettings();
+  await updateAiSettings({
+    aiAgentId: settings.aiAgentId,
+    autoResolveAfterSeconds: settings.autoResolveAfterSeconds,
+    autoResolveEnabled: settings.autoResolveEnabled,
+    followUpAfterSeconds: settings.followUpAfterSeconds,
+    handoffMessage: demoHandoffMessage,
+    instructions: demoAiInstructions,
+    resolutionMessage: demoResolutionMessage,
+  });
+  console.log("AI Agent instructions and lifecycle messages configured.");
+
+  const subscriptionTool =
+    (await listHttpTools()).find((tool) => tool.name === demoSubscriptionToolName) ??
+    (await createHttpTool({
+      description:
+        "Look up the demo Business System's linked subscription (customerId cus_102). The " +
+        "required-Tool Policy runtime calls this with no arguments, so customerId is optional here.",
+      enabled: true,
+      inputSchema: {
+        properties: { customerId: { type: "string" } },
+        required: [],
+        type: "object",
+      },
+      method: "GET",
+      name: demoSubscriptionToolName,
+      risk: "READ_ONLY",
+      url: new URL("/subscription-status", apiConfig.businessSystemUrl).toString(),
+    }));
+  console.log(`HTTP Tool ready: ${subscriptionTool.name}`);
+
+  const mcpServer =
+    (await listMcpServers()).find((server) => server.name === demoMcpServerName) ??
+    (await createMcpServer({
+      name: demoMcpServerName,
+      url: new URL("/mcp", apiConfig.businessSystemUrl).toString(),
+    }));
+
+  const connection = await testMcpConnection(mcpServer.id);
+  if (!connection.ok) {
+    console.warn(
+      `MCP Server "${demoMcpServerName}" is not reachable at ${mcpServer.url} — start ` +
+        "the Business System, then re-run this seed to discover and enable getInvoiceStatus.",
+    );
+    return;
+  }
+
+  const discovered = await discoverMcpTools(mcpServer.id);
+  const invoiceMcpTool = discovered.find((tool) => tool.remoteName === demoInvoiceToolRemoteName);
+  if (!invoiceMcpTool) {
+    console.warn(`MCP Server "${demoMcpServerName}" did not report a ${demoInvoiceToolRemoteName} Tool.`);
+    return;
+  }
+  if (invoiceMcpTool.discoveryStatus !== "CURRENT" || !invoiceMcpTool.tool.enabled) {
+    await reviewMcpTool(invoiceMcpTool.toolId, { enabled: true, risk: "READ_ONLY" });
+  }
+  console.log(`MCP Tool ready: ${mcpServer.name}/${demoInvoiceToolRemoteName}`);
+
+  await setToolAssignment(subscriptionTool.id, settings.aiAgentId, true);
+  await setToolAssignment(invoiceMcpTool.toolId, settings.aiAgentId, true);
+  await setToolPolicy(settings.aiAgentId, "SUBSCRIPTION", subscriptionTool.id);
+  console.log("Tools assigned to the AI Agent; SUBSCRIPTION Tool Policy set to getSubscriptionStatus.");
+}
+
 async function main() {
   const { workspace, admin } = await ensureAdminWorkspace();
   await ensureHumanAgent(workspace.id);
@@ -109,6 +205,7 @@ async function main() {
   await withWorkspaceContext(workspace.id, async () => {
     await ensureWidgetConfig();
     await ensureKnowledgeSources(workspace.id);
+    await ensureBusinessTools();
   });
 
   console.log("\nDemo Workspace ready.");
