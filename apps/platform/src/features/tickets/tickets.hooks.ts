@@ -1,4 +1,4 @@
-import type { ListTicketsFilters, TicketDetail } from "@repo/api-client";
+import type { TicketCategory, TicketDetail, TicketPriority, TicketStatus } from "@repo/api-client";
 import { queryOptions, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { queryKeys } from "../../lib/query-keys";
@@ -37,9 +37,11 @@ export const liveAiTicketsQueryOptions = queryOptions({
 });
 
 export function useAllTicketsQuery(filters: {
+  category?: TicketCategory;
   enabled: boolean;
+  priority?: TicketPriority;
   search?: string;
-  status?: ListTicketsFilters["status"];
+  status?: TicketStatus;
 }) {
   return useInfiniteQuery({
     enabled: filters.enabled,
@@ -47,10 +49,18 @@ export function useAllTicketsQuery(filters: {
       lastPage.nextCursor ?? undefined,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
-      getAllTickets({ cursor: pageParam, search: filters.search, status: filters.status }),
+      getAllTickets({
+        category: filters.category ? [filters.category] : undefined,
+        cursor: pageParam,
+        priority: filters.priority ? [filters.priority] : undefined,
+        search: filters.search,
+        status: filters.status ? [filters.status] : undefined,
+      }),
     queryKey: queryKeys.workspace.allTickets({
+      category: filters.category,
+      priority: filters.priority,
       search: filters.search,
-      status: filters.status?.join(","),
+      status: filters.status,
     }),
   });
 }
@@ -128,7 +138,10 @@ export function useTicketDetailEvents(ticketId: string | undefined) {
  * `newestMessageVisible`, driven by an IntersectionObserver on the last
  * bubble) — never while backgrounded, on a different Ticket, or scrolled
  * away from the newest Message. */
-export function useMarkTicketReadOnView(ticket: TicketDetail | undefined, newestMessageVisible: boolean) {
+export function useMarkTicketReadOnView(
+  ticket: TicketDetail | undefined,
+  newestMessageVisible: boolean,
+) {
   const queryClient = useQueryClient();
   const lastSent = useRef<string | undefined>(undefined);
 
@@ -172,9 +185,12 @@ export function useIsElementVisible(element: Element | null) {
       setVisible(false);
       return;
     }
-    const observer = new IntersectionObserver(([entry]) => setVisible(entry?.isIntersecting ?? false), {
-      threshold: 0.5,
-    });
+    const observer = new IntersectionObserver(
+      ([entry]) => setVisible(entry?.isIntersecting ?? false),
+      {
+        threshold: 0.5,
+      },
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, [element]);
@@ -199,17 +215,26 @@ export function useReassignTicketMutation() {
 
 export function useSendHumanReplyMutation() {
   const invalidateTicketAndLists = useInvalidateTicketAndLists();
-  return useMutation({ mutationFn: sendHumanReply, onSuccess: (_m, v) => invalidateTicketAndLists(v.id) });
+  return useMutation({
+    mutationFn: sendHumanReply,
+    onSuccess: (_m, v) => invalidateTicketAndLists(v.id),
+  });
 }
 
 export function useSendHumanAttachmentsMutation() {
   const invalidateTicketAndLists = useInvalidateTicketAndLists();
-  return useMutation({ mutationFn: sendHumanAttachments, onSuccess: (_m, v) => invalidateTicketAndLists(v.id) });
+  return useMutation({
+    mutationFn: sendHumanAttachments,
+    onSuccess: (_m, v) => invalidateTicketAndLists(v.id),
+  });
 }
 
 export function useRetryHumanReplyMutation() {
   const invalidateTicketAndLists = useInvalidateTicketAndLists();
-  return useMutation({ mutationFn: retryHumanReply, onSuccess: (_m, v) => invalidateTicketAndLists(v.id) });
+  return useMutation({
+    mutationFn: retryHumanReply,
+    onSuccess: (_m, v) => invalidateTicketAndLists(v.id),
+  });
 }
 
 export function useGenerateSuggestedReplyMutation() {
