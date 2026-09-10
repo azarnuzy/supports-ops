@@ -208,7 +208,7 @@ export function PlatformAppShell({
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset>
+      <SidebarInset className={fullBleed ? undefined : "overflow-y-auto"}>
         <header className="flex h-12 shrink-0 items-center justify-between border-b px-3">
           <div className="flex items-center gap-1.5">
             <SidebarTrigger />
@@ -220,7 +220,7 @@ export function PlatformAppShell({
           className={
             fullBleed
               ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden"
-              : "mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 overflow-y-auto px-6 py-8 lg:px-8"
+              : "mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-8 lg:px-8"
           }
         >
           {children}

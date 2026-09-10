@@ -53,7 +53,10 @@ export default function HeatmapGrid({ buckets }: HeatmapGridProps) {
                   return (
                     <div
                       key={hour}
-                      className={cn("size-4 rounded-sm", intensityClass(count, max))}
+                      className={cn(
+                        "size-4 rounded-sm transition-transform hover:scale-125 hover:ring-2 hover:ring-primary",
+                        intensityClass(count, max),
+                      )}
                       title={`${String(hour).padStart(2, "0")}:00 — ${count}`}
                     />
                   );
@@ -66,8 +69,11 @@ export default function HeatmapGrid({ buckets }: HeatmapGridProps) {
           <div className="w-24 shrink-0" />
           <div className="flex gap-1">
             {HOURS.map((hour) => (
-              <div key={hour} className="w-4 text-center text-[9px] text-muted-foreground">
-                {String(hour).padStart(2, "0")}
+              <div
+                key={hour}
+                className="w-4 pt-1 text-center text-[10px] leading-none text-muted-foreground tabular-nums [writing-mode:vertical-rl]"
+              >
+                {String(hour).padStart(2, "0")}:00
               </div>
             ))}
           </div>
