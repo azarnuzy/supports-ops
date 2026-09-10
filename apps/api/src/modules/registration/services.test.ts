@@ -64,6 +64,8 @@ describe("registerAdminWorkspace", () => {
       aiSettings?: unknown;
       channel?: unknown;
       webWidgetConfig?: unknown;
+      tools?: Record<string, unknown>[];
+      toolAssignments?: Record<string, unknown>[];
     } = {};
 
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => {
@@ -96,6 +98,19 @@ describe("registerAdminWorkspace", () => {
           create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
             created.aiAgent = data;
             return data;
+          }),
+        },
+        tool: {
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            created.tools ??= [];
+            created.tools.push(data);
+            return data;
+          }),
+        },
+        toolAssignment: {
+          createMany: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => {
+            created.toolAssignments = data;
+            return { count: data.length };
           }),
         },
         channel: {
@@ -152,6 +167,15 @@ describe("registerAdminWorkspace", () => {
     const webWidgetConfig = created.webWidgetConfig as Record<string, unknown>;
 
     expect(aiAgent).toMatchObject({ name: "AI Agent", workspaceId: workspace.id });
+    expect(created.tools).toEqual([
+      expect.objectContaining({ name: "searchKnowledge", origin: "BUILT_IN" }),
+      expect.objectContaining({ name: "searchCustomerTicketHistory", origin: "BUILT_IN" }),
+    ]);
+    expect(created.toolAssignments).toEqual(
+      created.tools?.map((tool) =>
+        expect.objectContaining({ aiAgentId: aiAgent.id, toolId: tool.id }),
+      ),
+    );
 
     expect(channel).toMatchObject({
       aiAgentId: aiAgent.id,

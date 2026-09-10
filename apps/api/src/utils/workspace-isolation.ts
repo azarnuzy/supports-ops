@@ -20,6 +20,12 @@ const workspaceScopedModels = new Set([
   "Attachment",
   "KnowledgeSource",
   "Chunk",
+  "Tool",
+  "ToolAssignment",
+  "ToolPolicy",
+  "HttpToolConfig",
+  "McpServer",
+  "McpTool",
 ]);
 
 type QueryArguments = {

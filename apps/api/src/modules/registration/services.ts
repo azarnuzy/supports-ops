@@ -75,6 +75,37 @@ export async function registerAdminWorkspace(input: RegisterInput) {
         },
       });
 
+      const tools = await Promise.all(
+        [
+          ["searchKnowledge", "Search published Customer-Safe Knowledge Sources."],
+          [
+            "searchCustomerTicketHistory",
+            "Search resolved Tickets for the same Customer Identity and Channel.",
+          ],
+        ].map(([name, description]) =>
+          tx.tool.create({
+            data: {
+              description,
+              id: randomUUID(),
+              inputSchema: { type: "object" },
+              name,
+              origin: "BUILT_IN",
+              risk: "READ_ONLY",
+              workspaceId: workspace.id,
+            },
+          }),
+        ),
+      );
+
+      await tx.toolAssignment.createMany({
+        data: tools.map((tool) => ({
+          aiAgentId: aiAgent.id,
+          id: randomUUID(),
+          toolId: tool.id,
+          workspaceId: workspace.id,
+        })),
+      });
+
       const channelId = randomUUID();
 
       await tx.channel.create({

@@ -71,6 +71,7 @@ const apiEnvSchema = z
     TELEMETRY_EXPORTER: telemetryExporterSchema,
     TELEMETRY_EXPORTER_OTLP_ENDPOINT: optionalStringSchema,
     TELEMETRY_SERVICE_NAMESPACE: optionalStringSchema,
+    TOOL_MASTER_KEY: optionalStringSchema,
   })
   .superRefine((env, context) => {
     const betterAuthSecret = env.BETTER_AUTH_SECRET ?? env.AUTH_SECRET ?? defaultBetterAuthSecret;
@@ -140,6 +141,15 @@ export const aiAgentConfig = {
   apiKey: env.OPENROUTER_API_KEY,
   baseUrl: modelGatewayBaseUrl,
   modelId: env.LLM_MODEL_MAIN,
+} as const;
+
+export const toolEncryptionConfig = {
+  get masterKey() {
+    if (!env.TOOL_MASTER_KEY) {
+      throw new Error("TOOL_MASTER_KEY is required to encrypt or decrypt Tool secrets.");
+    }
+    return env.TOOL_MASTER_KEY;
+  },
 } as const;
 
 export const storageConfig = {

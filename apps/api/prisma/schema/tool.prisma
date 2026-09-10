@@ -1,0 +1,99 @@
+model Tool {
+  id          String     @id
+  workspaceId String
+  origin      ToolOrigin
+  name        String
+  description String
+  enabled     Boolean    @default(true)
+  inputSchema Json
+  risk        ToolRisk   @default(READ_ONLY)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id])
+  httpConfig  HttpToolConfig?
+  mcpTool     McpTool?
+  assignments ToolAssignment[]
+  policies    ToolPolicy[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, name])
+}
+
+model ToolAssignment {
+  id               String   @id
+  workspaceId      String
+  aiAgentId        String
+  toolId           String
+  usageInstruction String?
+  createdAt        DateTime @default(now())
+  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+  aiAgent          AiAgent  @relation(fields: [workspaceId, aiAgentId], references: [workspaceId, id])
+  tool             Tool     @relation(fields: [workspaceId, toolId], references: [workspaceId, id])
+  policies         ToolPolicy[]
+
+  @@unique([workspaceId, aiAgentId, toolId])
+  @@index([workspaceId, toolId])
+}
+
+model ToolPolicy {
+  id          String         @id
+  workspaceId String
+  aiAgentId   String
+  category    TicketCategory
+  toolId      String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id])
+  aiAgent     AiAgent        @relation(fields: [workspaceId, aiAgentId], references: [workspaceId, id])
+  tool        Tool           @relation(fields: [workspaceId, toolId], references: [workspaceId, id])
+  assignment  ToolAssignment @relation(fields: [workspaceId, aiAgentId, toolId], references: [workspaceId, aiAgentId, toolId])
+
+  @@unique([workspaceId, aiAgentId, category])
+  @@index([workspaceId, toolId])
+}
+
+model HttpToolConfig {
+  toolId                 String     @id
+  workspaceId            String
+  method                 HttpMethod
+  url                    String
+  bearerTokenEncrypted   String?
+  secretHeadersEncrypted String?
+  tool                    Tool       @relation(fields: [workspaceId, toolId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@unique([workspaceId, toolId])
+}
+
+model McpServer {
+  id                     String    @id
+  workspaceId            String
+  name                   String
+  url                    String
+  enabled                Boolean   @default(true)
+  bearerTokenEncrypted   String?
+  secretHeadersEncrypted String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  workspace              Workspace @relation(fields: [workspaceId], references: [id])
+  tools                  McpTool[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, name])
+}
+
+model McpTool {
+  toolId          String                 @id
+  workspaceId     String
+  mcpServerId     String
+  remoteName      String
+  discoveredSchema Json
+  discoveredDescription String
+  discoveryStatus McpToolDiscoveryStatus @default(CURRENT)
+  discoveredAt    DateTime               @default(now())
+  tool            Tool                   @relation(fields: [workspaceId, toolId], references: [workspaceId, id], onDelete: Cascade)
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id])
+  mcpServer       McpServer              @relation(fields: [workspaceId, mcpServerId], references: [workspaceId, id])
+
+  @@unique([workspaceId, toolId])
+  @@unique([workspaceId, mcpServerId, remoteName])
+}

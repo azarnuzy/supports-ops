@@ -220,6 +220,7 @@ describe("createCustomerMessage", () => {
       title: "Invoice charged twice",
     });
     mocks.webSessionFindUniqueOrThrow.mockResolvedValue({
+      channel: { aiAgentId: "ai-agent-1" },
       channelId: "channel-1",
       customerIdentityId: "customer-1",
       id: "session-1",
@@ -233,6 +234,7 @@ describe("createCustomerMessage", () => {
 
     expect(mocks.ticketCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        aiAgentId: "ai-agent-1",
         category: "BILLING",
         priority: "HIGH",
         title: "Invoice charged twice",
