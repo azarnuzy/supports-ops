@@ -50,6 +50,11 @@
   --status-resolved: oklch(0.6 0.13 155);
   --status-resolved-foreground: oklch(0.31 0.08 155);
   --priority-high: oklch(0.58 0.2 25);
+  --bubble-customer: oklch(1 0 0);
+  --bubble-ai: oklch(0.96 0.02 240);
+  --bubble-ai-border: oklch(0.89 0.04 240);
+  --bubble-agent: oklch(0.96 0.025 295);
+  --bubble-agent-border: oklch(0.88 0.05 295);
 }
 
 .dark {
@@ -93,6 +98,11 @@
   --status-resolved: oklch(0.72 0.1 155);
   --status-resolved-foreground: oklch(0.81 0.06 155);
   --priority-high: oklch(0.72 0.16 25);
+  --bubble-customer: oklch(0.269 0 0);
+  --bubble-ai: oklch(0.31 0.035 240);
+  --bubble-ai-border: oklch(0.42 0.06 240);
+  --bubble-agent: oklch(0.33 0.045 295);
+  --bubble-agent-border: oklch(0.44 0.07 295);
 }
 
 @theme inline {
@@ -140,15 +150,54 @@
   --color-status-resolved: var(--status-resolved);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  --color-bubble-customer: var(--bubble-customer);
+  --color-bubble-ai: var(--bubble-ai);
+  --color-bubble-ai-border: var(--bubble-ai-border);
+  --color-bubble-agent: var(--bubble-agent);
+  --color-bubble-agent-border: var(--bubble-agent-border);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-color: oklch(0 0 0 / 0.18) transparent;
+    scrollbar-width: thin;
+  }
+
+  .dark * {
+    scrollbar-color: oklch(1 0 0 / 0.2) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: oklch(0 0 0 / 0.18);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(0 0 0 / 0.32);
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: oklch(1 0 0 / 0.2);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(1 0 0 / 0.34);
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply overflow-hidden bg-background text-foreground;
     font-family: var(--font-sans);
   }
 }
