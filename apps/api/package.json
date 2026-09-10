@@ -31,6 +31,7 @@
     "@repo/logger": "workspace:*",
     "@repo/storage": "workspace:*",
     "@repo/tools": "workspace:*",
+    "ajv": "^8.20.0",
     "better-auth": "^1.6.26",
     "bullmq": "^6.0.11",
     "hono": "^4.13.1",
