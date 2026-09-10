@@ -9,35 +9,12 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
 import { Switch } from "@repo/ui/components/switch";
-import {
-  createApiClient,
-  fetchAiSettings,
-  updateAiSettings,
-  type AiSettings,
-} from "@repo/api-client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsNav } from "../../components/settings-nav";
-
-const apiClient = createApiClient(import.meta.env.VITE_API_URL ?? "http://localhost:8000");
+import { useAiSettingsForm } from "./ai.hooks";
 
 const AiSettingsView = () => {
-  const queryClient = useQueryClient();
-  const settings = useQuery({
-    queryKey: ["workspace", "ai-settings"],
-    queryFn: () => fetchAiSettings(apiClient),
-  });
-  const [form, setForm] = useState<AiSettings | null>(null);
-  useEffect(() => {
-    if (settings.data) setForm(settings.data.aiSettings);
-  }, [settings.data]);
-  const save = useMutation({
-    mutationFn: (input: AiSettings) => updateAiSettings(apiClient, input),
-    onSuccess: (result) => queryClient.setQueryData(["workspace", "ai-settings"], result),
-  });
-  const update = (key: keyof AiSettings, value: number | boolean) =>
-    setForm((current) => (current ? { ...current, [key]: value } : current));
+  const { form, handleSubmit, save, settings, update } = useAiSettingsForm();
 
   return (
     <PlatformAppShell>
@@ -61,13 +38,7 @@ const AiSettingsView = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form
-                className="grid gap-5"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (form) save.mutate(form);
-                }}
-              >
+              <form className="grid gap-5" onSubmit={handleSubmit}>
                 <Field>
                   <FieldLabel htmlFor="follow-up-delay">Follow-Up delay (seconds)</FieldLabel>
                   <Input
