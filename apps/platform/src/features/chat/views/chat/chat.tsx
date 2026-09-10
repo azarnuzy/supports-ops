@@ -1,11 +1,4 @@
-import type {
-  SupportTicket,
-  TicketAttachment,
-  TicketDetail,
-  TicketDetailMessage,
-  TicketListItem,
-  TicketStatus,
-} from "@repo/api-client";
+import type { TicketStatus } from "@repo/api-client";
 import { webAttachmentCapability } from "@repo/channels";
 import {
   AlertDialog,
@@ -21,9 +14,7 @@ import {
 import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
-import { Bubble, BubbleContent } from "@repo/ui/components/bubble";
-import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@repo/ui/components/empty";
-import { Dialog, DialogContent, DialogTitle } from "@repo/ui/components/dialog";
+import { Empty, EmptyDescription, EmptyTitle } from "@repo/ui/components/empty";
 import {
   InputGroup,
   InputGroupAddon,
@@ -31,16 +22,6 @@ import {
   InputGroupInput,
   InputGroupTextarea,
 } from "@repo/ui/components/input-group";
-import { Item, ItemContent, ItemMedia, ItemTitle } from "@repo/ui/components/item";
-import { Marker, MarkerContent } from "@repo/ui/components/marker";
-import { Markdown } from "@repo/ui/components/markdown";
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-  MessageFooter,
-  MessageHeader,
-} from "@repo/ui/components/message";
 import { MessageScroller, MessageScrollerContent } from "@repo/ui/components/message-scroller";
 import {
   Select,
@@ -51,26 +32,16 @@ import {
 } from "@repo/ui/components/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/components/sheet";
 import { Skeleton } from "@repo/ui/components/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
 import { cn } from "@repo/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
-  CalendarIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  DownloadIcon,
-  FileTextIcon,
-  FlagIcon,
-  HistoryIcon,
-  MailIcon,
-  SendIcon,
   PaperclipIcon,
+  SendIcon,
   SparklesIcon,
   UserRoundIcon,
-  XIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
@@ -96,40 +67,17 @@ import {
   useTicketDetailEvents,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
-import { getAttachmentPreviewUrl, openAttachment } from "../../../tickets/tickets.services";
-
-function senderName(message: TicketDetailMessage) {
-  if (message.senderType === "CUSTOMER") return "Customer";
-  if (message.senderType === "AI_AGENT") return "AI Agent";
-  if (message.senderType === "HUMAN_AGENT") return "Human Agent";
-  return "System";
-}
-
-function bubbleVariant(senderType: TicketDetailMessage["senderType"]) {
-  if (senderType === "AI_AGENT") return "ai" as const;
-  if (senderType === "HUMAN_AGENT") return "human" as const;
-  return "customer" as const;
-}
-
-type TicketScope = "mine" | "unassigned" | "ai-live" | "all";
-
-const scopeRoutes = {
-  "ai-live": { list: "/chat/ai-live" as const, ticket: "/chat/ai-live/tickets/$ticketId" as const },
-  all: { list: "/chat/all" as const, ticket: "/chat/all/tickets/$ticketId" as const },
-  mine: { list: "/chat" as const, ticket: "/chat/tickets/$ticketId" as const },
-  unassigned: {
-    list: "/chat/unassigned" as const,
-    ticket: "/chat/unassigned/tickets/$ticketId" as const,
-  },
-};
-
-const statusFilterOptions: { label: string; value: TicketStatus | "ALL" }[] = [
-  { label: "All statuses", value: "ALL" },
-  { label: "AI handling", value: "AI_HANDLING" },
-  { label: "Escalated", value: "ESCALATED" },
-  { label: "Human handling", value: "HUMAN_HANDLING" },
-  { label: "Resolved", value: "RESOLVED" },
-];
+import { scopeRoutes, statusFilterOptions } from "./chat.constants";
+import type { DetailsTab, TicketScope } from "./chat.types";
+import { isImage, scopeUnreadTotal } from "./chat.utils";
+import {
+  AllTicketRow,
+  ImageGallery,
+  SelectedFile,
+  TicketInspector,
+  TicketRow,
+  TranscriptMessage,
+} from "./components";
 
 const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?: string }) => {
   const navigate = useNavigate();
@@ -192,7 +140,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const [files, setFiles] = useState<File[]>([]);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
   const [inspectorSheetOpen, setInspectorSheetOpen] = useState(false);
-  const [detailsTab, setDetailsTab] = useState<"details" | "attachments" | "activity">("details");
+  const [detailsTab, setDetailsTab] = useState<DetailsTab>("details");
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [suggestedReplyContent, setSuggestedReplyContent] = useState<string>();
   const replyKey = useRef<string | undefined>(undefined);
@@ -787,525 +735,5 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     </PlatformAppShell>
   );
 };
-
-function TicketInspector({
-  detail,
-  detailsTab,
-  images,
-  setDetailsTab,
-  setGalleryIndex,
-  timeline,
-}: {
-  detail: TicketDetail;
-  detailsTab: "details" | "attachments" | "activity";
-  images: { attachment: TicketAttachment; messagePosition: number }[];
-  setDetailsTab: (value: "details" | "attachments" | "activity") => void;
-  setGalleryIndex: (index: number) => void;
-  timeline: { createdAt: string; description: { mono?: string; text: string }; id: string }[];
-}) {
-  return (
-    <Tabs
-      value={detailsTab}
-      onValueChange={(value) => setDetailsTab(value as typeof detailsTab)}
-      className="min-h-0 flex-1 gap-0"
-    >
-      <TabsList className="mx-3 mt-3 w-[calc(100%-1.5rem)]">
-        <TabsTrigger value="details">Details</TabsTrigger>
-        <TabsTrigger value="attachments">Attachments</TabsTrigger>
-        <TabsTrigger value="activity">Activity</TabsTrigger>
-      </TabsList>
-      {detailsTab === "details" ? (
-        <div className="flex flex-col gap-1 p-3">
-          <DetailRow icon={MailIcon} label="Email" value={detail.customerIdentity.email} />
-          <DetailRow
-            icon={UserRoundIcon}
-            label="Owner"
-            value={detail.assignedHumanAgent?.name ?? "Unassigned"}
-          />
-          <DetailRow icon={FlagIcon} label="Priority" value={detail.priority} />
-          <DetailRow icon={CalendarIcon} label="Category" value={detail.category} />
-          {detail.escalationReason ? (
-            <DetailRow icon={FlagIcon} label="Escalation reason" value={detail.escalationReason} />
-          ) : null}
-          {detail.escalationSummaryStatus === "PENDING" ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              Preparing the Escalation Summary…
-            </p>
-          ) : null}
-          {detail.escalationSummaryStatus === "FAILED" ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              The Escalation Summary could not be generated.
-            </p>
-          ) : null}
-          {detail.escalationSummaryStatus === "READY" && detail.escalationSummary ? (
-            <article className="mx-2 mt-1 whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">
-              {detail.escalationSummary}
-            </article>
-          ) : null}
-          {detail.status === "RESOLVED" ? (
-            <>
-              <DetailRow
-                icon={FlagIcon}
-                label="Resolution reason"
-                value={detail.resolutionReason ?? "—"}
-              />
-              <DetailRow
-                icon={CalendarIcon}
-                label="Resolved at"
-                value={detail.resolvedAt ? new Date(detail.resolvedAt).toLocaleString() : "—"}
-              />
-            </>
-          ) : null}
-        </div>
-      ) : null}
-      {detailsTab === "attachments" ? (
-        <div className="grid gap-2 p-3">
-          {detail.messages.flatMap((message) => message.attachments).length ? (
-            detail.messages.flatMap((message) =>
-              message.attachments.map((attachment) => (
-                <AttachmentCard
-                  attachment={attachment}
-                  key={attachment.id}
-                  onOpenImage={() =>
-                    setGalleryIndex(images.findIndex((image) => image.attachment.id === attachment.id))
-                  }
-                />
-              )),
-            )
-          ) : (
-            <p className="p-3 text-center text-xs text-muted-foreground">No Attachments yet.</p>
-          )}
-        </div>
-      ) : null}
-      {detailsTab === "activity" ? (
-        timeline.length === 0 ? (
-          <Empty className="border-0 p-6">
-            <EmptyMedia variant="icon">
-              <HistoryIcon />
-            </EmptyMedia>
-            <EmptyTitle>No activity yet</EmptyTitle>
-          </Empty>
-        ) : (
-          <ol className="grid gap-3 p-3">
-            {timeline.map((entry) => (
-              <li key={entry.id} className="flex items-baseline gap-3 text-sm">
-                <span className="w-16 shrink-0 text-xs text-muted-foreground">
-                  {new Date(entry.createdAt).toLocaleTimeString()}
-                </span>
-                <span>
-                  {entry.description.text}
-                  {entry.description.mono ? (
-                    <>
-                      {" "}
-                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-                        {entry.description.mono}
-                      </code>
-                    </>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )
-      ) : null}
-    </Tabs>
-  );
-}
-
-function TicketRow({
-  active,
-  onSelect,
-  ticket,
-}: {
-  active: boolean;
-  onSelect: () => void;
-  ticket: SupportTicket;
-}) {
-  const lastMessage = ticket.messages.at(-1);
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "flex w-full gap-3 rounded-lg p-3 text-left hover:bg-accent",
-        active ? "bg-accent" : "",
-      )}
-    >
-      <Avatar>
-        <AvatarFallback>{getInitials(ticket.customerIdentity.name)}</AvatarFallback>
-      </Avatar>
-      <span className="min-w-0 flex-1">
-        <span className="flex justify-between gap-2">
-          <b className="truncate text-sm">{ticket.customerIdentity.name}</b>
-          <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-            <small>{new Date(ticket.createdAt).toLocaleDateString()}</small>
-            {ticket.unreadCount > 0 ? (
-              <Badge aria-label={`${ticket.unreadCount} unread`} className="px-1.5" variant="default">
-                {ticket.unreadCount}
-              </Badge>
-            ) : null}
-          </span>
-        </span>
-        <span className="mt-1 block truncate text-xs text-muted-foreground">
-          {lastMessage?.content ?? ticket.title}
-        </span>
-        <span className="mt-2 flex items-center gap-1.5">
-          <PriorityBadge priority={ticket.priority} />
-          <Badge variant="outline">{ticket.category}</Badge>
-          {ticket.status === "ESCALATED" ? (
-            <small className="text-muted-foreground">
-              Waiting {formatWaitingDuration(ticket.escalatedAt ?? ticket.createdAt)}
-            </small>
-          ) : null}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function scopeUnreadTotal(data: { tickets: SupportTicket[] } | undefined) {
-  return data?.tickets.reduce((total, ticket) => total + ticket.unreadCount, 0) ?? 0;
-}
-
-function AllTicketRow({
-  active,
-  onSelect,
-  ticket,
-}: {
-  active: boolean;
-  onSelect: () => void;
-  ticket: TicketListItem;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "flex w-full gap-3 rounded-lg p-3 text-left hover:bg-accent",
-        active ? "bg-accent" : "",
-      )}
-    >
-      <Avatar>
-        <AvatarFallback>{getInitials(ticket.customerIdentity.name)}</AvatarFallback>
-      </Avatar>
-      <span className="min-w-0 flex-1">
-        <span className="flex justify-between gap-2">
-          <b className="truncate text-sm">{ticket.customerIdentity.name}</b>
-          <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-            <small>{new Date(ticket.updatedAt).toLocaleDateString()}</small>
-            {ticket.unreadCount > 0 ? (
-              <Badge aria-label={`${ticket.unreadCount} unread`} className="px-1.5" variant="default">
-                {ticket.unreadCount}
-              </Badge>
-            ) : null}
-          </span>
-        </span>
-        <span className="mt-1 block truncate text-xs text-muted-foreground">{ticket.title}</span>
-        <span className="mt-2 flex items-center gap-1.5">
-          <StatusBadge status={ticket.status} />
-          <PriorityBadge priority={ticket.priority} />
-          <Badge variant="outline">{ticket.category}</Badge>
-          {ticket.assignedHumanAgent ? (
-            <small className="truncate text-muted-foreground">{ticket.assignedHumanAgent.name}</small>
-          ) : null}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function formatWaitingDuration(since: string) {
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60_000));
-  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
-function DetailRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof MailIcon;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Item size="sm" className="px-2 py-1.5">
-      <ItemMedia>
-        <Icon className="size-4 text-muted-foreground" />
-      </ItemMedia>
-      <ItemContent className="gap-0">
-        <ItemTitle className="text-xs font-normal text-muted-foreground">{label}</ItemTitle>
-        <p className="truncate text-sm">{value}</p>
-      </ItemContent>
-    </Item>
-  );
-}
-
-function isImage(attachment: TicketAttachment) {
-  return attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/png";
-}
-
-function formatBytes(sizeBytes: number) {
-  if (sizeBytes < 1024) return `${sizeBytes} B`;
-  const units = ["KB", "MB", "GB"];
-  let value = sizeBytes;
-  let unit = -1;
-  do {
-    value /= 1024;
-    unit += 1;
-  } while (value >= 1024 && unit < units.length - 1);
-  return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
-}
-
-function SelectedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
-  const [previewUrl, setPreviewUrl] = useState<string>();
-  useEffect(() => {
-    if (!file.type.startsWith("image/")) return;
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-  return (
-    <div className="flex min-w-0 max-w-48 items-center gap-2 rounded-md bg-muted p-1.5 text-xs text-foreground">
-      {previewUrl ? <img alt="" className="size-8 rounded object-cover" src={previewUrl} /> : <FileTextIcon className="size-5 shrink-0" />}
-      <span className="truncate">{file.name}</span>
-      <button aria-label={`Remove ${file.name}`} onClick={onRemove} type="button"><XIcon className="size-3.5" /></button>
-    </div>
-  );
-}
-
-function AttachmentCard({
-  attachment,
-  onOpenImage,
-  showReadability = true,
-}: {
-  attachment: TicketAttachment;
-  onOpenImage: () => void;
-  showReadability?: boolean;
-}) {
-  const [previewUrl, setPreviewUrl] = useState<string>();
-  const isPreviewableDocument =
-    attachment.mimeType === "application/pdf" || attachment.mimeType === "text/plain";
-
-  useEffect(() => {
-    if (!isImage(attachment)) return;
-    void getAttachmentPreviewUrl(attachment.id).then(({ url }) => setPreviewUrl(url));
-  }, [attachment]);
-
-  const readability =
-    attachment.processingStatus === "PROCESSING"
-      ? "AI reading…"
-      : attachment.processingStatus === "FAILED"
-        ? `Could not be read${attachment.failureReason ? `: ${attachment.failureReason}` : ""}`
-        : "✓";
-
-  if (isImage(attachment)) {
-    return (
-      <button
-        aria-label={`Open ${attachment.fileName} in gallery`}
-        className="relative size-28 shrink-0 overflow-hidden rounded-md border bg-muted"
-        onClick={onOpenImage}
-        type="button"
-      >
-        {previewUrl ? (
-          <img alt="" className="size-full object-cover" src={previewUrl} />
-        ) : (
-          <span className="grid size-full place-items-center text-xs text-muted-foreground">Loading…</span>
-        )}
-        {showReadability ? (
-          <span className="absolute right-1 bottom-1 rounded bg-background/90 px-1 text-[10px] text-foreground">
-            {readability}
-          </span>
-        ) : null}
-      </button>
-    );
-  }
-
-  return (
-    <article className="flex min-w-0 items-center gap-3 rounded-md border p-3">
-      <FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{attachment.fileName}</p>
-        <p className="text-xs text-muted-foreground">{formatBytes(attachment.sizeBytes)}{showReadability ? ` · ${readability}` : ""}</p>
-      </div>
-      {isPreviewableDocument ? (
-        <Button onClick={() => void getAttachmentPreviewUrl(attachment.id).then(({ url }) => window.open(url, "_blank", "noopener"))} size="xs" type="button" variant="outline">
-          Preview
-        </Button>
-      ) : null}
-      {isPreviewableDocument ? (
-        <Button aria-label={`Download ${attachment.fileName}`} onClick={() => void openAttachment(attachment.id)} size="icon-xs" type="button" variant="outline">
-          <DownloadIcon />
-        </Button>
-      ) : null}
-    </article>
-  );
-}
-
-function ImageGallery({
-  images,
-  index,
-  onOpenChange,
-  setIndex,
-}: {
-  images: { attachment: TicketAttachment; messagePosition: number }[];
-  index: number | null;
-  onOpenChange: (open: boolean) => void;
-  setIndex: (index: number) => void;
-}) {
-  const image = index === null ? null : images[index];
-  const [url, setUrl] = useState<string>();
-
-  useEffect(() => {
-    setUrl(undefined);
-    if (image) void getAttachmentPreviewUrl(image.attachment.id).then(({ url }) => setUrl(url));
-  }, [image]);
-
-  return (
-    <Dialog open={index !== null} onOpenChange={onOpenChange}>
-      <DialogContent
-        aria-describedby={undefined}
-        className="max-w-5xl bg-background p-4"
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft" && index !== null) setIndex((index - 1 + images.length) % images.length);
-          if (event.key === "ArrowRight" && index !== null) setIndex((index + 1) % images.length);
-        }}
-        showCloseButton={false}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <DialogTitle className="truncate text-sm">{image?.attachment.fileName} · {(index ?? 0) + 1} of {images.length}</DialogTitle>
-          <Button aria-label="Close gallery" onClick={() => onOpenChange(false)} size="icon-sm" type="button" variant="ghost"><XIcon /></Button>
-        </div>
-        <div className="relative grid min-h-80 place-items-center bg-muted">
-          {url ? <img alt={image?.attachment.fileName ?? ""} className="max-h-[65vh] max-w-full object-contain" src={url} /> : "Loading…"}
-          {images.length > 1 && index !== null ? (
-            <>
-              <Button aria-label="Previous image" className="absolute left-2" onClick={() => setIndex((index - 1 + images.length) % images.length)} size="icon-sm" type="button" variant="secondary"><ChevronLeftIcon /></Button>
-              <Button aria-label="Next image" className="absolute right-2" onClick={() => setIndex((index + 1) % images.length)} size="icon-sm" type="button" variant="secondary"><ChevronRightIcon /></Button>
-            </>
-          ) : null}
-        </div>
-        <div aria-label="Image filmstrip" className="flex gap-2 overflow-x-auto">
-          {images.map((entry, imageIndex) => (
-            <button aria-label={`View image ${imageIndex + 1}`} className={cn("size-12 shrink-0 overflow-hidden rounded border", index === imageIndex && "ring-2 ring-primary")} key={entry.attachment.id} onClick={() => setIndex(imageIndex)} type="button">
-              <GalleryThumbnail attachment={entry.attachment} />
-            </button>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function GalleryThumbnail({ attachment }: { attachment: TicketAttachment }) {
-  const [url, setUrl] = useState<string>();
-  useEffect(() => {
-    void getAttachmentPreviewUrl(attachment.id).then(({ url }) => setUrl(url));
-  }, [attachment]);
-  return url ? <img alt="" className="size-full object-cover" src={url} /> : null;
-}
-
-function TranscriptMessage({
-  message,
-  onRetry,
-  onOpenImage,
-}: {
-  message: TicketDetailMessage;
-  onRetry: () => void;
-  onOpenImage: (attachment: TicketAttachment) => void;
-}) {
-  if (message.senderType === "SYSTEM") {
-    return (
-      <Marker>
-        <MarkerContent>{message.content}</MarkerContent>
-      </Marker>
-    );
-  }
-
-  const isHuman = message.senderType === "HUMAN_AGENT";
-  const legacyAttachmentText = /^I need help with the attached file: .+$/.test(message.content) && message.attachments.length;
-  return (
-    <Message align={isHuman ? "end" : "start"}>
-      <MessageAvatar>
-        <Avatar className="size-8">
-          <AvatarFallback>{getInitials(senderName(message))}</AvatarFallback>
-        </Avatar>
-      </MessageAvatar>
-      <MessageContent>
-        <MessageHeader>{senderName(message)}</MessageHeader>
-        <Bubble variant={bubbleVariant(message.senderType)}>
-          <BubbleContent className={message.attachments.length ? "w-fit max-w-full" : undefined}>
-            {message.attachments.length ? (
-              <MessageAttachments attachments={message.attachments} onOpenImage={onOpenImage} showReadability={message.senderType === "CUSTOMER"} />
-            ) : null}
-            {message.content && !legacyAttachmentText ? (
-              <div className={message.attachments.length ? "mt-2" : undefined}>
-                {message.senderType === "CUSTOMER" ? message.content : <Markdown>{message.content}</Markdown>}
-              </div>
-            ) : null}
-          </BubbleContent>
-        </Bubble>
-        <MessageFooter className="flex items-center gap-1.5">
-          {new Date(message.createdAt).toLocaleString()}
-          {isHuman && message.deliveryStatus !== "SENT" ? (
-            <span
-              className={cn(
-                message.deliveryStatus === "FAILED" ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {message.deliveryStatus === "PENDING" ? "Sending…" : "Failed to send"}
-            </span>
-          ) : null}
-          {isHuman && message.deliveryStatus === "FAILED" ? (
-            <button className="text-xs underline" onClick={onRetry} type="button">
-              Retry
-            </button>
-          ) : null}
-        </MessageFooter>
-      </MessageContent>
-    </Message>
-  );
-}
-
-function MessageAttachments({
-  attachments,
-  onOpenImage,
-  showReadability = true,
-}: {
-  attachments: TicketAttachment[];
-  onOpenImage: (attachment: TicketAttachment) => void;
-  showReadability?: boolean;
-}) {
-  const images = attachments.filter(isImage);
-  const otherAttachments = attachments.filter((attachment) => !isImage(attachment));
-  const shownImages = images.slice(0, 4);
-  const imageColumns = Math.min(shownImages.length, 3);
-  return (
-    <div className="grid w-fit max-w-sm gap-1.5">
-      {images.length ? (
-        <div
-          className={cn(
-            "grid gap-1.5",
-            imageColumns === 1 ? "grid-cols-1" : imageColumns === 2 ? "grid-cols-2" : "grid-cols-3",
-          )}
-        >
-          {shownImages.map((attachment, index) => (
-            <div className="relative" key={attachment.id}>
-              <AttachmentCard attachment={attachment} onOpenImage={() => onOpenImage(attachment)} showReadability={showReadability} />
-              {index === 3 && images.length > 4 ? (
-                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-black/60 text-sm font-semibold text-white">
-                  +{images.length - 4}
-                </span>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {otherAttachments.map((attachment) => (
-        <AttachmentCard attachment={attachment} key={attachment.id} onOpenImage={() => onOpenImage(attachment)} showReadability={showReadability} />
-      ))}
-    </div>
-  );
-}
 
 export default ChatView;
