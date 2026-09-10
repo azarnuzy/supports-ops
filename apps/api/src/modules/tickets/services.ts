@@ -10,7 +10,7 @@ import {
   createOpenAiEmbeddingClient as createEmbeddingClient,
   searchChunks as findKnowledgeChunks,
 } from "@repo/knowledge";
-import { BusinessToolError, createBusinessTools } from "@repo/tools";
+import { createBusinessTools } from "@repo/tools";
 import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
 import type { ListTicketsQuery } from "./schema";
@@ -21,6 +21,8 @@ import {
 } from "../widget/realtime";
 import { cancelFollowUpTimers } from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "./queue";
+import { resolveTools } from "../tools/services";
+import { executeReadOnlyAssignedTools } from "../tools/orchestration";
 
 const ticketSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
@@ -681,6 +683,7 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
     throw new SuggestedReplyNotConfiguredError();
   const ticket = await unscopedPrisma.ticket.findFirst({
     select: {
+      aiAgentId: true,
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
       id: true,
       messages: {
@@ -728,9 +731,10 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
       workspaceId,
     },
   });
-  const businessData = await getCopilotBusinessToolData(
+  const businessData = await getCopilotToolData(
     ticketId,
     workspaceId,
+    ticket.aiAgentId,
     ticket.customerIdentity,
   );
   const draft = await generateSuggestedReply({
@@ -778,51 +782,42 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
   return { content: draft };
 }
 
-async function getCopilotBusinessToolData(
+/** AI Copilot has no model-directed tool-calling loop of its own, so it
+ * resolves Tools through the same assignment service as the AI Agent runtime
+ * and eagerly runs every assigned, non-BUILT_IN, READ_ONLY Tool (Knowledge
+ * retrieval already happens separately above); it never executes a MUTATING
+ * Tool. */
+async function getCopilotToolData(
   ticketId: string,
   workspaceId: string,
+  aiAgentId: string,
   identity: { email: string; externalCustomerId: string | null; id: string },
 ) {
-  const tools = createBusinessTools(apiConfig.businessSystemUrl);
-  try {
-    let customerId = identity.externalCustomerId;
-    if (!customerId) {
-      const customer = await tools.getCustomerByEmail(identity.email);
-      if (!customer) return undefined;
-      customerId = customer.id;
-      await unscopedPrisma.customerIdentity.update({
-        data: { externalCustomerId: customerId },
-        where: { id: identity.id },
-      });
-    }
-    const [subscription, invoice] = await Promise.all([
-      tools.getSubscriptionStatus(customerId),
-      tools.getInvoiceStatus(customerId),
-    ]);
-    await unscopedPrisma.aiActivity.createMany({
-      data: ["getSubscriptionStatus", "getInvoiceStatus"].map((tool) => ({
-        eventType: "TOOL_CALLED" as const,
-        id: randomUUID(),
-        metadata: { outcome: "SUCCESS", tool },
-        ticketId,
-        workspaceId,
-      })),
+  const assignedTools = (await resolveTools(aiAgentId)).filter(
+    (tool) => tool.origin !== "BUILT_IN" && tool.risk === "READ_ONLY",
+  );
+  if (!assignedTools.length) return undefined;
+
+  let customerId = identity.externalCustomerId;
+  if (!customerId) {
+    const businessTools = createBusinessTools(apiConfig.businessSystemUrl);
+    const customer = await businessTools.getCustomerByEmail(identity.email);
+    if (!customer) return undefined;
+    customerId = customer.id;
+    await unscopedPrisma.customerIdentity.update({
+      data: { externalCustomerId: customerId },
+      where: { id: identity.id },
     });
-    return JSON.stringify({ invoice, subscription });
-  } catch (error) {
-    await unscopedPrisma.aiActivity.create({
-      data: {
-        eventType: "TOOL_FAILED",
-        id: randomUUID(),
-        metadata: { outcome: "FAILED", tool: "Business System" },
-        ticketId,
-        workspaceId,
-      },
-    });
-    throw error instanceof BusinessToolError
-      ? error
-      : new BusinessToolError("Business Tool failed.", { cause: error });
   }
+
+  const results = await executeReadOnlyAssignedTools({
+    aiAgentId,
+    input: { customerId },
+    ticketId,
+    tools: assignedTools,
+    workspaceId,
+  });
+  return Object.keys(results).length ? JSON.stringify(results) : undefined;
 }
 
 export async function resolveTicket(
