@@ -227,15 +227,27 @@ export async function markTicketRead(client: ApiClient, id: string, position: nu
  * status changes). The event name matches the payload's `type`, so
  * `addEventListener` handlers stay untyped and generic. */
 export function subscribeToTicketEvents(baseUrl: string, ticketId: string, onEvent: () => void) {
-  const events = new EventSource(`${baseUrl}/tickets/${ticketId}/events`, { withCredentials: true });
-  for (const type of ["message.created", "message.updated", "message.delta", "ticket.status", "attachment.updated"])
+  const events = new EventSource(`${baseUrl}/tickets/${ticketId}/events`, {
+    withCredentials: true,
+  });
+  for (const type of [
+    "message.created",
+    "message.updated",
+    "message.delta",
+    "ticket.status",
+    "attachment.updated",
+  ])
     events.addEventListener(type, onEvent);
   return events;
 }
 
 /** Attachments open through the signed download URL, never through the raw
  * storage key. */
-export async function getAttachmentUrl(client: ApiClient, id: string, mode: "download" | "preview") {
+export async function getAttachmentUrl(
+  client: ApiClient,
+  id: string,
+  mode: "download" | "preview",
+) {
   const response = await client.attachments[":id"][":mode"].$get({ param: { id, mode } });
   if (response.status === 401) throw new UnauthorizedApiError();
   if (!response.ok) throw new Error("Failed to open the attachment.");
@@ -318,7 +330,13 @@ export async function sendHumanReply(
   return response.json();
 }
 
-export async function sendHumanAttachments(client: ApiClient, id: string, content: string, files: File[], idempotencyKey: string) {
+export async function sendHumanAttachments(
+  client: ApiClient,
+  id: string,
+  content: string,
+  files: File[],
+  idempotencyKey: string,
+) {
   const response = await client.tickets[":id"].attachments.$post({
     form: { content, files, idempotencyKey } as never,
     param: { id },
@@ -326,7 +344,8 @@ export async function sendHumanAttachments(client: ApiClient, id: string, conten
   if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
   if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
-  if (response.status === 422) throw new Error("Attachments must be PDF, TXT, JPG, or PNG and no larger than 10 MB.");
+  if (response.status === 422)
+    throw new Error("Attachments must be PDF, TXT, JPG, or PNG and no larger than 10 MB.");
   if (!response.ok) throw new Error("Failed to send the reply.");
   return response.json();
 }

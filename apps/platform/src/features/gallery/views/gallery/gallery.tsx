@@ -36,7 +36,11 @@ const GalleryView = () => {
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
               <AttachmentStateSample state="done" label="invoice.pdf" detail="182 KB" />
-              <AttachmentStateSample state="processing" label="screenshot.png" detail="Processing…" />
+              <AttachmentStateSample
+                state="processing"
+                label="screenshot.png"
+                detail="Processing…"
+              />
               <AttachmentStateSample state="error" label="recording.mp3" detail="Delivery failed" />
             </CardContent>
           </Card>
@@ -46,7 +50,11 @@ const GalleryView = () => {
             <CardTitle>Sender types and delivery states</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5">
-            <MessageSample kind="customer" name="Customer" text="I need help with my subscription." />
+            <MessageSample
+              kind="customer"
+              name="Customer"
+              text="I need help with my subscription."
+            />
             <MessageSample
               kind="ai"
               name="SupportOps AI"

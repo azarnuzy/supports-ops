@@ -105,7 +105,10 @@ export async function uploadWebWidgetLogo(file: File): Promise<WebWidgetConfigRe
     }),
   ]);
 
-  return { webWidgetConfig: toDto(webWidgetConfig), closingMessage: workspace?.closingMessage ?? null };
+  return {
+    webWidgetConfig: toDto(webWidgetConfig),
+    closingMessage: workspace?.closingMessage ?? null,
+  };
 }
 
 function toDto(webWidgetConfig: {

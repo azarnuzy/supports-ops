@@ -7,10 +7,20 @@ import {
   DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
 import { FileTextIcon, MoreHorizontalIcon } from "lucide-react";
-import { formatUpdatedAt, sourceTypeLabel, statusLabel, statusVariant, visibilityLabel } from "../../knowledge.utils";
+import {
+  formatUpdatedAt,
+  sourceTypeLabel,
+  statusLabel,
+  statusVariant,
+  visibilityLabel,
+} from "../../knowledge.utils";
 import type { KnowledgeSourceRowProps } from "./index.types";
 
-export default function KnowledgeSourceRow({ source, onSelect, onDelete }: KnowledgeSourceRowProps) {
+export default function KnowledgeSourceRow({
+  source,
+  onSelect,
+  onDelete,
+}: KnowledgeSourceRowProps) {
   return (
     <div
       className="grid cursor-pointer gap-3 border-b p-4 last:border-b-0 hover:bg-accent/50 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
@@ -35,10 +45,14 @@ export default function KnowledgeSourceRow({ source, onSelect, onDelete }: Knowl
       </div>
       <Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>
       <Badge variant={statusVariant(source.status)}>
-        {source.status === "PROCESSING" && source.stage ? statusLabel(source.stage) : statusLabel(source.status)}
+        {source.status === "PROCESSING" && source.stage
+          ? statusLabel(source.stage)
+          : statusLabel(source.status)}
       </Badge>
       <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">Last updated {formatUpdatedAt(source.updatedAt)}</span>
+        <span className="text-xs text-muted-foreground">
+          Last updated {formatUpdatedAt(source.updatedAt)}
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

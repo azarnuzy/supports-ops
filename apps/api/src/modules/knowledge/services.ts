@@ -357,7 +357,10 @@ export async function deleteKnowledgeSource(id: string, deletedBy: string): Prom
   const ids = [existing.id, ...childIds];
 
   await prisma.$transaction([
-    prisma.knowledgeSource.updateMany({ data: { deletedAt, deletedBy }, where: { id: { in: ids } } }),
+    prisma.knowledgeSource.updateMany({
+      data: { deletedAt, deletedBy },
+      where: { id: { in: ids } },
+    }),
     prisma.chunk.updateMany({ data: { deletedAt }, where: { knowledgeSourceId: { in: ids } } }),
   ]);
 }

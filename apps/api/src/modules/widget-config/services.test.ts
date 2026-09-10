@@ -173,7 +173,9 @@ describe("updateWebWidgetConfig", () => {
     });
 
     expect(mocks.webWidgetConfigUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.not.objectContaining({ logoKey: expect.anything() }) }),
+      expect.objectContaining({
+        data: expect.not.objectContaining({ logoKey: expect.anything() }),
+      }),
     );
   });
 

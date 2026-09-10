@@ -55,7 +55,9 @@ const KnowledgeView = () => {
   const visibleSources = sources.filter(
     (source) =>
       (filter === "ALL" || source.sourceType === filter) &&
-      `${source.title} ${source.sourceUrl ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()),
+      `${source.title} ${source.sourceUrl ?? ""}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()),
   );
 
   function closeDialog() {
@@ -72,7 +74,8 @@ const KnowledgeView = () => {
     addDocumentationUrl.mutate(
       { url: url.trim(), visibility },
       {
-        onError: (error) => toast.error(error instanceof Error ? error.message : "Crawl failed to start."),
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : "Crawl failed to start."),
         onSuccess: () => {
           toast.success("Website import started.");
           closeDialog();
@@ -95,7 +98,8 @@ const KnowledgeView = () => {
     addPdf.mutate(
       { file, visibility },
       {
-        onError: (error) => toast.error(error instanceof Error ? error.message : "PDF upload failed."),
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : "PDF upload failed."),
         onSuccess: () => {
           toast.success("PDF upload started.");
           closeDialog();
@@ -109,7 +113,8 @@ const KnowledgeView = () => {
     addManualFaq.mutate(
       { content: content.trim(), title: title.trim(), visibility },
       {
-        onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to create."),
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : "Failed to create."),
         onSuccess: () => {
           toast.success("Knowledge Source created.");
           closeDialog();
@@ -152,26 +157,47 @@ const KnowledgeView = () => {
             type="button"
             onClick={() => setDialog("website")}
           >
-            <span className="rounded-md border bg-background p-2"><Globe2Icon className="size-5" /></span>
-            <span><span className="block font-medium">Add Website</span><span className="mt-1 block text-sm text-muted-foreground">Import same-domain documentation pages.</span></span>
+            <span className="rounded-md border bg-background p-2">
+              <Globe2Icon className="size-5" />
+            </span>
+            <span>
+              <span className="block font-medium">Add Website</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Import same-domain documentation pages.
+              </span>
+            </span>
           </button>
           <button
             className="flex min-h-28 items-start gap-4 rounded-lg border p-5 text-left transition-colors hover:bg-accent"
             type="button"
             onClick={() => setDialog("file")}
           >
-            <span className="rounded-md border bg-background p-2"><FileTextIcon className="size-5" /></span>
-            <span><span className="block font-medium">Add File</span><span className="mt-1 block text-sm text-muted-foreground">Upload one PDF up to 25 MB.</span></span>
+            <span className="rounded-md border bg-background p-2">
+              <FileTextIcon className="size-5" />
+            </span>
+            <span>
+              <span className="block font-medium">Add File</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Upload one PDF up to 25 MB.
+              </span>
+            </span>
           </button>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Search Knowledge Sources" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <Input
+              className="pl-9"
+              placeholder="Search Knowledge Sources"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
           </div>
           <Select value={filter} onValueChange={(value) => setFilter(value as SourceFilter)}>
-            <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="Source type" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-44">
+              <SelectValue placeholder="Source type" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All types</SelectItem>
               <SelectItem value="MANUAL_FAQ">Text</SelectItem>
@@ -183,16 +209,46 @@ const KnowledgeView = () => {
 
         <div className="overflow-hidden rounded-lg border">
           {knowledgeSources.isPending ? (
-            <div className="grid gap-3 p-5">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}</div>
+            <div className="grid gap-3 p-5">
+              {Array.from({ length: 5 }, (_, index) => (
+                <Skeleton key={index} className="h-16 w-full" />
+              ))}
+            </div>
           ) : null}
           {knowledgeSources.isError ? (
-            <div className="grid place-items-center gap-3 p-12 text-center"><p className="text-sm text-destructive">Unable to load Knowledge Sources.</p><Button variant="outline" onClick={() => void knowledgeSources.refetch()}>Retry</Button></div>
+            <div className="grid place-items-center gap-3 p-12 text-center">
+              <p className="text-sm text-destructive">Unable to load Knowledge Sources.</p>
+              <Button variant="outline" onClick={() => void knowledgeSources.refetch()}>
+                Retry
+              </Button>
+            </div>
           ) : null}
           {!knowledgeSources.isPending && !knowledgeSources.isError && sources.length === 0 ? (
-            <div className="grid place-items-center gap-4 p-12 text-center"><div><p className="font-medium">No Knowledge Sources yet</p><p className="mt-1 text-sm text-muted-foreground">Start with a website, PDF, or text.</p></div><div className="flex flex-wrap justify-center gap-2"><Button variant="outline" onClick={() => setDialog("website")}>Add Website</Button><Button variant="outline" onClick={() => setDialog("file")}>Add File</Button><Button onClick={() => setDialog("text")}>Create Text</Button></div></div>
+            <div className="grid place-items-center gap-4 p-12 text-center">
+              <div>
+                <p className="font-medium">No Knowledge Sources yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Start with a website, PDF, or text.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button variant="outline" onClick={() => setDialog("website")}>
+                  Add Website
+                </Button>
+                <Button variant="outline" onClick={() => setDialog("file")}>
+                  Add File
+                </Button>
+                <Button onClick={() => setDialog("text")}>Create Text</Button>
+              </div>
+            </div>
           ) : null}
-          {!knowledgeSources.isPending && !knowledgeSources.isError && sources.length > 0 && visibleSources.length === 0 ? (
-            <p className="p-12 text-center text-sm text-muted-foreground">No Knowledge Sources match this search or type.</p>
+          {!knowledgeSources.isPending &&
+          !knowledgeSources.isError &&
+          sources.length > 0 &&
+          visibleSources.length === 0 ? (
+            <p className="p-12 text-center text-sm text-muted-foreground">
+              No Knowledge Sources match this search or type.
+            </p>
           ) : null}
           {visibleSources.map((source) => (
             <KnowledgeSourceRow

@@ -172,7 +172,10 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       data: { failedStage: stage, failureReason, status: "FAILED" },
       where: { id: knowledgeSourceId },
     });
-    await publishStatus(workspaceId, knowledgeSourceId, "FAILED", { failedStage: stage, failureReason });
+    await publishStatus(workspaceId, knowledgeSourceId, "FAILED", {
+      failedStage: stage,
+      failureReason,
+    });
 
     throw error;
   }
@@ -265,7 +268,12 @@ async function crawlDocumentation(parentId: string, workspaceId: string) {
   const deletedAt = new Date();
   const removedChildren = await prisma.knowledgeSource.findMany({
     select: { id: true },
-    where: { deletedAt: null, parentId, sourceUrl: { notIn: pages.map((page) => page.url) }, workspaceId },
+    where: {
+      deletedAt: null,
+      parentId,
+      sourceUrl: { notIn: pages.map((page) => page.url) },
+      workspaceId,
+    },
   });
   if (removedChildren.length) {
     const ids = removedChildren.map((child) => child.id);

@@ -1,5 +1,11 @@
 import { Button } from "@repo/ui/components/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@repo/ui/components/card";
 import { CopyIcon } from "lucide-react";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsNav } from "../../components/settings-nav";
@@ -8,7 +14,8 @@ import { ConfigForm, PreviewCard } from "./components";
 
 const WebWidgetSettingsView = () => {
   const form = useWidgetSettingsForm();
-  const { botName, config, copySnippet, current, embedSnippet, primaryColor, welcomeMessage } = form;
+  const { botName, config, copySnippet, current, embedSnippet, primaryColor, welcomeMessage } =
+    form;
 
   return (
     <PlatformAppShell>

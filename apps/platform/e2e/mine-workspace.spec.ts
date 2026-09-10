@@ -43,7 +43,9 @@ test.describe("Mine Ticket workspace", () => {
     // Resolution requires confirmation and leaves the transcript read-only.
     await page.getByRole("button", { name: "Resolve Ticket" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Resolve" }).click();
-    await expect(page.getByText("This Ticket is resolved. The transcript is read-only.")).toBeVisible();
+    await expect(
+      page.getByText("This Ticket is resolved. The transcript is read-only."),
+    ).toBeVisible();
     await expect(page.getByLabel("Reply to Customer")).not.toBeVisible();
   });
 });

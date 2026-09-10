@@ -130,7 +130,13 @@ export async function seedMineTicketFixture() {
 
   await prisma.aiActivity.createMany({
     data: [
-      { eventType: "TICKET_CREATED", id: randomUUID(), metadata: {}, ticketId, workspaceId: admin.workspaceId },
+      {
+        eventType: "TICKET_CREATED",
+        id: randomUUID(),
+        metadata: {},
+        ticketId,
+        workspaceId: admin.workspaceId,
+      },
       {
         eventType: "ESCALATED",
         id: randomUUID(),
@@ -138,7 +144,13 @@ export async function seedMineTicketFixture() {
         ticketId,
         workspaceId: admin.workspaceId,
       },
-      { eventType: "CLAIMED", id: randomUUID(), metadata: {}, ticketId, workspaceId: admin.workspaceId },
+      {
+        eventType: "CLAIMED",
+        id: randomUUID(),
+        metadata: {},
+        ticketId,
+        workspaceId: admin.workspaceId,
+      },
     ],
   });
 

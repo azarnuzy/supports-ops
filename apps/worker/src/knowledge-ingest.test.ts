@@ -180,15 +180,16 @@ describe("processKnowledgeIngestJob", () => {
 
     const [chunkingUpdate, embeddingUpdate, indexingUpdate] = mocks.update.mock.invocationCallOrder;
     expect(chunkingUpdate).toBeLessThan(mocks.chunkText.mock.invocationCallOrder[0]);
-    expect(embeddingUpdate).toBeLessThan(mocks.createOpenAiEmbeddingClient.mock.invocationCallOrder[0]);
-    expect(indexingUpdate).toBeLessThan(mocks.txKnowledgeSourceFindFirst.mock.invocationCallOrder[0]);
+    expect(embeddingUpdate).toBeLessThan(
+      mocks.createOpenAiEmbeddingClient.mock.invocationCallOrder[0],
+    );
+    expect(indexingUpdate).toBeLessThan(
+      mocks.txKnowledgeSourceFindFirst.mock.invocationCallOrder[0],
+    );
 
-    expect(mocks.publish.mock.calls.map(([, payload]) => JSON.parse(payload as string).data.stage)).toEqual([
-      "CHUNKING",
-      "EMBEDDING",
-      "INDEXING",
-      "PUBLISHED",
-    ]);
+    expect(
+      mocks.publish.mock.calls.map(([, payload]) => JSON.parse(payload as string).data.stage),
+    ).toEqual(["CHUNKING", "EMBEDDING", "INDEXING", "PUBLISHED"]);
   });
 
   it("does not restore chunks when the source was deleted during embedding", async () => {

@@ -1,4 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@repo/ui/components/card";
 import type { AgentLoadCardProps } from "./index.types";
 
 export default function AgentLoadCard({ loads }: AgentLoadCardProps) {

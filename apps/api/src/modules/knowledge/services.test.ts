@@ -262,7 +262,11 @@ describe("updateKnowledgeSource", () => {
     });
 
     expect(mocks.knowledgeSourceUpdate).toHaveBeenCalledWith({
-      data: { content: draftSource.content, title: "New title", visibility: draftSource.visibility },
+      data: {
+        content: draftSource.content,
+        title: "New title",
+        visibility: draftSource.visibility,
+      },
       where: { id: "ks-1" },
     });
     expect(mocks.transaction).not.toHaveBeenCalled();

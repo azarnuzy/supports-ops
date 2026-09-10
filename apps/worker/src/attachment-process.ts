@@ -63,7 +63,9 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
     where: { messageId: attachment.messageId, processingStatus: "PROCESSING" },
   });
   if (!pending) {
-    publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", { maxRetriesPerRequest: null });
+    publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
+      maxRetriesPerRequest: null,
+    });
     const replyKey = `supportops:attachment-reply:${attachment.messageId}`;
     if (await publisher.set(replyKey, "1", "EX", 300, "NX")) {
       try {
