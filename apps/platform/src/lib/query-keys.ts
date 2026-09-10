@@ -19,6 +19,7 @@ export const queryKeys = {
       ["workspace", "all-tickets", filters] as const,
     analytics: ["workspace", "analytics"] as const,
     analyticsTraffic: ["workspace", "analytics-traffic"] as const,
+    aiSettings: ["workspace", "ai-settings"] as const,
     ticket: (id: string) => ["workspace", "tickets", id] as const,
   },
 } as const;
