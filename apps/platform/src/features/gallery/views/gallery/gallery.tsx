@@ -1,24 +1,8 @@
-import {
-  Attachment,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@repo/ui/components/attachment";
-import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
-import { Bubble, BubbleContent } from "@repo/ui/components/bubble";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Marker, MarkerContent } from "@repo/ui/components/marker";
-import {
-  Message,
-  MessageAvatar,
-  MessageContent,
-  MessageFooter,
-  MessageHeader,
-} from "@repo/ui/components/message";
 import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
-import { BotIcon } from "lucide-react";
 import { PlatformAppShell } from "../../../app-shell";
+import { AttachmentStateSample, MessageSample } from "./components";
 
 const GalleryView = () => {
   return (
@@ -51,9 +35,9 @@ const GalleryView = () => {
               <CardTitle>Attachment states</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              <File state="done" label="invoice.pdf" detail="182 KB" />
-              <File state="processing" label="screenshot.png" detail="Processing…" />
-              <File state="error" label="recording.mp3" detail="Delivery failed" />
+              <AttachmentStateSample state="done" label="invoice.pdf" detail="182 KB" />
+              <AttachmentStateSample state="processing" label="screenshot.png" detail="Processing…" />
+              <AttachmentStateSample state="error" label="recording.mp3" detail="Delivery failed" />
             </CardContent>
           </Card>
         </div>
@@ -62,13 +46,13 @@ const GalleryView = () => {
             <CardTitle>Sender types and delivery states</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5">
-            <Sample kind="customer" name="Customer" text="I need help with my subscription." />
-            <Sample
+            <MessageSample kind="customer" name="Customer" text="I need help with my subscription." />
+            <MessageSample
               kind="ai"
               name="SupportOps AI"
               text="I found the relevant policy and am preparing a response."
             />
-            <Sample
+            <MessageSample
               kind="human"
               name="Human Agent"
               text="I’ve taken over and will follow up shortly."
@@ -76,7 +60,7 @@ const GalleryView = () => {
             <Marker>
               <MarkerContent>System notice: Human Agent claimed this Ticket</MarkerContent>
             </Marker>
-            <Sample
+            <MessageSample
               kind="error"
               name="Human Agent"
               text="Message could not be delivered. Retry when the Customer reconnects."
@@ -87,64 +71,5 @@ const GalleryView = () => {
     </PlatformAppShell>
   );
 };
-
-function File({
-  state,
-  label,
-  detail,
-}: {
-  state: "done" | "processing" | "error";
-  label: string;
-  detail: string;
-}) {
-  return (
-    <Attachment state={state}>
-      <AttachmentMedia />
-      <AttachmentContent>
-        <AttachmentTitle>{label}</AttachmentTitle>
-        <AttachmentDescription>{detail}</AttachmentDescription>
-      </AttachmentContent>
-    </Attachment>
-  );
-}
-
-function Sample({
-  kind,
-  name,
-  text,
-}: {
-  kind: "customer" | "ai" | "human" | "error";
-  name: string;
-  text: string;
-}) {
-  const human = kind === "human";
-  return (
-    <Message align={human ? "end" : "start"}>
-      <MessageAvatar>
-        {kind === "ai" ? (
-          <span className="flex size-8 items-center justify-center rounded-full bg-status-ai/15 text-status-ai">
-            <BotIcon className="size-4" />
-          </span>
-        ) : (
-          <Avatar className="size-8">
-            <AvatarFallback>{name.slice(0, 2)}</AvatarFallback>
-          </Avatar>
-        )}
-      </MessageAvatar>
-      <MessageContent>
-        <MessageHeader>{name}</MessageHeader>
-        <Bubble variant={kind}>
-          <BubbleContent>
-            {text}
-            {kind === "ai" ? (
-              <span className="ml-1 inline-block size-1.5 animate-pulse rounded-full bg-status-ai" />
-            ) : null}
-          </BubbleContent>
-        </Bubble>
-        <MessageFooter>{kind === "error" ? "Failed to deliver" : "10:28 AM"}</MessageFooter>
-      </MessageContent>
-    </Message>
-  );
-}
 
 export default GalleryView;
