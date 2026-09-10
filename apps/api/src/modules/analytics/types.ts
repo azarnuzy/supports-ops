@@ -30,3 +30,12 @@ export type AnalyticsOverview = {
 };
 
 export type AnalyticsOverviewResponse = { analytics: AnalyticsOverview };
+
+export type AnalyticsHourBucket = { hourStart: string; count: number };
+
+export type AnalyticsTraffic = {
+  traffic: AnalyticsHourBucket[];
+  resolutions: AnalyticsHourBucket[];
+};
+
+export type AnalyticsTrafficResponse = { analytics: AnalyticsTraffic };
