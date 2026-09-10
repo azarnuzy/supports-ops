@@ -6,4 +6,5 @@ export type TrafficCardProps = {
   buckets: AnalyticsHourBucket[];
   /** Metric name surfaced by the heatmap tooltips and selection panel. */
   metricLabel: string;
+  timeZone: string;
 };

@@ -17,18 +17,19 @@ export default function TrafficCard({
   description,
   buckets,
   metricLabel,
+  timeZone,
 }: TrafficCardProps) {
   return (
     <DashboardCard>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+      <CardHeader className="gap-1.5">
+        <CardTitle className="text-base leading-5">{title}</CardTitle>
+        <CardDescription className="leading-5">{description}</CardDescription>
         <CardAction>
           <LiveBadge />
         </CardAction>
       </CardHeader>
       <CardContent>
-        <HeatmapGrid buckets={buckets} metricLabel={metricLabel} />
+        <HeatmapGrid buckets={buckets} metricLabel={metricLabel} timeZone={timeZone} />
       </CardContent>
     </DashboardCard>
   );
