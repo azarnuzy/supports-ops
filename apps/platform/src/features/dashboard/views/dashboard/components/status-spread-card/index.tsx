@@ -1,28 +1,62 @@
+import { cn } from "@repo/ui/lib/utils";
+
+import { StatusBadge, type TicketStatus } from "@repo/ui/components/ticket-badge";
 import {
-  Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@repo/ui/components/card";
-import { StatusBadge } from "@repo/ui/components/ticket-badge";
+
+import { formatShare } from "../../dashboard.utils";
+import DashboardCard from "../dashboard-card";
 import type { StatusSpreadCardProps } from "./index.types";
 
+const barClassByStatus: Record<TicketStatus, string> = {
+  AI_HANDLING: "bg-status-ai",
+  ESCALATED: "bg-status-escalated",
+  HUMAN_HANDLING: "bg-status-human",
+  RESOLVED: "bg-status-resolved",
+};
+
 export default function StatusSpreadCard({ counts }: StatusSpreadCardProps) {
+  const total = counts.reduce((sum, entry) => sum + entry.count, 0);
+
   return (
-    <Card>
+    <DashboardCard>
       <CardHeader>
         <CardTitle>Ticket statuses</CardTitle>
         <CardDescription>The current spread across the Workspace.</CardDescription>
+        <CardAction>
+          <span className="text-xs tabular-nums text-muted-foreground">{total} total</span>
+        </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent className="grid gap-1">
         {counts.map((entry) => (
-          <div key={entry.status} className="flex items-center justify-between gap-2">
-            <StatusBadge status={entry.status} />
-            <span className="text-sm font-medium tabular-nums">{entry.count}</span>
+          <div
+            key={entry.status}
+            className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/50"
+          >
+            <div className="w-36 shrink-0">
+              <StatusBadge status={entry.status} />
+            </div>
+            <div aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-500",
+                  barClassByStatus[entry.status],
+                )}
+                style={{ width: `${total === 0 ? 0 : (entry.count / total) * 100}%` }}
+              />
+            </div>
+            <span className="w-8 text-right text-sm font-semibold tabular-nums">{entry.count}</span>
+            <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
+              {formatShare(entry.count, total)}
+            </span>
           </div>
         ))}
       </CardContent>
-    </Card>
+    </DashboardCard>
   );
 }
