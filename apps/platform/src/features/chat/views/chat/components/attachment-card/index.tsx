@@ -37,7 +37,9 @@ export default function AttachmentCard({
         {previewUrl ? (
           <img alt="" className="size-full object-cover" src={previewUrl} />
         ) : (
-          <span className="grid size-full place-items-center text-xs text-muted-foreground">Loading…</span>
+          <span className="grid size-full place-items-center text-xs text-muted-foreground">
+            Loading…
+          </span>
         )}
         {showReadability ? (
           <span className="absolute right-1 bottom-1 rounded bg-background/90 px-1 text-[10px] text-foreground">
@@ -53,15 +55,33 @@ export default function AttachmentCard({
       <FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{attachment.fileName}</p>
-        <p className="text-xs text-muted-foreground">{formatBytes(attachment.sizeBytes)}{showReadability ? ` · ${readability}` : ""}</p>
+        <p className="text-xs text-muted-foreground">
+          {formatBytes(attachment.sizeBytes)}
+          {showReadability ? ` · ${readability}` : ""}
+        </p>
       </div>
       {isPreviewableDocument ? (
-        <Button onClick={() => void getAttachmentPreviewUrl(attachment.id).then(({ url }) => window.open(url, "_blank", "noopener"))} size="xs" type="button" variant="outline">
+        <Button
+          onClick={() =>
+            void getAttachmentPreviewUrl(attachment.id).then(({ url }) =>
+              window.open(url, "_blank", "noopener"),
+            )
+          }
+          size="xs"
+          type="button"
+          variant="outline"
+        >
           Preview
         </Button>
       ) : null}
       {isPreviewableDocument ? (
-        <Button aria-label={`Download ${attachment.fileName}`} onClick={() => void openAttachment(attachment.id)} size="icon-xs" type="button" variant="outline">
+        <Button
+          aria-label={`Download ${attachment.fileName}`}
+          onClick={() => void openAttachment(attachment.id)}
+          size="icon-xs"
+          type="button"
+          variant="outline"
+        >
           <DownloadIcon />
         </Button>
       ) : null}

@@ -22,27 +22,73 @@ export default function ImageGallery({ images, index, onOpenChange, setIndex }: 
         aria-describedby={undefined}
         className="max-w-5xl bg-background p-4"
         onKeyDown={(event) => {
-          if (event.key === "ArrowLeft" && index !== null) setIndex((index - 1 + images.length) % images.length);
+          if (event.key === "ArrowLeft" && index !== null)
+            setIndex((index - 1 + images.length) % images.length);
           if (event.key === "ArrowRight" && index !== null) setIndex((index + 1) % images.length);
         }}
         showCloseButton={false}
       >
         <div className="flex items-center justify-between gap-3">
-          <DialogTitle className="truncate text-sm">{image?.attachment.fileName} · {(index ?? 0) + 1} of {images.length}</DialogTitle>
-          <Button aria-label="Close gallery" onClick={() => onOpenChange(false)} size="icon-sm" type="button" variant="ghost"><XIcon /></Button>
+          <DialogTitle className="truncate text-sm">
+            {image?.attachment.fileName} · {(index ?? 0) + 1} of {images.length}
+          </DialogTitle>
+          <Button
+            aria-label="Close gallery"
+            onClick={() => onOpenChange(false)}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <XIcon />
+          </Button>
         </div>
         <div className="relative grid min-h-80 place-items-center bg-muted">
-          {url ? <img alt={image?.attachment.fileName ?? ""} className="max-h-[65vh] max-w-full object-contain" src={url} /> : "Loading…"}
+          {url ? (
+            <img
+              alt={image?.attachment.fileName ?? ""}
+              className="max-h-[65vh] max-w-full object-contain"
+              src={url}
+            />
+          ) : (
+            "Loading…"
+          )}
           {images.length > 1 && index !== null ? (
             <>
-              <Button aria-label="Previous image" className="absolute left-2" onClick={() => setIndex((index - 1 + images.length) % images.length)} size="icon-sm" type="button" variant="secondary"><ChevronLeftIcon /></Button>
-              <Button aria-label="Next image" className="absolute right-2" onClick={() => setIndex((index + 1) % images.length)} size="icon-sm" type="button" variant="secondary"><ChevronRightIcon /></Button>
+              <Button
+                aria-label="Previous image"
+                className="absolute left-2"
+                onClick={() => setIndex((index - 1 + images.length) % images.length)}
+                size="icon-sm"
+                type="button"
+                variant="secondary"
+              >
+                <ChevronLeftIcon />
+              </Button>
+              <Button
+                aria-label="Next image"
+                className="absolute right-2"
+                onClick={() => setIndex((index + 1) % images.length)}
+                size="icon-sm"
+                type="button"
+                variant="secondary"
+              >
+                <ChevronRightIcon />
+              </Button>
             </>
           ) : null}
         </div>
         <div aria-label="Image filmstrip" className="flex gap-2 overflow-x-auto">
           {images.map((entry, imageIndex) => (
-            <button aria-label={`View image ${imageIndex + 1}`} className={cn("size-12 shrink-0 overflow-hidden rounded border", index === imageIndex && "ring-2 ring-primary")} key={entry.attachment.id} onClick={() => setIndex(imageIndex)} type="button">
+            <button
+              aria-label={`View image ${imageIndex + 1}`}
+              className={cn(
+                "size-12 shrink-0 overflow-hidden rounded border",
+                index === imageIndex && "ring-2 ring-primary",
+              )}
+              key={entry.attachment.id}
+              onClick={() => setIndex(imageIndex)}
+              type="button"
+            >
               <GalleryThumbnail attachment={entry.attachment} />
             </button>
           ))}
