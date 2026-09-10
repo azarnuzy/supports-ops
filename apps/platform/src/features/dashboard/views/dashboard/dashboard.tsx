@@ -1,35 +1,18 @@
-import type {
-  AnalyticsAgentLoad,
-  AnalyticsChannelCount,
-  AnalyticsStatusCount,
-  ResolutionFigure,
-} from "@repo/api-client";
-import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@repo/ui/components/card";
-import { StatusBadge } from "@repo/ui/components/ticket-badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { PlatformAppShell } from "../../../app-shell";
 import { meQueryOptions } from "../../../auth";
-import { analyticsOverviewQueryOptions, analyticsTrafficQueryOptions } from "../../dashboard.hooks";
-import { ConversationTrafficCard, ResolutionsCard } from "./components";
-
-const percentFormat = new Intl.NumberFormat(undefined, {
-  style: "percent",
-  maximumFractionDigits: 1,
-});
-const channelTypeLabels: Record<string, string> = { WEB: "Web", WHATSAPP: "WhatsApp" };
-
-function formatRate(rate: number | null) {
-  return rate === null ? "—" : percentFormat.format(rate);
-}
+import { analyticsOverviewQueryOptions, analyticsTrafficQueryOptions } from "./dashboard.hooks";
+import {
+  AgentLoadCard,
+  ChannelCard,
+  ConversationTrafficCard,
+  RateCard,
+  ResolutionsCard,
+  StatusSpreadCard,
+} from "./components";
 
 const DashboardView = () => {
   const user = useQuery(meQueryOptions);
@@ -114,97 +97,5 @@ const DashboardView = () => {
     </PlatformAppShell>
   );
 };
-
-function RateCard({
-  title,
-  description,
-  figure,
-  totalTickets,
-}: {
-  title: string;
-  description: string;
-  figure: ResolutionFigure;
-  totalTickets: number;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-3xl tabular-nums">{formatRate(figure.rate)}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        {totalTickets === 0
-          ? "No Tickets yet."
-          : `${figure.count} of ${totalTickets} Tickets. ${description}`}
-      </CardContent>
-    </Card>
-  );
-}
-
-function StatusSpreadCard({ counts }: { counts: AnalyticsStatusCount[] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Ticket statuses</CardTitle>
-        <CardDescription>The current spread across the Workspace.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {counts.map((entry) => (
-          <div key={entry.status} className="flex items-center justify-between gap-2">
-            <StatusBadge status={entry.status} />
-            <span className="text-sm font-medium tabular-nums">{entry.count}</span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChannelCard({ counts }: { counts: AnalyticsChannelCount[] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Tickets by Channel</CardTitle>
-        <CardDescription>Where conversations arrive.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {counts.map((channel) => (
-          <div key={channel.channelId} className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              {channel.channelName}
-              <Badge variant="outline">
-                {channelTypeLabels[channel.channelType] ?? channel.channelType}
-              </Badge>
-            </span>
-            <span className="text-sm font-medium tabular-nums">{channel.ticketCount}</span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AgentLoadCard({ loads }: { loads: AnalyticsAgentLoad[] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Active Tickets per Human Agent</CardTitle>
-        <CardDescription>Who is holding human-handled work right now.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {loads.length ? (
-          loads.map((load) => (
-            <div key={load.humanAgentId} className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm font-medium">{load.humanAgentName}</span>
-              <span className="text-sm font-medium tabular-nums">{load.activeTicketCount}</span>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground">No active human-handled Tickets.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 export default DashboardView;

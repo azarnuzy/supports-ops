@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { queryKeys } from "../../lib/query-keys";
+import { queryKeys } from "../../../../lib/query-keys";
 import { getAnalyticsOverview, getAnalyticsTraffic } from "./dashboard.services";
 
 export const analyticsOverviewQueryOptions = queryOptions({
