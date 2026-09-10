@@ -11,7 +11,7 @@ import {
   domainPattern,
   domainsAreEqual,
   validateWidgetConfig,
-} from "./widget.services";
+} from "./widget.utils";
 
 export function useWidgetSettingsForm() {
   const config = useQuery(webWidgetConfigQueryOptions);
