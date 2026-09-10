@@ -312,6 +312,7 @@ async function seedWorkspaces(): Promise<Seeded> {
     data: tickets.map((ticket, index) => ({
       id: `ticket-${ticket.key}-${run}`,
       workspaceId,
+      aiAgentId: `aiagent-${run}`,
       channelId: ticket.channelId,
       webSessionId: sessions[index].id,
       customerIdentityId: ticket.customerIdentityId,
@@ -337,6 +338,7 @@ async function seedWorkspaces(): Promise<Seeded> {
     data: otherSessions.map((session, index) => ({
       id: `ticket-other-${index}-${run}`,
       workspaceId: otherWorkspaceId,
+      aiAgentId: `aiagent-other-${run}`,
       channelId: otherChannel.id,
       webSessionId: session.id,
       customerIdentityId: otherIdentity.id,
@@ -741,6 +743,7 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
     data: tickets.map((ticket, index) => ({
       id: `traffic-ticket-${ticket.key}-${run}`,
       workspaceId: ticket.workspaceId,
+      aiAgentId: ticket.workspaceId === workspaceId ? aiAgentId : otherAiAgentId,
       channelId: ticket.channelId,
       webSessionId: sessions[index].id,
       customerIdentityId: ticket.customerIdentityId,
