@@ -1,5 +1,11 @@
 import { Badge } from "@repo/ui/components/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@repo/ui/components/card";
 import { channelTypeLabels } from "../../dashboard.utils";
 import type { ChannelCardProps } from "./index.types";
 

@@ -35,7 +35,12 @@ export default function AddTextDialog({
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="knowledge-title">Title</FieldLabel>
-            <Input id="knowledge-title" required value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Input
+              id="knowledge-title"
+              required
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="knowledge-content">Content</FieldLabel>

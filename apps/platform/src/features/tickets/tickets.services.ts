@@ -69,8 +69,19 @@ export function sendHumanReply(input: { id: string; content: string; idempotency
   return sendHumanReplyRequest(apiClient, input.id, input.content, input.idempotencyKey);
 }
 
-export function sendHumanAttachments(input: { id: string; content: string; files: File[]; idempotencyKey: string }) {
-  return sendHumanAttachmentsRequest(apiClient, input.id, input.content, input.files, input.idempotencyKey);
+export function sendHumanAttachments(input: {
+  id: string;
+  content: string;
+  files: File[];
+  idempotencyKey: string;
+}) {
+  return sendHumanAttachmentsRequest(
+    apiClient,
+    input.id,
+    input.content,
+    input.files,
+    input.idempotencyKey,
+  );
 }
 
 export function retryHumanReply(input: { id: string; messageId: string }) {

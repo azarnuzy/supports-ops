@@ -649,7 +649,13 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
   const otherIdentityId = `traffic-other-identity-${run}`;
   await unscopedPrisma.customerIdentity.createMany({
     data: [
-      { id: identityId, workspaceId, name: "Citra", email: "citra@example.com", channelType: "WEB" },
+      {
+        id: identityId,
+        workspaceId,
+        name: "Citra",
+        email: "citra@example.com",
+        channelType: "WEB",
+      },
       {
         id: otherIdentityId,
         workspaceId: otherWorkspaceId,
@@ -787,7 +793,10 @@ describe.skipIf(!databaseReachable)("GET /analytics/traffic", () => {
     expect(body.analytics.traffic[0].hourStart).toBe(trafficSeed.oldestBucketStart.toISOString());
 
     const totalTraffic = body.analytics.traffic.reduce((sum, bucket) => sum + bucket.count, 0);
-    const totalResolutions = body.analytics.resolutions.reduce((sum, bucket) => sum + bucket.count, 0);
+    const totalResolutions = body.analytics.resolutions.reduce(
+      (sum, bucket) => sum + bucket.count,
+      0,
+    );
     expect(totalTraffic).toBe(3);
     expect(totalResolutions).toBe(1);
 
@@ -805,7 +814,10 @@ describe.skipIf(!databaseReachable)("GET /analytics/traffic", () => {
     const body = (await response.json()) as TrafficResponse;
 
     const totalTraffic = body.analytics.traffic.reduce((sum, bucket) => sum + bucket.count, 0);
-    const totalResolutions = body.analytics.resolutions.reduce((sum, bucket) => sum + bucket.count, 0);
+    const totalResolutions = body.analytics.resolutions.reduce(
+      (sum, bucket) => sum + bucket.count,
+      0,
+    );
     expect(totalTraffic).toBe(1);
     expect(totalResolutions).toBe(1);
   });

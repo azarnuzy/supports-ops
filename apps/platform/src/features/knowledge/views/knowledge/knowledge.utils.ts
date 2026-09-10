@@ -1,4 +1,9 @@
-import type { KnowledgeIngestStage, KnowledgeSourceType, KnowledgeStatus, KnowledgeVisibility } from "./knowledge.types";
+import type {
+  KnowledgeIngestStage,
+  KnowledgeSourceType,
+  KnowledgeStatus,
+  KnowledgeVisibility,
+} from "./knowledge.types";
 
 const statusLabels: Record<KnowledgeStatus, string> = {
   DRAFT: "Draft",

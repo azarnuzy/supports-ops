@@ -105,9 +105,7 @@ export default function ConfigForm({ form }: ConfigFormProps) {
                 </div>
               </div>
             </div>
-            <FieldDescription>
-              Shown on the widget header. PNG, JPG, or SVG.
-            </FieldDescription>
+            <FieldDescription>Shown on the widget header. PNG, JPG, or SVG.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="widget-bot-name">Bot name</FieldLabel>

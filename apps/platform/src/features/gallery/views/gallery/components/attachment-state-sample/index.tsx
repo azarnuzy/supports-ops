@@ -7,7 +7,11 @@ import {
 } from "@repo/ui/components/attachment";
 import type { AttachmentStateSampleProps } from "./index.types";
 
-export default function AttachmentStateSample({ state, label, detail }: AttachmentStateSampleProps) {
+export default function AttachmentStateSample({
+  state,
+  label,
+  detail,
+}: AttachmentStateSampleProps) {
   return (
     <Attachment state={state}>
       <AttachmentMedia />

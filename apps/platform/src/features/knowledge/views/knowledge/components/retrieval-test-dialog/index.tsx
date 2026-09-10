@@ -77,7 +77,10 @@ export default function RetrievalTestDialog({ onOpenChange, open }: RetrievalTes
             ) : (
               <ol className="grid max-h-72 gap-3 overflow-y-auto">
                 {results.map((result, index) => (
-                  <li key={`${result.knowledgeSourceId}-${index}`} className="rounded-md border p-3 text-sm">
+                  <li
+                    key={`${result.knowledgeSourceId}-${index}`}
+                    className="rounded-md border p-3 text-sm"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium">{result.title}</p>
                       <span className="text-xs text-muted-foreground">

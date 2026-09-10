@@ -110,7 +110,10 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
     try {
-      return c.json(await markTicketRead(c.req.param("id"), user, c.req.valid("json").position), 200);
+      return c.json(
+        await markTicketRead(c.req.param("id"), user, c.req.valid("json").position),
+        200,
+      );
     } catch (error) {
       if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
       throw error;
@@ -170,15 +173,31 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/:id/attachments", async (c) => {
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
-    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN") return c.json({ error: "forbidden" }, 403);
+    if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN")
+      return c.json({ error: "forbidden" }, 403);
     const form = await c.req.formData();
-    const parsed = humanAttachmentReplySchema.safeParse({ content: form.get("content") || undefined, idempotencyKey: form.get("idempotencyKey") });
+    const parsed = humanAttachmentReplySchema.safeParse({
+      content: form.get("content") || undefined,
+      idempotencyKey: form.get("idempotencyKey"),
+    });
     if (!parsed.success) return c.json({ error: "invalid_attachment" }, 422);
     try {
-      return c.json({ message: await sendHumanAttachmentReply(c.req.param("id"), user.id, parsed.data.content, form.getAll("files").filter((value): value is File => value instanceof File), parsed.data.idempotencyKey) }, 201);
+      return c.json(
+        {
+          message: await sendHumanAttachmentReply(
+            c.req.param("id"),
+            user.id,
+            parsed.data.content,
+            form.getAll("files").filter((value): value is File => value instanceof File),
+            parsed.data.idempotencyKey,
+          ),
+        },
+        201,
+      );
     } catch (error) {
       if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
-      if (error instanceof InvalidHumanAttachmentError) return c.json({ error: "invalid_attachment" }, 422);
+      if (error instanceof InvalidHumanAttachmentError)
+        return c.json({ error: "invalid_attachment" }, 422);
       throw error;
     }
   })

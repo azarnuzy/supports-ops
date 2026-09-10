@@ -1,11 +1,22 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Bubble, BubbleContent } from "@repo/ui/components/bubble";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@repo/ui/components/card";
 import { hexColorPattern } from "../../widget.utils";
 import WidgetChatIcon from "../widget-chat-icon";
 import type { PreviewCardProps } from "./index.types";
 
-export default function PreviewCard({ logoUrl, botName, welcomeMessage, primaryColor }: PreviewCardProps) {
+export default function PreviewCard({
+  logoUrl,
+  botName,
+  welcomeMessage,
+  primaryColor,
+}: PreviewCardProps) {
   const color = hexColorPattern.test(primaryColor) ? primaryColor : "#2563eb";
 
   return (

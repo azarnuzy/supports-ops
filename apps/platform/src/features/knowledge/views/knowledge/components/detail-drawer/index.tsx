@@ -46,7 +46,10 @@ import type { KnowledgeDetailDrawerProps } from "./index.types";
 const refreshableTypes = new Set(["PDF", "URL"]);
 const editableTypes = new Set(["MANUAL_FAQ", "PDF", "URL", "INTERNAL_SOP"]);
 
-export default function KnowledgeDetailDrawer({ onOpenChange, source }: KnowledgeDetailDrawerProps) {
+export default function KnowledgeDetailDrawer({
+  onOpenChange,
+  source,
+}: KnowledgeDetailDrawerProps) {
   const updateKnowledgeSource = useUpdateKnowledgeSourceMutation();
   const retryKnowledgeSource = usePublishKnowledgeSourceMutation();
   const refreshKnowledgeSource = useRefreshKnowledgeSourceMutation();
@@ -116,7 +119,8 @@ export default function KnowledgeDetailDrawer({ onOpenChange, source }: Knowledg
   function handleUpdateSource() {
     if (!source) return;
     refreshKnowledgeSource.mutate(source.id, {
-      onError: (error) => toast.error(error instanceof Error ? error.message : "Update source failed."),
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : "Update source failed."),
       onSuccess: () => {
         toast.success("Update source started.");
         setConfirmingUpdateSource(false);
@@ -142,7 +146,9 @@ export default function KnowledgeDetailDrawer({ onOpenChange, source }: Knowledg
         <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-2xl" side="right">
           <SheetHeader>
             <SheetTitle className="pr-8 break-words">{source.title}</SheetTitle>
-            <SheetDescription>{sourceTypeLabel(source.sourceType)} Knowledge Source</SheetDescription>
+            <SheetDescription>
+              {sourceTypeLabel(source.sourceType)} Knowledge Source
+            </SheetDescription>
           </SheetHeader>
 
           <div className="grid gap-6 px-4 pb-6">
@@ -164,18 +170,25 @@ export default function KnowledgeDetailDrawer({ onOpenChange, source }: Knowledg
                   }
                 />
               ) : null}
-              <Row label="Visibility" value={<Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>} />
+              <Row
+                label="Visibility"
+                value={<Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>}
+              />
               <Row
                 label="Status"
                 value={
                   <Badge variant={statusVariant(source.status)}>
-                    {source.status === "PROCESSING" && source.stage ? statusLabel(source.stage) : statusLabel(source.status)}
+                    {source.status === "PROCESSING" && source.stage
+                      ? statusLabel(source.stage)
+                      : statusLabel(source.status)}
                   </Badge>
                 }
               />
               <Row label="Created" value={formatUpdatedAt(source.createdAt)} />
               <Row label="Last updated" value={formatUpdatedAt(source.updatedAt)} />
-              {source.publishedAt ? <Row label="Published" value={formatUpdatedAt(source.publishedAt)} /> : null}
+              {source.publishedAt ? (
+                <Row label="Published" value={formatUpdatedAt(source.publishedAt)} />
+              ) : null}
               {source.status === "FAILED" ? (
                 <Row
                   label="Failure"
@@ -219,9 +232,17 @@ export default function KnowledgeDetailDrawer({ onOpenChange, source }: Knowledg
                 <div className="grid gap-4">
                   <Field>
                     <FieldLabel htmlFor="detail-title">Title</FieldLabel>
-                    <Input id="detail-title" value={title} onChange={(event) => setTitle(event.target.value)} />
+                    <Input
+                      id="detail-title"
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                    />
                   </Field>
-                  <VisibilitySelect id="detail-visibility" value={visibility} onChange={setVisibility} />
+                  <VisibilitySelect
+                    id="detail-visibility"
+                    value={visibility}
+                    onChange={setVisibility}
+                  />
                   <Field>
                     <FieldLabel htmlFor="detail-content">Content</FieldLabel>
                     <Textarea
@@ -260,7 +281,11 @@ export default function KnowledgeDetailDrawer({ onOpenChange, source }: Knowledg
               ) : (
                 <>
                   {canRetry ? (
-                    <Button disabled={retryKnowledgeSource.isPending} variant="outline" onClick={handleRetry}>
+                    <Button
+                      disabled={retryKnowledgeSource.isPending}
+                      variant="outline"
+                      onClick={handleRetry}
+                    >
                       {retryKnowledgeSource.isPending ? "Retrying..." : "Retry"}
                     </Button>
                   ) : null}
@@ -281,14 +306,18 @@ export default function KnowledgeDetailDrawer({ onOpenChange, source }: Knowledg
           <AlertDialogHeader>
             <AlertDialogTitle>Update source?</AlertDialogTitle>
             <AlertDialogDescription>
-              This re-extracts content from the original {source.sourceType === "PDF" ? "PDF" : "URL"} and
-              replaces any manual edits to &ldquo;{source.title}&rdquo;. Previously published content stays
-              active until the new extraction succeeds.
+              This re-extracts content from the original{" "}
+              {source.sourceType === "PDF" ? "PDF" : "URL"} and replaces any manual edits to &ldquo;
+              {source.title}&rdquo;. Previously published content stays active until the new
+              extraction succeeds.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={refreshKnowledgeSource.isPending} onClick={handleUpdateSource}>
+            <AlertDialogAction
+              disabled={refreshKnowledgeSource.isPending}
+              onClick={handleUpdateSource}
+            >
               {refreshKnowledgeSource.isPending ? "Updating..." : "Update source"}
             </AlertDialogAction>
           </AlertDialogFooter>

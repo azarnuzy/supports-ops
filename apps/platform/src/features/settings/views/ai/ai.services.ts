@@ -1,4 +1,9 @@
-import { createApiClient, fetchAiSettings, updateAiSettings, type AiSettings } from "@repo/api-client";
+import {
+  createApiClient,
+  fetchAiSettings,
+  updateAiSettings,
+  type AiSettings,
+} from "@repo/api-client";
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const apiClient = createApiClient(apiBaseUrl);
