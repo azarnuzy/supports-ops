@@ -754,3 +754,248 @@ export async function testKnowledgeRetrieval(client: ApiClient, query: string) {
 
   return (await response.json()) as { results: RetrievalTestResult[] };
 }
+
+export type ToolOrigin = "BUILT_IN" | "HTTP" | "MCP";
+export type ToolRisk = "READ_ONLY" | "MUTATING";
+export type ToolAvailability = "AVAILABLE" | "UNAVAILABLE";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type McpDiscoveryStatus = "CURRENT" | "CHANGED" | "UNAVAILABLE";
+
+export type HttpTool = {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  inputSchema: unknown;
+  risk: ToolRisk;
+  method: HttpMethod;
+  url: string;
+  hasBearerToken: boolean;
+  hasSecretHeaders: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CatalogTool = {
+  id: string;
+  origin: ToolOrigin;
+  name: string;
+  description: string;
+  enabled: boolean;
+  inputSchema: unknown;
+  risk: ToolRisk;
+  createdAt: string;
+  updatedAt: string;
+  assigned: boolean;
+  availability: ToolAvailability;
+  requiredForCategories: TicketCategory[];
+};
+
+export type HttpToolInput = {
+  name: string;
+  description: string;
+  enabled: boolean;
+  inputSchema: Record<string, unknown>;
+  method: HttpMethod;
+  url: string;
+  risk: ToolRisk;
+  bearerToken?: string | null;
+  secretHeaders?: Record<string, string> | null;
+};
+
+export class ToolApiError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message);
+    this.name = "ToolApiError";
+  }
+}
+
+async function readToolError(response: Response, fallback: string) {
+  if (response.status === 404) return new ToolApiError("not_found", "This Tool no longer exists.");
+  if (response.status === 409) {
+    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (data?.error === "tool_required_by_policy")
+      return new ToolApiError(data.error, "Remove the Tool Policy that requires this Tool first.");
+    if (data?.error === "tool_unavailable")
+      return new ToolApiError(data?.error ?? "tool_unavailable", "This Tool is not available to assign.");
+    if (data?.error === "tool_not_assigned")
+      return new ToolApiError(
+        data?.error ?? "tool_not_assigned",
+        "Assign this Tool to the AI Agent before requiring it.",
+      );
+  }
+  if (response.status === 422) {
+    const data = (await response.json().catch(() => null)) as { message?: string } | null;
+    return new ToolApiError("invalid_schema", data?.message ?? "The input schema is invalid.");
+  }
+  return new Error(fallback);
+}
+
+export async function listHttpTools(client: ApiClient) {
+  const response = await client.tools.$get({ query: {} });
+  if (response.status === 403) throw new Error("Only an Admin can manage Tools.");
+  if (!response.ok) throw new Error("Failed to load Tools.");
+  return (await response.json()) as { tools: HttpTool[] };
+}
+
+export async function listCatalogTools(client: ApiClient, aiAgentId: string) {
+  const response = await client.tools.$get({ query: { aiAgentId } });
+  if (response.status === 403) throw new Error("Only an Admin can manage Tools.");
+  if (!response.ok) throw new Error("Failed to load Tools.");
+  return (await response.json()) as { tools: CatalogTool[] };
+}
+
+export async function createHttpTool(client: ApiClient, input: HttpToolInput) {
+  const response = await client.tools.$post({ json: input });
+  if (!response.ok) throw await readToolError(response, "Failed to create the HTTP Tool.");
+  return (await response.json()) as { tool: HttpTool };
+}
+
+export async function updateHttpTool(client: ApiClient, id: string, input: HttpToolInput) {
+  const response = await client.tools[":id"].$put({ json: input, param: { id } });
+  if (!response.ok) throw await readToolError(response, "Failed to save the HTTP Tool.");
+  return (await response.json()) as { tool: HttpTool };
+}
+
+export async function deleteHttpTool(client: ApiClient, id: string) {
+  const response = await client.tools[":id"].$delete({ param: { id } });
+  if (!response.ok) throw await readToolError(response, "Failed to delete the HTTP Tool.");
+}
+
+export async function setToolEnabled(client: ApiClient, toolId: string, enabled: boolean) {
+  const response = await client.tools[":toolId"].$patch({
+    json: { enabled },
+    param: { toolId },
+  });
+  if (!response.ok) throw await readToolError(response, "Failed to update the Tool.");
+  return (await response.json()) as { tool: CatalogTool };
+}
+
+export async function setToolAssignment(
+  client: ApiClient,
+  toolId: string,
+  aiAgentId: string,
+  assigned: boolean,
+) {
+  const response = await client.tools[":toolId"].assignments[":aiAgentId"].$put({
+    json: { assigned },
+    param: { aiAgentId, toolId },
+  });
+  if (!response.ok) throw await readToolError(response, "Failed to update the Tool assignment.");
+}
+
+export async function setToolPolicy(
+  client: ApiClient,
+  aiAgentId: string,
+  category: TicketCategory,
+  toolId: string,
+) {
+  const response = await client.tools.policies[":aiAgentId"][":category"].$put({
+    json: { toolId },
+    param: { aiAgentId, category } as never,
+  });
+  if (!response.ok) throw await readToolError(response, "Failed to set the Tool Policy.");
+  return (await response.json()) as { policy: { aiAgentId: string; category: TicketCategory; toolId: string } };
+}
+
+export async function removeToolPolicy(client: ApiClient, aiAgentId: string, category: TicketCategory) {
+  const response = await client.tools.policies[":aiAgentId"][":category"].$delete({
+    param: { aiAgentId, category } as never,
+  });
+  if (!response.ok) throw await readToolError(response, "Failed to remove the Tool Policy.");
+}
+
+export type McpServer = {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type McpServerInput = {
+  name: string;
+  url: string;
+  enabled?: boolean;
+  bearerToken?: string | null;
+  secretHeaders?: Record<string, string> | null;
+};
+
+export type McpTool = {
+  toolId: string;
+  mcpServerId: string;
+  remoteName: string;
+  discoveredSchema: unknown;
+  discoveredDescription: string;
+  discoveryStatus: McpDiscoveryStatus;
+  discoveredAt: string;
+  tool: CatalogTool;
+};
+
+export class McpApiError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message);
+    this.name = "McpApiError";
+  }
+}
+
+async function readMcpError(response: Response, fallback: string) {
+  if (response.status === 404) return new McpApiError("not_found", "This MCP Server no longer exists.");
+  if (response.status === 409) {
+    const data = (await response.json().catch(() => null)) as { message?: string } | null;
+    return new McpApiError("tool_denied", data?.message ?? "This MCP Tool can no longer be enabled.");
+  }
+  return new Error(fallback);
+}
+
+export async function listMcpServers(client: ApiClient) {
+  const response = await client["mcp-servers"].$get();
+  if (response.status === 403) throw new Error("Only an Admin can manage MCP Servers.");
+  if (!response.ok) throw new Error("Failed to load MCP Servers.");
+  return (await response.json()) as { servers: McpServer[] };
+}
+
+export async function createMcpServer(client: ApiClient, input: McpServerInput) {
+  const response = await client["mcp-servers"].$post({ json: input as never });
+  if (!response.ok) throw new Error("Failed to add the MCP Server.");
+  return (await response.json()) as { server: McpServer };
+}
+
+export async function updateMcpServer(client: ApiClient, id: string, input: Partial<McpServerInput>) {
+  const response = await client["mcp-servers"][":id"].$patch({ json: input, param: { id } });
+  if (!response.ok) throw await readMcpError(response, "Failed to save the MCP Server.");
+  return (await response.json()) as { data: McpServer };
+}
+
+export async function deleteMcpServer(client: ApiClient, id: string) {
+  const response = await client["mcp-servers"][":id"].$delete({ param: { id } });
+  if (!response.ok) throw await readMcpError(response, "Failed to delete the MCP Server.");
+}
+
+export async function testMcpConnection(client: ApiClient, id: string) {
+  const response = await client["mcp-servers"][":id"].test.$post({ param: { id } });
+  if (!response.ok) throw await readMcpError(response, "Failed to test the MCP Server.");
+  return (await response.json()) as {
+    data: { ok: true; server: unknown } | { ok: false; error: string };
+  };
+}
+
+export async function discoverMcpTools(client: ApiClient, id: string) {
+  const response = await client["mcp-servers"][":id"].discover.$post({ param: { id } });
+  if (!response.ok) throw await readMcpError(response, "Failed to discover Tools.");
+  return (await response.json()) as { data: McpTool[] };
+}
+
+export async function reviewMcpTool(
+  client: ApiClient,
+  toolId: string,
+  input: { enabled: boolean; risk: ToolRisk },
+) {
+  const response = await client["mcp-servers"].tools[":toolId"].review.$post({
+    json: input,
+    param: { toolId },
+  });
+  if (!response.ok) throw await readMcpError(response, "Failed to review the MCP Tool.");
+  return (await response.json()) as { data: McpTool };
+}
