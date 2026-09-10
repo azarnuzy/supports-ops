@@ -1,5 +1,6 @@
 import { InboxIcon } from "lucide-react";
 
+import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
 import {
   CardAction,
   CardContent,
@@ -18,14 +19,14 @@ export default function AgentLoadCard({ loads }: AgentLoadCardProps) {
 
   return (
     <DashboardCard>
-      <CardHeader>
-        <CardTitle>Active Tickets per Human Agent</CardTitle>
-        <CardDescription>Who is holding human-handled work right now.</CardDescription>
+      <CardHeader className="gap-1.5">
+        <CardTitle className="text-base leading-5">Active Tickets per Human Agent</CardTitle>
+        <CardDescription className="leading-5">Current human-handled workload.</CardDescription>
         <CardAction>
-          <span className="text-xs tabular-nums text-muted-foreground">{total} active</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{total} Tickets</span>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-1">
+      <CardContent className="grid gap-1.5">
         {sorted.length > 0 ? (
           sorted.map((load, index) => {
             const initials = load.humanAgentName
@@ -36,14 +37,16 @@ export default function AgentLoadCard({ loads }: AgentLoadCardProps) {
             return (
               <div
                 key={load.humanAgentId}
-                className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/50"
+                className="-mx-2 flex items-center gap-3 px-2 py-2"
               >
                 <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                   {index + 1}
                 </span>
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                  {initials}
-                </span>
+                <Avatar>
+                  <AvatarFallback className="text-xs font-semibold text-foreground">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate text-sm font-medium">{load.humanAgentName}</span>

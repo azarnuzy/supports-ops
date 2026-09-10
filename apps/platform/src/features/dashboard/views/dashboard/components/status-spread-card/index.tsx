@@ -25,20 +25,20 @@ export default function StatusSpreadCard({ counts }: StatusSpreadCardProps) {
 
   return (
     <DashboardCard>
-      <CardHeader>
-        <CardTitle>Ticket statuses</CardTitle>
-        <CardDescription>The current spread across the Workspace.</CardDescription>
+      <CardHeader className="gap-1.5">
+        <CardTitle className="text-base leading-5">Ticket statuses</CardTitle>
+        <CardDescription className="leading-5">Current Ticket distribution.</CardDescription>
         <CardAction>
-          <span className="text-xs tabular-nums text-muted-foreground">{total} total</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{total} Tickets</span>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-1">
+      <CardContent className="grid gap-1.5">
         {counts.map((entry) => (
           <div
             key={entry.status}
-            className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/50"
+            className="-mx-2 flex items-center gap-2.5 px-2 py-2"
           >
-            <div className="w-36 shrink-0">
+            <div className="w-32 shrink-0">
               <StatusBadge status={entry.status} />
             </div>
             <div aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -50,8 +50,8 @@ export default function StatusSpreadCard({ counts }: StatusSpreadCardProps) {
                 style={{ width: `${total === 0 ? 0 : (entry.count / total) * 100}%` }}
               />
             </div>
-            <span className="w-8 text-right text-sm font-semibold tabular-nums">{entry.count}</span>
-            <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
+            <span className="w-7 text-right text-sm font-semibold tabular-nums">{entry.count}</span>
+            <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
               {formatShare(entry.count, total)}
             </span>
           </div>
