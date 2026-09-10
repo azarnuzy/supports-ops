@@ -18,7 +18,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { PlatformAppShell } from "../../../app-shell";
 import { meQueryOptions } from "../../../auth";
-import { analyticsOverviewQueryOptions } from "../../dashboard.hooks";
+import { analyticsOverviewQueryOptions, analyticsTrafficQueryOptions } from "../../dashboard.hooks";
+import { ConversationTrafficCard, ResolutionsCard } from "./components";
 
 const percentFormat = new Intl.NumberFormat(undefined, {
   style: "percent",
@@ -34,6 +35,7 @@ const DashboardView = () => {
   const user = useQuery(meQueryOptions);
   const isAdmin = user.data?.role === "ADMIN";
   const analytics = useQuery({ ...analyticsOverviewQueryOptions, enabled: isAdmin });
+  const traffic = useQuery({ ...analyticsTrafficQueryOptions, enabled: isAdmin });
 
   if (!user.data) {
     return null;
@@ -81,6 +83,13 @@ const DashboardView = () => {
                 <ChannelCard counts={analytics.data.analytics.channelCounts} />
                 <AgentLoadCard loads={analytics.data.analytics.activeTicketsPerHumanAgent} />
               </div>
+
+              {traffic.data ? (
+                <div className="grid gap-4">
+                  <ConversationTrafficCard buckets={traffic.data.analytics.traffic} />
+                  <ResolutionsCard buckets={traffic.data.analytics.resolutions} />
+                </div>
+              ) : null}
             </>
           ) : null
         ) : (
