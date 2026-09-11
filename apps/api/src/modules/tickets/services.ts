@@ -42,6 +42,7 @@ const ticketSelect = {
     select: {
       content: true,
       createdAt: true,
+      deliveryFailureReason: true,
       deliveryStatus: true,
       position: true,
       senderType: true,
@@ -75,7 +76,8 @@ const ticketListSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
   category: true,
   createdAt: true,
-  customerIdentity: { select: { email: true, id: true, name: true } },
+  channel: { select: { name: true, type: true } },
+  customerIdentity: { select: { email: true, id: true, name: true, phoneE164: true } },
   id: true,
   priority: true,
   resolvedAt: true,
@@ -112,6 +114,7 @@ const transcriptSelect = {
   },
   content: true,
   createdAt: true,
+  deliveryFailureReason: true,
   deliveryStatus: true,
   id: true,
   position: true,
@@ -156,6 +159,7 @@ export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
                 OR: [
                   { name: { contains: filters.search, mode: "insensitive" as const } },
                   { email: { contains: filters.search, mode: "insensitive" as const } },
+                  { phoneE164: { contains: filters.search, mode: "insensitive" as const } },
                 ],
               },
             },
@@ -755,7 +759,7 @@ async function getCopilotToolData(
   ticketId: string,
   workspaceId: string,
   aiAgentId: string,
-  identity: { email: string; externalCustomerId: string | null; id: string },
+  identity: { email: string | null; externalCustomerId: string | null; id: string },
 ) {
   const assignedTools = (await resolveTools(aiAgentId)).filter(
     (tool) => tool.origin !== "BUILT_IN" && tool.risk === "READ_ONLY",
@@ -764,6 +768,7 @@ async function getCopilotToolData(
 
   let customerId = identity.externalCustomerId;
   if (!customerId) {
+    if (!identity.email) return undefined;
     const businessTools = createBusinessTools(apiConfig.businessSystemUrl);
     const customer = await businessTools.getCustomerByEmail(identity.email);
     if (!customer) return undefined;

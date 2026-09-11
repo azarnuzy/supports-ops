@@ -209,13 +209,14 @@ async function appendAiMessage(ticketId: string, workspaceId: string, content: s
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      select: { sessionId: true },
+      select: { channel: { select: { type: true } }, sessionId: true },
       where: { id: ticketId },
     });
     return tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
+        deliveryStatus: ticket.channel.type === "WHATSAPP" ? "PENDING" : "SENT",
         externalMessageId: `ai:${randomUUID()}`,
         message: { content },
         role: "assistant",
@@ -241,13 +242,14 @@ export async function escalate(
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      select: { sessionId: true },
+      select: { channel: { select: { type: true } }, sessionId: true },
       where: { id: ticketId },
     });
     const acknowledgementMessage = await tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, ticket.sessionId)),
         content: acknowledgement,
+        deliveryStatus: ticket.channel.type === "WHATSAPP" ? "PENDING" : "SENT",
         externalMessageId: `escalation:${randomUUID()}`,
         message: { content: acknowledgement },
         role: "system",
@@ -288,7 +290,10 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      include: { aiAgent: { select: { resolutionMessage: true } } },
+      include: {
+        aiAgent: { select: { resolutionMessage: true } },
+        channel: { select: { type: true } },
+      },
       where: { id: ticketId },
     });
     const content = ticket.aiAgent.resolutionMessage ?? "This conversation has been resolved.";
@@ -296,6 +301,7 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
       data: {
         ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
+        deliveryStatus: ticket.channel.type === "WHATSAPP" ? "PENDING" : "SENT",
         externalMessageId: `resolution:${randomUUID()}`,
         message: { content },
         role: "system",

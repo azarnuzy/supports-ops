@@ -124,7 +124,8 @@ export type TicketCategoryInput = { label: string; description: string };
 export type TicketMessage = {
   content: string;
   createdAt: string;
-  deliveryStatus: "PENDING" | "SENT" | "FAILED";
+  deliveryFailureReason?: string | null;
+  deliveryStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
   position: number;
   senderType: "CUSTOMER" | "AI_AGENT" | "HUMAN_AGENT" | "SYSTEM";
 };
@@ -148,8 +149,9 @@ export type SupportTicket = {
 export type TicketListItem = {
   assignedHumanAgent: { id: string; name: string } | null;
   category: TicketCategory;
+  channel: { name: string; type: "WEB" | "WHATSAPP" };
   createdAt: string;
-  customerIdentity: { email: string; id: string; name: string };
+  customerIdentity: { email: string | null; id: string; name: string; phoneE164: string | null };
   id: string;
   priority: TicketPriority;
   resolvedAt: string | null;

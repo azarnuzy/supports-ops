@@ -11,6 +11,7 @@ import {
   processTicketKnowledgeIndexJob,
   type TicketKnowledgeIndexJob,
 } from "./ticket-knowledge-index";
+import { processWhatsAppTurn, type WhatsAppTurnJob } from "./whatsapp-turn";
 
 export type { ExampleJob } from "./types";
 
@@ -96,6 +97,10 @@ export function startTicketKnowledgeIndexWorker() {
   );
 }
 
+export function startWhatsAppTurnWorker() {
+  return new Worker<WhatsAppTurnJob>("whatsapp-turn", processWhatsAppTurn, { connection });
+}
+
 export function runWorker() {
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
@@ -103,6 +108,7 @@ export function runWorker() {
   const attachmentProcessWorker = startAttachmentProcessWorker();
   const followUpWorker = startFollowUpWorker();
   const ticketKnowledgeIndexWorker = startTicketKnowledgeIndexWorker();
+  const whatsAppTurnWorker = startWhatsAppTurnWorker();
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "Job completed");
@@ -126,6 +132,9 @@ export function runWorker() {
   ticketKnowledgeIndexWorker.on("failed", (job, error) => {
     logger.error({ err: error, jobId: job?.id }, "Ticket Knowledge indexing failed");
   });
+  whatsAppTurnWorker.on("failed", (job, error) => {
+    logger.error({ err: error, jobId: job?.id }, "WhatsApp turn failed");
+  });
 
   return {
     attachmentProcessWorker,
@@ -133,6 +142,7 @@ export function runWorker() {
     knowledgeIngestWorker,
     sessionEmailWorker,
     ticketKnowledgeIndexWorker,
+    whatsAppTurnWorker,
     worker,
   };
 }
