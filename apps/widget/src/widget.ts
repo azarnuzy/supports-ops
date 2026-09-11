@@ -425,6 +425,10 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     messages?.replaceChildren();
     sessionEnded?.setAttribute("hidden", "");
     startNew?.setAttribute("hidden", "");
+    if (input) {
+      input.disabled = false;
+      input.placeholder = "Type your message…";
+    }
     showPreChat();
   };
   startNew?.addEventListener("click", resetSession);
