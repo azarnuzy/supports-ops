@@ -24,7 +24,7 @@ import {
   embeddingConfig,
   storageConfig,
 } from "../../config";
-import { type Message, unscopedPrisma } from "../../utils/prisma";
+import { isUniqueConstraintError, type Message, unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { withWorkspaceContext } from "../../utils/workspace-context";
 import { enqueueSessionEmail } from "./session-email";
@@ -1052,18 +1052,4 @@ function isAllowedOrigin(origin: string, allowedDomains: string[]) {
   } catch {
     return false;
   }
-}
-
-function isUniqueConstraintError(error: unknown, target: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "P2002" &&
-    "meta" in error &&
-    typeof error.meta === "object" &&
-    error.meta !== null &&
-    "target" in error.meta &&
-    JSON.stringify(error.meta.target).includes(target)
-  );
 }
