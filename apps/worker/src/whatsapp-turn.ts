@@ -36,7 +36,8 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   if (!incoming.length) return deliverPendingMessages(session.id);
 
   for (const attachment of incoming.flatMap((message) => message.attachments)) {
-    if (attachment.processingStatus === "PROCESSING") Object.assign(attachment, await read(attachment));
+    if (attachment.processingStatus === "PROCESSING")
+      Object.assign(attachment, await read(attachment));
   }
   // Once a Ticket leaves AI_HANDLING the AI Agent never speaks again; a person owns it.
   if (session.ticket && session.ticket.status !== "AI_HANDLING") {
@@ -98,15 +99,34 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
       }),
     });
     if (!decision.qualifies) {
-      await appendReply(
-        session.id,
-        session.workspaceId,
-        incoming.at(-1)?.externalMessageId ?? randomUUID(),
-        decision.reply,
-      );
-      return deliverPendingMessages(session.id);
+      const previous = await prisma.ticket.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { category: true, title: true },
+        where: {
+          channelId: session.channelId,
+          customerIdentityId: session.customerIdentityId,
+          sessionId: { not: session.id },
+          status: "RESOLVED",
+          workspaceId: session.workspaceId,
+        },
+      });
+      if (!previous) {
+        await appendReply(
+          session.id,
+          session.workspaceId,
+          incoming.at(-1)?.externalMessageId ?? randomUUID(),
+          decision.reply,
+        );
+        return deliverPendingMessages(session.id);
+      }
+      ticketId = await createTicket(session.id, {
+        category: previous.category,
+        priority: "NORMAL",
+        title: previous.title,
+      });
+    } else {
+      ticketId = await createTicket(session.id, decision);
     }
-    ticketId = await createTicket(session.id, decision);
   }
 
   await generateAiReply(ticketId, session.workspaceId, customerMessage);
@@ -265,7 +285,10 @@ export async function processWhatsAppDelivery(job: {
     await deliverMessage(job.data.messageId);
   } catch (error) {
     // A transient failure that exhausts its retries must still end visibly failed.
-    if (!(error instanceof UnrecoverableError) && job.attemptsMade + 1 >= (job.opts.attempts ?? 1)) {
+    if (
+      !(error instanceof UnrecoverableError) &&
+      job.attemptsMade + 1 >= (job.opts.attempts ?? 1)
+    ) {
       await prisma.message.update({
         data: {
           deliveryFailureReason: error instanceof Error ? error.message : "Delivery failed.",
@@ -301,23 +324,31 @@ async function deliverMessage(messageId: string) {
   const accessToken = decryptToolSecret(config.accessTokenEncrypted, requiredMasterKey());
   const to = phone.replace(/^\+/, "");
   const [attachment] = message.attachments;
+  const window = message.session.customerLastMessageAt
+    ? { customerLastMessageAt: message.session.customerLastMessageAt, now: new Date() }
+    : undefined;
   let response: Response;
   try {
-    const payload = attachment
-      ? renderWhatsAppMessage({
-          attachment: {
-            caption: message.content || undefined,
-            fileName: attachment.fileName,
-            id: await uploadMedia(config.phoneNumberId, accessToken, attachment),
-            type: attachment.mimeType.startsWith("image/")
-              ? "image"
-              : attachment.mimeType.startsWith("audio/")
-                ? "audio"
-                : "document",
-          },
-          to,
-        })
-      : renderWhatsAppMessage({ text: message.content, to });
+    const textPayload = renderWhatsAppMessage({ text: message.content, to }, window);
+    const payload =
+      attachment && textPayload.type !== "template"
+        ? renderWhatsAppMessage(
+            {
+              attachment: {
+                caption: message.content || undefined,
+                fileName: attachment.fileName,
+                id: await uploadMedia(config.phoneNumberId, accessToken, attachment),
+                type: attachment.mimeType.startsWith("image/")
+                  ? "image"
+                  : attachment.mimeType.startsWith("audio/")
+                    ? "audio"
+                    : "document",
+              },
+              to,
+            },
+            window,
+          )
+        : textPayload;
     response = await fetch(
       `https://graph.facebook.com/v23.0/${encodeURIComponent(config.phoneNumberId)}/messages`,
       {
@@ -345,7 +376,9 @@ async function deliverMessage(messageId: string) {
     await prisma.message.update({
       data: {
         deliveryAttempts: { increment: 1 },
-        ...(kind === "permanent" ? { deliveryFailureReason: reason, deliveryStatus: "FAILED" } : {}),
+        ...(kind === "permanent"
+          ? { deliveryFailureReason: reason, deliveryStatus: "FAILED" }
+          : {}),
       },
       where: { id: message.id },
     });

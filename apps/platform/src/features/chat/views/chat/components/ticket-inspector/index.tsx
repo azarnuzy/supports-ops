@@ -2,6 +2,7 @@ import { Empty, EmptyMedia, EmptyTitle } from "@repo/ui/components/empty";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import {
   CalendarIcon,
+  ClockIcon,
   FlagIcon,
   HistoryIcon,
   MailIcon,
@@ -9,6 +10,7 @@ import {
   PhoneIcon,
   UserRoundIcon,
 } from "lucide-react";
+import { whatsAppCustomerServiceWindowClosesAt } from "@repo/channels";
 import type { ReactNode } from "react";
 import { formatEnumLabel } from "../../../../../../lib/utils";
 import { formatTimestamp } from "../../chat.utils";
@@ -56,6 +58,15 @@ export default function TicketInspector({
             label="Owner"
             value={detail.assignedHumanAgent?.name ?? "Unassigned"}
           />
+          {detail.channel.type === "WHATSAPP" && detail.session.customerLastMessageAt ? (
+            <DetailRow
+              icon={ClockIcon}
+              label="Service window closes"
+              value={whatsAppCustomerServiceWindowClosesAt(
+                new Date(detail.session.customerLastMessageAt),
+              ).toLocaleString()}
+            />
+          ) : null}
           <SectionLabel>Classification</SectionLabel>
           <DetailRow icon={FlagIcon} label="Priority" value={formatEnumLabel(detail.priority)} />
           <DetailRow

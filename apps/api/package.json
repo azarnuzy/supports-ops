@@ -7,6 +7,7 @@
     ".": "./src/app.ts",
     "./ai-agent-turn": "./src/modules/ai-agent/turn.ts",
     "./secrets": "./src/modules/tools/secrets.ts",
+    "./ticket-queue": "./src/modules/tickets/queue.ts",
     "./whatsapp-queue": "./src/modules/whatsapp-config/queue.ts"
   },
   "scripts": {
