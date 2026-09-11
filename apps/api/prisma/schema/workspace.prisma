@@ -9,6 +9,7 @@ model Workspace {
   users              User[]
   aiAgents           AiAgent[]
   channels           Channel[]
+  whatsAppConfigs    WhatsAppConfig[]
   customerIdentities CustomerIdentity[]
   sessions           Session[]
   tickets            Ticket[]

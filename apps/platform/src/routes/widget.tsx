@@ -7,8 +7,8 @@ export const Route = createFileRoute("/widget")({
   beforeLoad: requireAdmin,
   head: () =>
     pageMetadata({
-      title: "Web Widget",
-      description: "Brand the Web Widget and install it on your site.",
+      title: "Channels",
+      description: "Configure the Web Widget and WhatsApp Channel.",
       path: "/widget",
       noIndex: true,
     }),
