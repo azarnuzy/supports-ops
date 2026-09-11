@@ -12,6 +12,7 @@ const demoAdminEmail = "admin@demo.supportops.dev";
 const demoHumanAgentEmail = "agent@demo.supportops.dev";
 const fixtureTitle = "E2E Mine Ticket Fixture";
 export const fixtureCustomerName = "E2E Fixture Customer";
+const fixtureEmail = `e2e-fixture-${randomUUID()}@example.com`;
 export const fixtureCustomerMessage = "I can't log into my account anymore, can someone help?";
 
 async function deleteExistingFixture(workspaceId: string) {
@@ -22,9 +23,9 @@ async function deleteExistingFixture(workspaceId: string) {
 
   await prisma.aiActivity.deleteMany({ where: { ticketId: existing.id } });
   await prisma.message.deleteMany({ where: { ticketId: existing.id } });
-  await prisma.conversation.deleteMany({ where: { ticketId: existing.id } });
   await prisma.ticket.delete({ where: { id: existing.id } });
-  await prisma.webSession.delete({ where: { id: existing.webSessionId } });
+  await prisma.conversation.deleteMany({ where: { sessionId: existing.sessionId } });
+  await prisma.session.delete({ where: { id: existing.sessionId } });
   await prisma.customerIdentity.delete({ where: { id: existing.customerIdentityId } });
 }
 
@@ -39,20 +40,23 @@ export async function seedMineTicketFixture() {
 
   const customerIdentity = await prisma.customerIdentity.create({
     data: {
+      canonicalId: fixtureEmail,
       channelType: "WEB",
-      email: `e2e-fixture-${randomUUID()}@example.com`,
+      email: fixtureEmail,
       id: randomUUID(),
       name: fixtureCustomerName,
       workspaceId: admin.workspaceId,
     },
   });
 
-  const webSession = await prisma.webSession.create({
+  const sessionId = randomUUID();
+  await prisma.session.create({
     data: {
       accessToken: randomUUID(),
       channelId: channel.id,
       customerIdentityId: customerIdentity.id,
-      id: randomUUID(),
+      id: sessionId,
+      messageSeq: 2,
       status: "ACTIVE",
       workspaceId: admin.workspaceId,
     },
@@ -61,8 +65,20 @@ export async function seedMineTicketFixture() {
   const ticketId = randomUUID();
   const conversationId = randomUUID();
 
+  await prisma.conversation.create({
+    data: {
+      id: conversationId,
+      metadata: {},
+      scopeKey: `session:${sessionId}`,
+      sessionId,
+      userId: customerIdentity.id,
+      workspaceId: admin.workspaceId,
+    },
+  });
+
   await prisma.ticket.create({
     data: {
+      aiAgentId: channel.aiAgentId,
       assignedHumanAgentId: agent.id,
       category: "ACCOUNT",
       channelId: channel.id,
@@ -72,23 +88,10 @@ export async function seedMineTicketFixture() {
       escalationSummary: "Customer is locked out of their account and requested a Human Agent.",
       escalationSummaryStatus: "READY",
       id: ticketId,
-      messageSeq: 2,
       priority: "HIGH",
+      sessionId,
       status: "HUMAN_HANDLING",
       title: fixtureTitle,
-      webSessionId: webSession.id,
-      workspaceId: admin.workspaceId,
-    },
-  });
-
-  await prisma.conversation.create({
-    data: {
-      id: conversationId,
-      metadata: {},
-      scopeKey: `ticket:${ticketId}`,
-      sessionId: webSession.id,
-      ticketId,
-      userId: customerIdentity.id,
       workspaceId: admin.workspaceId,
     },
   });
@@ -106,6 +109,7 @@ export async function seedMineTicketFixture() {
         role: "user",
         runId: randomUUID(),
         senderType: "CUSTOMER",
+        sessionId,
         ticketId,
         turn: 1,
         workspaceId: admin.workspaceId,
@@ -121,6 +125,7 @@ export async function seedMineTicketFixture() {
         role: "assistant",
         runId: randomUUID(),
         senderType: "AI_AGENT",
+        sessionId,
         ticketId,
         turn: 1,
         workspaceId: admin.workspaceId,
