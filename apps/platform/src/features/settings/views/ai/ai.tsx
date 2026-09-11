@@ -151,6 +151,24 @@ const AiAgentView = () => {
                       />
                     </div>
                   </Field>
+                  <Field>
+                    <FieldLabel className="text-sm font-medium" htmlFor="idle-close-delay">
+                      Human-owned Ticket silence limit (seconds)
+                    </FieldLabel>
+                    <Input
+                      id="idle-close-delay"
+                      type="number"
+                      min={1}
+                      value={form.idleCloseAfterSeconds}
+                      onChange={(event) =>
+                        update("idleCloseAfterSeconds", Number(event.target.value))
+                      }
+                    />
+                    <FieldDescription>
+                      Close a claimed or unclaimed Ticket after this much Customer silence. Human
+                      replies do not reset the timer.
+                    </FieldDescription>
+                  </Field>
                   <div className="flex justify-end border-t pt-5">
                     <Button type="submit" disabled={save.isPending}>
                       {save.isPending ? "Saving…" : "Save changes"}

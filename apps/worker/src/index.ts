@@ -5,8 +5,8 @@ import { processKnowledgeIngestJob, type KnowledgeIngestJob } from "./knowledge-
 import { processAttachmentJob, type AttachmentProcessJob } from "./attachment-process";
 import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
-import { processAutoResolveJob, processFollowUpJob } from "./follow-up";
-import type { AutoResolveJob, FollowUpJob } from "./follow-up";
+import { processAutoResolveJob, processFollowUpJob, processIdleClosureJob } from "./follow-up";
+import type { AutoResolveJob, FollowUpJob, IdleClosureJob } from "./follow-up";
 import {
   processTicketKnowledgeIndexJob,
   type TicketKnowledgeIndexJob,
@@ -76,10 +76,12 @@ export function startAttachmentProcessWorker() {
 }
 
 export function startFollowUpWorker() {
-  return new Worker<FollowUpJob | AutoResolveJob>(
+  return new Worker<FollowUpJob | AutoResolveJob | IdleClosureJob>(
     "ticket-follow-up",
     async (job) => {
       if (job.name === "follow-up") return processFollowUpJob({ data: job.data as FollowUpJob });
+      if (job.name === "idle-close")
+        return processIdleClosureJob({ data: job.data as IdleClosureJob });
       return processAutoResolveJob({ data: job.data as AutoResolveJob });
     },
     { connection },

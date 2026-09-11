@@ -34,7 +34,9 @@ vi.mock("./realtime", () => ({
 
 vi.mock("../follow-up/queue", () => ({
   cancelFollowUpTimers: vi.fn(),
+  resetTimersAfterCustomerMessage: vi.fn(async () => undefined),
   scheduleFollowUp: vi.fn(),
+  scheduleIdleClosureForTicket: vi.fn(),
 }));
 
 vi.mock("../tickets/queue", () => ({ enqueueTicketKnowledgeIndex: vi.fn() }));

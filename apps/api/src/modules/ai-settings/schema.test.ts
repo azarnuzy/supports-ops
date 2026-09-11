@@ -6,6 +6,7 @@ const input = {
   autoResolveAfterSeconds: 3600,
   autoResolveEnabled: true,
   followUpAfterSeconds: 900,
+  idleCloseAfterSeconds: 28800,
   handoffMessage: "Hi {humanAgentName}",
   instructions: "",
   resolutionMessage: "Resolved.",

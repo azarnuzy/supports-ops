@@ -24,6 +24,10 @@ export type AnalyticsOverview = {
     customerInactive: ResolutionFigure;
   };
   humanEscalation: ResolutionFigure;
+  humanIdleClosure: {
+    handled: ResolutionFigure;
+    sharedQueue: ResolutionFigure;
+  };
   statusCounts: AnalyticsStatusCount[];
   channelCounts: AnalyticsChannelCount[];
   activeTicketsPerHumanAgent: AnalyticsAgentLoad[];

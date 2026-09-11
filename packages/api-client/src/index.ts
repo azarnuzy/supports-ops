@@ -21,6 +21,7 @@ export type AiSettings = {
   followUpAfterSeconds: number;
   autoResolveAfterSeconds: number;
   autoResolveEnabled: boolean;
+  idleCloseAfterSeconds: number;
   instructions: string;
   handoffMessage: string;
   resolutionMessage: string;
@@ -61,6 +62,10 @@ export type AnalyticsOverview = {
     customerInactive: ResolutionFigure;
   };
   humanEscalation: ResolutionFigure;
+  humanIdleClosure: {
+    handled: ResolutionFigure;
+    sharedQueue: ResolutionFigure;
+  };
   statusCounts: AnalyticsStatusCount[];
   channelCounts: AnalyticsChannelCount[];
   activeTicketsPerHumanAgent: AnalyticsAgentLoad[];

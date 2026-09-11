@@ -1,17 +1,25 @@
 import { Queue, type ConnectionOptions } from "bullmq";
+import { unscopedPrisma } from "../../utils/prisma";
 
 export type FollowUpJob = { ticketId: string; workspaceId: string; aiMessageId: string };
 export type AutoResolveJob = { ticketId: string; workspaceId: string; followUpMessageId: string };
+export type IdleClosureJob = {
+  assignedHumanAgentId: string | null;
+  customerLastMessageAt: string;
+  status: "ESCALATED" | "HUMAN_HANDLING";
+  ticketId: string;
+  workspaceId: string;
+};
 
 const connection: ConnectionOptions = {
   maxRetriesPerRequest: null,
   url: process.env.REDIS_URL ?? "redis://localhost:16379",
 };
 const queueName = "ticket-follow-up";
-let queue: Queue<FollowUpJob | AutoResolveJob> | null = null;
+let queue: Queue<FollowUpJob | AutoResolveJob | IdleClosureJob> | null = null;
 
 function getQueue() {
-  queue ??= new Queue<FollowUpJob | AutoResolveJob>(queueName, { connection });
+  queue ??= new Queue<FollowUpJob | AutoResolveJob | IdleClosureJob>(queueName, { connection });
   return queue;
 }
 
@@ -35,6 +43,67 @@ export async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: num
     removeOnComplete: 100,
     removeOnFail: 500,
   });
+}
+
+export async function scheduleIdleClosure(job: IdleClosureJob, idleCloseAfterSeconds: number) {
+  const jobs = getQueue();
+  await jobs.add("idle-close", job, {
+    delay: Math.max(
+      0,
+      new Date(job.customerLastMessageAt).getTime() + idleCloseAfterSeconds * 1_000 - Date.now(),
+    ),
+    jobId: [
+      "idle-close",
+      job.ticketId,
+      job.status,
+      job.assignedHumanAgentId ?? "queue",
+      new Date(job.customerLastMessageAt).getTime(),
+    ].join("-"),
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  });
+}
+
+export async function scheduleIdleClosureForTicket(ticketId: string, workspaceId: string) {
+  const [ticket, settings] = await Promise.all([
+    unscopedPrisma.ticket.findFirst({
+      select: {
+        assignedHumanAgentId: true,
+        session: { select: { customerLastMessageAt: true } },
+        status: true,
+      },
+      where: { id: ticketId, workspaceId },
+    }),
+    unscopedPrisma.aiSettings.findUnique({ where: { workspaceId } }),
+  ]);
+  if (
+    !ticket?.session.customerLastMessageAt ||
+    (ticket.status !== "ESCALATED" && ticket.status !== "HUMAN_HANDLING")
+  )
+    return;
+  await scheduleIdleClosure(
+    {
+      assignedHumanAgentId: ticket.assignedHumanAgentId,
+      customerLastMessageAt: ticket.session.customerLastMessageAt.toISOString(),
+      status: ticket.status,
+      ticketId,
+      workspaceId,
+    },
+    settings?.idleCloseAfterSeconds ?? 28_800,
+  );
+}
+
+export async function rescheduleIdleClosures(workspaceId: string) {
+  const tickets = await unscopedPrisma.ticket.findMany({
+    select: { id: true },
+    where: { status: { in: ["ESCALATED", "HUMAN_HANDLING"] }, workspaceId },
+  });
+  await Promise.all(tickets.map((ticket) => scheduleIdleClosureForTicket(ticket.id, workspaceId)));
+}
+
+export async function resetTimersAfterCustomerMessage(ticketId: string, workspaceId: string) {
+  await cancelFollowUpTimers(ticketId);
+  await scheduleIdleClosureForTicket(ticketId, workspaceId);
 }
 
 export async function cancelFollowUpTimers(ticketId: string) {
