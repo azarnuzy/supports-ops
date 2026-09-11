@@ -78,7 +78,7 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
   }
 }
 
-async function extractAttachment(storageKey: string, mimeType: string) {
+export async function extractAttachment(storageKey: string, mimeType: string) {
   if (mimeType === "text/plain") {
     const object = await createStorage(storageConfig).getObject(storageKey);
     if (!object.Body) throw new Error("Attachment file is missing.");
@@ -86,11 +86,11 @@ async function extractAttachment(storageKey: string, mimeType: string) {
   }
   if (!ingestionConfig.mistralApiKey)
     throw new Error("Configure MISTRAL_API_KEY to process attachments.");
+  if (mimeType.startsWith("audio/")) return transcribe(storageKey, mimeType);
   const url = await createStorage(storageConfig).getSignedGetObjectUrl({ key: storageKey });
-  const document =
-    mimeType === "application/pdf"
-      ? { document_url: url, type: "document_url" }
-      : { image_url: url, type: "image_url" };
+  const document = mimeType.startsWith("image/")
+    ? { image_url: url, type: "image_url" }
+    : { document_url: url, type: "document_url" };
   const response = await fetch("https://api.mistral.ai/v1/ocr", {
     body: JSON.stringify({ document, model: "mistral-ocr-latest" }),
     headers: {
@@ -102,6 +102,25 @@ async function extractAttachment(storageKey: string, mimeType: string) {
   if (!response.ok) throw new Error(`OCR failed: ${await response.text()}`);
   const body = (await response.json()) as { pages?: Array<{ markdown?: string }> };
   return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
+}
+
+async function transcribe(storageKey: string, mimeType: string) {
+  const object = await createStorage(storageConfig).getObject(storageKey);
+  if (!object.Body) throw new Error("Voice note file is missing.");
+  const form = new FormData();
+  form.set("model", "voxtral-mini-latest");
+  form.set(
+    "file",
+    new Blob([new Uint8Array(await object.Body.transformToByteArray())], { type: mimeType }),
+    `voice-note.${mimeType.split("/")[1]}`,
+  );
+  const response = await fetch("https://api.mistral.ai/v1/audio/transcriptions", {
+    body: form,
+    headers: { Authorization: `Bearer ${ingestionConfig.mistralApiKey}` },
+    method: "POST",
+  });
+  if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`);
+  return ((await response.json()) as { text?: string }).text ?? "";
 }
 
 async function requestReply(ticketId: string, workspaceId: string) {

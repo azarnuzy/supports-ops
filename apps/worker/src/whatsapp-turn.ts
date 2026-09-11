@@ -4,6 +4,7 @@ import { generateAiReply } from "@repo/api/ai-agent-turn";
 import { decryptToolSecret } from "@repo/api/secrets";
 import { classifyWhatsAppError, renderWhatsAppMessage } from "@repo/channels";
 import { UnrecoverableError } from "bullmq";
+import { extractAttachment } from "./attachment-process";
 import { classificationConfig } from "./config";
 import { claimMessageSlot } from "./follow-up";
 import { prisma } from "./prisma";
@@ -14,7 +15,10 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   const session = await prisma.session.findFirst({
     include: {
       channel: { include: { whatsAppConfig: true } },
-      messages: { orderBy: { position: "asc" } },
+      messages: {
+        include: { attachments: { where: { deletedAt: null } } },
+        orderBy: { position: "asc" },
+      },
       ticket: true,
     },
     where: { id: job.data.sessionId, status: "ACTIVE", workspaceId: job.data.workspaceId },
@@ -29,7 +33,28 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   );
   if (!incoming.length) return deliverPendingMessages(session.id);
 
-  const customerMessage = incoming.map((message) => message.content).join("\n");
+  for (const attachment of incoming.flatMap((message) => message.attachments)) {
+    if (attachment.processingStatus === "PROCESSING") Object.assign(attachment, await read(attachment));
+  }
+  const unreadable = incoming.flatMap((message) => message.attachments);
+  if (
+    !incoming.some(
+      (message) =>
+        message.content.trim() ||
+        message.attachments.some((attachment) => attachment.processingStatus === "READY"),
+    )
+  ) {
+    await appendReply(
+      session.id,
+      session.workspaceId,
+      incoming.at(-1)?.externalMessageId ?? randomUUID(),
+      unreadable.map(customerFacingFailure).join("\n"),
+      session.ticket?.id ?? null,
+    );
+    return deliverPendingMessages(session.id);
+  }
+
+  const customerMessage = incoming.map(describeCustomerMessage).join("\n");
   let ticketId = session.ticket?.id;
   if (!ticketId) {
     if (!classificationConfig.apiKey) throw new Error("OPENROUTER_API_KEY is required.");
@@ -57,7 +82,8 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
       history: session.messages
         .filter((message) => message.position < incoming[0].position)
         .map((message) => ({
-          content: message.content,
+          content:
+            message.senderType === "CUSTOMER" ? describeCustomerMessage(message) : message.content,
           role: message.senderType === "CUSTOMER" ? ("customer" as const) : ("agent" as const),
         })),
       model: createClassificationModel({
@@ -105,6 +131,10 @@ async function createTicket(
       },
     });
     await tx.message.updateMany({ data: { ticketId }, where: { sessionId, ticketId: null } });
+    await tx.attachment.updateMany({
+      data: { ticketId },
+      where: { message: { sessionId }, ticketId: null },
+    });
     await tx.aiActivity.createMany({
       data: [
         {
@@ -127,11 +157,65 @@ async function createTicket(
   });
 }
 
+type TurnAttachment = {
+  extractedText: string | null;
+  failureReason: string | null;
+  fileName: string;
+  id: string;
+  mimeType: string;
+  processingStatus: "PROCESSING" | "READY" | "FAILED";
+  storageKey: string;
+};
+
+/** Extraction happens before the turn so the AI Agent never reasons over an
+ * empty context; a failure is recorded rather than silently skipped. */
+async function read(attachment: TurnAttachment) {
+  try {
+    const extractedText = await extractAttachment(attachment.storageKey, attachment.mimeType);
+    if (!extractedText.trim()) throw new Error("The attachment did not contain readable text.");
+    return prisma.attachment.update({
+      data: { extractedText, failureReason: null, processingStatus: "READY" },
+      where: { id: attachment.id },
+    });
+  } catch (error) {
+    return prisma.attachment.update({
+      data: {
+        failureReason: error instanceof Error ? error.message : "Attachment processing failed.",
+        processingStatus: "FAILED",
+      },
+      where: { id: attachment.id },
+    });
+  }
+}
+
+/** A transcript stays labelled as Attachment content, so a mis-heard word is
+ * never mistaken for something the Customer typed. */
+function describeCustomerMessage(message: { attachments: TurnAttachment[]; content: string }) {
+  return [
+    message.content,
+    ...message.attachments.map((attachment) =>
+      attachment.processingStatus === "READY"
+        ? `[${attachment.mimeType.startsWith("audio/") ? "Automatic transcript of a voice note — may contain mistakes" : `Content of attached file ${attachment.fileName}`}]\n${attachment.extractedText}`
+        : `[Attached file ${attachment.fileName} could not be read. Tell the Customer.]`,
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function customerFacingFailure(attachment: TurnAttachment) {
+  // Nothing is stored for a file the Channel refused; its reason is already Customer-facing.
+  return !attachment.storageKey && attachment.failureReason
+    ? attachment.failureReason
+    : `Sorry, we couldn't read ${attachment.fileName}. Could you describe the problem in a message?`;
+}
+
 async function appendReply(
   sessionId: string,
   workspaceId: string,
   inboundId: string,
   content: string,
+  ticketId: string | null = null,
 ) {
   await prisma.$transaction(async (tx) => {
     const externalMessageId = `whatsapp-reply:${inboundId}`;
@@ -151,6 +235,7 @@ async function appendReply(
         message: { content },
         role: "assistant",
         senderType: "AI_AGENT",
+        ticketId,
         workspaceId,
       },
     });
