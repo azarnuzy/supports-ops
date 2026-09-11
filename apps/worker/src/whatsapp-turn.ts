@@ -3,9 +3,10 @@ import { classifyMessage, createClassificationModel } from "@repo/ai-agent";
 import { generateAiReply } from "@repo/api/ai-agent-turn";
 import { decryptToolSecret } from "@repo/api/secrets";
 import { classifyWhatsAppError, renderWhatsAppMessage } from "@repo/channels";
+import { createStorage } from "@repo/storage";
 import { UnrecoverableError } from "bullmq";
 import { extractAttachment } from "./attachment-process";
-import { classificationConfig } from "./config";
+import { classificationConfig, storageConfig } from "./config";
 import { claimMessageSlot } from "./follow-up";
 import { prisma } from "./prisma";
 
@@ -253,6 +254,7 @@ async function deliverPendingMessages(sessionId: string) {
 async function deliverMessage(messageId: string) {
   const message = await prisma.message.findUniqueOrThrow({
     include: {
+      attachments: { where: { deletedAt: null } },
       session: {
         include: {
           channel: { include: { whatsAppConfig: true } },
@@ -269,14 +271,29 @@ async function deliverMessage(messageId: string) {
   }
 
   const accessToken = decryptToolSecret(config.accessTokenEncrypted, requiredMasterKey());
+  const to = phone.replace(/^\+/, "");
+  const [attachment] = message.attachments;
   let response: Response;
   try {
+    const payload = attachment
+      ? renderWhatsAppMessage({
+          attachment: {
+            caption: message.content || undefined,
+            fileName: attachment.fileName,
+            id: await uploadMedia(config.phoneNumberId, accessToken, attachment),
+            type: attachment.mimeType.startsWith("image/")
+              ? "image"
+              : attachment.mimeType.startsWith("audio/")
+                ? "audio"
+                : "document",
+          },
+          to,
+        })
+      : renderWhatsAppMessage({ text: message.content, to });
     response = await fetch(
       `https://graph.facebook.com/v23.0/${encodeURIComponent(config.phoneNumberId)}/messages`,
       {
-        body: JSON.stringify(
-          renderWhatsAppMessage({ text: message.content, to: phone.replace(/^\+/, "") }),
-        ),
+        body: JSON.stringify(payload),
         headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
         method: "POST",
         signal: AbortSignal.timeout(15_000),
@@ -317,6 +334,43 @@ async function deliverMessage(messageId: string) {
     },
     where: { id: message.id },
   });
+}
+
+/** Meta's media id is used for this one send and then discarded; storage
+ * stays the source of truth for the file. */
+async function uploadMedia(
+  phoneNumberId: string,
+  accessToken: string,
+  attachment: { fileName: string; mimeType: string; storageKey: string },
+) {
+  const object = await createStorage(storageConfig).getObject(attachment.storageKey);
+  if (!object.Body) throw new UnrecoverableError("Attachment file is missing.");
+  const form = new FormData();
+  form.set("messaging_product", "whatsapp");
+  form.set("type", attachment.mimeType);
+  form.set(
+    "file",
+    new Blob([new Uint8Array(await object.Body.transformToByteArray())], {
+      type: attachment.mimeType,
+    }),
+    attachment.fileName,
+  );
+  const response = await fetch(
+    `https://graph.facebook.com/v23.0/${encodeURIComponent(phoneNumberId)}/media`,
+    {
+      body: form,
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: { message?: string };
+    id?: string;
+  };
+  if (!response.ok || !body.id)
+    throw new Error(body.error?.message ?? `Meta media upload returned HTTP ${response.status}.`);
+  return body.id;
 }
 
 function requiredMasterKey() {
