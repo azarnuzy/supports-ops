@@ -13,7 +13,6 @@ model Tool {
   httpConfig  HttpToolConfig?
   mcpTool     McpTool?
   assignments ToolAssignment[]
-  policies    ToolPolicy[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, name])
@@ -29,26 +28,8 @@ model ToolAssignment {
   workspace        Workspace @relation(fields: [workspaceId], references: [id])
   aiAgent          AiAgent  @relation(fields: [workspaceId, aiAgentId], references: [workspaceId, id])
   tool             Tool     @relation(fields: [workspaceId, toolId], references: [workspaceId, id])
-  policies         ToolPolicy[]
 
   @@unique([workspaceId, aiAgentId, toolId])
-  @@index([workspaceId, toolId])
-}
-
-model ToolPolicy {
-  id          String         @id
-  workspaceId String
-  aiAgentId   String
-  category    String
-  toolId      String
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  workspace   Workspace      @relation(fields: [workspaceId], references: [id])
-  aiAgent     AiAgent        @relation(fields: [workspaceId, aiAgentId], references: [workspaceId, id])
-  tool        Tool           @relation(fields: [workspaceId, toolId], references: [workspaceId, id])
-  assignment  ToolAssignment @relation(fields: [workspaceId, aiAgentId, toolId], references: [workspaceId, aiAgentId, toolId])
-
-  @@unique([workspaceId, aiAgentId, category])
   @@index([workspaceId, toolId])
 }
 

@@ -801,7 +801,7 @@ export type CatalogTool = {
   assigned: boolean;
   availability: ToolAvailability;
   lastCall: { at: string; succeeded: boolean } | null;
-  requiredForCategories: TicketCategory[];
+  usageInstruction: string | null;
 };
 
 export type HttpToolTestResult =
@@ -846,8 +846,6 @@ async function readToolError(response: Response, fallback: string) {
   if (response.status === 404) return new ToolApiError("not_found", "This Tool no longer exists.");
   if (response.status === 409) {
     const data = (await response.json().catch(() => null)) as { error?: string } | null;
-    if (data?.error === "tool_required_by_policy")
-      return new ToolApiError(data.error, "Remove the Tool Policy that requires this Tool first.");
     if (data?.error === "tool_unavailable")
       return new ToolApiError(
         data?.error ?? "tool_unavailable",
@@ -856,7 +854,7 @@ async function readToolError(response: Response, fallback: string) {
     if (data?.error === "tool_not_assigned")
       return new ToolApiError(
         data?.error ?? "tool_not_assigned",
-        "Assign this Tool to the AI Agent before requiring it.",
+        "Switch this Tool on for the AI Agent first.",
       );
   }
   if (response.status === 422) {
@@ -941,31 +939,17 @@ export async function setToolAssignment(
   if (!response.ok) throw await readToolError(response, "Failed to update the Tool assignment.");
 }
 
-export async function setToolPolicy(
+export async function setToolUsageInstruction(
   client: ApiClient,
-  aiAgentId: string,
-  category: TicketCategory,
   toolId: string,
-) {
-  const response = await client.tools.policies[":aiAgentId"][":category"].$put({
-    json: { toolId },
-    param: { aiAgentId, category } as never,
-  });
-  if (!response.ok) throw await readToolError(response, "Failed to set the Tool Policy.");
-  return (await response.json()) as {
-    policy: { aiAgentId: string; category: TicketCategory; toolId: string };
-  };
-}
-
-export async function removeToolPolicy(
-  client: ApiClient,
   aiAgentId: string,
-  category: TicketCategory,
+  usageInstruction: string | null,
 ) {
-  const response = await client.tools.policies[":aiAgentId"][":category"].$delete({
-    param: { aiAgentId, category } as never,
+  const response = await client.tools[":toolId"].instructions[":aiAgentId"].$put({
+    json: { usageInstruction },
+    param: { aiAgentId, toolId },
   });
-  if (!response.ok) throw await readToolError(response, "Failed to remove the Tool Policy.");
+  if (!response.ok) throw await readToolError(response, "Failed to save when to use this Tool.");
 }
 
 export type McpServer = {

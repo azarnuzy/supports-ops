@@ -47,7 +47,7 @@ Empat proses terakhir berjalan terus; gunakan empat terminal terpisah. Setelah A
 pnpm seed:demo
 ```
 
-Seed ini idempoten dan menyiapkan:
+Seed ini idempoten; `pnpm seed:demo -- --reset` menghapus Workspace demo lebih dulu dan menyeed ulang dari nol. Seed menyiapkan:
 
 | Peran/data | Nilai demo |
 | --- | --- |
@@ -57,8 +57,9 @@ Seed ini idempoten dan menyiapkan:
 | Knowledge | Lima Customer-Safe dan dua Internal-Only, dipublish bila `OPENROUTER_API_KEY` tersedia |
 | Business System | Customer demo, termasuk `budi@example.com` dan `siti@example.com` |
 | AI Agent | Instructions dan Handoff/AI Resolution Message demo terpasang |
-| HTTP Tool | `getSubscriptionStatus` mengarah ke `/subscription-status` pada Business System, ditetapkan ke AI Agent, dan menjadi Tool Policy wajib untuk kategori `SUBSCRIPTION` |
-| MCP Server | "Business System Demo" (`/mcp` pada Business System) dengan Tool `getInvoiceStatus` ditemukan, direview, diaktifkan, dan ditetapkan ke AI Agent |
+| Webhook Tool | `getSubscriptionStatus` mengarah ke `/subscription-status` pada Business System, aktif untuk AI Agent, dengan guidance "when to use" terisi |
+| MCP Server | "Business System Demo" (`/mcp` pada Business System) dengan Tool `getInvoiceStatus` ditemukan, direview, diaktifkan, aktif untuk AI Agent, dan punya guidance sendiri |
+| Contoh percakapan | Empat Ticket siap pakai: satu di-resolve AI setelah memanggil Tool, satu eskalasi yang sudah diklaim Human Agent, satu masih `AI_HANDLING`, satu di-resolve Human Agent |
 
 Jika seed mencetak Knowledge Source `drafted (unpublished)`, API key belum tersedia; perbaiki `.env.local`, restart API/Worker, kemudian ulangi `pnpm seed:demo`. Jika seed mencetak peringatan MCP Server tidak terjangkau, pastikan Business System berjalan pada port `8001`, lalu ulangi `pnpm seed:demo` untuk melakukan discovery dan mengaktifkan `getInvoiceStatus`.
 
@@ -127,13 +128,13 @@ Jika email tidak muncul:
 - Periksa log Worker untuk `Session Link email failed`. Error koneksi biasanya berarti `SMTP_URL` atau container Mailpit tidak tersedia.
 - Kirim Pre-Chat baru setelah Worker diperbaiki. Kegagalan enqueue sengaja tidak menggagalkan pembuatan Web Session.
 
-### Konfigurasi Tools dan MCP Server (demo #94)
+### Konfigurasi Tools dan MCP Server
 
 `pnpm seed:demo` sudah menyiapkan HTTP Tool dan MCP Server demo di atas melalui application service yang sama dengan langkah manual berikut, sehingga langkah ini opsional — jalankan untuk melihat sendiri alur Admin, atau untuk memahami apa yang sudah diseed:
 
 1. Login sebagai Admin, buka **Settings → Tools** (`/settings/tools`). Tool HTTP `getSubscriptionStatus` (method GET, URL `http://localhost:8001/subscription-status`) sudah ada dari seed; buat manual dengan tombol "New HTTP Tool" bila ingin mengulang dari awal.
 2. Buka **Settings → MCP Servers** (`/settings/mcp`). Tambah server dengan URL `http://localhost:8001/mcp`, klik **Test Connection** (harus sukses selama Business System berjalan dan `ALLOW_LOCAL_HTTP_TOOLS=true`), lalu **Discover Tools**. Tool `getInvoiceStatus` muncul dengan status belum diaktifkan; review lalu aktifkan dengan risk `READ_ONLY`.
-3. Buka **Settings → AI Agent** (`/settings/ai`). Tetapkan (assign) kedua Tool ke AI Agent, lalu buat Tool Policy `SUBSCRIPTION → getSubscriptionStatus` di bagian Tool Policy.
+3. Masih di **Settings → Tools**, nyalakan sakelar kedua Tool untuk AI Agent, buka detail masing-masing, lalu isi **When to use this tool** — kalimat itu ditambahkan ke deskripsi Tool yang dibaca model, dan itulah satu-satunya cara mengarahkan pemilihan Tool. Tidak ada aturan yang memaksa sebuah Tool dipanggil.
 4. Tool yang baru ditemukan tapi belum diaktifkan/ditetapkan tidak pernah bisa dipanggil AI Agent, termasuk bila Customer menyebut namanya secara eksplisit — resolver runtime hanya mengembalikan Tool yang enabled, tersedia, dan ditetapkan (lihat W3b).
 
 ## 4. Skenario produk end-to-end
@@ -144,10 +145,10 @@ Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak
 | --- | --- | --- | --- |
 | W1 | Pre-Chat, lalu jangan mengirim pesan | Web Session aktif, tanpa Ticket | Widget terbuka; tidak ada Ticket baru di Platform |
 | W2 | `How do I reset my password?` | AI menjawab dari Knowledge Customer-Safe, bahasa mengikuti Customer | Widget memperlihatkan balasan bertahap; Ticket diklasifikasi |
-| W3 | `Is my subscription active?` | Tool Policy wajib menjalankan HTTP Tool `getSubscriptionStatus` sebelum balasan; AI menjawab dari data live Business System, bukan mengarang | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `HTTP` |
-| W3a | `What's the status of my latest invoice?` | AI memilih sendiri (model-directed) MCP Tool `getInvoiceStatus` karena kategori Ticket ini (Billing) tidak punya Tool Policy wajib | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `MCP` |
+| W3 | `Is my subscription active?` | AI Agent memilih sendiri Webhook Tool `getSubscriptionStatus` dari deskripsi dan guidance-nya, lalu menjawab dari data live Business System, bukan mengarang | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `HTTP` |
+| W3a | `What's the status of my latest invoice?` | Dari dua Tool yang aktif, AI Agent memilih MCP Tool `getInvoiceStatus` karena deskripsi dan guidance-nya yang cocok | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `MCP` |
 | W3b | Di `/settings/mcp`, discover ulang lalu jangan aktifkan sebuah Tool baru (atau nonaktifkan `getInvoiceStatus`), lalu ulangi W3a | AI Agent tidak pernah memanggil Tool yang belum diaktifkan/ditetapkan, termasuk bila Customer menyebut namanya; AI menjawab dari Knowledge saja atau eskalasi | Tidak ada `TOOL_CALLED` baru untuk Tool tersebut di AI Activity |
-| W3c | Hentikan Business System (`docker compose -f docker-compose.dev.yaml stop business-system` atau matikan proses dev-nya), lalu ulangi W3 | Tool Policy wajib gagal; Ticket `ESCALATED` dengan alasan `BUSINESS_TOOL_FAILURE` | AI Activity mencatat `TOOL_FAILED`; nyalakan lagi Business System setelah selesai |
+| W3c | Hentikan Business System (`docker compose -f docker-compose.dev.yaml stop business-system` atau matikan proses dev-nya), lalu ulangi W3 | Panggilan Tool yang dipilih AI Agent gagal; Ticket `ESCALATED` dengan alasan `BUSINESS_TOOL_FAILURE` | AI Activity mencatat `TOOL_FAILED`; nyalakan lagi Business System setelah selesai |
 | W4 | Minta refund atau `I want to speak to a human` | Ticket `ESCALATED`, acknowledgement dikirim, AI berhenti membalas pesan berikutnya | Admin/Human Agent: `/chat/unassigned` |
 | W5 | Dari W4, login Human Agent → Unassigned → Claim | Hanya satu Claim sukses; Ticket `HUMAN_HANDLING`; Handoff dan Escalation Summary tersedia | `/chat` dan Widget menerima perkenalan Human Agent |
 | W6 | Dari W5, minta Suggested Reply, edit bila perlu, kirim reply, lalu Resolve | Draft tidak terkirim otomatis; Resolution oleh Human Agent mengirim closing message; Widget read-only | `/chat`; Widget menampilkan tombol Start a new conversation |

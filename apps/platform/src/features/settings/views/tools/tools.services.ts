@@ -8,6 +8,7 @@ import {
   listToolCalls,
   setToolAssignment,
   setToolEnabled,
+  setToolUsageInstruction,
   testHttpTool,
   updateHttpTool,
   type HttpToolInput,
@@ -54,6 +55,18 @@ export function setAttached({
   toolId: string;
 }) {
   return setToolAssignment(apiClient, toolId, aiAgentId, assigned);
+}
+
+export function setUsageInstruction({
+  aiAgentId,
+  toolId,
+  usageInstruction,
+}: {
+  aiAgentId: string;
+  toolId: string;
+  usageInstruction: string | null;
+}) {
+  return setToolUsageInstruction(apiClient, toolId, aiAgentId, usageInstruction);
 }
 
 export function testTool({ id, input }: { id: string; input: Record<string, unknown> }) {

@@ -8,7 +8,7 @@ export const Route = createFileRoute("/agent/")({
   head: () =>
     pageMetadata({
       title: "AI Agent",
-      description: "Instructions, handoff messages, and routing rules for your AI Agent.",
+      description: "Instructions and handoff messages for your AI Agent.",
       path: "/agent",
       noIndex: true,
     }),

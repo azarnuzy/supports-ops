@@ -113,7 +113,7 @@ export async function classifyMessage(params: {
 }
 
 /** A model that invents a category name must not write it onto a Ticket, because filters and
- * Routing Rules only recognise configured keys. Anything unrecognised lands on the fallback. */
+ * reports only recognise configured keys. Anything unrecognised lands on the fallback. */
 function narrowClassification(
   output: z.infer<typeof classificationOutputSchema>,
   originalContent: string,

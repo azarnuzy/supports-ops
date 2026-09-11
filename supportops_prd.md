@@ -969,7 +969,7 @@ If no external customer is found:
 
 ### 23.3 Tool Failure
 
-If the question depends on customer-specific live data and the required tool fails:
+If the question depends on customer-specific live data and the tool the AI Agent called fails:
 
 - AI must escalate.
 

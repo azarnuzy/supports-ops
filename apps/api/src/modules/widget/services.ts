@@ -39,12 +39,7 @@ import { cancelFollowUpTimers, scheduleFollowUp } from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "../tickets/queue";
 import { ticketCategoryOptions } from "../ticket-categories/services";
 import { resolveTools } from "../tools/services";
-import {
-  createOptionalToolExecutor,
-  describeOptionalTools,
-  RequiredToolFailedError,
-  runRequiredTool,
-} from "../tools/orchestration";
+import { createAssignedToolExecutor, describeAssignedTools } from "../tools/orchestration";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -439,7 +434,7 @@ export async function generateAiReply(
 /** The run itself. Retrieval, Business Tool calls, generation, and the final
  * decision all nest under the caller's `ai_agent.run` span. */
 /** The Widget flow has no per-request auth middleware to set a Workspace context,
- * but Tool resolution/execution (resolveTools, runRequiredTool, executeHttpTool,
+ * but Tool resolution/execution (resolveTools, executeHttpTool,
  * executeMcpTool) run Workspace-scoped Prisma queries that require one. */
 function generateAiReplyRun(run: Span, ticketId: string, workspaceId: string, customerMessage: string) {
   return withWorkspaceContext(workspaceId, () =>
@@ -457,7 +452,6 @@ async function generateAiReplyRunInWorkspace(
     select: {
       aiAgent: { select: { instructions: true } },
       aiAgentId: true,
-      category: true,
       channel: { select: { type: true } },
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
       status: true,
@@ -554,28 +548,23 @@ async function generateAiReplyRunInWorkspace(
       where: { eventType: "CLARIFICATION_ASKED", ticketId },
     });
     const assignedTools = await resolveTools(ticket.aiAgentId);
-    const required = await runRequiredTool({
-      aiAgentId: ticket.aiAgentId,
-      category: ticket.category,
-      ticketId,
-      workspaceId,
-    });
-    const businessData = required?.result;
-    run.setAttribute("ai_agent.business_tool_data", Boolean(businessData));
     run.setAttribute("ai_agent.assigned_tools", assignedTools.length);
     const tools = createAssignedTools(
-      describeOptionalTools(assignedTools, required?.id),
-      createOptionalToolExecutor({
+      describeAssignedTools(assignedTools),
+      createAssignedToolExecutor({
         aiAgentId: ticket.aiAgentId,
         ticketId,
         tools: assignedTools,
         workspaceId,
       }),
     );
+    /** Nothing to ground an answer in and no Tool the model could call for it: escalate before
+     * spending a generation. An Agent with Tools still gets its turn — the Tool Result is the
+     * grounding. */
     if (
       !sources.length &&
       !attachments.length &&
-      !businessData &&
+      !assignedTools.length &&
       !looksLikeResolutionSignal(customerMessage)
     ) {
       run.setAttributes({
@@ -602,7 +591,6 @@ async function generateAiReplyRunInWorkspace(
               data: { delta, provisionalId },
             });
           },
-          businessData,
           sources: [
             ...sources.map((source) => ({ id: source.chunkId, content: source.content })),
             ...attachments.flatMap((attachment) =>
@@ -667,8 +655,7 @@ async function generateAiReplyRunInWorkspace(
     );
     await publishTicketQueueEvent(workspaceId);
   } catch (error) {
-    const reason =
-      error instanceof RequiredToolFailedError ? "BUSINESS_TOOL_FAILURE" : "AI_GENERATION_FAILED";
+    const reason = "AI_GENERATION_FAILED";
     run.recordException(error instanceof Error ? error : new Error(String(error)));
     run.setAttributes({ "ai_agent.decision": "ESCALATE", "ai_agent.escalation_reason": reason });
     await escalate(ticketId, workspaceId, reason, customerMessage);

@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by 0016
 ---
 
 # AI Agents use assigned Tools through one runtime

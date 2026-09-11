@@ -85,11 +85,14 @@ export default function ToolSheet({
   testResult,
   log,
   isLogPending,
+  onSaveUsage,
+  isSavingUsage,
 }: ToolSheetProps) {
   const [jsonDraft, setJsonDraft] = useState<string | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [sampleInput, setSampleInput] = useState("{}");
   const [copied, setCopied] = useState(false);
+  const [usage, setUsage] = useState<string | null>(null);
   const editable = !tool || tool.origin === "HTTP";
 
   function toggleJsonMode() {
@@ -180,18 +183,49 @@ export default function ToolSheet({
           {tool.availability === "AVAILABLE" ? null : <Badge variant="destructive">Disconnected</Badge>}
         </div>
       </div>
-      {tool.requiredForCategories.length > 0 ? (
-        <div className="grid gap-1">
-          <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-            Routing rules
-          </p>
-          <p className="text-[13px] text-muted-foreground">
-            Always runs on {tool.requiredForCategories.join(", ").toLowerCase()} tickets.
-          </p>
-        </div>
-      ) : null}
     </aside>
   ) : null;
+
+  /** The agent picks its own tools from what it reads here, so this is the one place an Admin
+   * can steer that choice. It is per agent, which is why it lives beside the assignment
+   * switch rather than in the Tool definition. */
+  const usagePanel =
+    tool && onSaveUsage ? (
+      <div className="grid gap-3 rounded-lg border bg-muted/30 p-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">When to use this tool</p>
+          <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+            {tool.assigned
+              ? "Added to what the agent reads about this tool, so it knows which requests call for it. Leave empty to rely on the description alone."
+              : "Switch this tool on for the agent first — guidance only reaches the agent for tools it can call."}
+          </p>
+        </div>
+        <Textarea
+          aria-label="When to use this tool"
+          disabled={!tool.assigned || isSavingUsage}
+          maxLength={1000}
+          rows={3}
+          className="bg-background"
+          placeholder="Use when the customer asks about their subscription, plan, or renewal date."
+          value={usage ?? tool.usageInstruction ?? ""}
+          onChange={(event) => setUsage(event.target.value)}
+        />
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!tool.assigned || isSavingUsage || usage === null}
+            onClick={() => {
+              onSaveUsage(usage?.trim() ? usage.trim() : null);
+              setUsage(null);
+            }}
+          >
+            {isSavingUsage ? "Saving…" : "Save guidance"}
+          </Button>
+        </div>
+      </div>
+    ) : null;
 
   const testPanel = onTest ? (
     <div className="grid gap-3 rounded-lg border bg-muted/30 p-4">
@@ -489,6 +523,7 @@ export default function ToolSheet({
                 </TabsContent>
               ) : null}
             </Tabs>
+            {usagePanel ? <div className="mt-5">{usagePanel}</div> : null}
           </div>
         </div>
       </SheetContent>

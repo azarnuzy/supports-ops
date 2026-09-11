@@ -22,6 +22,7 @@ import {
   useCreateToolMutation,
   useDeleteToolMutation,
   useSetAttachedMutation,
+  useSetUsageInstructionMutation,
   useTestToolMutation,
   useToolCallsQuery,
   useToggleToolEnabledMutation,
@@ -47,6 +48,7 @@ const ToolsView = () => {
   const deleteTool = useDeleteToolMutation(aiAgentId);
   const toggleEnabled = useToggleToolEnabledMutation(aiAgentId);
   const setAttached = useSetAttachedMutation(aiAgentId);
+  const setUsage = useSetUsageInstructionMutation(aiAgentId);
   const testTool = useTestToolMutation();
 
   const [tab, setTab] = useState<Tab>("tools");
@@ -358,6 +360,22 @@ const ToolsView = () => {
         testResult={testResult}
         log={toolCalls.data}
         isLogPending={toolCalls.isPending}
+        onSaveUsage={
+          aiAgentId && editingId
+            ? (usageInstruction) =>
+                setUsage.mutate(
+                  { aiAgentId, toolId: editingId, usageInstruction },
+                  {
+                    onError: (error) =>
+                      toast.error(
+                        error instanceof Error ? error.message : "Failed to save the guidance.",
+                      ),
+                    onSuccess: () => toast.success("Guidance saved."),
+                  },
+                )
+            : undefined
+        }
+        isSavingUsage={setUsage.isPending}
       />
     </PlatformAppShell>
   );

@@ -2,24 +2,9 @@ import { randomUUID } from "node:crypto";
 import { executeMcpTool } from "../mcp/services";
 import { unscopedPrisma } from "../../utils/prisma";
 import { executeHttpTool } from "./execution";
-import {
-  executeBuiltInTool,
-  resolveRequiredTool,
-  resolveTools,
-  type TicketCategory,
-} from "./services";
+import { executeBuiltInTool, resolveTools } from "./services";
 
 export type AssignedTool = Awaited<ReturnType<typeof resolveTools>>[number];
-
-export class RequiredToolFailedError extends Error {
-  constructor(
-    readonly toolName: string,
-    options?: { cause?: unknown },
-  ) {
-    super(`Required Tool "${toolName}" failed.`, options);
-    this.name = "RequiredToolFailedError";
-  }
-}
 
 async function recordToolActivity(params: {
   latencyMs: number;
@@ -85,47 +70,6 @@ async function dispatchTool(params: {
   return JSON.stringify(result);
 }
 
-/** Executes the Ticket Category's required Tool before response generation; its
- * successful result becomes Grounding. Failure, timeout, invalid, or oversized
- * result throws RequiredToolFailedError — the caller escalates with
- * BUSINESS_TOOL_FAILURE. Returns null when no policy applies to this category. */
-export async function runRequiredTool(params: {
-  aiAgentId: string;
-  category: TicketCategory;
-  ticketId: string;
-  workspaceId: string;
-}): Promise<{ id: string; name: string; result: string } | null> {
-  const tool = await resolveRequiredTool(params.aiAgentId, params.category);
-  if (!tool) return null;
-  const startedAt = Date.now();
-  try {
-    const result = await dispatchTool({
-      aiAgentId: params.aiAgentId,
-      explicitCustomerRequest: false,
-      input: {},
-      ticketId: params.ticketId,
-      tool,
-    });
-    await recordToolActivity({
-      latencyMs: Date.now() - startedAt,
-      outcome: "SUCCESS",
-      ticketId: params.ticketId,
-      tool,
-      workspaceId: params.workspaceId,
-    });
-    return { id: tool.id, name: tool.name, result };
-  } catch (error) {
-    await recordToolActivity({
-      latencyMs: Date.now() - startedAt,
-      outcome: "FAILED",
-      ticketId: params.ticketId,
-      tool,
-      workspaceId: params.workspaceId,
-    });
-    throw new RequiredToolFailedError(tool.name, { cause: error });
-  }
-}
-
 /** Executes every READ_ONLY assigned Tool with the same input (used by AI
  * Copilot's Suggested Reply, which has no model-directed tool-calling loop of
  * its own). MUTATING Tools are always excluded, defensively, even if the
@@ -172,17 +116,18 @@ export async function executeReadOnlyAssignedTools(params: {
   return Object.fromEntries(entries);
 }
 
-/** Descriptors for every assigned Tool the model may call, excluding the
- * category's required Tool (already executed above). */
-export function describeOptionalTools(tools: readonly AssignedTool[], requiredToolId?: string) {
-  return tools
-    .filter((tool) => tool.id !== requiredToolId)
-    .map((tool) => ({
-      description: tool.description,
-      id: tool.id,
-      inputSchema: tool.inputSchema,
-      name: tool.name,
-    }));
+/** Descriptors for every assigned Tool the model may call. The Admin's usage instruction is
+ * appended to the description, because a Tool description is the only thing that steers model
+ * Tool selection. */
+export function describeAssignedTools(tools: readonly AssignedTool[]) {
+  return tools.map((tool) => ({
+    description: tool.usageInstruction
+      ? `${tool.description}\n\nWhen to use: ${tool.usageInstruction}`
+      : tool.description,
+    id: tool.id,
+    inputSchema: tool.inputSchema,
+    name: tool.name,
+  }));
 }
 
 /**
@@ -192,7 +137,7 @@ export function describeOptionalTools(tools: readonly AssignedTool[], requiredTo
  * is READ_ONLY. Wire a real intent signal (e.g. from classification) before
  * assigning a MUTATING Tool to an AI Agent for real.
  */
-export function createOptionalToolExecutor(params: {
+export function createAssignedToolExecutor(params: {
   aiAgentId: string;
   ticketId: string;
   tools: readonly AssignedTool[];

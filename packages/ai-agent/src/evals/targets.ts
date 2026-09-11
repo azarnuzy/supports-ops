@@ -7,34 +7,61 @@ import {
 } from "../classification";
 import { generateEscalationSummary, generateSuggestedReply } from "../handoff";
 import { streamReply, type ReplyDecision, type ReplyModel } from "../reply";
+import { createAssignedTools } from "../tools";
 
 /**
  * The eval suite calls the same production functions the AI Agent runs in
  * apps/api — `streamReply`, `classifyMessage`, `generateSuggestedReply` —
- * with a model, a fixed set of sources, and canned Business Tool data as
- * plain parameters. None of them reach a database or the network beyond the
+ * with a model, a fixed set of sources, and canned Tools whose results are
+ * fixed instead of fetched. None of them reach a database or the network beyond the
  * model call itself, which is what lets an Eval Case stand in for a live
  * Workspace.
  */
 
+/** An assigned Tool with a fixed result, standing in for a live HTTP or MCP call.
+ * `result: Error` stands in for a Tool call that fails at runtime. */
+export type ReplyEvalTool = {
+  description: string;
+  name: string;
+  result: string | Error;
+};
+
 export type ReplyEvalInput = {
-  businessData?: string;
   clarificationCount?: number;
   customerMessage: string;
   sources: Array<{ id: string; content: string }>;
   ticketContext?: Array<{ id: string; content: string }>;
+  tools?: ReplyEvalTool[];
 };
+
+function stubTools(tools: ReplyEvalTool[] | undefined) {
+  if (!tools?.length) return undefined;
+  const byId = new Map(tools.map((tool) => [tool.name, tool]));
+  return createAssignedTools(
+    tools.map((tool) => ({
+      description: tool.description,
+      id: tool.name,
+      inputSchema: { properties: {}, type: "object" },
+      name: tool.name,
+    })),
+    async ({ toolId }) => {
+      const result = byId.get(toolId)?.result;
+      if (result instanceof Error) throw result;
+      return result ?? "";
+    },
+  );
+}
 
 export function createReplyTarget(model: ReplyModel): EvalTarget<ReplyEvalInput, ReplyDecision> {
   return (input) =>
     streamReply({
-      businessData: input.businessData,
       clarificationCount: input.clarificationCount ?? 0,
       customerMessage: input.customerMessage,
       model,
       onDelta: () => {},
       sources: input.sources,
       ticketContext: input.ticketContext,
+      tools: stubTools(input.tools),
     });
 }
 

@@ -172,12 +172,12 @@ _Avoid_: Remote Tool, Server Tool
 The Workspace-scoped permission connecting one Tool to one AI Agent. Availability elsewhere in the Workspace never grants the AI Agent permission to use it.
 _Avoid_: Tool Access, Tool Binding
 
-**Tool Policy**:
-A structured rule requiring an AI Agent to use a particular assigned Tool for a defined kind of Customer request. Unlike free-form instructions, it is an enforceable condition rather than guidance to the model.
-_Avoid_: Tool Instruction, Tool Prompt, Tool Rule
+**Usage Instruction**:
+The Admin's free-text note on one Tool Assignment saying when that Tool should be used. It is appended to the Tool description the model reads, so it steers Tool selection without forcing it — SupportOps has no rule that compels a Tool call.
+_Avoid_: Tool Policy, Routing Rule, Tool Instruction
 
 **Business System**:
-The Workspace's own product database, external to SupportOps, holding customers, subscriptions, and invoices. Its live facts reach the AI Agent through Tools, and a failed required lookup never permits the AI Agent to guess.
+The Workspace's own product database, external to SupportOps, holding customers, subscriptions, and invoices. Its live facts reach the AI Agent through Tools, and a failed lookup never permits the AI Agent to guess.
 _Avoid_: Backend, Mock API, CRM
 
 **Attachment**:

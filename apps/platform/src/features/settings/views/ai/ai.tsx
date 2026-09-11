@@ -11,39 +11,19 @@ import { Input } from "@repo/ui/components/input";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { Switch } from "@repo/ui/components/switch";
 import { Textarea } from "@repo/ui/components/textarea";
-import { toast } from "@repo/ui/components/sonner";
-import type { TicketCategory } from "@repo/api-client";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsHeader } from "../../components/settings-header";
-import { ToolPolicies } from "./components";
-import {
-  useAgentToolsQuery,
-  useAiSettingsForm,
-  useRemoveCategoryPolicyMutation,
-  useSetCategoryPolicyMutation,
-} from "./ai.hooks";
+import { useAiSettingsForm } from "./ai.hooks";
 
 const AiAgentView = () => {
   const { form, handleSubmit, save, settings, update } = useAiSettingsForm();
-  const aiAgentId = settings.data?.aiSettings.aiAgentId;
-  const agentTools = useAgentToolsQuery(aiAgentId);
-  const setCategoryPolicy = useSetCategoryPolicyMutation(aiAgentId);
-  const removeCategoryPolicy = useRemoveCategoryPolicyMutation(aiAgentId);
-
-  function handlePolicyChange(category: TicketCategory, toolId: string | null) {
-    if (!aiAgentId) return;
-    const onError = (error: unknown) =>
-      toast.error(error instanceof Error ? error.message : "Failed to update the Tool Policy.");
-    if (toolId) setCategoryPolicy.mutate({ aiAgentId, category, toolId }, { onError });
-    else removeCategoryPolicy.mutate({ aiAgentId, category }, { onError });
-  }
 
   return (
     <PlatformAppShell>
       <section className="grid gap-6">
         <SettingsHeader
           title="AI Agent"
-          description="Set the instructions your agent follows, the messages it sends when it transfers or ends a conversation, and the rules that pick a tool per category."
+          description="Set the instructions your agent follows and the messages it sends when it transfers or ends a conversation. Its tools live on the Tools page."
         />
         {settings.isPending ? (
           <div className="grid max-w-3xl gap-5">
@@ -177,29 +157,6 @@ const AiAgentView = () => {
                     </Button>
                   </div>
                 </form>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Routing rules</CardTitle>
-                <CardDescription>
-                  Every conversation is sorted into one of five fixed categories automatically. A
-                  rule guarantees that a tool runs and its result reaches the agent before it
-                  answers that kind of ticket — and if the tool fails, the ticket goes to a
-                  teammate instead of getting a guess. Categories without a rule are left to the
-                  agent's own judgement.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {agentTools.isPending ? (
-                  <Skeleton className="h-24 w-full rounded-lg" />
-                ) : (
-                  <ToolPolicies
-                    tools={agentTools.data?.tools ?? []}
-                    onChange={handlePolicyChange}
-                    isPending={setCategoryPolicy.isPending || removeCategoryPolicy.isPending}
-                  />
-                )}
               </CardContent>
             </Card>
           </div>

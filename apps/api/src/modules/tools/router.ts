@@ -6,9 +6,8 @@ import {
   createHttpToolSchema,
   setToolAssignmentSchema,
   setToolEnabledSchema,
-  setToolPolicySchema,
+  setToolUsageInstructionSchema,
   testHttpToolSchema,
-  toolPolicyParamsSchema,
   updateHttpToolSchema,
 } from "./schema";
 import { HttpToolFailure, testHttpTool } from "./execution";
@@ -22,13 +21,11 @@ import {
   listHttpTools,
   listToolCalls,
   listTools,
-  removeToolPolicy,
   setToolAssignment,
   setToolEnabled,
-  setToolPolicy,
+  setToolUsageInstruction,
   ToolNotAssignedError,
   ToolNotFoundError,
-  ToolRequiredByPolicyError,
   ToolUnavailableError,
   updateHttpTool,
 } from "./services";
@@ -82,32 +79,15 @@ export const toolsRouter = new Hono<{ Variables: AuthVariables }>()
     },
   )
   .put(
-    "/policies/:aiAgentId/:category",
-    zValidator("param", toolPolicyParamsSchema),
-    zValidator("json", setToolPolicySchema),
+    "/:toolId/instructions/:aiAgentId",
+    zValidator("json", setToolUsageInstructionSchema),
     async (c) => {
       try {
-        return c.json(
-          {
-            policy: await setToolPolicy(
-              c.req.param("aiAgentId"),
-              c.req.valid("param").category,
-              c.req.valid("json").toolId,
-            ),
-          },
-          200,
+        await setToolUsageInstruction(
+          c.req.param("aiAgentId"),
+          c.req.param("toolId"),
+          c.req.valid("json").usageInstruction || null,
         );
-      } catch (error) {
-        return toolAuthorizationError(c, error);
-      }
-    },
-  )
-  .delete(
-    "/policies/:aiAgentId/:category",
-    zValidator("param", toolPolicyParamsSchema),
-    async (c) => {
-      try {
-        await removeToolPolicy(c.req.param("aiAgentId"), c.req.valid("param").category);
         return c.body(null, 204);
       } catch (error) {
         return toolAuthorizationError(c, error);
@@ -167,8 +147,6 @@ function toolAuthorizationError(
 ): Response {
   if (error instanceof ToolNotFoundError || error instanceof AiAgentNotFoundError)
     return c.json({ error: "not_found" }, 404);
-  if (error instanceof ToolRequiredByPolicyError)
-    return c.json({ error: "tool_required_by_policy" }, 409);
   if (error instanceof ToolUnavailableError) return c.json({ error: "tool_unavailable" }, 409);
   if (error instanceof ToolNotAssignedError) return c.json({ error: "tool_not_assigned" }, 409);
   throw error;

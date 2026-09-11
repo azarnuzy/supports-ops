@@ -17,4 +17,7 @@ export type ToolSheetProps = {
   testResult?: HttpToolTestResult | null;
   log?: ToolCallLog;
   isLogPending?: boolean;
+  /** Saves the Admin's "when to use" guidance for this Tool on this AI Agent. */
+  onSaveUsage?: (usageInstruction: string | null) => void;
+  isSavingUsage?: boolean;
 };
