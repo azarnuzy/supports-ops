@@ -144,7 +144,7 @@ export function PlatformAppShell({
             label: "Configure",
           },
           {
-            items: [{ icon: MessageSquareCodeIcon, label: "Web Widget", to: "/widget" }],
+            items: [{ icon: MessageSquareCodeIcon, label: "Channels", to: "/widget" }],
             label: "Deploy",
           },
           {

@@ -24,3 +24,10 @@ export type WebWidgetConfigResult = {
   webWidgetConfig: WebWidgetConfig;
   closingMessage: string | null;
 };
+
+export type VerifyWhatsAppConfigInput = {
+  accessToken: string;
+  appSecret: string;
+  businessAccountId: string;
+  phoneNumberId: string;
+};
