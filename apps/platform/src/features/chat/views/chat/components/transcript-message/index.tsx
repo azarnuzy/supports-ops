@@ -64,14 +64,16 @@ export default function TranscriptMessage({
         </Bubble>
         <MessageFooter className="flex items-center gap-1.5 text-[11px] tabular-nums">
           {formatTimestamp(message.createdAt)}
-          {isHuman && message.deliveryStatus !== "SENT" ? (
+          {isHuman && ["PENDING", "FAILED"].includes(message.deliveryStatus) ? (
             <span
               className={cn(
                 "text-[11px]",
                 message.deliveryStatus === "FAILED" ? "text-destructive" : "text-muted-foreground",
               )}
             >
-              {message.deliveryStatus === "PENDING" ? "Sending…" : "Failed to send"}
+              {message.deliveryStatus === "PENDING"
+                ? "Sending…"
+                : `Failed to send${message.deliveryFailureReason ? `: ${message.deliveryFailureReason}` : ""}`}
             </span>
           ) : null}
           {isHuman && message.deliveryStatus === "FAILED" ? (

@@ -41,7 +41,7 @@ async function scheduleIdleClosure(job: IdleClosureJob, delayMs: number) {
 /** The worker writes into the same transcript as the API, so it claims its
  * Message position from the same counter on the Session. The API's own copy
  * lives in `apps/api/src/utils/session-messages.ts`. */
-async function claimMessageSlot(
+export async function claimMessageSlot(
   tx: Pick<typeof prisma, "session">,
   sessionId: string,
   memorySessionId: string,

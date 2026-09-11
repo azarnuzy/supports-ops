@@ -28,7 +28,8 @@ model CustomerIdentity {
   channelType        ChannelType
   canonicalId        String
   name               String
-  email              String
+  email              String?
+  phoneE164          String?
   externalCustomerId String?
   createdAt          DateTime    @default(now())
   deletedAt          DateTime?

@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/app.ts",
+    "./ai-agent-turn": "./src/modules/ai-agent/turn.ts",
+    "./secrets": "./src/modules/tools/secrets.ts"
+  },
   "scripts": {
     "with-env": "dotenv -e ../../.env.local --",
     "with-production-env": "dotenv -e ../../.env --",

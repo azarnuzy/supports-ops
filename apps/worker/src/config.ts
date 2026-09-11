@@ -14,6 +14,7 @@ const emailFromSchema = z.string().trim().min(1).default("SupportOps <support@ex
 const defaultDatabaseUrl =
   "postgresql://postgres:postgres@localhost:15432/supportops?schema=public";
 const defaultEmbeddingModel = "openai/text-embedding-3-small";
+const defaultFastModel = "openai/gpt-4.1-nano";
 export const modelGatewayBaseUrl = "https://openrouter.ai/api/v1";
 const booleanSchema = z.preprocess((value) => {
   if (typeof value !== "string") {
@@ -39,6 +40,7 @@ const workerEnvSchema = z.object({
   EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
   ENABLE_TELEMETRY: booleanSchema.default(false),
   LOG_LEVEL: logLevelSchema,
+  LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
   OPENROUTER_API_KEY: optionalStringSchema,
   MISTRAL_API_KEY: optionalStringSchema,
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:16379"),
@@ -80,6 +82,12 @@ export const embeddingConfig = {
   apiKey: env.OPENROUTER_API_KEY,
   baseUrl: modelGatewayBaseUrl,
   modelId: env.EMBEDDING_MODEL,
+} as const;
+
+export const classificationConfig = {
+  apiKey: env.OPENROUTER_API_KEY,
+  baseUrl: modelGatewayBaseUrl,
+  modelId: env.LLM_MODEL_FAST,
 } as const;
 
 export const ingestionConfig = {

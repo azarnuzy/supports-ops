@@ -1,6 +1,14 @@
 import { Empty, EmptyMedia, EmptyTitle } from "@repo/ui/components/empty";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
-import { CalendarIcon, FlagIcon, HistoryIcon, MailIcon, UserRoundIcon } from "lucide-react";
+import {
+  CalendarIcon,
+  FlagIcon,
+  HistoryIcon,
+  MailIcon,
+  MessageCircleIcon,
+  PhoneIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { formatEnumLabel } from "../../../../../../lib/utils";
 import { formatTimestamp } from "../../chat.utils";
@@ -32,7 +40,17 @@ export default function TicketInspector({
       {detailsTab === "details" ? (
         <div className="flex flex-col p-3">
           <SectionLabel>Customer</SectionLabel>
-          <DetailRow icon={MailIcon} label="Email" value={detail.customerIdentity.email} />
+          <DetailRow
+            icon={MessageCircleIcon}
+            label="Channel"
+            value={detail.channel.type === "WHATSAPP" ? "WhatsApp" : detail.channel.name}
+          />
+          {detail.customerIdentity.email ? (
+            <DetailRow icon={MailIcon} label="Email" value={detail.customerIdentity.email} />
+          ) : null}
+          {detail.customerIdentity.phoneE164 ? (
+            <DetailRow icon={PhoneIcon} label="Phone" value={detail.customerIdentity.phoneE164} />
+          ) : null}
           <DetailRow
             icon={UserRoundIcon}
             label="Owner"

@@ -33,6 +33,7 @@ model Message {
   externalMessageId String
   deliveryStatus    MessageDeliveryStatus @default(SENT)
   deliveryAttempts  Int                   @default(0)
+  deliveryFailureReason String?
   deletedAt         DateTime?
   deletedBy         String?
   conversation      Conversation          @relation(fields: [memorySessionId], references: [id])
