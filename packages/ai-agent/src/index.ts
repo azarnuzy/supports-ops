@@ -7,6 +7,7 @@ export {
 } from "./classification";
 export { createReplyModel, ReplyGenerationFailedError, streamReply } from "./reply";
 export { createAssignedTools } from "./tools";
+export { runAiAgentTurn, type AiAgentTurnRuntime, type EscalationReason } from "./turn";
 export {
   EscalationSummaryGenerationFailedError,
   generateEscalationSummary,

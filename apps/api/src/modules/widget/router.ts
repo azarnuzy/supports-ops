@@ -14,6 +14,7 @@ import {
   subscribeToWidgetEvents,
 } from "./realtime";
 import { clientAddress, limitWidgetMessage } from "./rate-limit";
+import { escalate, generateAiReply } from "../ai-agent/turn";
 import {
   ClassificationFailedError,
   ClassificationNotConfiguredError,
@@ -21,9 +22,7 @@ import {
   getApprovedWidget,
   createCustomerMessage,
   createCustomerAttachments,
-  generateAiReply,
   customerRequestedHuman,
-  escalate,
   getMessagesAfter,
   getSession,
   toPublicWidgetConfig,
