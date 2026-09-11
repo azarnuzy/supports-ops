@@ -51,9 +51,9 @@ describe("toPublicWidgetConfig", () => {
   it("includes the logo URL when a logo reference is set", () => {
     mocks.getObjectUrl.mockReturnValue("https://cdn.example.com/logo.png");
 
-    expect(toPublicWidgetConfig({ ...baseConfig, logoKey: "web-widget-logos/w1/logo.png" })).toEqual(
-      { ...baseConfig, logoUrl: "https://cdn.example.com/logo.png" },
-    );
+    expect(
+      toPublicWidgetConfig({ ...baseConfig, logoKey: "web-widget-logos/w1/logo.png" }),
+    ).toEqual({ ...baseConfig, logoUrl: "https://cdn.example.com/logo.png" });
   });
 
   it("returns a null logo URL when no logo reference is set", () => {
