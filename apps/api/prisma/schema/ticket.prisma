@@ -58,7 +58,7 @@ model TicketReadState {
 model Attachment {
   id               String                     @id
   workspaceId      String
-  ticketId         String
+  ticketId         String?
   messageId        String
   fileName         String
   mimeType         String
@@ -71,7 +71,7 @@ model Attachment {
   deletedAt        DateTime?
   deletedBy        String?
   workspace        Workspace                  @relation(fields: [workspaceId], references: [id])
-  ticket           Ticket                     @relation(fields: [ticketId], references: [id])
+  ticket           Ticket?                    @relation(fields: [ticketId], references: [id])
   message          Message                    @relation(fields: [messageId], references: [id])
 
   @@index([ticketId, processingStatus])

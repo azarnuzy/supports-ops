@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { webAttachmentCapability } from "@repo/channels";
+import {
+  type AttachmentCapability,
+  webAttachmentCapability,
+  whatsAppAttachmentCapability,
+} from "@repo/channels";
 import { createStorage } from "@repo/storage";
 import {
   createReplyModel,
@@ -105,6 +109,7 @@ const ticketDetailSelect = {
 const transcriptSelect = {
   attachments: {
     select: {
+      extractedText: true,
       fileName: true,
       failureReason: true,
       id: true,
@@ -561,24 +566,27 @@ export async function sendHumanAttachmentReply(
   files: File[],
   idempotencyKey: string,
 ) {
-  if (!files.length) throw new InvalidHumanAttachmentError();
-  if (files.length > webAttachmentCapability.maxFilesPerMessage)
+  const owner = await unscopedPrisma.ticket.findFirst({
+    select: { channel: { select: { type: true } } },
+    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+  });
+  if (!owner) throw new TicketNotOwnedError();
+  const capability: AttachmentCapability =
+    owner.channel.type === "WHATSAPP" ? whatsAppAttachmentCapability : webAttachmentCapability;
+  if (!files.length || files.length > capability.maxFilesPerMessage)
     throw new InvalidHumanAttachmentError();
   if (
     files.some(
       (file) =>
-        !webAttachmentCapability.mimeTypes.includes(file.type) ||
+        !capability.mimeTypes.includes(file.type) ||
         !file.size ||
-        file.size > webAttachmentCapability.maxFileSizeBytes,
+        file.size >
+          (capability.maxFileSizeBytesByMimeType?.[file.type] ?? capability.maxFileSizeBytes),
     )
   )
     throw new InvalidHumanAttachmentError();
   const text = content?.trim() ?? "";
   const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
-  const owner = await unscopedPrisma.ticket.findFirst({
-    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
-  });
-  if (!owner) throw new TicketNotOwnedError();
   const existing = await unscopedPrisma.message.findFirst({
     where: { externalMessageId, ticketId },
   });
@@ -899,7 +907,10 @@ async function queueWhatsAppDelivery(message: StoredMessage) {
 async function deliverMessage(message: StoredMessage) {
   if (!message.ticketId) return message;
   const queued = await queueWhatsAppDelivery(message);
-  if (queued) return queued;
+  if (queued) {
+    await publishWidgetEvent(message.ticketId, { type: "message.created", data: queued });
+    return queued;
+  }
   let attempts = 0;
   while (attempts < 3) {
     attempts += 1;

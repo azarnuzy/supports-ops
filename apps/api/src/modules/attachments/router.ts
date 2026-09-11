@@ -22,7 +22,8 @@ export const attachmentRouter = new Hono<{ Variables: AuthVariables }>().get(
         ticket: { is: ticketVisibilityWhere(user) },
       },
     });
-    if (!attachment) return c.json({ error: "not_found" }, 404);
+    // A refused WhatsApp file is recorded without ever being stored.
+    if (!attachment?.storageKey) return c.json({ error: "not_found" }, 404);
     const url = await createStorage(storageConfig).getSignedGetObjectUrl({
       key: attachment.storageKey,
       responseContentDisposition: `${mode === "preview" ? "inline" : "attachment"}; filename="${attachment.fileName.replaceAll('"', "")}"`,
