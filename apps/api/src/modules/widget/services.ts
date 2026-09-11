@@ -25,6 +25,7 @@ import {
   storageConfig,
 } from "../../config";
 import { type Message, unscopedPrisma } from "../../utils/prisma";
+import { claimMessageSlot } from "../../utils/session-messages";
 import { withWorkspaceContext } from "../../utils/workspace-context";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
@@ -123,15 +124,18 @@ export async function getApprovedWidget(widgetKey: string, origin: string) {
   return config;
 }
 
-export async function createWebSession(input: PreChatInput, origin: string) {
+export async function createSession(input: PreChatInput, origin: string) {
   const config = await getApprovedWidget(input.widgetKey, origin);
   const accessToken = randomBytes(32).toString("base64url");
   const businessTools = createBusinessTools(apiConfig.businessSystemUrl);
   const customer = await businessTools.getCustomerByEmail(input.email).catch(() => null);
 
   const session = await unscopedPrisma.$transaction(async (tx) => {
-    const customerIdentity = await tx.customerIdentity.create({
-      data: {
+    // One Customer Identity per Workspace and Channel, keyed on the email the
+    // Web Widget always has. A returning Customer gets the same identity.
+    const customerIdentity = await tx.customerIdentity.upsert({
+      create: {
+        canonicalId: input.email.toLowerCase(),
         channelType: "WEB",
         email: input.email,
         externalCustomerId: customer?.id,
@@ -139,24 +143,47 @@ export async function createWebSession(input: PreChatInput, origin: string) {
         name: input.name,
         workspaceId: config.workspaceId,
       },
+      update: { email: input.email, externalCustomerId: customer?.id, name: input.name },
+      where: {
+        workspaceId_channelType_canonicalId: {
+          canonicalId: input.email.toLowerCase(),
+          channelType: "WEB",
+          workspaceId: config.workspaceId,
+        },
+      },
     });
 
-    return tx.webSession.create({
+    const sessionId = randomUUID();
+    const created = await tx.session.create({
       data: {
         accessToken,
         channelId: config.channelId,
         customerIdentityId: customerIdentity.id,
-        id: randomUUID(),
+        id: sessionId,
         workspaceId: config.workspaceId,
       },
       select: { accessToken: true, id: true, status: true },
     });
+    // Agent Memory opens with the Session, so the AI Agent sees the
+    // conversation from its first turn. See ADR-0017.
+    await tx.conversation.create({
+      data: {
+        id: randomUUID(),
+        metadata: {},
+        scopeKey: `session:${sessionId}`,
+        sessionId,
+        userId: customerIdentity.id,
+        workspaceId: config.workspaceId,
+      },
+    });
+    return created;
   });
 
   const sessionLink = new URL(
     process.env.SESSION_LINK_BASE_URL ?? "http://localhost:8000/widget/session",
   );
-  sessionLink.searchParams.set("token", session.accessToken);
+  // The Web Widget always issues a token; other Channels leave it null.
+  sessionLink.searchParams.set("token", accessToken);
 
   void enqueueSessionEmail({
     customerName: input.name,
@@ -167,8 +194,8 @@ export async function createWebSession(input: PreChatInput, origin: string) {
   return session;
 }
 
-export async function getWebSession(accessToken: string) {
-  return unscopedPrisma.webSession.findUnique({
+export async function getSession(accessToken: string) {
+  return unscopedPrisma.session.findUnique({
     where: { accessToken },
     select: {
       accessToken: true,
@@ -188,14 +215,14 @@ export async function createCustomerMessage(
   accessToken: string,
   input: CustomerMessageInput,
 ): Promise<CreateCustomerMessageResult | null> {
-  const session = await unscopedPrisma.webSession.findUnique({
+  const session = await unscopedPrisma.session.findUnique({
     where: { accessToken },
     include: { ticket: true },
   });
   if (session?.status !== "ACTIVE") return null;
 
   if (session.ticket) {
-    const message = await appendMessage(session.ticket.id, session.workspaceId, input);
+    const message = await appendMessage(session, input);
     if (message.created) void cancelFollowUpTimers(session.ticket.id);
     return { created: message.created, kind: "message", message: message.message };
   }
@@ -207,32 +234,48 @@ export async function createCustomerMessage(
   const decision = await classifyMessage({
     categories: await ticketCategoryOptions(session.workspaceId),
     content: input.content,
+    history: await sessionHistory(session.id),
     model,
   });
 
   if (!decision.qualifies) {
-    await persistSessionExchange(session.id, session.workspaceId, input, decision.reply);
-    return { kind: "reply", reply: decision.reply };
+    const reply = await persistSessionExchange(session.id, session.workspaceId, input, decision.reply);
+    return { kind: "reply", reply };
   }
 
   try {
     const message = await createTicketAndFirstMessage(session.id, decision, input);
     return { created: true, kind: "message", message };
   } catch (error) {
-    // Two concurrent first messages on the same Web Session race to create
-    // the Ticket; webSessionId is unique, so the loser appends to whichever
-    // Ticket won instead of surfacing a spurious failure.
-    if (isUniqueConstraintError(error, "webSessionId")) {
-      const winner = await unscopedPrisma.webSession.findUniqueOrThrow({
+    // Two concurrent first messages on the same Session race to create the
+    // Ticket; sessionId is unique, so the loser appends to whichever Ticket
+    // won instead of surfacing a spurious failure.
+    if (isUniqueConstraintError(error, "sessionId")) {
+      const winner = await unscopedPrisma.session.findUniqueOrThrow({
         where: { accessToken },
         include: { ticket: true },
       });
       if (!winner.ticket) throw error;
-      const message = await appendMessage(winner.ticket.id, winner.workspaceId, input);
+      const message = await appendMessage(winner, input);
       return { created: message.created, kind: "message", message: message.message };
     }
     throw error;
   }
+}
+
+/** What has already been said on this Session, in order. Classification reads
+ * it so an opening greeting the AI Agent itself answered is part of the
+ * decision, and the Ticket is titled after the real problem. */
+async function sessionHistory(sessionId: string) {
+  const messages = await unscopedPrisma.message.findMany({
+    orderBy: { position: "asc" },
+    select: { content: true, senderType: true },
+    where: { deletedAt: null, sessionId },
+  });
+  return messages.map((message) => ({
+    content: message.content,
+    role: message.senderType === "CUSTOMER" ? ("customer" as const) : ("agent" as const),
+  }));
 }
 
 export async function createCustomerAttachments(
@@ -255,7 +298,7 @@ export async function createCustomerAttachments(
   }
 
   const content = input.content?.trim() ?? "";
-  const session = await unscopedPrisma.webSession.findUnique({
+  const session = await unscopedPrisma.session.findUnique({
     where: { accessToken },
     include: { ticket: true },
   });
@@ -277,8 +320,7 @@ export async function createCustomerAttachments(
     ? {
         created: true as const,
         kind: "message" as const,
-        message: (await appendMessage(session.ticket.id, session.workspaceId, messageInput))
-          .message,
+        message: (await appendMessage(session, messageInput)).message,
       }
     : {
         created: true as const,
@@ -346,7 +388,10 @@ export async function generateAttachmentReply(ticketId: string, workspaceId: str
     .filter(Boolean)
     .join("\n\n");
 
-  if (message.position === 1 && context) {
+  const isTicketOpener = !(await unscopedPrisma.message.count({
+    where: { position: { lt: message.position }, ticketId },
+  }));
+  if (isTicketOpener && context) {
     const apiKey = classificationConfig.apiKey;
     if (apiKey) {
       try {
@@ -381,7 +426,11 @@ export async function generateAttachmentReply(ticketId: string, workspaceId: str
   );
 }
 
-async function appendMessage(ticketId: string, workspaceId: string, input: CustomerMessageInput) {
+async function appendMessage(
+  session: { id: string; ticket: { id: string } | null; workspaceId: string },
+  input: CustomerMessageInput,
+) {
+  const workspaceId = session.workspaceId;
   return unscopedPrisma.$transaction(async (tx) => {
     const existing = await tx.message.findUnique({
       where: {
@@ -390,26 +439,16 @@ async function appendMessage(ticketId: string, workspaceId: string, input: Custo
     });
     if (existing) return { created: false, message: existing };
 
-    const ticket = await tx.ticket.update({
-      data: { messageSeq: { increment: 1 } },
-      where: { id: ticketId },
-    });
-    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
-
+    const slot = await claimMessageSlot(tx, session.id, { fromCustomer: true });
     const message = await tx.message.create({
       data: {
+        ...slot,
         content: input.content,
         externalMessageId: input.idempotencyKey,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content: input.content },
-        position: ticket.messageSeq,
         role: "user",
-        runId: randomUUID(),
         senderType: "CUSTOMER",
-        ticketId: ticket.id,
-        turn: ticket.messageSeq,
-        webSessionId: ticket.webSessionId,
+        ticketId: session.ticket?.id ?? null,
         workspaceId,
       },
     });
@@ -681,30 +720,27 @@ async function generateAiReplyRunInWorkspace(
 
 async function appendAiMessage(ticketId: string, workspaceId: string, content: string) {
   return unscopedPrisma.$transaction(async (tx) => {
+    // A conditional write to the status the Ticket already has still locks the
+    // row and reports whether the Agent is allowed to speak, now that the
+    // Message counter lives on the Session.
     const transition = await tx.ticket.updateMany({
-      data: { messageSeq: { increment: 1 } },
+      data: { status: "AI_HANDLING" },
       where: { id: ticketId, status: "AI_HANDLING" },
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      select: { messageSeq: true, webSessionId: true },
+      select: { sessionId: true },
       where: { id: ticketId },
     });
-    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     return tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
         externalMessageId: `ai:${randomUUID()}`,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content },
-        position: ticket.messageSeq,
         role: "assistant",
-        runId: randomUUID(),
         senderType: "AI_AGENT",
         ticketId,
-        turn: ticket.messageSeq,
-        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -720,34 +756,23 @@ export async function escalate(
   const acknowledgement = acknowledgementFor(customerMessage);
   const result = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
-      data: {
-        escalatedAt: new Date(),
-        escalationReason: reason,
-        messageSeq: { increment: 1 },
-        status: "ESCALATED",
-      },
+      data: { escalatedAt: new Date(), escalationReason: reason, status: "ESCALATED" },
       where: { id: ticketId, status: "AI_HANDLING" },
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      select: { messageSeq: true, webSessionId: true },
+      select: { sessionId: true },
       where: { id: ticketId },
     });
-    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     const acknowledgementMessage = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId)),
         content: acknowledgement,
         externalMessageId: `escalation:${randomUUID()}`,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content: acknowledgement },
-        position: ticket.messageSeq,
         role: "system",
-        runId: randomUUID(),
         senderType: "SYSTEM",
         ticketId,
-        turn: ticket.messageSeq,
-        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -773,7 +798,6 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
   const closing = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
       data: {
-        messageSeq: { increment: 1 },
         resolvedAt: new Date(),
         resolvedBy: "AI_AGENT",
         resolutionReason: "CUSTOMER_CONFIRMED",
@@ -786,26 +810,20 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
       include: { aiAgent: { select: { resolutionMessage: true } } },
       where: { id: ticketId },
     });
-    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     const content = ticket.aiAgent.resolutionMessage ?? "This conversation has been resolved.";
     const closingMessage = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
         externalMessageId: `resolution:${randomUUID()}`,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content },
-        position: ticket.messageSeq,
         role: "system",
-        runId: randomUUID(),
         senderType: "SYSTEM",
         ticketId,
-        turn: ticket.messageSeq,
-        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
-    await tx.webSession.update({ data: { status: "CLOSED" }, where: { id: ticket.webSessionId } });
+    await tx.session.update({ data: { status: "CLOSED" }, where: { id: ticket.sessionId } });
     await tx.aiActivity.create({
       data: {
         eventType: "RESOLVED",
@@ -835,8 +853,12 @@ function acknowledgementFor(customerMessage: string) {
     : "Your conversation has been passed to our team. A Human Agent will help you as soon as possible.";
 }
 
+/** An exchange that qualified for no Ticket is still part of the conversation:
+ * both turns are written to the Session's Agent Memory, in order, so the next
+ * message is classified with them in view. Returns the reply that was stored,
+ * which is the earlier one when this message is a duplicate. */
 async function persistSessionExchange(
-  webSessionId: string,
+  sessionId: string,
   workspaceId: string,
   input: CustomerMessageInput,
   reply: string,
@@ -847,68 +869,62 @@ async function persistSessionExchange(
         workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId },
       },
     });
-    if (existing) return;
+    if (existing) {
+      const storedReply = await tx.message.findFirst({
+        orderBy: { position: "asc" },
+        where: { position: { gt: existing.position }, sessionId },
+      });
+      return storedReply?.content ?? reply;
+    }
 
-    // Negative positions sort before every Ticket position, so the pre-Ticket
-    // exchange stays at the top of the transcript once a Ticket exists.
-    const count = await tx.message.count({ where: { ticketId: null, webSessionId } });
-    const base = -(count * 2 + 2);
-    const runId = randomUUID();
-    await tx.message.createMany({
-      data: [
-        {
-          content: input.content,
-          externalMessageId: input.idempotencyKey,
-          id: randomUUID(),
-          message: { content: input.content },
-          position: base,
-          role: "user",
-          runId,
-          senderType: "CUSTOMER",
-          turn: 0,
-          webSessionId,
-          workspaceId,
-        },
-        {
-          content: reply,
-          externalMessageId: randomUUID(),
-          id: randomUUID(),
-          message: { content: reply },
-          position: base + 1,
-          role: "assistant",
-          runId,
-          senderType: "AI_AGENT",
-          turn: 0,
-          webSessionId,
-          workspaceId,
-        },
-      ],
+    await tx.message.create({
+      data: {
+        ...(await claimMessageSlot(tx, sessionId, { fromCustomer: true })),
+        content: input.content,
+        externalMessageId: input.idempotencyKey,
+        message: { content: input.content },
+        role: "user",
+        senderType: "CUSTOMER",
+        workspaceId,
+      },
+    });
+    await tx.message.create({
+      data: {
+        ...(await claimMessageSlot(tx, sessionId)),
+        content: reply,
+        externalMessageId: `greeting:${randomUUID()}`,
+        message: { content: reply },
+        role: "assistant",
+        senderType: "AI_AGENT",
+        workspaceId,
+      },
     });
 
     // A concurrent qualifying message may have created the Ticket while this
     // exchange was being classified; adopt it so it joins that Ticket's history.
-    const winner = await tx.webSession.findUnique({
+    const winner = await tx.session.findUnique({
       select: { ticket: { select: { id: true } } },
-      where: { id: webSessionId },
+      where: { id: sessionId },
     });
     if (winner?.ticket) {
       await tx.message.updateMany({
         data: { ticketId: winner.ticket.id },
-        where: { ticketId: null, webSessionId },
+        where: { sessionId, ticketId: null },
       });
     }
+    return reply;
   });
 }
 
 async function createTicketAndFirstMessage(
-  webSessionId: string,
+  sessionId: string,
   decision: Extract<Awaited<ReturnType<typeof classifyMessage>>, { qualifies: true }>,
   input: CustomerMessageInput,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
-    const session = await tx.webSession.findUniqueOrThrow({
+    const session = await tx.session.findUniqueOrThrow({
       include: { channel: { select: { aiAgentId: true } } },
-      where: { id: webSessionId },
+      where: { id: sessionId },
     });
     const ticketId = randomUUID();
     const ticket = await tx.ticket.create({
@@ -918,48 +934,31 @@ async function createTicketAndFirstMessage(
         channelId: session.channelId,
         customerIdentityId: session.customerIdentityId,
         id: ticketId,
-        messageSeq: 1,
         priority: decision.priority,
+        sessionId,
         title: decision.title,
-        webSessionId,
-        workspaceId: session.workspaceId,
-      },
-    });
-    const conversation = await tx.conversation.create({
-      data: {
-        id: randomUUID(),
-        metadata: {},
-        scopeKey: `ticket:${ticketId}`,
-        sessionId: ticketId,
-        ticketId,
-        userId: session.customerIdentityId,
         workspaceId: session.workspaceId,
       },
     });
 
     const message = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, sessionId, { fromCustomer: true })),
         content: input.content,
         externalMessageId: input.idempotencyKey,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content: input.content },
-        position: 1,
         role: "user",
-        runId: randomUUID(),
         senderType: "CUSTOMER",
         ticketId: ticket.id,
-        turn: 1,
-        webSessionId,
         workspaceId: session.workspaceId,
       },
     });
 
-    // Adopt any pre-Ticket session messages so the transcript shows the full
-    // conversation history, including what came before this Ticket existed.
+    // The turns that came before this Ticket are part of its history: the
+    // Human Agent's transcript and Ticket Knowledge both read by Ticket.
     await tx.message.updateMany({
       data: { ticketId },
-      where: { ticketId: null, webSessionId },
+      where: { sessionId, ticketId: null },
     });
 
     await tx.aiActivity.createMany({
@@ -994,46 +993,39 @@ async function createTicketAndFirstMessage(
   });
 }
 
+/** Read by Session, never by Ticket: reading by Ticket drops the opening
+ * exchange, which is the bug ADR-0017 exists to remove. */
 export async function getMessagesAfter(accessToken: string, afterPosition: number | null) {
-  const session = await unscopedPrisma.webSession.findUnique({
+  const session = await unscopedPrisma.session.findUnique({
     where: { accessToken },
     select: { id: true, status: true, ticket: { select: { id: true, status: true } } },
   });
   if (!session) return null;
 
-  const attachmentsSelect = {
-    select: { fileName: true, id: true, mimeType: true, processingStatus: true, sizeBytes: true },
-  };
-
-  if (!session.ticket) {
-    // A session without a Ticket can still hold pre-Ticket history.
-    const messages = await unscopedPrisma.message.findMany({
-      include: { attachments: attachmentsSelect },
-      where: { deletedAt: null, ticketId: null, webSessionId: session.id },
-      orderBy: { position: "asc" },
-    });
-    return {
-      messages,
-      sessionStatus: session.status,
-      ticketId: null,
-      ticketStatus: null,
-    };
-  }
-
   const messages = await unscopedPrisma.message.findMany({
-    include: { attachments: attachmentsSelect },
-    where: {
-      deletedAt: null,
-      OR: [{ ticketId: session.ticket.id }, { webSessionId: session.id }],
-      ...(afterPosition !== null ? { position: { gt: afterPosition } } : {}),
+    include: {
+      attachments: {
+        select: {
+          fileName: true,
+          id: true,
+          mimeType: true,
+          processingStatus: true,
+          sizeBytes: true,
+        },
+      },
     },
     orderBy: { position: "asc" },
+    where: {
+      deletedAt: null,
+      sessionId: session.id,
+      ...(afterPosition !== null ? { position: { gt: afterPosition } } : {}),
+    },
   });
   return {
     messages,
     sessionStatus: session.status,
-    ticketId: session.ticket.id,
-    ticketStatus: session.ticket.status,
+    ticketId: session.ticket?.id ?? null,
+    ticketStatus: session.ticket?.status ?? null,
   };
 }
 

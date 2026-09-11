@@ -17,7 +17,7 @@ import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import {
   ClassificationFailedError,
   ClassificationNotConfiguredError,
-  createWebSession,
+  createSession,
   getApprovedWidget,
   createCustomerMessage,
   createCustomerAttachments,
@@ -25,7 +25,7 @@ import {
   customerRequestedHuman,
   escalate,
   getMessagesAfter,
-  getWebSession,
+  getSession,
   toPublicWidgetConfig,
   UnapprovedWidgetOriginError,
   WidgetNotFoundError,
@@ -114,7 +114,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
   .post("/pre-chat", zValidator("json", preChatSchema), async (c) => {
     const origin = c.get("origin");
     if (!origin) return c.json({ error: "forbidden" }, 403);
-    const session = await createWebSession(c.req.valid("json"), origin);
+    const session = await createSession(c.req.valid("json"), origin);
     return c.json(session, 201);
   })
   .post("/messages", zValidator("json", customerMessageSchema), async (c) => {
@@ -240,7 +240,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
     const attachment = await unscopedPrisma.attachment.findFirst({
-      where: { id: c.req.param("id"), deletedAt: null, ticket: { webSession: { accessToken } } },
+      where: { id: c.req.param("id"), deletedAt: null, session: { accessToken } },
     });
     if (!attachment) return c.json({ error: "not_found" }, 404);
     const preview = c.req.param("mode") === "preview";
@@ -257,7 +257,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
 
-    const session = await getWebSession(accessToken);
+    const session = await getSession(accessToken);
     if (!session) return c.json({ error: "unauthorized" }, 401);
 
     return c.json(session, 200);
