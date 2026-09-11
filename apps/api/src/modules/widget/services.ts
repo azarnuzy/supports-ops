@@ -239,7 +239,12 @@ export async function createCustomerMessage(
   });
 
   if (!decision.qualifies) {
-    const reply = await persistSessionExchange(session.id, session.workspaceId, input, decision.reply);
+    const reply = await persistSessionExchange(
+      session.id,
+      session.workspaceId,
+      input,
+      decision.reply,
+    );
     return { kind: "reply", reply };
   }
 

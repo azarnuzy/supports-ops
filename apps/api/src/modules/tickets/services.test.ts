@@ -251,7 +251,10 @@ describe("markTicketRead", () => {
   beforeEach(resetMocks);
 
   it("clamps the requested position to the Session's current messageSeq", async () => {
-    mocks.ticketFindFirst.mockResolvedValue({ session: { messageSeq: 5 }, workspaceId: "workspace-1" });
+    mocks.ticketFindFirst.mockResolvedValue({
+      session: { messageSeq: 5 },
+      workspaceId: "workspace-1",
+    });
 
     const result = await markTicketRead("t-1", { id: "agent-1", role: "HUMAN_AGENT" }, 99);
 
@@ -269,7 +272,10 @@ describe("markTicketRead", () => {
   });
 
   it("persists per-user, and never regresses a stored position, via a GREATEST upsert", async () => {
-    mocks.ticketFindFirst.mockResolvedValue({ session: { messageSeq: 10 }, workspaceId: "workspace-1" });
+    mocks.ticketFindFirst.mockResolvedValue({
+      session: { messageSeq: 10 },
+      workspaceId: "workspace-1",
+    });
 
     await markTicketRead("t-1", { id: "agent-1", role: "HUMAN_AGENT" }, 3);
 

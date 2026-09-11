@@ -19,7 +19,9 @@ vi.mock("@repo/ai-agent", () => ({
   createClassificationModel: () => ({ id: "fake-model" }),
 }));
 
-vi.mock("@repo/tools", () => ({ createBusinessTools: () => ({ getCustomerByEmail: async () => null }) }));
+vi.mock("@repo/tools", () => ({
+  createBusinessTools: () => ({ getCustomerByEmail: async () => null }),
+}));
 
 vi.mock("./session-email", () => ({ enqueueSessionEmail: mocks.enqueueSessionEmail }));
 
@@ -216,23 +218,24 @@ describe("a Customer message arrived on a Session", () => {
     });
 
     const afterCustomer = await prisma.session.findUniqueOrThrow({ where: { id: session.id } });
-    expect(afterCustomer.customerLastMessageAt).not.toBeNull();
+    const customerWroteAt = afterCustomer.customerLastMessageAt;
+    expect(customerWroteAt).not.toBeNull();
 
     // The AI Agent's own reply was written in the same exchange and must not
     // have moved the clock past the Customer's message.
     const reply = await prisma.message.findFirstOrThrow({
       where: { senderType: "AI_AGENT", sessionId: session.id },
     });
-    expect(afterCustomer.customerLastMessageAt!.getTime()).toBeLessThanOrEqual(
-      reply.createdAt.getTime(),
-    );
+    expect(customerWroteAt?.getTime()).toBeLessThanOrEqual(reply.createdAt.getTime());
   });
 
   it("reuses one Customer Identity per Workspace and Channel, and the database refuses a second", async () => {
     const first = await openSession("Budi@example.com");
     const second = await openSession("budi@example.com");
 
-    const sessions = await prisma.session.findMany({ where: { id: { in: [first.id, second.id] } } });
+    const sessions = await prisma.session.findMany({
+      where: { id: { in: [first.id, second.id] } },
+    });
     expect(new Set(sessions.map((session) => session.customerIdentityId)).size).toBe(1);
     expect(await prisma.customerIdentity.count()).toBe(1);
 
