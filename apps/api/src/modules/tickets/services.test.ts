@@ -211,7 +211,7 @@ describe("getTicketDetail", () => {
     const sessionCreatedAt = new Date("2026-01-01T00:00:00Z");
     mocks.ticketFindFirst.mockResolvedValue({
       id: "t-1",
-      webSession: { createdAt: sessionCreatedAt, id: "session-1" },
+      session: { createdAt: sessionCreatedAt, id: "session-1" },
     });
     mocks.messageFindMany.mockResolvedValue([
       { content: "halo", position: -2, senderType: "CUSTOMER" },
@@ -225,16 +225,16 @@ describe("getTicketDetail", () => {
       id: "t-1",
       messages: [{ content: "halo", position: -2, senderType: "CUSTOMER" }],
       unreadCount: 0,
-      webSession: { createdAt: sessionCreatedAt, id: "session-1" },
+      session: { createdAt: sessionCreatedAt, id: "session-1" },
     });
     const messageCall = mocks.messageFindMany.mock.calls[0]?.[0];
-    expect(messageCall.where).toEqual({ deletedAt: null, webSessionId: "session-1" });
+    expect(messageCall.where).toEqual({ deletedAt: null, sessionId: "session-1" });
     expect(messageCall.orderBy).toEqual([{ position: "asc" }, { createdAt: "asc" }]);
     const call = mocks.ticketFindFirst.mock.calls[0]?.[0];
     expect(call.where).toEqual({ AND: [{ deletedAt: null, id: "t-1" }, {}] });
     // The timeline opens with the Web Session's creation, and attachments are
     // opened through the download endpoint, so no storage key is exposed.
-    expect(call.select.webSession).toEqual({ select: { createdAt: true, id: true } });
+    expect(call.select.session).toEqual({ select: { createdAt: true, id: true } });
     expect(call.select.messages).toBeUndefined();
     expect(call.select).not.toHaveProperty("messages");
   });
@@ -250,8 +250,8 @@ describe("getTicketDetail", () => {
 describe("markTicketRead", () => {
   beforeEach(resetMocks);
 
-  it("clamps the requested position to the Ticket's current messageSeq", async () => {
-    mocks.ticketFindFirst.mockResolvedValue({ messageSeq: 5, workspaceId: "workspace-1" });
+  it("clamps the requested position to the Session's current messageSeq", async () => {
+    mocks.ticketFindFirst.mockResolvedValue({ session: { messageSeq: 5 }, workspaceId: "workspace-1" });
 
     const result = await markTicketRead("t-1", { id: "agent-1", role: "HUMAN_AGENT" }, 99);
 
@@ -269,7 +269,7 @@ describe("markTicketRead", () => {
   });
 
   it("persists per-user, and never regresses a stored position, via a GREATEST upsert", async () => {
-    mocks.ticketFindFirst.mockResolvedValue({ messageSeq: 10, workspaceId: "workspace-1" });
+    mocks.ticketFindFirst.mockResolvedValue({ session: { messageSeq: 10 }, workspaceId: "workspace-1" });
 
     await markTicketRead("t-1", { id: "agent-1", role: "HUMAN_AGENT" }, 3);
 
