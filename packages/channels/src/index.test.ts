@@ -5,6 +5,8 @@ import {
   parseWhatsAppWebhook,
   refuseWhatsAppAttachment,
   renderWhatsAppMessage,
+  whatsAppCustomerServiceWindowClosesAt,
+  whatsAppTimerDelayMs,
   verifyWhatsAppSignature,
   webDeliveryStates,
   whatsAppAttachmentCapability,
@@ -269,6 +271,36 @@ describe("renderWhatsAppMessage", () => {
       type: "document",
       document: { id: "media-1", filename: "guide.pdf", caption: "Guide" },
     });
+  });
+
+  it("uses the invitation template instead of free-form content after the Customer Service Window closes", () => {
+    const customerLastMessageAt = new Date("2026-01-01T00:00:00Z");
+
+    expect(whatsAppCustomerServiceWindowClosesAt(customerLastMessageAt)).toEqual(
+      new Date("2026-01-02T00:00:00Z"),
+    );
+    expect(
+      renderWhatsAppMessage(
+        { to: "628123", text: "The answer must not leave the platform" },
+        { customerLastMessageAt, now: new Date("2026-01-02T00:00:00Z") },
+      ),
+    ).toEqual({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: "628123",
+      type: "template",
+      template: { language: { code: "en_US" }, name: "supportops_reopen_conversation" },
+    });
+  });
+
+  it("caps lifecycle timers before the Customer Service Window closes", () => {
+    expect(
+      whatsAppTimerDelayMs(
+        new Date("2026-01-01T00:00:00Z"),
+        30 * 24 * 60 * 60 * 1_000,
+        new Date("2026-01-01T01:00:00Z"),
+      ),
+    ).toBe(22 * 60 * 60 * 1_000);
   });
 });
 

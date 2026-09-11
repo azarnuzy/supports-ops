@@ -269,8 +269,39 @@ type WhatsAppOutboundMessage =
       };
     };
 
-export function renderWhatsAppMessage(message: WhatsAppOutboundMessage): Record<string, unknown> {
+export const WHATSAPP_CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const WHATSAPP_CONVERSATION_LIMIT_MS = 23 * 60 * 60 * 1_000;
+
+export function whatsAppCustomerServiceWindowClosesAt(customerLastMessageAt: Date) {
+  return new Date(customerLastMessageAt.getTime() + WHATSAPP_CUSTOMER_SERVICE_WINDOW_MS);
+}
+
+export function whatsAppTimerDelayMs(
+  customerLastMessageAt: Date,
+  requestedDelayMs: number,
+  now: Date,
+) {
+  return Math.max(
+    0,
+    Math.min(
+      requestedDelayMs,
+      customerLastMessageAt.getTime() + WHATSAPP_CONVERSATION_LIMIT_MS - now.getTime(),
+    ),
+  );
+}
+
+export function renderWhatsAppMessage(
+  message: WhatsAppOutboundMessage,
+  window?: { customerLastMessageAt: Date; now: Date },
+): Record<string, unknown> {
   const base = { messaging_product: "whatsapp", recipient_type: "individual", to: message.to };
+  if (window && window.now >= whatsAppCustomerServiceWindowClosesAt(window.customerLastMessageAt)) {
+    return {
+      ...base,
+      type: "template",
+      template: { language: { code: "en_US" }, name: "supportops_reopen_conversation" },
+    };
+  }
   if ("text" in message) return { ...base, type: "text", text: { body: message.text } };
 
   const { type, id, caption, fileName } = message.attachment;
