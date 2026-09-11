@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/app.ts",
     "./ai-agent-turn": "./src/modules/ai-agent/turn.ts",
-    "./secrets": "./src/modules/tools/secrets.ts"
+    "./secrets": "./src/modules/tools/secrets.ts",
+    "./whatsapp-queue": "./src/modules/whatsapp-config/queue.ts"
   },
   "scripts": {
     "with-env": "dotenv -e ../../.env.local --",
