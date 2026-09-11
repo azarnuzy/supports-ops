@@ -13,6 +13,7 @@ import { storageConfig, toolEncryptionConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { decryptToolSecret } from "../tools/secrets";
+import { publishTicketQueueEvent, publishWidgetEvent } from "../widget/realtime";
 import { enqueueWhatsAppTurn } from "./queue";
 import { resetTimersAfterCustomerMessage } from "../follow-up/queue";
 
@@ -61,20 +62,25 @@ export const whatsAppWebhookRouter = new Hono()
     const sessions = new Map<string, { sessionId: string; workspaceId: string }>();
     for (const event of parseWhatsAppWebhook(payload)) {
       if (event.kind === "delivery") {
-        await unscopedPrisma.message.updateMany({
-          data: {
-            deliveryStatus: event.deliveryStatus,
-            ...(event.failureReason ? { deliveryFailureReason: event.failureReason } : {}),
-          },
+        const message = await unscopedPrisma.message.findFirst({
           where: { externalMessageId: event.messageId, workspaceId: config.workspaceId },
         });
+        if (!message) continue;
+        const updated = await unscopedPrisma.message.update({
+          data: {
+            deliveryFailureReason: event.failureReason ?? null,
+            deliveryStatus: event.deliveryStatus,
+          },
+          where: { id: message.id },
+        });
+        if (updated.ticketId)
+          await publishWidgetEvent(updated.ticketId, { type: "message.updated", data: updated });
         continue;
       }
       if (event.phoneNumberId !== config.phoneNumberId) continue;
       if (event.text === undefined && !event.attachment) continue;
 
       const seen = await unscopedPrisma.message.findUnique({
-        select: { sessionId: true },
         where: {
           workspaceId_externalMessageId: {
             externalMessageId: event.messageId,
@@ -83,6 +89,10 @@ export const whatsAppWebhookRouter = new Hono()
         },
       });
       if (seen) {
+        if (seen.ticketId) {
+          await publishWidgetEvent(seen.ticketId, { type: "message.created", data: seen });
+          await publishTicketQueueEvent(seen.workspaceId);
+        }
         sessions.set(seen.sessionId, {
           sessionId: seen.sessionId,
           workspaceId: config.workspaceId,
@@ -109,6 +119,11 @@ export const whatsAppWebhookRouter = new Hono()
         workspaceId: config.workspaceId,
       });
       if (stored.created && stored.ticketId) {
+        await publishWidgetEvent(stored.ticketId, {
+          type: "message.created",
+          data: stored.message,
+        });
+        await publishTicketQueueEvent(stored.workspaceId);
         await resetTimersAfterCustomerMessage(stored.ticketId, stored.workspaceId);
       }
       sessions.set(stored.sessionId, stored);
@@ -304,7 +319,7 @@ async function persistInboundMessage(input: {
         },
       });
     }
-    await tx.message.create({
+    const message = await tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, session.id)),
         ...(input.attachment
@@ -336,6 +351,7 @@ async function persistInboundMessage(input: {
     }
     return {
       created: true,
+      message,
       sessionId: session.id,
       ticketId: session.ticket?.id ?? null,
       workspaceId: input.workspaceId,
