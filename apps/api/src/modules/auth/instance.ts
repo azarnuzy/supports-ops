@@ -30,6 +30,9 @@ export const auth = betterAuth({
       },
     },
   },
+  // The domain's Session is a Customer's conversation on a Channel, so Better
+  // Auth's own sign-in session lives on the AuthSession model instead.
+  session: { modelName: "authSession" },
   secret: betterAuthConfig.secret,
   trustedOrigins: betterAuthConfig.trustedOrigins,
 });

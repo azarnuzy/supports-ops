@@ -10,7 +10,7 @@ model Workspace {
   aiAgents           AiAgent[]
   channels           Channel[]
   customerIdentities CustomerIdentity[]
-  webSessions        WebSession[]
+  sessions           Session[]
   tickets            Ticket[]
   attachments        Attachment[]
   knowledgeSources   KnowledgeSource[]

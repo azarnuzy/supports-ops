@@ -43,7 +43,7 @@ enum ChannelStatus {
   INACTIVE
 }
 
-enum WebSessionStatus {
+enum SessionStatus {
   ACTIVE
   CLOSED
 }
