@@ -162,6 +162,7 @@ export type TicketListItem = {
 };
 
 export type TicketAttachment = {
+  extractedText: string | null;
   failureReason: string | null;
   fileName: string;
   id: string;

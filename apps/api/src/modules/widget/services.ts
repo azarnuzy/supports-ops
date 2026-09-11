@@ -339,7 +339,7 @@ export async function createCustomerAttachments(
     attachments.map((attachment) =>
       enqueueAttachmentProcess({
         attachmentId: attachment.id,
-        ticketId: attachment.ticketId,
+        ticketId,
         workspaceId: attachment.workspaceId,
       }),
     ),
