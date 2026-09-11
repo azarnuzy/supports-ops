@@ -89,6 +89,8 @@ enum MessageSenderType {
 enum MessageDeliveryStatus {
   PENDING
   SENT
+  DELIVERED
+  READ
   FAILED
 }
 
