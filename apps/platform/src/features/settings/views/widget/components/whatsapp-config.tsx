@@ -84,7 +84,15 @@ export default function WhatsAppConfig() {
             </CardDescription>
           </div>
           {current ? (
-            <Badge variant={current.health === "HEALTHY" ? "default" : "secondary"}>
+            <Badge
+              variant={
+                current.health === "HEALTHY"
+                  ? "default"
+                  : current.health === "TOKEN_INVALID"
+                    ? "destructive"
+                    : "secondary"
+              }
+            >
               {current.health.replaceAll("_", " ")}
             </Badge>
           ) : null}
@@ -94,6 +102,12 @@ export default function WhatsAppConfig() {
       <CardContent className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
         {current ? (
           <div className="grid gap-5">
+            {current.health === "TOKEN_INVALID" ? (
+              <p className="text-sm text-destructive" role="alert">
+                Meta rejected the access token, so replies are not reaching Customers. Generate a
+                new permanent token in Meta Business Settings and reconnect this number.
+              </p>
+            ) : null}
             <div className="grid gap-1">
               <p className="text-sm font-medium">
                 {current.verifiedName ?? "Connected number"} · {current.displayPhoneNumber}

@@ -66,6 +66,7 @@ vi.mock("../follow-up/queue", () => ({
   scheduleIdleClosureForTicket: vi.fn(),
 }));
 
+vi.mock("../whatsapp-config/queue", () => ({ enqueueWhatsAppDelivery: vi.fn() }));
 vi.mock("./queue", () => ({
   enqueueTicketKnowledgeIndex: vi.fn(),
 }));

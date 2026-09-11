@@ -22,6 +22,7 @@ import {
 } from "../widget/realtime";
 import { cancelFollowUpTimers, scheduleIdleClosureForTicket } from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "./queue";
+import { enqueueWhatsAppDelivery } from "../whatsapp-config/queue";
 import { resolveTools } from "../tools/services";
 import { executeReadOnlyAssignedTools } from "../tools/orchestration";
 
@@ -322,6 +323,7 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
     };
   });
   await publishWidgetEvent(ticketId, { type: "message.created", data: result.message });
+  await queueWhatsAppDelivery(result.message);
   await cancelFollowUpTimers(ticketId);
   await scheduleIdleClosureForTicket(ticketId, workspaceId);
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "ready" } });
@@ -391,6 +393,7 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
     workspaceId,
   });
   await publishWidgetEvent(ticketId, { type: "message.created", data: handoffMessage });
+  await queueWhatsAppDelivery(handoffMessage);
 
   try {
     if (!aiAgentConfig.apiKey) throw new Error("AI Agent is not configured.");
@@ -875,8 +878,28 @@ export async function deleteTicket(ticketId: string, adminId: string, workspaceI
   await publishTicketQueueEvent(workspaceId);
 }
 
-async function deliverMessage(message: Awaited<ReturnType<typeof unscopedPrisma.message.create>>) {
+type StoredMessage = Awaited<ReturnType<typeof unscopedPrisma.message.create>>;
+
+/** WhatsApp Messages leave through the Worker's delivery job, which retries
+ * and records Meta's verdict. Returns null for every other Channel. */
+async function queueWhatsAppDelivery(message: StoredMessage) {
+  const session = await unscopedPrisma.session.findUniqueOrThrow({
+    select: { channel: { select: { type: true } } },
+    where: { id: message.sessionId },
+  });
+  if (session.channel.type !== "WHATSAPP") return null;
+  const pending = await unscopedPrisma.message.update({
+    data: { deliveryFailureReason: null, deliveryStatus: "PENDING" },
+    where: { id: message.id },
+  });
+  await enqueueWhatsAppDelivery(message.id);
+  return pending;
+}
+
+async function deliverMessage(message: StoredMessage) {
   if (!message.ticketId) return message;
+  const queued = await queueWhatsAppDelivery(message);
+  if (queued) return queued;
   let attempts = 0;
   while (attempts < 3) {
     attempts += 1;
