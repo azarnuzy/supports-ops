@@ -196,6 +196,22 @@ const DashboardView = () => {
                     figure={analytics.data.analytics.humanEscalation}
                     totalTickets={analytics.data.analytics.totalTickets}
                   />
+                  <RateCard
+                    icon={HourglassIcon}
+                    title="Customer inactive · handled"
+                    info="Timer-closed after Customer silence while a Human Agent owned the Ticket. Never counted as an AI resolution."
+                    hint="Customer went quiet with a Human Agent."
+                    figure={analytics.data.analytics.humanIdleClosure.handled}
+                    totalTickets={analytics.data.analytics.totalTickets}
+                  />
+                  <RateCard
+                    icon={HourglassIcon}
+                    title="Customer inactive · queue"
+                    info="Timer-closed before anyone claimed the Ticket, kept separate to reveal understaffing."
+                    hint="Customer went quiet in the Shared Human Queue."
+                    figure={analytics.data.analytics.humanIdleClosure.sharedQueue}
+                    totalTickets={analytics.data.analytics.totalTickets}
+                  />
                 </div>
 
                 <div className="grid gap-5 xl:grid-cols-3">

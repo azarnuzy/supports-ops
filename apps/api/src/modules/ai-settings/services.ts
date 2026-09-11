@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import type { UpdateAiSettingsInput } from "./schema";
+import { rescheduleIdleClosures } from "../follow-up/queue";
 
 const defaults = {
   autoResolveAfterSeconds: 3600,
   autoResolveEnabled: true,
   followUpAfterSeconds: 900,
+  idleCloseAfterSeconds: 28_800,
 };
 
 export const defaultAiAgentMessages = {
@@ -33,7 +35,7 @@ export async function getAiSettings() {
 export async function updateAiSettings(input: UpdateAiSettingsInput) {
   const workspaceId = requireWorkspaceId();
   const { aiAgentId, handoffMessage, instructions, resolutionMessage, ...timers } = input;
-  return prisma.$transaction(async (tx) => {
+  const settings = await prisma.$transaction(async (tx) => {
     await tx.aiAgent.update({
       data: { handoffMessage, instructions, resolutionMessage },
       where: { workspaceId_id: { id: aiAgentId, workspaceId } },
@@ -45,4 +47,6 @@ export async function updateAiSettings(input: UpdateAiSettingsInput) {
     });
     return { ...settings, aiAgentId, handoffMessage, instructions, resolutionMessage };
   });
+  await rescheduleIdleClosures(workspaceId);
+  return settings;
 }

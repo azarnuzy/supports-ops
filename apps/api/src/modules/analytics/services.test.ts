@@ -50,8 +50,8 @@ async function databaseIsReachable() {
  * | T5     | ESCALATED      | —                  | —           | yes       | web     | —          |
  * | T6     | ESCALATED      | —                  | —           | yes       | wa      | —          |
  * | T7     | HUMAN_HANDLING | —                  | —           | yes       | web     | agent      |
- * | T8     | HUMAN_HANDLING | —                  | —           | yes       | web     | agent      |
- * | T9     | HUMAN_HANDLING | —                  | —           | yes       | wa      | otherAgent |
+ * | T8     | RESOLVED       | CUSTOMER_INACTIVE_HUMAN_HANDLING | PLATFORM | yes | web | agent |
+ * | T9     | RESOLVED       | CUSTOMER_INACTIVE_SHARED_QUEUE | PLATFORM | yes | wa | — |
  * | T10    | AI_HANDLING    | —                  | —           | no        | web     | —          |
  * | T11    | RESOLVED       | CUSTOMER_CONFIRMED | AI_AGENT    | no        | web     | —          | soft-deleted
  *
@@ -204,7 +204,12 @@ async function seedWorkspaces(): Promise<Seeded> {
   type TicketSeed = {
     key: string;
     status: "AI_HANDLING" | "ESCALATED" | "HUMAN_HANDLING" | "RESOLVED";
-    resolutionReason?: "CUSTOMER_CONFIRMED" | "CUSTOMER_INACTIVE" | "HUMAN_RESOLVED";
+    resolutionReason?:
+      | "CUSTOMER_CONFIRMED"
+      | "CUSTOMER_INACTIVE"
+      | "CUSTOMER_INACTIVE_HUMAN_HANDLING"
+      | "CUSTOMER_INACTIVE_SHARED_QUEUE"
+      | "HUMAN_RESOLVED";
     resolvedBy?: string;
     escalatedAt?: Date;
     channelId: string;
@@ -272,7 +277,9 @@ async function seedWorkspaces(): Promise<Seeded> {
     },
     {
       key: "t8",
-      status: "HUMAN_HANDLING",
+      status: "RESOLVED",
+      resolutionReason: "CUSTOMER_INACTIVE_HUMAN_HANDLING",
+      resolvedBy: "PLATFORM",
       escalatedAt: escalated,
       channelId: webChannel.id,
       customerIdentityId: identity.id,
@@ -280,11 +287,12 @@ async function seedWorkspaces(): Promise<Seeded> {
     },
     {
       key: "t9",
-      status: "HUMAN_HANDLING",
+      status: "RESOLVED",
+      resolutionReason: "CUSTOMER_INACTIVE_SHARED_QUEUE",
+      resolvedBy: "PLATFORM",
       escalatedAt: escalated,
       channelId: waChannel.id,
       customerIdentityId: waIdentity.id,
-      assignedHumanAgentId: otherAgent.id,
     },
     {
       key: "t10",
@@ -402,6 +410,10 @@ type OverviewResponse = {
       customerConfirmed: { count: number; rate: number | null };
       customerInactive: { count: number; rate: number | null };
     };
+    humanIdleClosure: {
+      handled: { count: number; rate: number | null };
+      sharedQueue: { count: number; rate: number | null };
+    };
     humanEscalation: { count: number; rate: number | null };
     statusCounts: { status: string; count: number }[];
     channelCounts: {
@@ -448,12 +460,14 @@ describe.skipIf(!databaseReachable)("GET /analytics/overview", () => {
     expect(body.analytics.aiResolution.customerInactive.rate).toBeCloseTo(0.2);
     expect(body.analytics.humanEscalation.count).toBe(6);
     expect(body.analytics.humanEscalation.rate).toBeCloseTo(0.6);
+    expect(body.analytics.humanIdleClosure.handled).toEqual({ count: 1, rate: 0.1 });
+    expect(body.analytics.humanIdleClosure.sharedQueue).toEqual({ count: 1, rate: 0.1 });
 
     expect(body.analytics.statusCounts).toEqual([
       { status: "AI_HANDLING", count: 1 },
       { status: "ESCALATED", count: 2 },
-      { status: "HUMAN_HANDLING", count: 3 },
-      { status: "RESOLVED", count: 4 },
+      { status: "HUMAN_HANDLING", count: 1 },
+      { status: "RESOLVED", count: 6 },
     ]);
 
     const channelCounts = [...body.analytics.channelCounts].sort((a, b) =>
@@ -478,12 +492,7 @@ describe.skipIf(!databaseReachable)("GET /analytics/overview", () => {
       a.humanAgentName.localeCompare(b.humanAgentName),
     );
     expect(agentLoads).toEqual([
-      { humanAgentId: `agent-${seeded.run}`, humanAgentName: "Dana Solusi", activeTicketCount: 2 },
-      {
-        humanAgentId: `other-agent-${seeded.run}`,
-        humanAgentName: "Rian Tugas",
-        activeTicketCount: 1,
-      },
+      { humanAgentId: `agent-${seeded.run}`, humanAgentName: "Dana Solusi", activeTicketCount: 1 },
     ]);
   });
 
@@ -513,6 +522,10 @@ describe.skipIf(!databaseReachable)("GET /analytics/overview", () => {
       customerInactive: { count: 0, rate: null },
     });
     expect(body.analytics.humanEscalation).toEqual({ count: 0, rate: null });
+    expect(body.analytics.humanIdleClosure).toEqual({
+      handled: { count: 0, rate: null },
+      sharedQueue: { count: 0, rate: null },
+    });
     expect(body.analytics.statusCounts).toEqual([
       { status: "AI_HANDLING", count: 0 },
       { status: "ESCALATED", count: 0 },

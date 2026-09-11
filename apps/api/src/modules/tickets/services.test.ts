@@ -63,6 +63,7 @@ vi.mock("../widget/realtime", () => ({
 
 vi.mock("../follow-up/queue", () => ({
   cancelFollowUpTimers: vi.fn(),
+  scheduleIdleClosureForTicket: vi.fn(),
 }));
 
 vi.mock("./queue", () => ({

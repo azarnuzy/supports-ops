@@ -5,18 +5,34 @@ import { Queue, type ConnectionOptions } from "bullmq";
 
 export type FollowUpJob = { ticketId: string; workspaceId: string; aiMessageId: string };
 export type AutoResolveJob = { ticketId: string; workspaceId: string; followUpMessageId: string };
+export type IdleClosureJob = {
+  assignedHumanAgentId: string | null;
+  customerLastMessageAt: string;
+  status: "ESCALATED" | "HUMAN_HANDLING";
+  ticketId: string;
+  workspaceId: string;
+};
 const connection: ConnectionOptions = {
   maxRetriesPerRequest: null,
   url: process.env.REDIS_URL ?? "redis://localhost:16379",
 };
-let followUpQueue: Queue<AutoResolveJob> | undefined;
+let followUpQueue: Queue<AutoResolveJob | IdleClosureJob> | undefined;
 
 async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: number) {
-  followUpQueue ??= new Queue<AutoResolveJob>("ticket-follow-up", { connection });
+  followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob>("ticket-follow-up", { connection });
   await followUpQueue.remove(`auto-resolve:${job.ticketId}`).catch(() => undefined);
   await followUpQueue.add("auto-resolve", job, {
     delay: delaySeconds * 1_000,
     jobId: `auto-resolve:${job.ticketId}`,
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  });
+}
+
+async function scheduleIdleClosure(job: IdleClosureJob, delayMs: number) {
+  followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob>("ticket-follow-up", { connection });
+  await followUpQueue.add("idle-close", job, {
+    delay: Math.max(0, delayMs),
     removeOnComplete: 100,
     removeOnFail: 500,
   });
@@ -191,4 +207,102 @@ export async function processAutoResolveJob(job: { data: AutoResolveJob }) {
   await publish(job.data.ticketId, { type: "message.created", data: closing });
   await publish(job.data.ticketId, { type: "ticket.status", data: { status: "resolved" } });
   await publishQueue(closing.workspaceId);
+}
+
+class IdleClosureRaceLost extends Error {}
+
+export async function processIdleClosureJob(job: { data: IdleClosureJob }) {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const settings = await tx.aiSettings.findUnique({
+        where: { workspaceId: job.data.workspaceId },
+      });
+      const idleCloseAfterSeconds = settings?.idleCloseAfterSeconds ?? 28_800;
+      const customerLastMessageAt = new Date(job.data.customerLastMessageAt);
+      const remainingMs =
+        customerLastMessageAt.getTime() + idleCloseAfterSeconds * 1_000 - Date.now();
+      if (remainingMs > 0) return { remainingMs };
+
+      const resolvedAt = new Date();
+      const transition = await tx.ticket.updateMany({
+        data: {
+          resolvedAt,
+          resolvedBy: "PLATFORM",
+          resolutionReason:
+            job.data.status === "ESCALATED"
+              ? "CUSTOMER_INACTIVE_SHARED_QUEUE"
+              : "CUSTOMER_INACTIVE_HUMAN_HANDLING",
+          status: "RESOLVED",
+        },
+        where: {
+          assignedHumanAgentId: job.data.assignedHumanAgentId,
+          id: job.data.ticketId,
+          status: job.data.status,
+          workspaceId: job.data.workspaceId,
+        },
+      });
+      if (!transition.count) return null;
+
+      const session = await tx.session.findFirst({
+        select: { conversation: { select: { id: true } }, id: true },
+        where: {
+          customerLastMessageAt,
+          status: "ACTIVE",
+          ticket: { id: job.data.ticketId },
+          workspaceId: job.data.workspaceId,
+        },
+      });
+      if (!session?.conversation) throw new IdleClosureRaceLost();
+
+      const closed = await tx.session.updateMany({
+        data: { closedAt: resolvedAt, status: "CLOSED" },
+        where: { customerLastMessageAt, id: session.id, status: "ACTIVE" },
+      });
+      if (!closed.count) throw new IdleClosureRaceLost();
+
+      const workspace = await tx.workspace.findUniqueOrThrow({
+        select: { closingMessage: true },
+        where: { id: job.data.workspaceId },
+      });
+      const content = workspace.closingMessage ?? "This conversation has been resolved.";
+      const message = await tx.message.create({
+        data: {
+          ...(await claimMessageSlot(tx, session.id, session.conversation.id)),
+          content,
+          deliveryStatus: "PENDING",
+          externalMessageId: `idle-closure:${job.data.ticketId}`,
+          message: { content },
+          role: "system",
+          senderType: "SYSTEM",
+          ticketId: job.data.ticketId,
+          workspaceId: job.data.workspaceId,
+        },
+      });
+      await tx.aiActivity.create({
+        data: {
+          eventType: "RESOLVED",
+          id: randomUUID(),
+          metadata: {
+            reason:
+              job.data.status === "ESCALATED"
+                ? "CUSTOMER_INACTIVE_SHARED_QUEUE"
+                : "CUSTOMER_INACTIVE_HUMAN_HANDLING",
+          },
+          ticketId: job.data.ticketId,
+          workspaceId: job.data.workspaceId,
+        },
+      });
+      return { message, remainingMs: null };
+    });
+    if (!result) return;
+    if (result.remainingMs !== null) {
+      await scheduleIdleClosure(job.data, result.remainingMs);
+      return;
+    }
+    await publish(job.data.ticketId, { type: "message.created", data: result.message });
+    await publish(job.data.ticketId, { type: "ticket.status", data: { status: "resolved" } });
+    await publishQueue(job.data.workspaceId);
+  } catch (error) {
+    if (!(error instanceof IdleClosureRaceLost)) throw error;
+  }
 }

@@ -20,7 +20,7 @@ import {
   publishTicketQueueEvent,
   publishWidgetEvent,
 } from "../widget/realtime";
-import { cancelFollowUpTimers } from "../follow-up/queue";
+import { cancelFollowUpTimers, scheduleIdleClosureForTicket } from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "./queue";
 import { resolveTools } from "../tools/services";
 import { executeReadOnlyAssignedTools } from "../tools/orchestration";
@@ -319,6 +319,7 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
   });
   await publishWidgetEvent(ticketId, { type: "message.created", data: result.message });
   await cancelFollowUpTimers(ticketId);
+  await scheduleIdleClosureForTicket(ticketId, workspaceId);
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "ready" } });
   await publishTicketQueueEvent(workspaceId);
   return result.ticket;
@@ -346,6 +347,7 @@ export async function claimTicket(ticketId: string, humanAgentId: string, worksp
   });
   await publishTicketQueueEvent(workspaceId);
   await cancelFollowUpTimers(ticketId);
+  await scheduleIdleClosureForTicket(ticketId, workspaceId);
   return claimed;
 }
 
@@ -493,6 +495,7 @@ export async function reassignTicket(ticketId: string, humanAgentId: string, wor
   });
   await publishTicketQueueEvent(workspaceId);
   await cancelFollowUpTimers(ticketId);
+  await scheduleIdleClosureForTicket(ticketId, workspaceId);
   return ticket;
 }
 

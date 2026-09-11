@@ -22,6 +22,8 @@ vi.mock("../../utils/prisma", () => ({
   },
 }));
 
+vi.mock("../follow-up/queue", () => ({ rescheduleIdleClosures: vi.fn() }));
+
 const { getAiSettings, updateAiSettings } = await import("./services");
 
 describe("AI Agent settings", () => {
@@ -47,6 +49,7 @@ describe("AI Agent settings", () => {
     expect(settings).toMatchObject({
       aiAgentId: "ai-1",
       handoffMessage: expect.stringContaining("{humanAgentName}"),
+      idleCloseAfterSeconds: 28_800,
       instructions: "",
       resolutionMessage: "This conversation has been resolved.",
       workspaceId: "ws-1",
@@ -61,6 +64,7 @@ describe("AI Agent settings", () => {
       autoResolveAfterSeconds: 60,
       autoResolveEnabled: true,
       followUpAfterSeconds: 30,
+      idleCloseAfterSeconds: 28_800,
       handoffMessage: "Hi {humanAgentName}",
       instructions: "Be concise.",
       resolutionMessage: "All done.",
