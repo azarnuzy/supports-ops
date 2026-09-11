@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { webAttachmentCapability } from "@repo/channels";
+import {
+  type AttachmentCapability,
+  webAttachmentCapability,
+  whatsAppAttachmentCapability,
+} from "@repo/channels";
 import { createStorage } from "@repo/storage";
 import {
   createReplyModel,
@@ -22,6 +26,7 @@ import {
 } from "../widget/realtime";
 import { cancelFollowUpTimers, scheduleIdleClosureForTicket } from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "./queue";
+import { enqueueWhatsAppTurn } from "../whatsapp-config/queue";
 import { resolveTools } from "../tools/services";
 import { executeReadOnlyAssignedTools } from "../tools/orchestration";
 
@@ -104,6 +109,7 @@ const ticketDetailSelect = {
 const transcriptSelect = {
   attachments: {
     select: {
+      extractedText: true,
       fileName: true,
       failureReason: true,
       id: true,
@@ -558,24 +564,27 @@ export async function sendHumanAttachmentReply(
   files: File[],
   idempotencyKey: string,
 ) {
-  if (!files.length) throw new InvalidHumanAttachmentError();
-  if (files.length > webAttachmentCapability.maxFilesPerMessage)
+  const owner = await unscopedPrisma.ticket.findFirst({
+    select: { channel: { select: { type: true } } },
+    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+  });
+  if (!owner) throw new TicketNotOwnedError();
+  const capability: AttachmentCapability =
+    owner.channel.type === "WHATSAPP" ? whatsAppAttachmentCapability : webAttachmentCapability;
+  if (!files.length || files.length > capability.maxFilesPerMessage)
     throw new InvalidHumanAttachmentError();
   if (
     files.some(
       (file) =>
-        !webAttachmentCapability.mimeTypes.includes(file.type) ||
+        !capability.mimeTypes.includes(file.type) ||
         !file.size ||
-        file.size > webAttachmentCapability.maxFileSizeBytes,
+        file.size >
+          (capability.maxFileSizeBytesByMimeType?.[file.type] ?? capability.maxFileSizeBytes),
     )
   )
     throw new InvalidHumanAttachmentError();
   const text = content?.trim() ?? "";
   const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
-  const owner = await unscopedPrisma.ticket.findFirst({
-    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
-  });
-  if (!owner) throw new TicketNotOwnedError();
   const existing = await unscopedPrisma.message.findFirst({
     where: { externalMessageId, ticketId },
   });
@@ -877,6 +886,23 @@ export async function deleteTicket(ticketId: string, adminId: string, workspaceI
 
 async function deliverMessage(message: Awaited<ReturnType<typeof unscopedPrisma.message.create>>) {
   if (!message.ticketId) return message;
+  const session = await unscopedPrisma.session.findUniqueOrThrow({
+    select: { channel: { select: { type: true } } },
+    where: { id: message.sessionId },
+  });
+  if (session.channel.type === "WHATSAPP") {
+    // The WhatsApp turn worker delivers every PENDING Message to Meta.
+    const pending =
+      message.deliveryStatus === "FAILED"
+        ? await unscopedPrisma.message.update({
+            data: { deliveryFailureReason: null, deliveryStatus: "PENDING" },
+            where: { id: message.id },
+          })
+        : message;
+    await enqueueWhatsAppTurn({ sessionId: message.sessionId, workspaceId: message.workspaceId });
+    await publishWidgetEvent(message.ticketId, { type: "message.created", data: pending });
+    return pending;
+  }
   let attempts = 0;
   while (attempts < 3) {
     attempts += 1;

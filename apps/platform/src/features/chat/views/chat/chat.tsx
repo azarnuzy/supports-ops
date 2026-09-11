@@ -1,5 +1,9 @@
 import type { TicketCategory, TicketPriority, TicketStatus } from "@repo/api-client";
-import { webAttachmentCapability } from "@repo/channels";
+import {
+  type AttachmentCapability,
+  webAttachmentCapability,
+  whatsAppAttachmentCapability,
+} from "@repo/channels";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -135,6 +139,10 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     ...ticketDetailQueryOptions(ticketId ?? ""),
     enabled: Boolean(ticketId),
   });
+  const attachmentCapability: AttachmentCapability =
+    ticket.data?.ticket.channel.type === "WHATSAPP"
+      ? whatsAppAttachmentCapability
+      : webAttachmentCapability;
   useTicketEvents();
   const { reconnecting } = useTicketDetailEvents(ticketId);
   useMarkTicketReadOnView(ticket.data?.ticket);
@@ -731,18 +739,21 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                             className="sr-only"
                             type="file"
                             multiple
-                            accept={webAttachmentCapability.mimeTypes.join(",")}
+                            accept={attachmentCapability.mimeTypes.join(",")}
                             onChange={(event) => {
                               const additions = [...(event.target.files ?? [])].filter(
                                 (file) =>
-                                  webAttachmentCapability.mimeTypes.includes(file.type) &&
+                                  attachmentCapability.mimeTypes.includes(file.type) &&
                                   file.size > 0 &&
-                                  file.size <= webAttachmentCapability.maxFileSizeBytes,
+                                  file.size <=
+                                    (attachmentCapability.maxFileSizeBytesByMimeType?.[
+                                      file.type
+                                    ] ?? attachmentCapability.maxFileSizeBytes),
                               );
                               setFiles((current) =>
                                 [...current, ...additions].slice(
                                   0,
-                                  webAttachmentCapability.maxFilesPerMessage,
+                                  attachmentCapability.maxFilesPerMessage,
                                 ),
                               );
                               event.currentTarget.value = "";

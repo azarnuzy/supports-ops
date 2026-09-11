@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { parseWhatsAppWebhook, verifyWhatsAppSignature } from "@repo/channels";
+import {
+  baseMimeType,
+  parseWhatsAppWebhook,
+  refuseWhatsAppAttachment,
+  verifyWhatsAppSignature,
+  type WhatsAppInboundEvent,
+} from "@repo/channels";
+import { createStorage } from "@repo/storage";
 import { Hono } from "hono";
-import { toolEncryptionConfig } from "../../config";
+import { storageConfig, toolEncryptionConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { decryptToolSecret } from "../tools/secrets";
@@ -64,15 +71,39 @@ export const whatsAppWebhookRouter = new Hono()
         });
         continue;
       }
-      if (event.phoneNumberId !== config.phoneNumberId || event.text === undefined) continue;
+      if (event.phoneNumberId !== config.phoneNumberId) continue;
+      if (event.text === undefined && !event.attachment) continue;
 
-      const stored = await persistInboundText({
+      const seen = await unscopedPrisma.message.findUnique({
+        select: { sessionId: true },
+        where: {
+          workspaceId_externalMessageId: {
+            externalMessageId: event.messageId,
+            workspaceId: config.workspaceId,
+          },
+        },
+      });
+      if (seen) {
+        sessions.set(seen.sessionId, { sessionId: seen.sessionId, workspaceId: config.workspaceId });
+        continue;
+      }
+
+      // Meta's media URLs expire and need the access token, so the file is
+      // copied into our own storage now, while it can still be fetched.
+      const attachment = event.attachment
+        ? await receiveMedia(
+            event.attachment,
+            decryptToolSecret(config.accessTokenEncrypted, toolEncryptionConfig.masterKey),
+          )
+        : undefined;
+      const stored = await persistInboundMessage({
+        attachment,
         channelId: config.channelId,
         customerMessageAt: timestampFromMeta(event.timestamp),
         customerName: event.customerName,
         externalMessageId: event.messageId,
         phoneE164: event.from.startsWith("+") ? event.from : `+${event.from}`,
-        text: event.text,
+        text: event.text ?? "",
         workspaceId: config.workspaceId,
       });
       sessions.set(stored.sessionId, stored);
@@ -101,7 +132,55 @@ function findPhoneNumberId(payload: unknown) {
   }
 }
 
-async function persistInboundText(input: {
+type ReceivedMedia = Awaited<ReturnType<typeof receiveMedia>>;
+
+/** A refused file is still recorded, as a failed Attachment with nothing
+ * stored, so the turn can tell the Customer why instead of leaving them waiting. */
+async function receiveMedia(
+  media: NonNullable<Extract<WhatsAppInboundEvent, { kind: "message" }>["attachment"]>,
+  accessToken: string,
+) {
+  const mimeType = baseMimeType(media.mimeType);
+  const fileName =
+    media.fileName ??
+    `${media.type === "audio" ? "voice-note" : media.type}.${mimeType.split("/")[1]}`;
+  const headers = { authorization: `Bearer ${accessToken}` };
+  const infoResponse = await fetch(
+    `https://graph.facebook.com/v23.0/${encodeURIComponent(media.id)}`,
+    { headers, signal: AbortSignal.timeout(15_000) },
+  );
+  if (!infoResponse.ok) throw new Error(`Meta media lookup returned HTTP ${infoResponse.status}.`);
+  const info = (await infoResponse.json()) as { file_size?: number; url?: string };
+  const sizeBytes = Number(info.file_size ?? 0);
+  const refusal = refuseWhatsAppAttachment(mimeType, sizeBytes);
+  if (refusal || !info.url) {
+    return {
+      failureReason: refusal ?? "Meta did not provide the file.",
+      fileName,
+      mimeType,
+      processingStatus: "FAILED" as const,
+      sizeBytes,
+      storageKey: "",
+    };
+  }
+
+  const file = await fetch(info.url, { headers, signal: AbortSignal.timeout(60_000) });
+  if (!file.ok) throw new Error(`Meta media download returned HTTP ${file.status}.`);
+  const body = new Uint8Array(await file.arrayBuffer());
+  const storageKey = `attachments/inbound/${randomUUID()}`;
+  await createStorage(storageConfig).putObject({ body, contentType: mimeType, key: storageKey });
+  return {
+    failureReason: null,
+    fileName,
+    mimeType,
+    processingStatus: "PROCESSING" as const,
+    sizeBytes: body.byteLength,
+    storageKey,
+  };
+}
+
+async function persistInboundMessage(input: {
+  attachment?: ReceivedMedia;
   channelId: string;
   customerMessageAt: Date;
   customerName?: string;
@@ -192,6 +271,18 @@ async function persistInboundText(input: {
     await tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, session.id)),
+        ...(input.attachment
+          ? {
+              attachments: {
+                create: {
+                  ...input.attachment,
+                  id: randomUUID(),
+                  ticketId: session.ticket?.id ?? null,
+                  workspaceId: input.workspaceId,
+                },
+              },
+            }
+          : {}),
         content: input.text,
         externalMessageId: input.externalMessageId,
         message: { content: input.text },
