@@ -40,7 +40,7 @@ const demoHumanAgentEmail = "agent@demo.supportops.dev";
 const demoHumanAgentPassword = "DemoAgent123!";
 const demoHumanAgentName = "Rian Wibowo";
 
-const demoWidgetDomains = ["localhost:3001", "localhost:4000"];
+const demoWidgetDomains = ["localhost:3002", "localhost:4000"];
 
 const demoAiInstructions =
   "Always verify the Customer's subscription status with the Business Tool before answering a " +

@@ -73,14 +73,6 @@ enum EscalationReason {
   AI_TIMEOUT
 }
 
-enum TicketCategory {
-  ACCOUNT
-  BILLING
-  SUBSCRIPTION
-  TECHNICAL
-  GENERAL
-}
-
 enum TicketPriority {
   LOW
   NORMAL

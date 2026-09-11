@@ -635,6 +635,7 @@ function renderWidget(config: WidgetConfig) {
     .panel[data-chat-active] { height: min(620px, calc(100vh - 112px)); }
     .panel[data-open] { visibility: visible; opacity: 1; pointer-events: auto; transform: none; }
     @media (prefers-reduced-motion: reduce) { .panel { transition: opacity 1ms; transform: none; } }
+    .message.typing { flex-direction: row; align-items: center; gap: 0; }
     .typing span { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 999px; background: #94a3b8; animation: typing-bounce 1.1s infinite ease-in-out; }
     .typing span:nth-child(2) { animation-delay: .15s; }
     .typing span:nth-child(3) { animation-delay: .3s; margin-right: 0; }

@@ -1,6 +1,7 @@
 export type PreviewCardProps = {
-  logoUrl: string | null | undefined;
+  allowedDomains: string[];
   botName: string;
-  welcomeMessage: string;
+  logoUrl: string | null | undefined;
   primaryColor: string;
+  welcomeMessage: string;
 };

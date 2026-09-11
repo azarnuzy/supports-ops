@@ -21,6 +21,27 @@ model Workspace {
   toolPolicies       ToolPolicy[]
   mcpServers         McpServer[]
   mcpTools           McpTool[]
+  ticketCategories   TicketCategory[]
+}
+
+/// Ticket categories are per-Workspace so a team can name them after its own product.
+/// `key` is what Tickets and Routing Rules store, so renaming a category never orphans them.
+/// Exactly one category per Workspace is the fallback: it catches anything the classifier is
+/// unsure about, and it cannot be deleted.
+model TicketCategory {
+  id          String    @id
+  workspaceId String
+  key         String
+  label       String
+  description String
+  isFallback  Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, key])
 }
 
 model AiSettings {

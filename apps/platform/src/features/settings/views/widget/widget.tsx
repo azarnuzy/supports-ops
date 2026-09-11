@@ -1,72 +1,120 @@
 import { Button } from "@repo/ui/components/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@repo/ui/components/card";
-import { CopyIcon } from "lucide-react";
+import { Skeleton } from "@repo/ui/components/skeleton";
+import { CheckIcon, CopyIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
-import { SettingsNav } from "../../components/settings-nav";
+import { SettingsHeader } from "../../components/settings-header";
 import { useWidgetSettingsForm } from "./widget.hooks";
 import { ConfigForm, PreviewCard } from "./components";
 
-const WebWidgetSettingsView = () => {
+const WebWidgetView = () => {
   const form = useWidgetSettingsForm();
-  const { botName, config, copySnippet, current, embedSnippet, primaryColor, welcomeMessage } =
-    form;
+  const {
+    allowedDomains,
+    botName,
+    config,
+    copySnippet,
+    current,
+    embedSnippet,
+    primaryColor,
+    welcomeMessage,
+  } = form;
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  async function handleCopy() {
+    if (await copySnippet()) setCopied(true);
+  }
 
   return (
     <PlatformAppShell>
-      <section className="grid gap-8">
-        <div className="max-w-2xl">
-          <p className="text-sm font-medium text-muted-foreground">Workspace settings</p>
-          <h1 className="text-3xl font-semibold text-balance">Web Widget</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Set how support looks and behaves on your website, then copy the embed snippet.
-          </p>
-        </div>
+      <section className="grid gap-6">
+        <SettingsHeader
+          title="Web Widget"
+          description="Match the widget to your brand, control where it can load, then drop the snippet into your site."
+        />
 
-        <SettingsNav />
-
-        {config.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
-        {config.isError ? (
-          <p className="text-sm text-destructive">Unable to load the Web Widget configuration.</p>
+        {config.isPending ? (
+          <div className="grid gap-5 lg:grid-cols-[1fr_26rem]">
+            <Skeleton className="h-[32rem] w-full rounded-xl" />
+            <Skeleton className="h-[32rem] w-full rounded-xl" />
+          </div>
         ) : null}
 
-        {current ? (
-          <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
-            <ConfigForm form={form} />
-            <PreviewCard
-              logoUrl={current.logoUrl}
-              botName={botName}
-              welcomeMessage={welcomeMessage}
-              primaryColor={primaryColor}
-            />
+        {config.isError ? (
+          <div className="grid place-items-center gap-3 rounded-xl border border-dashed p-12 text-center">
+            <p className="text-sm text-destructive">Unable to load the Web Widget configuration.</p>
+            <Button size="sm" variant="outline" onClick={() => void config.refetch()}>
+              Try again
+            </Button>
           </div>
         ) : null}
 
         {current ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Embed snippet</CardTitle>
-              <CardDescription>Paste this before the closing &lt;/body&gt; tag.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <pre className="overflow-x-auto rounded-md border bg-muted p-3 font-mono text-xs leading-relaxed">
-                {embedSnippet}
-              </pre>
-              <Button type="button" variant="outline" onClick={copySnippet}>
-                <CopyIcon className="size-4" />
-                Copy snippet
-              </Button>
-            </CardContent>
-          </Card>
+          <>
+            <div className="grid items-start gap-5 lg:grid-cols-[1fr_26rem]">
+              <ConfigForm form={form} />
+              <PreviewCard
+                allowedDomains={allowedDomains}
+                botName={botName}
+                logoUrl={current.logoUrl}
+                primaryColor={primaryColor}
+                welcomeMessage={welcomeMessage}
+              />
+            </div>
+
+            <Card className="gap-5">
+              <CardHeader>
+                <CardTitle className="text-base">Install the widget</CardTitle>
+                <CardDescription>
+                  Paste this snippet just before the closing &lt;/body&gt; tag on every page that
+                  should show support. It loads asynchronously and adds nothing to your bundle.
+                </CardDescription>
+                <CardAction>
+                  <Button
+                    className="min-w-[8.5rem]"
+                    type="button"
+                    variant={copied ? "secondary" : "outline"}
+                    onClick={() => void handleCopy()}
+                  >
+                    {copied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
+                    {copied ? "Copied" : "Copy snippet"}
+                  </Button>
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-hidden rounded-lg border bg-muted/40">
+                  <div className="flex items-center justify-between gap-3 border-b bg-muted/60 px-3 py-2">
+                    <span className="font-mono text-[11px] text-muted-foreground">index.html</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      key · {current.widgetKey.slice(0, 8)}
+                      ••••
+                    </span>
+                  </div>
+                  <pre className="overflow-x-auto px-4 py-3.5 font-mono text-xs leading-6 text-foreground">
+                    {embedSnippet}
+                  </pre>
+                </div>
+              </CardContent>
+            </Card>
+          </>
         ) : null}
       </section>
     </PlatformAppShell>
   );
 };
 
-export default WebWidgetSettingsView;
+export default WebWidgetView;

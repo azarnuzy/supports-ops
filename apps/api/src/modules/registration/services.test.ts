@@ -66,6 +66,7 @@ describe("registerAdminWorkspace", () => {
       webWidgetConfig?: unknown;
       tools?: Record<string, unknown>[];
       toolAssignments?: Record<string, unknown>[];
+      ticketCategories?: Record<string, unknown>[];
     } = {};
 
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => {
@@ -105,6 +106,12 @@ describe("registerAdminWorkspace", () => {
             created.tools ??= [];
             created.tools.push(data);
             return data;
+          }),
+        },
+        ticketCategory: {
+          createMany: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => {
+            created.ticketCategories = data;
+            return { count: data.length };
           }),
         },
         toolAssignment: {
@@ -171,6 +178,8 @@ describe("registerAdminWorkspace", () => {
       expect.objectContaining({ name: "searchKnowledge", origin: "BUILT_IN" }),
       expect.objectContaining({ name: "searchCustomerTicketHistory", origin: "BUILT_IN" }),
     ]);
+    expect(created.ticketCategories).toHaveLength(5);
+    expect(created.ticketCategories?.filter((category) => category.isFallback)).toHaveLength(1);
     expect(created.toolAssignments).toEqual(
       created.tools?.map((tool) =>
         expect.objectContaining({ aiAgentId: aiAgent.id, toolId: tool.id }),

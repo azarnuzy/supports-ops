@@ -39,7 +39,7 @@ model ToolPolicy {
   id          String         @id
   workspaceId String
   aiAgentId   String
-  category    TicketCategory
+  category    String
   toolId      String
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt

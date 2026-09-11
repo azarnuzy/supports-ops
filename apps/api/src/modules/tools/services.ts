@@ -18,7 +18,8 @@ export class TicketNotFoundError extends Error {}
 
 const builtInNames = ["searchKnowledge", "searchCustomerTicketHistory"] as const;
 type BuiltInName = (typeof builtInNames)[number];
-export type TicketCategory = "ACCOUNT" | "BILLING" | "SUBSCRIPTION" | "TECHNICAL" | "GENERAL";
+/** A Workspace-configured category key; the list lives in the TicketCategory table. */
+export type TicketCategory = string;
 
 const includeHttpConfig = { httpConfig: true } as const;
 
@@ -28,8 +29,63 @@ export async function listHttpTools() {
   );
 }
 
+/** Last call per Tool, read from the AI Activity log so no new table is needed.
+ * ponytail: scans the most recent tool events rather than aggregating in SQL, because
+ * `metadata.toolId` is unindexed JSON. Move to a GROUP BY on a real column if the log grows
+ * past the point where the newest 500 events still cover every Tool. */
+async function lastToolCalls() {
+  const events = await prisma.aiActivity.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, eventType: true, metadata: true },
+    take: 500,
+    where: { eventType: { in: ["TOOL_CALLED", "TOOL_FAILED"] } },
+  });
+  const lastCallByToolId = new Map<string, { at: Date; succeeded: boolean }>();
+  for (const event of events) {
+    const toolId = (event.metadata as { toolId?: unknown } | null)?.toolId;
+    if (typeof toolId !== "string" || lastCallByToolId.has(toolId)) continue;
+    lastCallByToolId.set(toolId, {
+      at: event.createdAt,
+      succeeded: event.eventType === "TOOL_CALLED",
+    });
+  }
+  return lastCallByToolId;
+}
+
+/** Recent calls for one Tool, read straight from the AI Activity log. Capped because the panel
+ * shows a list, not an archive; the summary is explicitly "of these calls", never all-time. */
+export async function listToolCalls(toolId: string) {
+  const events = await prisma.aiActivity.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, eventType: true, metadata: true, ticketId: true },
+    take: 50,
+    where: {
+      eventType: { in: ["TOOL_CALLED", "TOOL_FAILED"] },
+      metadata: { path: ["toolId"], equals: toolId },
+    },
+  });
+  const calls = events.map((event) => ({
+    at: event.createdAt.toISOString(),
+    latencyMs: Number((event.metadata as { latencyMs?: unknown } | null)?.latencyMs ?? 0),
+    succeeded: event.eventType === "TOOL_CALLED",
+    ticketId: event.ticketId,
+  }));
+  const failed = calls.filter((call) => !call.succeeded).length;
+  return {
+    calls,
+    stats: {
+      avgLatencyMs: calls.length
+        ? Math.round(calls.reduce((total, call) => total + call.latencyMs, 0) / calls.length)
+        : 0,
+      failed,
+      total: calls.length,
+    },
+  };
+}
+
 export async function listTools(aiAgentId: string) {
   await requireAiAgent(aiAgentId);
+  const lastCallByToolId = await lastToolCalls();
   const tools = await prisma.tool.findMany({
     include: {
       assignments: { select: { id: true }, where: { aiAgentId } },
@@ -44,6 +100,12 @@ export async function listTools(aiAgentId: string) {
     ...tool,
     assigned: assignments.length > 0,
     availability: isAvailable({ ...tool, httpConfig, mcpTool }) ? "AVAILABLE" : "UNAVAILABLE",
+    lastCall: lastCallByToolId.get(tool.id)
+      ? {
+          at: lastCallByToolId.get(tool.id)!.at.toISOString(),
+          succeeded: lastCallByToolId.get(tool.id)!.succeeded,
+        }
+      : null,
     requiredForCategories: policies.map((policy) => policy.category),
   }));
 }

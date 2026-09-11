@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { queryKeys } from "../../../../lib/query-keys";
 import {
-  assignTool,
   getAgentTools,
   getAiSettings,
   removeCategoryPolicy,
@@ -25,11 +24,6 @@ function useInvalidateAgentTools(aiAgentId: string | undefined) {
     queryClient.invalidateQueries({ queryKey: queryKeys.workspace.tools(aiAgentId ?? "") });
 }
 
-export function useAssignToolMutation(aiAgentId: string | undefined) {
-  const invalidate = useInvalidateAgentTools(aiAgentId);
-  return useMutation({ mutationFn: assignTool, onSuccess: invalidate });
-}
-
 export function useSetCategoryPolicyMutation(aiAgentId: string | undefined) {
   const invalidate = useInvalidateAgentTools(aiAgentId);
   return useMutation({ mutationFn: setCategoryPolicy, onSuccess: invalidate });
@@ -39,14 +33,6 @@ export function useRemoveCategoryPolicyMutation(aiAgentId: string | undefined) {
   const invalidate = useInvalidateAgentTools(aiAgentId);
   return useMutation({ mutationFn: removeCategoryPolicy, onSuccess: invalidate });
 }
-
-export const ticketCategories: TicketCategory[] = [
-  "ACCOUNT",
-  "BILLING",
-  "SUBSCRIPTION",
-  "TECHNICAL",
-  "GENERAL",
-];
 
 export function useAiSettingsForm() {
   const queryClient = useQueryClient();

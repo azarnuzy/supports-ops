@@ -167,8 +167,10 @@ export function useWidgetSettingsForm() {
     try {
       await navigator.clipboard.writeText(embedSnippet);
       toast.success("Embed snippet copied.");
+      return true;
     } catch {
       toast.error("Failed to copy embed snippet.");
+      return false;
     }
   }
 

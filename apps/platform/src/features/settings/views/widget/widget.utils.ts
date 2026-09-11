@@ -1,4 +1,4 @@
-const widgetScriptUrl = (import.meta.env.VITE_WIDGET_URL ?? "http://localhost:3001").replace(
+const widgetScriptUrl = (import.meta.env.VITE_WIDGET_URL ?? "http://localhost:3002").replace(
   /\/$/,
   "",
 );

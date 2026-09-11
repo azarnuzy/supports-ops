@@ -3,6 +3,7 @@ import {
   classifyMessage,
   type ClassificationDecision,
   type ClassificationModel,
+  type TicketCategoryOption,
 } from "../classification";
 import { generateEscalationSummary, generateSuggestedReply } from "../handoff";
 import { streamReply, type ReplyDecision, type ReplyModel } from "../reply";
@@ -39,10 +40,45 @@ export function createReplyTarget(model: ReplyModel): EvalTarget<ReplyEvalInput,
 
 export type ClassificationEvalInput = { content: string };
 
+const defaultEvalCategories: TicketCategoryOption[] = [
+  {
+    description: "Sign-in problems, profile changes, access, and account security.",
+    isFallback: false,
+    key: "ACCOUNT",
+    label: "Account",
+  },
+  {
+    description: "Invoices, payments, refunds, and anything about money already charged.",
+    isFallback: false,
+    key: "BILLING",
+    label: "Billing",
+  },
+  {
+    description: "Plans, upgrades, downgrades, renewals, and cancellations.",
+    isFallback: false,
+    key: "SUBSCRIPTION",
+    label: "Subscription",
+  },
+  {
+    description: "Bugs, errors, outages, and the product not behaving as expected.",
+    isFallback: false,
+    key: "TECHNICAL",
+    label: "Technical",
+  },
+  {
+    description: "Anything that does not clearly belong to another category.",
+    isFallback: true,
+    key: "GENERAL",
+    label: "General",
+  },
+];
+
 export function createClassificationTarget(
   model: ClassificationModel,
 ): EvalTarget<ClassificationEvalInput, ClassificationDecision> {
-  return (input) => classifyMessage({ content: input.content, model });
+  // The eval suite grades against the shipped defaults, which are what a new Workspace starts with.
+  return (input) =>
+    classifyMessage({ categories: defaultEvalCategories, content: input.content, model });
 }
 
 export type SuggestedReplyEvalInput = {

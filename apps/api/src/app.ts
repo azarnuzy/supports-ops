@@ -14,6 +14,7 @@ import { generateAttachmentReply } from "./modules/widget/services";
 import { attachmentRouter } from "./modules/attachments/router";
 import { aiSettingsRouter } from "./modules/ai-settings/router";
 import { analyticsRouter } from "./modules/analytics/router";
+import { ticketCategoriesRouter } from "./modules/ticket-categories/router";
 import { ticketsRouter } from "./modules/tickets/router";
 import { toolsRouter } from "./modules/tools/router";
 import { mcpRouter } from "./modules/mcp/router";
@@ -61,6 +62,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   })
   .route("/knowledge", knowledgeRouter)
   .route("/attachments", attachmentRouter)
+  .route("/ticket-categories", ticketCategoriesRouter)
   .route("/tickets", ticketsRouter)
   .route("/analytics", analyticsRouter)
   .route("/profile", profileRouter)

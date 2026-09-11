@@ -5,7 +5,10 @@ import {
   fetchAiSettings,
   getHttpTool,
   listCatalogTools,
+  listToolCalls,
+  setToolAssignment,
   setToolEnabled,
+  testHttpTool,
   updateHttpTool,
   type HttpToolInput,
 } from "@repo/api-client";
@@ -39,4 +42,24 @@ export function deleteTool(id: string) {
 
 export function toggleToolEnabled({ toolId, enabled }: { toolId: string; enabled: boolean }) {
   return setToolEnabled(apiClient, toolId, enabled);
+}
+
+export function setAttached({
+  aiAgentId,
+  assigned,
+  toolId,
+}: {
+  aiAgentId: string;
+  assigned: boolean;
+  toolId: string;
+}) {
+  return setToolAssignment(apiClient, toolId, aiAgentId, assigned);
+}
+
+export function testTool({ id, input }: { id: string; input: Record<string, unknown> }) {
+  return testHttpTool(apiClient, id, input);
+}
+
+export function getToolCalls(id: string) {
+  return listToolCalls(apiClient, id);
 }

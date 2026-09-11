@@ -224,3 +224,56 @@ async function readLimited(response: Response) {
   }
   return new TextDecoder().decode(result);
 }
+
+export type HttpToolTestResult = {
+  body: string;
+  latencyMs: number;
+  status: number;
+};
+
+/** Runs a configured HTTP Tool once against sample input so an Admin can prove it works before
+ * attaching it to the AI Agent. Unlike `executeHttpTool` it is not bound to a Ticket and skips the
+ * assignment, enabled, and MUTATING gates — nothing here reaches a Customer — but it keeps the
+ * schema validation, SSRF guard, timeout, and result cap. Never retries: a test reports what
+ * happened, including a 500. */
+export async function testHttpTool(
+  input: { input: unknown; toolId: string },
+  dependencies: ExecutionDependencies = {},
+): Promise<HttpToolTestResult> {
+  const tool = await prisma.tool.findFirst({
+    include: { httpConfig: true },
+    where: { id: input.toolId, origin: "HTTP" },
+  });
+  if (!tool?.httpConfig) throw new HttpToolFailure("DENIED");
+  try {
+    if (!new Ajv({ strict: true }).compile(tool.inputSchema as object)(input.input)) {
+      throw new HttpToolFailure("VALIDATION");
+    }
+  } catch (error) {
+    if (error instanceof HttpToolFailure) throw error;
+    throw new HttpToolFailure("VALIDATION");
+  }
+
+  const request = serializeRequest(
+    tool.httpConfig.method,
+    tool.httpConfig.url,
+    input.input,
+    decryptHeaders(tool.httpConfig),
+  );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), httpToolConfig.timeoutMs);
+  const startedAt = Date.now();
+  try {
+    const response = await safeFetch(request, controller.signal, dependencies);
+    return {
+      body: await readLimited(response),
+      latencyMs: Date.now() - startedAt,
+      status: response.status,
+    };
+  } catch (error) {
+    if (controller.signal.aborted) throw new HttpToolFailure("TIMEOUT");
+    throw error instanceof HttpToolFailure ? error : new HttpToolFailure("NETWORK");
+  } finally {
+    clearTimeout(timeout);
+  }
+}

@@ -3,8 +3,11 @@ import { queryKeys } from "../../../../lib/query-keys";
 import {
   getAiSettings,
   getTools,
+  getToolCalls,
   createTool,
   deleteTool,
+  setAttached,
+  testTool,
   toggleToolEnabled,
   updateTool,
 } from "./tools.services";
@@ -46,4 +49,21 @@ export function useDeleteToolMutation(aiAgentId: string | undefined) {
 export function useToggleToolEnabledMutation(aiAgentId: string | undefined) {
   const invalidate = useInvalidateTools(aiAgentId);
   return useMutation({ mutationFn: toggleToolEnabled, onSuccess: invalidate });
+}
+
+export function useSetAttachedMutation(aiAgentId: string | undefined) {
+  const invalidate = useInvalidateTools(aiAgentId);
+  return useMutation({ mutationFn: setAttached, onSuccess: invalidate });
+}
+
+export function useTestToolMutation() {
+  return useMutation({ mutationFn: testTool });
+}
+
+export function useToolCallsQuery(toolId: string | null) {
+  return useQuery({
+    enabled: Boolean(toolId),
+    queryFn: () => getToolCalls(toolId as string),
+    queryKey: ["tool-calls", toolId],
+  });
 }

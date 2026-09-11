@@ -40,6 +40,21 @@ describe("createClassificationModel", () => {
   });
 });
 
+const categories = [
+  {
+    description: "Invoices and payments.",
+    isFallback: false,
+    key: "BILLING",
+    label: "Billing",
+  },
+  {
+    description: "Anything else.",
+    isFallback: true,
+    key: "GENERAL",
+    label: "General",
+  },
+];
+
 describe("classifyMessage", () => {
   beforeEach(() => {
     extractMock.mockReset();
@@ -57,6 +72,7 @@ describe("classifyMessage", () => {
     });
 
     const decision = await classifyMessage({
+      categories,
       content: "I was charged twice for my invoice this month, please help urgently",
       model: { id: "fake-model" } as never,
     });
@@ -81,6 +97,7 @@ describe("classifyMessage", () => {
     });
 
     const decision = await classifyMessage({
+      categories,
       content: "halo",
       model: { id: "fake-model" } as never,
     });
@@ -100,6 +117,7 @@ describe("classifyMessage", () => {
     });
 
     const decision = await classifyMessage({
+      categories,
       content: "x".repeat(200),
       model: { id: "fake-model" } as never,
     });
@@ -122,6 +140,7 @@ describe("classifyMessage", () => {
     });
 
     const decision = await classifyMessage({
+      categories,
       content: "thanks!",
       model: { id: "fake-model" } as never,
     });
@@ -136,9 +155,59 @@ describe("classifyMessage", () => {
     const providerError = new Error("401 User not found.");
     extractMock.mockRejectedValue(providerError);
 
-    const rejection = classifyMessage({ content: "hello", model: { id: "fake-model" } as never });
+    const rejection = classifyMessage({ categories, content: "hello", model: { id: "fake-model" } as never });
 
     await expect(rejection).rejects.toBeInstanceOf(ClassificationFailedError);
     await expect(rejection).rejects.toMatchObject({ cause: providerError });
+  });
+});
+
+describe("category safety", () => {
+  beforeEach(() => {
+    extractMock.mockReset();
+  });
+
+  it("falls back when the model answers with a category that is not configured", async () => {
+    extractMock.mockResolvedValue({
+      output: {
+        category: "REFUNDS",
+        greetingReply: null,
+        isSupportRequest: true,
+        priority: "NORMAL",
+        title: "Where is my refund",
+      },
+    });
+
+    const decision = await classifyMessage({
+      categories,
+      content: "where is my refund",
+      model: { id: "fake-model" } as never,
+    });
+
+    expect(decision.qualifies).toBe(true);
+    if (decision.qualifies) expect(decision.category).toBe("GENERAL");
+  });
+
+  it("puts every configured category and its description in the prompt", async () => {
+    extractMock.mockResolvedValue({
+      output: {
+        category: "BILLING",
+        greetingReply: null,
+        isSupportRequest: true,
+        priority: "NORMAL",
+        title: "Double charge",
+      },
+    });
+
+    await classifyMessage({
+      categories,
+      content: "charged twice",
+      model: { id: "fake-model" } as never,
+    });
+
+    const { instructions } = extractMock.mock.calls[0][0];
+    expect(instructions).toContain("BILLING");
+    expect(instructions).toContain("Invoices and payments.");
+    expect(instructions).toContain("GENERAL (fallback)");
   });
 });

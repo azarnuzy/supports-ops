@@ -20,6 +20,22 @@ export const markTicketReadSchema = z.object({
   position: z.number().int().min(0),
 });
 
+/** Category keys are Workspace-configured, so the filter validates shape, not membership. */
+function commaSeparated() {
+  return z
+    .string()
+    .trim()
+    .min(1)
+    .transform((value) =>
+      value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.string().min(1)).min(1))
+    .optional();
+}
+
 function commaSeparatedEnum<T extends [string, ...string[]]>(values: T) {
   return z
     .string()
@@ -37,13 +53,7 @@ function commaSeparatedEnum<T extends [string, ...string[]]>(values: T) {
 
 export const listTicketsQuerySchema = z.object({
   assigneeId: z.string().trim().min(1).optional(),
-  category: commaSeparatedEnum([
-    "ACCOUNT",
-    "BILLING",
-    "SUBSCRIPTION",
-    "TECHNICAL",
-    "GENERAL",
-  ] as const),
+  category: commaSeparated(),
   cursor: z.string().trim().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   priority: commaSeparatedEnum(["LOW", "NORMAL", "HIGH"] as const),

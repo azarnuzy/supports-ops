@@ -26,13 +26,11 @@ export const updateHttpToolSchema = z.object({
   enabled: z.boolean(),
 });
 
-const ticketCategorySchema = z.enum([
-  "ACCOUNT",
-  "BILLING",
-  "SUBSCRIPTION",
-  "TECHNICAL",
-  "GENERAL",
-]);
+const ticketCategorySchema = z.string().trim().min(1).max(40);
+
+export const testHttpToolSchema = z.object({
+  input: z.record(z.string(), z.unknown()).default({}),
+});
 
 export const toolPolicyParamsSchema = z.object({ category: ticketCategorySchema });
 export const setToolEnabledSchema = z.object({ enabled: z.boolean() });
