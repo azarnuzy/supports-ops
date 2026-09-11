@@ -13,6 +13,7 @@ import {
 import { createBusinessTools } from "@repo/tools";
 import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
+import { claimMessageSlot } from "../../utils/session-messages";
 import type { ListTicketsQuery } from "./schema";
 import {
   cancelTicketGeneration,
@@ -95,7 +96,7 @@ const ticketDetailSelect = {
     orderBy: { createdAt: "asc" },
     select: { createdAt: true, eventType: true, id: true, metadata: true },
   },
-  webSession: { select: { createdAt: true, id: true } },
+  session: { select: { createdAt: true, id: true } },
 } as const;
 
 const transcriptSelect = {
@@ -193,18 +194,18 @@ export async function getTicketDetail(ticketId: string, user: InboxUser) {
     where: { AND: [{ deletedAt: null, id: ticketId }, ticketVisibilityWhere(user)] },
   });
   if (!ticket) throw new TicketNotFoundError();
-  // The transcript spans the whole Web Session, so Messages persisted before
-  // the Ticket existed are part of the same conversation history.
+  // The transcript spans the whole Session, so Messages persisted before the
+  // Ticket existed are part of the same conversation history.
   const messages = await prisma.message.findMany({
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
     select: transcriptSelect,
-    where: { deletedAt: null, webSessionId: ticket.webSession.id },
+    where: { deletedAt: null, sessionId: ticket.session.id },
   });
   const [withUnread] = await attachUnreadCounts(user.id, [{ ...ticket, messages }]);
   return withUnread;
 }
 
-/** Unread counts are computed against Ticket.messageSeq positions in one
+/** Unread counts are computed against Session.messageSeq positions in one
  * grouped query rather than by loading every transcript. Only Customer
  * Messages count, and the count is personal to `userId` — another Human
  * Agent's read state never affects it. */
@@ -246,11 +247,11 @@ export async function listMyTickets(humanAgentId: string) {
  * an out-of-order or duplicate call can never regress read state. */
 export async function markTicketRead(ticketId: string, user: InboxUser, position: number) {
   const ticket = await prisma.ticket.findFirst({
-    select: { messageSeq: true, workspaceId: true },
+    select: { session: { select: { messageSeq: true } }, workspaceId: true },
     where: { AND: [{ deletedAt: null, id: ticketId }, ticketVisibilityWhere(user)] },
   });
   if (!ticket) throw new TicketNotFoundError();
-  const clamped = Math.min(Math.max(position, 0), ticket.messageSeq);
+  const clamped = Math.min(Math.max(position, 0), ticket.session.messageSeq);
   await prisma.$executeRaw`
     INSERT INTO "TicketReadState" ("id", "workspaceId", "ticketId", "userId", "lastReadPosition", "updatedAt")
     VALUES (${randomUUID()}, ${ticket.workspaceId}, ${ticketId}, ${user.id}, ${clamped}, now())
@@ -276,21 +277,14 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
   cancelTicketGeneration(ticketId);
   const result = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
-      data: {
-        assignedHumanAgentId: adminId,
-        messageSeq: { increment: 1 },
-        status: "HUMAN_HANDLING",
-      },
+      data: { assignedHumanAgentId: adminId, status: "HUMAN_HANDLING" },
       where: { id: ticketId, status: "AI_HANDLING", workspaceId },
     });
     if (!transition.count) throw new TicketNotAvailableForTakeoverError();
-    const [ticket, conversation] = await Promise.all([
-      tx.ticket.findUniqueOrThrow({
-        select: { messageSeq: true, webSessionId: true },
-        where: { id: ticketId },
-      }),
-      tx.conversation.findUniqueOrThrow({ where: { ticketId } }),
-    ]);
+    const ticket = await tx.ticket.findUniqueOrThrow({
+      select: { sessionId: true },
+      where: { id: ticketId },
+    });
     const admin = await tx.user.findUniqueOrThrow({
       where: { id: adminId },
       select: { name: true },
@@ -298,19 +292,14 @@ export async function takeOverTicket(ticketId: string, adminId: string, workspac
     const content = `Hello, I’m ${admin.name} from the support team. I’ve taken over and will continue helping you.`;
     const message = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
         deliveryStatus: "PENDING",
         externalMessageId: `takeover:${randomUUID()}`,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content },
-        position: ticket.messageSeq,
         role: "system",
-        runId: randomUUID(),
         senderType: "SYSTEM",
         ticketId,
-        turn: ticket.messageSeq,
-        webSessionId: ticket.webSessionId,
         workspaceId,
       },
     });
@@ -455,27 +444,19 @@ async function appendHandoffMessage(input: {
     input.message ?? "Hello, I’m {humanAgentName} from the support team. I’ll continue helping you."
   ).replaceAll("{humanAgentName}", input.humanAgentName);
   return unscopedPrisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
-      data: { messageSeq: { increment: 1 } },
+    const ticket = await tx.ticket.findUniqueOrThrow({
+      select: { sessionId: true },
       where: { id: input.ticketId },
-    });
-    const conversation = await tx.conversation.findUniqueOrThrow({
-      where: { ticketId: input.ticketId },
     });
     const message = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
         externalMessageId: `handoff:${randomUUID()}`,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content },
-        position: ticket.messageSeq,
         role: "system",
-        runId: randomUUID(),
         senderType: "SYSTEM",
         ticketId: input.ticketId,
-        turn: ticket.messageSeq,
-        webSessionId: ticket.webSessionId,
         workspaceId: input.workspaceId,
       },
     });
@@ -530,27 +511,17 @@ export async function sendHumanReply(
       if (!ticket) throw new TicketNotOwnedError();
       const existing = await tx.message.findFirst({ where: { externalMessageId, ticketId } });
       if (existing) return { deliver: existing.deliveryStatus === "FAILED", message: existing };
-      const updated = await tx.ticket.update({
-        data: { messageSeq: { increment: 1 } },
-        where: { id: ticketId },
-      });
-      const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
       const message = await tx.message.create({
         data: {
+          ...(await claimMessageSlot(tx, ticket.sessionId)),
           content,
           deliveryStatus: "PENDING",
           externalMessageId,
-          id: randomUUID(),
-          memorySessionId: conversation.id,
           message: { content },
-          position: updated.messageSeq,
           role: "assistant",
-          runId: randomUUID(),
           senderType: "HUMAN_AGENT",
           senderUserId: humanAgentId,
           ticketId,
-          turn: updated.messageSeq,
-          webSessionId: updated.webSessionId,
           workspaceId: ticket.workspaceId,
         },
       });
@@ -619,13 +590,9 @@ export async function sendHumanAttachmentReply(
       where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
     });
     if (!ticket) throw new TicketNotOwnedError();
-    const updated = await tx.ticket.update({
-      data: { messageSeq: { increment: 1 } },
-      where: { id: ticketId },
-    });
-    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     return tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId)),
         attachments: {
           create: uploads.map(({ file, id, key }) => ({
             fileName: file.name,
@@ -641,17 +608,11 @@ export async function sendHumanAttachmentReply(
         content: text,
         deliveryStatus: "PENDING",
         externalMessageId,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content: text },
-        position: updated.messageSeq,
         role: "assistant",
-        runId: randomUUID(),
         senderType: "HUMAN_AGENT",
         senderUserId: humanAgentId,
         ticketId,
-        turn: updated.messageSeq,
-        webSessionId: updated.webSessionId,
         workspaceId: ticket.workspaceId,
       },
       include: { attachments: true },
@@ -837,9 +798,8 @@ export async function resolveTicket(
       })
     )
       throw new PendingMessageDeliveryError();
-    const updated = await tx.ticket.update({
+    await tx.ticket.update({
       data: {
-        messageSeq: { increment: 1 },
         resolvedAt: new Date(),
         resolvedBy: humanAgentId,
         resolutionReason,
@@ -847,30 +807,21 @@ export async function resolveTicket(
       },
       where: { id: ticketId },
     });
-    await tx.webSession.update({
-      data: { status: "CLOSED" },
-      where: { id: ticket.webSessionId },
-    });
-    const conversation = await tx.conversation.findUniqueOrThrow({ where: { ticketId } });
     const content = ticket.workspace.closingMessage ?? "This conversation has been resolved.";
     const message = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
         deliveryStatus: "PENDING",
         externalMessageId: `resolution:${randomUUID()}`,
-        id: randomUUID(),
-        memorySessionId: conversation.id,
         message: { content },
-        position: updated.messageSeq,
         role: "system",
-        runId: randomUUID(),
         senderType: "SYSTEM",
         ticketId,
-        turn: updated.messageSeq,
-        webSessionId: updated.webSessionId,
         workspaceId: ticket.workspaceId,
       },
     });
+    await tx.session.update({ data: { status: "CLOSED" }, where: { id: ticket.sessionId } });
     await tx.aiActivity.create({
       data: {
         eventType: "RESOLVED",

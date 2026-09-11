@@ -49,7 +49,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   })
   .get("/session", (c) => {
     const user = c.get("user");
-    const session = c.get("session");
+    const session = c.get("authSession");
 
     if (!user || !session) {
       return c.json({ error: "unauthorized" }, 401);

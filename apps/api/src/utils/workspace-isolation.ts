@@ -10,7 +10,7 @@ const workspaceScopedModels = new Set([
   "Channel",
   "WebWidgetConfig",
   "CustomerIdentity",
-  "WebSession",
+  "Session",
   "Ticket",
   "TicketCategory",
   "TicketReadState",

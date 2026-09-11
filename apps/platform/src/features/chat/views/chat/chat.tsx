@@ -246,9 +246,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const timeline = detail
     ? [
         {
-          createdAt: detail.webSession.createdAt,
+          createdAt: detail.session.createdAt,
           description: { text: "Session created." },
-          id: "web-session",
+          id: "session",
         },
         ...detail.aiActivities.map((activity) => ({
           createdAt: activity.createdAt,
