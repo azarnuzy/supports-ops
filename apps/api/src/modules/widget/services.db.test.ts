@@ -17,6 +17,7 @@ vi.mock("@repo/ai-agent", () => ({
   ClassificationFailedError: class ClassificationFailedError extends Error {},
   classifyMessage: mocks.classifyMessage,
   createClassificationModel: () => ({ id: "fake-model" }),
+  runAiAgentTurn: vi.fn(),
 }));
 
 vi.mock("@repo/tools", () => ({
@@ -53,6 +54,7 @@ vi.mock("../../config", async (importOriginal) => ({
 let database: TestDatabase;
 let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let services: typeof import("./services");
+let aiAgentTurn: typeof import("../ai-agent/turn");
 
 const widgetKey = "widget-key-1";
 const origin = "https://shop.example.com";
@@ -62,6 +64,7 @@ beforeAll(async () => {
   process.env.DATABASE_URL = database.url;
   ({ unscopedPrisma: prisma } = await import("../../utils/prisma"));
   services = await import("./services");
+  aiAgentTurn = await import("../ai-agent/turn");
 }, 60_000);
 
 afterAll(async () => {
@@ -265,7 +268,7 @@ describe("a Customer message arrived on a Session", () => {
     });
     const ticket = await prisma.ticket.findFirstOrThrow({ where: { sessionId: session.id } });
 
-    await services.resolveByAi(ticket.id, ticket.workspaceId);
+    await aiAgentTurn.resolveByAi(ticket.id, ticket.workspaceId);
 
     const closed = await prisma.session.findUniqueOrThrow({ where: { id: session.id } });
     expect(closed.status).toBe("CLOSED");
