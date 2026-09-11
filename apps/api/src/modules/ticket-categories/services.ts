@@ -8,7 +8,7 @@ export class TicketCategoryNotFoundError extends Error {}
 export class FallbackCategoryError extends Error {}
 export class DuplicateCategoryError extends Error {}
 
-/** Stable identifier stored on Tickets and Routing Rules. Derived from the label once, at
+/** Stable identifier stored on Tickets. Derived from the label once, at
  * creation, and never touched again so a rename cannot orphan existing Tickets. */
 function keyFor(label: string) {
   const base = label
@@ -70,8 +70,7 @@ export async function updateTicketCategory(id: string, input: UpdateTicketCatego
   });
 }
 
-/** Deleting a category never deletes history: its Tickets move to the fallback category, and any
- * Routing Rule that pointed at it is dropped because the rule no longer has a category to fire on. */
+/** Deleting a category never deletes history: its Tickets move to the fallback category. */
 export async function deleteTicketCategory(id: string) {
   const category = await prisma.ticketCategory.findFirst({ where: { id } });
   if (!category) throw new TicketCategoryNotFoundError();
@@ -84,7 +83,6 @@ export async function deleteTicketCategory(id: string) {
       data: { category: fallback.key },
       where: { category: category.key },
     }),
-    prisma.toolPolicy.deleteMany({ where: { category: category.key } }),
     prisma.ticketCategory.delete({ where: { id } }),
   ]);
 }

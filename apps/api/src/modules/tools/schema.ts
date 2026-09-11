@@ -26,16 +26,15 @@ export const updateHttpToolSchema = z.object({
   enabled: z.boolean(),
 });
 
-const ticketCategorySchema = z.string().trim().min(1).max(40);
-
 export const testHttpToolSchema = z.object({
   input: z.record(z.string(), z.unknown()).default({}),
 });
 
-export const toolPolicyParamsSchema = z.object({ category: ticketCategorySchema });
 export const setToolEnabledSchema = z.object({ enabled: z.boolean() });
 export const setToolAssignmentSchema = z.object({ assigned: z.boolean() });
-export const setToolPolicySchema = z.object({ toolId: z.string().trim().min(1) });
+export const setToolUsageInstructionSchema = z.object({
+  usageInstruction: z.string().trim().max(1_000).nullable(),
+});
 
 export type CreateHttpToolInput = z.infer<typeof createHttpToolSchema>;
 export type UpdateHttpToolInput = z.infer<typeof updateHttpToolSchema>;

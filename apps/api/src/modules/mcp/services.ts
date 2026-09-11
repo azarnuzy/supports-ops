@@ -57,7 +57,6 @@ export async function deleteMcpServer(id: string) {
   const tools = await prisma.mcpTool.findMany({ select: { toolId: true }, where: { mcpServerId: id } });
   const toolIds = tools.map(({ toolId }) => toolId);
   await prisma.$transaction([
-    prisma.toolPolicy.deleteMany({ where: { toolId: { in: toolIds } } }),
     prisma.toolAssignment.deleteMany({ where: { toolId: { in: toolIds } } }),
     prisma.tool.deleteMany({ where: { id: { in: toolIds } } }),
   ]);

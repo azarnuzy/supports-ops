@@ -44,8 +44,8 @@ describe("Tool runtime authorization", () => {
 
   it("resolves assigned, enabled, available Tools only", async () => {
     mocks.toolFindMany.mockResolvedValue([
-      { httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
-      { httpConfig: null, mcpTool: null, name: "unknownBuiltIn", origin: "BUILT_IN" },
+      { assignments: [], httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
+      { assignments: [], httpConfig: null, mcpTool: null, name: "unknownBuiltIn", origin: "BUILT_IN" },
     ]);
 
     await expect(resolveTools("agent-1")).resolves.toEqual([
@@ -62,7 +62,7 @@ describe("Tool runtime authorization", () => {
     ).rejects.toBeInstanceOf(ToolNotAssignedError);
 
     mocks.toolFindMany.mockResolvedValue([
-      { httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
+      { assignments: [], httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
     ]);
     mocks.ticketFindFirst.mockResolvedValue(null);
     await expect(
@@ -73,10 +73,10 @@ describe("Tool runtime authorization", () => {
   it("keeps Knowledge Customer-Safe and Ticket Knowledge scoped to server Ticket context", async () => {
     mocks.toolFindMany
       .mockResolvedValueOnce([
-        { httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
+        { assignments: [], httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
       ])
       .mockResolvedValueOnce([
-        { httpConfig: null, mcpTool: null, name: "searchCustomerTicketHistory", origin: "BUILT_IN" },
+        { assignments: [], httpConfig: null, mcpTool: null, name: "searchCustomerTicketHistory", origin: "BUILT_IN" },
       ]);
 
     await executeBuiltInTool({ aiAgentId: "agent-1", embedding: [0.1], ticketId: "ticket-1", toolName: "searchKnowledge" });

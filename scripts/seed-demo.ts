@@ -21,7 +21,7 @@ import {
   createHttpTool,
   listHttpTools,
   setToolAssignment,
-  setToolPolicy,
+  setToolUsageInstruction,
 } from "../apps/api/src/modules/tools/services";
 import {
   HumanAgentEmailAlreadyInUseError,
@@ -43,9 +43,9 @@ const demoHumanAgentName = "Rian Wibowo";
 const demoWidgetDomains = ["localhost:3002", "localhost:4000"];
 
 const demoAiInstructions =
-  "Always verify the Customer's subscription status with the Business Tool before answering a " +
-  "subscription question. Use the invoice lookup Tool when a Customer asks about a specific " +
-  "invoice or billing charge.";
+  "You are the support assistant for the SupportOps demo company. Answer from the Knowledge Base, " +
+  "keep replies to two short paragraphs, and hand off to a Human Agent for refunds, cancellations, " +
+  "or anything that changes the Customer's account.";
 const demoHandoffMessage =
   "Hello, I'm {humanAgentName} from the support team. I'll continue helping you from here.";
 const demoResolutionMessage = "Glad that's sorted — this conversation is now resolved.";
@@ -129,11 +129,12 @@ const demoKnowledgeSources: DemoKnowledgeSource[] = [
 ];
 
 /**
- * Seeds the #94 demonstration: a required HTTP Tool for subscription status and an
- * optional MCP Tool for invoice status, both assigned to the Workspace's AI Agent
- * through the same application services Admin flows use.
+ * Seeds the Tools the demo AI Agent can call: a Webhook Tool for subscription status and an
+ * MCP Tool for invoice status, both switched on for the Workspace's AI Agent through the same
+ * application services the Admin UI uses. The AI Agent chooses between them at runtime; the
+ * "when to use" guidance on each assignment is the only steering.
  */
-async function ensureBusinessTools() {
+async function ensureTools() {
   const settings = await getAiSettings();
   await updateAiSettings({
     aiAgentId: settings.aiAgentId,
@@ -150,8 +151,8 @@ async function ensureBusinessTools() {
     (await listHttpTools()).find((tool) => tool.name === demoSubscriptionToolName) ??
     (await createHttpTool({
       description:
-        "Look up the demo Business System's linked subscription (customerId cus_102). The " +
-        "required-Tool Policy runtime calls this with no arguments, so customerId is optional here.",
+        "Look up the demo Business System's linked subscription (customerId cus_102): plan, " +
+        "status, and renewal date. Call with no arguments to read the linked account.",
       enabled: true,
       inputSchema: {
         properties: { customerId: { type: "string" } },
@@ -194,19 +195,31 @@ async function ensureBusinessTools() {
 
   await setToolAssignment(subscriptionTool.id, settings.aiAgentId, true);
   await setToolAssignment(invoiceMcpTool.toolId, settings.aiAgentId, true);
-  await setToolPolicy(settings.aiAgentId, "SUBSCRIPTION", subscriptionTool.id);
-  console.log("Tools assigned to the AI Agent; SUBSCRIPTION Tool Policy set to getSubscriptionStatus.");
+  await setToolUsageInstruction(
+    settings.aiAgentId,
+    subscriptionTool.id,
+    "Use when the Customer asks whether their subscription is active, which plan they are on, or when it renews.",
+  );
+  await setToolUsageInstruction(
+    settings.aiAgentId,
+    invoiceMcpTool.toolId,
+    "Use when the Customer asks about an invoice, a charge, or an overdue payment.",
+  );
+  console.log("Tools switched on for the AI Agent, each with its own when-to-use guidance.");
 }
 
 async function main() {
+  if (process.argv.includes("--reset")) await resetDemoWorkspace();
+
   const { workspace, admin } = await ensureAdminWorkspace();
-  await ensureHumanAgent(workspace.id);
+  const humanAgent = await ensureHumanAgent(workspace.id);
 
   await withWorkspaceContext(workspace.id, async () => {
     await ensureWidgetConfig();
     await ensureKnowledgeSources(workspace.id);
-    await ensureBusinessTools();
+    await ensureTools();
   });
+  await ensureDemoConversations(workspace.id, humanAgent.id);
 
   console.log("\nDemo Workspace ready.");
   console.log(`  Workspace: ${workspace.name} (${workspace.slug})`);
@@ -356,6 +369,338 @@ async function ensureKnowledgeSources(workspaceId: string) {
 
     console.log(`Published Knowledge Source: ${source.title} (${source.visibility})`);
   }
+}
+
+
+type DemoTurn = {
+  senderType: "AI_AGENT" | "CUSTOMER" | "HUMAN_AGENT";
+  content: string;
+  /** AI Activity recorded right after this Message, so the Activity Timeline reads in order. */
+  activity?: Array<{ eventType: DemoActivityType; metadata: Record<string, unknown> }>;
+};
+
+type DemoActivityType =
+  | "AI_REPLIED"
+  | "CLAIMED"
+  | "ESCALATED"
+  | "HANDOFF_SENT"
+  | "KNOWLEDGE_RETRIEVED"
+  | "RESOLVED"
+  | "TOOL_CALLED";
+
+type DemoConversation = {
+  category: string;
+  customer: { email: string; name: string };
+  /** Stable key: re-running the seed finds this Ticket instead of creating a second one. */
+  key: string;
+  outcome:
+    | { status: "AI_HANDLING" }
+    | { status: "ESCALATED"; reason: "INTERNAL_ACTION_REQUIRED"; claimed: boolean }
+    | { status: "RESOLVED"; by: "AI_AGENT" | "HUMAN_AGENT" };
+  title: string;
+  turns: DemoTurn[];
+};
+
+const knowledgeRetrieved = { chunkIds: [], knowledgeSourceIds: [] };
+
+/**
+ * Four Tickets that show the whole product in the inbox without needing an API key: a Tool call
+ * the AI Agent chose itself, an Escalation a Human Agent picked up, a live conversation, and a
+ * Ticket a Human Agent resolved. Transcripts are written directly rather than generated, so the
+ * demo Workspace looks the same on every machine.
+ */
+const demoConversations: DemoConversation[] = [
+  {
+    category: "SUBSCRIPTION",
+    customer: { email: "budi@example.com", name: "Budi Santoso" },
+    key: "subscription-status",
+    outcome: { status: "RESOLVED", by: "AI_AGENT" },
+    title: "Is my subscription still active?",
+    turns: [
+      { senderType: "CUSTOMER", content: "Hi, is my subscription still active? I want to make sure before the team starts onboarding." },
+      {
+        senderType: "AI_AGENT",
+        content:
+          "Yes — your account is on the Pro plan and the subscription is active, renewing on 1 November 2026. " +
+          "Pro includes priority support, unlimited seats, and API access, so your team can start onboarding right away.",
+        activity: [
+          { eventType: "KNOWLEDGE_RETRIEVED", metadata: knowledgeRetrieved },
+          {
+            eventType: "TOOL_CALLED",
+            metadata: {
+              latencyMs: 214,
+              origin: "HTTP",
+              outcome: "SUCCESS",
+              risk: "READ_ONLY",
+              tool: demoSubscriptionToolName,
+            },
+          },
+          { eventType: "AI_REPLIED", metadata: {} },
+        ],
+      },
+      { senderType: "CUSTOMER", content: "That's what I needed, thanks!" },
+      {
+        senderType: "AI_AGENT",
+        content: demoResolutionMessage,
+        activity: [{ eventType: "RESOLVED", metadata: { resolvedBy: "AI_AGENT" } }],
+      },
+    ],
+  },
+  {
+    category: "BILLING",
+    customer: { email: "siti@example.com", name: "Siti Aminah" },
+    key: "invoice-refund",
+    outcome: { status: "ESCALATED", reason: "INTERNAL_ACTION_REQUIRED", claimed: true },
+    title: "Refund for an invoice charged last month",
+    turns: [
+      { senderType: "CUSTOMER", content: "I was charged for INV-2091 last month but we had already cancelled. Can you refund it?" },
+      {
+        senderType: "AI_AGENT",
+        content: "Let me check that invoice for you.",
+        activity: [
+          { eventType: "KNOWLEDGE_RETRIEVED", metadata: knowledgeRetrieved },
+          {
+            eventType: "TOOL_CALLED",
+            metadata: {
+              latencyMs: 388,
+              origin: "MCP",
+              outcome: "SUCCESS",
+              risk: "READ_ONLY",
+              tool: demoInvoiceToolRemoteName,
+            },
+          },
+          {
+            eventType: "ESCALATED",
+            metadata: { reason: "INTERNAL_ACTION_REQUIRED" },
+          },
+        ],
+      },
+      {
+        senderType: "HUMAN_AGENT",
+        content: demoHandoffMessage.replace("{humanAgentName}", demoHumanAgentName),
+        activity: [
+          { eventType: "CLAIMED", metadata: {} },
+          { eventType: "HANDOFF_SENT", metadata: {} },
+        ],
+      },
+    ],
+  },
+  {
+    category: "ACCOUNT",
+    customer: { email: "andi@example.com", name: "Andi Kurniawan" },
+    key: "password-reset",
+    outcome: { status: "AI_HANDLING" },
+    title: "Password reset email never arrives",
+    turns: [
+      { senderType: "CUSTOMER", content: "I keep asking for a password reset link but nothing shows up in my inbox." },
+      {
+        senderType: "AI_AGENT",
+        content:
+          "Reset links are sent straight away and expire after 30 minutes, so the usual cause is the message landing in spam. " +
+          "Could you check your spam folder, then request one more link and tell me whether it arrives?",
+        activity: [
+          { eventType: "KNOWLEDGE_RETRIEVED", metadata: knowledgeRetrieved },
+          { eventType: "AI_REPLIED", metadata: {} },
+        ],
+      },
+    ],
+  },
+  {
+    category: "TECHNICAL",
+    customer: { email: "maya@example.com", name: "Maya Larasati" },
+    key: "api-timeout",
+    outcome: { status: "RESOLVED", by: "HUMAN_AGENT" },
+    title: "API requests timing out since this morning",
+    turns: [
+      { senderType: "CUSTOMER", content: "Every API call from our backend has been timing out since around 09:00." },
+      {
+        senderType: "AI_AGENT",
+        content: "I don't have anything published that covers this, so I'm bringing in a teammate.",
+        activity: [{ eventType: "ESCALATED", metadata: { reason: "NO_RELEVANT_KNOWLEDGE" } }],
+      },
+      {
+        senderType: "HUMAN_AGENT",
+        content:
+          "Your API key was rotated this morning and the old one is still in your backend config. " +
+          "Swapping in the new key clears the timeouts — I've confirmed the last five calls went through.",
+        activity: [
+          { eventType: "CLAIMED", metadata: {} },
+          { eventType: "RESOLVED", metadata: { resolvedBy: "HUMAN_AGENT" } },
+        ],
+      },
+    ],
+  },
+];
+
+/** Writes each demo transcript straight to the tables the Widget flow writes, so the inbox,
+ * Activity Timeline, and analytics all have something to show without an AI run. */
+async function ensureDemoConversations(workspaceId: string, humanAgentId: string) {
+  const channel = await prisma.channel.findFirst({
+    select: { aiAgentId: true, id: true },
+    where: { type: "WEB", workspaceId },
+  });
+  if (!channel) {
+    console.warn("No Web Channel on the demo Workspace — skipping example conversations.");
+    return;
+  }
+
+  for (const conversation of demoConversations) {
+    const accessToken = `demo-session-${conversation.key}`;
+    if (await prisma.webSession.findUnique({ select: { id: true }, where: { accessToken } })) {
+      console.log(`Example conversation already seeded: ${conversation.title}`);
+      continue;
+    }
+
+    const customerIdentity =
+      (await prisma.customerIdentity.findFirst({
+        where: { channelType: "WEB", email: conversation.customer.email, workspaceId },
+      })) ??
+      (await prisma.customerIdentity.create({
+        data: {
+          channelType: "WEB",
+          email: conversation.customer.email,
+          id: randomUUID(),
+          name: conversation.customer.name,
+          workspaceId,
+        },
+      }));
+
+    const webSession = await prisma.webSession.create({
+      data: {
+        accessToken,
+        channelId: channel.id,
+        customerIdentityId: customerIdentity.id,
+        id: randomUUID(),
+        status: conversation.outcome.status === "AI_HANDLING" ? "ACTIVE" : "CLOSED",
+        workspaceId,
+      },
+    });
+
+    const ticketId = randomUUID();
+    const resolved = conversation.outcome.status === "RESOLVED" ? conversation.outcome : null;
+    const escalated = conversation.outcome.status === "ESCALATED" ? conversation.outcome : null;
+    await prisma.ticket.create({
+      data: {
+        aiAgentId: channel.aiAgentId,
+        assignedHumanAgentId: escalated?.claimed || resolved?.by === "HUMAN_AGENT" ? humanAgentId : null,
+        category: conversation.category,
+        channelId: channel.id,
+        customerIdentityId: customerIdentity.id,
+        escalatedAt: escalated ? new Date() : null,
+        escalationReason: escalated?.reason ?? null,
+        id: ticketId,
+        messageSeq: conversation.turns.length,
+        resolutionReason: resolved
+          ? resolved.by === "AI_AGENT"
+            ? "CUSTOMER_CONFIRMED"
+            : "HUMAN_RESOLVED"
+          : null,
+        resolvedAt: resolved ? new Date() : null,
+        resolvedBy: resolved?.by ?? null,
+        status: conversation.outcome.status,
+        title: conversation.title,
+        webSessionId: webSession.id,
+        workspaceId,
+      },
+    });
+
+    const memory = await prisma.conversation.create({
+      data: {
+        id: randomUUID(),
+        metadata: {},
+        scopeKey: `ticket:${ticketId}`,
+        sessionId: ticketId,
+        ticketId,
+        userId: customerIdentity.id,
+        workspaceId,
+      },
+    });
+
+    await prisma.aiActivity.create({
+      data: {
+        eventType: "TICKET_CREATED",
+        id: randomUUID(),
+        metadata: { category: conversation.category, title: conversation.title },
+        ticketId,
+        workspaceId,
+      },
+    });
+
+    for (const [index, turn] of conversation.turns.entries()) {
+      await prisma.message.create({
+        data: {
+          content: turn.content,
+          externalMessageId: `${accessToken}-${index + 1}`,
+          id: randomUUID(),
+          memorySessionId: memory.id,
+          message: { content: turn.content },
+          position: index + 1,
+          role: turn.senderType === "CUSTOMER" ? "user" : "assistant",
+          runId: randomUUID(),
+          senderType: turn.senderType,
+          senderUserId: turn.senderType === "HUMAN_AGENT" ? humanAgentId : null,
+          ticketId,
+          turn: index + 1,
+          webSessionId: webSession.id,
+          workspaceId,
+        },
+      });
+      for (const activity of turn.activity ?? []) {
+        await prisma.aiActivity.create({
+          data: {
+            eventType: activity.eventType,
+            id: randomUUID(),
+            metadata: { ...activity.metadata, ticketId },
+            ticketId,
+            workspaceId,
+          },
+        });
+      }
+    }
+
+    console.log(`Seeded example conversation: ${conversation.title} (${conversation.outcome.status})`);
+  }
+}
+
+/** Deletes the demo Workspace outright so `--reset` gives a first-run state. Order follows the
+ * foreign keys; Session and Account cascade from User. */
+async function resetDemoWorkspace() {
+  const admin = await prisma.user.findUnique({
+    select: { workspaceId: true },
+    where: { email: demoAdminEmail },
+  });
+  if (!admin) {
+    console.log("No demo Workspace to reset.");
+    return;
+  }
+  const workspaceId = admin.workspaceId;
+  const where = { where: { workspaceId } };
+
+  await prisma.$transaction([
+    prisma.aiActivity.deleteMany({ where: { ticket: { workspaceId } } }),
+    prisma.ticketReadState.deleteMany(where),
+    prisma.attachment.deleteMany(where),
+    prisma.message.deleteMany(where),
+    prisma.conversation.deleteMany(where),
+    prisma.ticket.deleteMany(where),
+    prisma.webSession.deleteMany(where),
+    prisma.customerIdentity.deleteMany(where),
+    prisma.chunk.deleteMany(where),
+    prisma.knowledgeSource.deleteMany(where),
+    prisma.toolAssignment.deleteMany(where),
+    prisma.httpToolConfig.deleteMany(where),
+    prisma.mcpTool.deleteMany(where),
+    prisma.tool.deleteMany(where),
+    prisma.mcpServer.deleteMany(where),
+    prisma.webWidgetConfig.deleteMany(where),
+    prisma.channel.deleteMany(where),
+    prisma.ticketCategory.deleteMany(where),
+    prisma.aiSettings.deleteMany(where),
+    prisma.user.deleteMany(where),
+    prisma.aiAgent.deleteMany(where),
+    prisma.workspace.delete({ where: { id: workspaceId } }),
+  ]);
+  console.log("Demo Workspace deleted — seeding from scratch.");
 }
 
 main()

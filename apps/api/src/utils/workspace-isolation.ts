@@ -23,7 +23,6 @@ const workspaceScopedModels = new Set([
   "Chunk",
   "Tool",
   "ToolAssignment",
-  "ToolPolicy",
   "HttpToolConfig",
   "McpServer",
   "McpTool",

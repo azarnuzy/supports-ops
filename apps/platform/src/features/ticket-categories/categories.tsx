@@ -150,9 +150,8 @@ const TicketCategoriesView = () => {
         </div>
 
         <p className="text-[13px] leading-relaxed text-muted-foreground">
-          Deleting a category never deletes tickets: they move to the fallback category, and any
-          routing rule pointing at it is removed. Renaming a category is safe at any time — existing
-          tickets keep their place.
+          Deleting a category never deletes tickets: they move to the fallback category. Renaming
+          a category is safe at any time — existing tickets keep their place.
         </p>
       </section>
 
@@ -162,8 +161,8 @@ const TicketCategoriesView = () => {
             <DialogHeader>
               <DialogTitle>{editing ? "Edit category" : "Add category"}</DialogTitle>
               <DialogDescription>
-                Two categories that sound alike get confused with each other, which sends tickets —
-                and any routing rule attached to them — the wrong way.
+                Two categories that sound alike get confused with each other, which files tickets
+                in the wrong place and skews every report built on them.
               </DialogDescription>
             </DialogHeader>
             <Field>

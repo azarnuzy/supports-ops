@@ -7,6 +7,7 @@ import {
   createTool,
   deleteTool,
   setAttached,
+  setUsageInstruction,
   testTool,
   toggleToolEnabled,
   updateTool,
@@ -54,6 +55,11 @@ export function useToggleToolEnabledMutation(aiAgentId: string | undefined) {
 export function useSetAttachedMutation(aiAgentId: string | undefined) {
   const invalidate = useInvalidateTools(aiAgentId);
   return useMutation({ mutationFn: setAttached, onSuccess: invalidate });
+}
+
+export function useSetUsageInstructionMutation(aiAgentId: string | undefined) {
+  const invalidate = useInvalidateTools(aiAgentId);
+  return useMutation({ mutationFn: setUsageInstruction, onSuccess: invalidate });
 }
 
 export function useTestToolMutation() {

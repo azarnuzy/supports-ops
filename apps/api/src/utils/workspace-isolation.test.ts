@@ -4,7 +4,7 @@ import { MissingWorkspaceContextError } from "./workspace-context";
 import { executeWorkspaceQuery, isWorkspaceScopedModel } from "./workspace-isolation";
 
 describe("Workspace-isolated Prisma queries", () => {
-  it.each(["Ticket", "Message", "KnowledgeSource", "CustomerIdentity", "Tool", "ToolPolicy"])(
+  it.each(["Ticket", "Message", "KnowledgeSource", "CustomerIdentity", "Tool", "ToolAssignment"])(
     "treats %s records as Workspace-scoped",
     (model) => {
       expect(isWorkspaceScopedModel(model)).toBe(true);
@@ -18,7 +18,7 @@ describe("Workspace-isolated Prisma queries", () => {
     expect(isWorkspaceScopedModel("ticket")).toBe(false);
   });
 
-  it.each(["Ticket", "Message", "KnowledgeSource", "CustomerIdentity", "Tool", "ToolPolicy"])(
+  it.each(["Ticket", "Message", "KnowledgeSource", "CustomerIdentity", "Tool", "ToolAssignment"])(
     "returns none of Workspace B's %s records to a Workspace A request",
     (model) => {
       const records = [{ id: "workspace-b-record", workspaceId: "workspace-b" }];

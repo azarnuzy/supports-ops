@@ -12,14 +12,11 @@ export class InvalidToolSchemaError extends Error {}
 export class ToolNotFoundError extends Error {}
 export class AiAgentNotFoundError extends Error {}
 export class ToolUnavailableError extends Error {}
-export class ToolRequiredByPolicyError extends Error {}
 export class ToolNotAssignedError extends Error {}
 export class TicketNotFoundError extends Error {}
 
 const builtInNames = ["searchKnowledge", "searchCustomerTicketHistory"] as const;
 type BuiltInName = (typeof builtInNames)[number];
-/** A Workspace-configured category key; the list lives in the TicketCategory table. */
-export type TicketCategory = string;
 
 const includeHttpConfig = { httpConfig: true } as const;
 
@@ -88,15 +85,14 @@ export async function listTools(aiAgentId: string) {
   const lastCallByToolId = await lastToolCalls();
   const tools = await prisma.tool.findMany({
     include: {
-      assignments: { select: { id: true }, where: { aiAgentId } },
+      assignments: { select: { id: true, usageInstruction: true }, where: { aiAgentId } },
       httpConfig: { select: { toolId: true } },
       mcpTool: { include: { mcpServer: { select: { enabled: true } } } },
-      policies: { select: { category: true }, where: { aiAgentId } },
     },
     orderBy: { name: "asc" },
   });
 
-  return tools.map(({ assignments, httpConfig, mcpTool, policies, ...tool }) => ({
+  return tools.map(({ assignments, httpConfig, mcpTool, ...tool }) => ({
     ...tool,
     assigned: assignments.length > 0,
     availability: isAvailable({ ...tool, httpConfig, mcpTool }) ? "AVAILABLE" : "UNAVAILABLE",
@@ -106,15 +102,12 @@ export async function listTools(aiAgentId: string) {
           succeeded: lastCallByToolId.get(tool.id)!.succeeded,
         }
       : null,
-    requiredForCategories: policies.map((policy) => policy.category),
+    usageInstruction: assignments[0]?.usageInstruction ?? null,
   }));
 }
 
 export async function setToolEnabled(toolId: string, enabled: boolean) {
   const tool = await findTool(toolId);
-  if (!enabled && (await prisma.toolPolicy.count({ where: { toolId } }))) {
-    throw new ToolRequiredByPolicyError();
-  }
   return prisma.tool.update({ data: { enabled }, where: { id: tool.id } });
 }
 
@@ -129,28 +122,23 @@ export async function setToolAssignment(toolId: string, aiAgentId: string, assig
       where: { workspaceId_aiAgentId_toolId: { aiAgentId, toolId, workspaceId } },
     });
   }
-  if (await prisma.toolPolicy.count({ where: { aiAgentId, toolId } })) {
-    throw new ToolRequiredByPolicyError();
-  }
   await prisma.toolAssignment.deleteMany({ where: { aiAgentId, toolId } });
 }
 
-export async function setToolPolicy(aiAgentId: string, category: TicketCategory, toolId: string) {
-  const [tool] = await Promise.all([findAssignableTool(toolId), requireAiAgent(aiAgentId)]);
-  if (!tool.enabled || !isAvailable(tool)) throw new ToolUnavailableError();
+/** Free-text guidance appended to the Tool description the model sees, so an Admin can say
+ * when a Tool should be used without any category rule. */
+export async function setToolUsageInstruction(
+  aiAgentId: string,
+  toolId: string,
+  usageInstruction: string | null,
+) {
+  await Promise.all([findAssignableTool(toolId), requireAiAgent(aiAgentId)]);
   const assignment = await prisma.toolAssignment.findFirst({ where: { aiAgentId, toolId } });
   if (!assignment) throw new ToolNotAssignedError();
-  const workspaceId = requireWorkspaceId();
-  return prisma.toolPolicy.upsert({
-    create: { aiAgentId, category, id: randomUUID(), toolId, workspaceId },
-    update: { toolId },
-    where: { workspaceId_aiAgentId_category: { aiAgentId, category, workspaceId } },
+  await prisma.toolAssignment.update({
+    data: { usageInstruction },
+    where: { id: assignment.id },
   });
-}
-
-export async function removeToolPolicy(aiAgentId: string, category: TicketCategory) {
-  await requireAiAgent(aiAgentId);
-  await prisma.toolPolicy.deleteMany({ where: { aiAgentId, category } });
 }
 
 /** The single runtime authorization seam for every AI Agent Tool call. */
@@ -158,22 +146,16 @@ export async function resolveTools(aiAgentId: string) {
   await requireAiAgent(aiAgentId);
   const tools = await prisma.tool.findMany({
     include: {
+      assignments: { select: { usageInstruction: true }, where: { aiAgentId } },
       httpConfig: { select: { toolId: true } },
       mcpTool: { include: { mcpServer: { select: { enabled: true } } } },
     },
     where: { assignments: { some: { aiAgentId } }, enabled: true },
   });
-  return tools.filter(isAvailable);
-}
-
-/** The Ticket Category's required Tool, or null when no policy is configured.
- * Reuses `resolveTools` so a required Tool that is no longer assigned, enabled,
- * or available cannot be returned. */
-export async function resolveRequiredTool(aiAgentId: string, category: TicketCategory) {
-  const policy = await prisma.toolPolicy.findFirst({ where: { aiAgentId, category } });
-  if (!policy) return null;
-  const tools = await resolveTools(aiAgentId);
-  return tools.find((tool) => tool.id === policy.toolId) ?? null;
+  return tools.filter(isAvailable).map(({ assignments, ...tool }) => ({
+    ...tool,
+    usageInstruction: assignments[0]?.usageInstruction ?? null,
+  }));
 }
 
 /** Ticket context is loaded server-side; model/customer-provided identities never scope retrieval. */
@@ -266,6 +248,21 @@ export async function createHttpTool(input: CreateHttpToolInput) {
     },
     include: includeHttpConfig,
   });
+  /** A Webhook Tool an Admin just configured is meant to be used, so it starts switched on for
+   * the Workspace's AI Agents. MCP discovery deliberately does not do this: one server can
+   * import dozens of Tools at once. */
+  if (input.enabled) {
+    const aiAgents = await prisma.aiAgent.findMany({ select: { id: true } });
+    await prisma.toolAssignment.createMany({
+      data: aiAgents.map((aiAgent) => ({
+        aiAgentId: aiAgent.id,
+        id: randomUUID(),
+        toolId: id,
+        workspaceId,
+      })),
+      skipDuplicates: true,
+    });
+  }
   return toDto(tool);
 }
 
@@ -293,7 +290,6 @@ export async function deleteHttpTool(id: string) {
   const tool = await prisma.tool.findFirst({ select: { id: true }, where: { id, origin: "HTTP" } });
   if (!tool) throw new HttpToolNotFoundError();
   await prisma.$transaction([
-    prisma.toolPolicy.deleteMany({ where: { toolId: id } }),
     prisma.toolAssignment.deleteMany({ where: { toolId: id } }),
     prisma.tool.delete({ where: { id } }),
   ]);

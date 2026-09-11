@@ -18,14 +18,13 @@ model Workspace {
   aiSettings         AiSettings?
   tools              Tool[]
   toolAssignments    ToolAssignment[]
-  toolPolicies       ToolPolicy[]
   mcpServers         McpServer[]
   mcpTools           McpTool[]
   ticketCategories   TicketCategory[]
 }
 
 /// Ticket categories are per-Workspace so a team can name them after its own product.
-/// `key` is what Tickets and Routing Rules store, so renaming a category never orphans them.
+/// `key` is what Tickets store, so renaming a category never orphans them.
 /// Exactly one category per Workspace is the fallback: it catches anything the classifier is
 /// unsure about, and it cannot be deleted.
 model TicketCategory {
@@ -69,7 +68,6 @@ model AiAgent {
   channels    Channel[]
   tickets     Ticket[]
   toolAssignments ToolAssignment[]
-  toolPolicies    ToolPolicy[]
 
   @@index([workspaceId])
   @@unique([workspaceId, id])
