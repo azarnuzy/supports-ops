@@ -40,7 +40,7 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
     data: { failureReason: null, processingStatus: "PROCESSING" },
     where: { id: attachment.id },
   });
-  await publishStatus(attachment.ticketId, attachment.id, "PROCESSING");
+  await publishStatus(job.data.ticketId, attachment.id, "PROCESSING");
 
   try {
     const extractedText = await extractAttachment(attachment.storageKey, attachment.mimeType);
@@ -49,14 +49,14 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
       data: { extractedText, processingStatus: "READY" },
       where: { id: attachment.id },
     });
-    await publishStatus(attachment.ticketId, attachment.id, "READY");
+    await publishStatus(job.data.ticketId, attachment.id, "READY");
   } catch (error) {
     const failureReason = error instanceof Error ? error.message : "Attachment processing failed.";
     await prisma.attachment.update({
       data: { failureReason, processingStatus: "FAILED" },
       where: { id: attachment.id },
     });
-    await publishStatus(attachment.ticketId, attachment.id, "FAILED", failureReason);
+    await publishStatus(job.data.ticketId, attachment.id, "FAILED", failureReason);
   }
 
   const pending = await prisma.attachment.count({
@@ -69,7 +69,7 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
     const replyKey = `supportops:attachment-reply:${attachment.messageId}`;
     if (await publisher.set(replyKey, "1", "EX", 300, "NX")) {
       try {
-        await requestReply(attachment.ticketId, attachment.workspaceId);
+        await requestReply(job.data.ticketId, attachment.workspaceId);
       } catch (error) {
         await publisher.del(replyKey);
         throw error;
