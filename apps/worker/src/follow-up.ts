@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { enqueueWhatsAppDelivery } from "@repo/api/whatsapp-queue";
+import { enqueueTicketKnowledgeIndex } from "@repo/api/ticket-queue";
+import { whatsAppTimerDelayMs } from "@repo/channels";
 import Redis from "ioredis";
 import { prisma } from "./prisma";
 import { Queue, type ConnectionOptions } from "bullmq";
@@ -7,6 +10,7 @@ export type FollowUpJob = { ticketId: string; workspaceId: string; aiMessageId: 
 export type AutoResolveJob = { ticketId: string; workspaceId: string; followUpMessageId: string };
 export type IdleClosureJob = {
   assignedHumanAgentId: string | null;
+  channelType?: "WEB" | "WHATSAPP";
   customerLastMessageAt: string;
   status: "ESCALATED" | "HUMAN_HANDLING";
   ticketId: string;
@@ -20,10 +24,10 @@ let followUpQueue: Queue<AutoResolveJob | IdleClosureJob> | undefined;
 
 async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: number) {
   followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob>("ticket-follow-up", { connection });
-  await followUpQueue.remove(`auto-resolve:${job.ticketId}`).catch(() => undefined);
+  await followUpQueue.remove(`auto-resolve-${job.ticketId}`).catch(() => undefined);
   await followUpQueue.add("auto-resolve", job, {
     delay: delaySeconds * 1_000,
-    jobId: `auto-resolve:${job.ticketId}`,
+    jobId: `auto-resolve-${job.ticketId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
   });
@@ -88,6 +92,7 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
     const [ticket, settings] = await Promise.all([
       tx.ticket.findFirst({
         include: {
+          channel: { select: { type: true } },
           messages: { orderBy: { position: "desc" }, take: 1 },
           session: { include: { conversation: true } },
         },
@@ -128,14 +133,24 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
         workspaceId: ticket.workspaceId,
       },
     });
+    const isWhatsApp = ticket.channel.type === "WHATSAPP";
     return {
-      autoResolveAfterSeconds: settings?.autoResolveAfterSeconds ?? 3600,
-      autoResolveEnabled: settings?.autoResolveEnabled ?? true,
+      autoResolveDelayMs:
+        isWhatsApp && ticket.session.customerLastMessageAt
+          ? whatsAppTimerDelayMs(
+              ticket.session.customerLastMessageAt,
+              (settings?.autoResolveAfterSeconds ?? 3600) * 1_000,
+              new Date(),
+            )
+          : (settings?.autoResolveAfterSeconds ?? 3600) * 1_000,
+      autoResolveEnabled: isWhatsApp || (settings?.autoResolveEnabled ?? true),
+      deliverWhatsApp: ticket.channel.type === "WHATSAPP",
       message,
     };
   });
   if (!result) return;
   await publish(job.data.ticketId, { type: "message.created", data: result.message });
+  if (result.deliverWhatsApp) await enqueueWhatsAppDelivery(result.message.id);
   if (result.autoResolveEnabled) {
     await scheduleAutoResolve(
       {
@@ -143,7 +158,7 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
         ticketId: job.data.ticketId,
         workspaceId: job.data.workspaceId,
       },
-      result.autoResolveAfterSeconds,
+      result.autoResolveDelayMs / 1_000,
     );
   }
 }
@@ -153,6 +168,7 @@ export async function processAutoResolveJob(job: { data: AutoResolveJob }) {
     const [ticket, settings] = await Promise.all([
       tx.ticket.findFirst({
         include: {
+          channel: { select: { type: true } },
           messages: { orderBy: { position: "desc" }, take: 1 },
           session: { include: { conversation: true } },
           workspace: { select: { closingMessage: true } },
@@ -201,12 +217,17 @@ export async function processAutoResolveJob(job: { data: AutoResolveJob }) {
         workspaceId: ticket.workspaceId,
       },
     });
-    return message;
+    return { deliverWhatsApp: ticket.channel.type === "WHATSAPP", message };
   });
   if (!closing) return;
-  await publish(job.data.ticketId, { type: "message.created", data: closing });
+  await publish(job.data.ticketId, { type: "message.created", data: closing.message });
+  if (closing.deliverWhatsApp) await enqueueWhatsAppDelivery(closing.message.id);
+  await enqueueTicketKnowledgeIndex({
+    ticketId: job.data.ticketId,
+    workspaceId: job.data.workspaceId,
+  });
   await publish(job.data.ticketId, { type: "ticket.status", data: { status: "resolved" } });
-  await publishQueue(closing.workspaceId);
+  await publishQueue(closing.message.workspaceId);
 }
 
 class IdleClosureRaceLost extends Error {}
@@ -220,7 +241,9 @@ export async function processIdleClosureJob(job: { data: IdleClosureJob }) {
       const idleCloseAfterSeconds = settings?.idleCloseAfterSeconds ?? 28_800;
       const customerLastMessageAt = new Date(job.data.customerLastMessageAt);
       const remainingMs =
-        customerLastMessageAt.getTime() + idleCloseAfterSeconds * 1_000 - Date.now();
+        job.data.channelType === "WHATSAPP"
+          ? whatsAppTimerDelayMs(customerLastMessageAt, idleCloseAfterSeconds * 1_000, new Date())
+          : customerLastMessageAt.getTime() + idleCloseAfterSeconds * 1_000 - Date.now();
       if (remainingMs > 0) return { remainingMs };
 
       const resolvedAt = new Date();
@@ -244,7 +267,11 @@ export async function processIdleClosureJob(job: { data: IdleClosureJob }) {
       if (!transition.count) return null;
 
       const session = await tx.session.findFirst({
-        select: { conversation: { select: { id: true } }, id: true },
+        select: {
+          channel: { select: { type: true } },
+          conversation: { select: { id: true } },
+          id: true,
+        },
         where: {
           customerLastMessageAt,
           status: "ACTIVE",
@@ -292,7 +319,11 @@ export async function processIdleClosureJob(job: { data: IdleClosureJob }) {
           workspaceId: job.data.workspaceId,
         },
       });
-      return { message, remainingMs: null };
+      return {
+        deliverWhatsApp: session.channel.type === "WHATSAPP",
+        message,
+        remainingMs: null,
+      };
     });
     if (!result) return;
     if (result.remainingMs !== null) {
@@ -300,6 +331,11 @@ export async function processIdleClosureJob(job: { data: IdleClosureJob }) {
       return;
     }
     await publish(job.data.ticketId, { type: "message.created", data: result.message });
+    if (result.deliverWhatsApp) await enqueueWhatsAppDelivery(result.message.id);
+    await enqueueTicketKnowledgeIndex({
+      ticketId: job.data.ticketId,
+      workspaceId: job.data.workspaceId,
+    });
     await publish(job.data.ticketId, { type: "ticket.status", data: { status: "resolved" } });
     await publishQueue(job.data.workspaceId);
   } catch (error) {

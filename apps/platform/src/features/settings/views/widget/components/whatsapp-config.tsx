@@ -241,6 +241,11 @@ export default function WhatsAppConfig() {
             After verification, copy the revealed callback URL and verify token into Meta's webhook
             configuration, then subscribe to messages.
           </li>
+          <li>
+            In Meta, approve the English (US) template <code>supportops_reopen_conversation</code>
+            with the body “Reply to this message to continue your conversation with our support
+            team.”
+          </li>
         </ol>
       </CardContent>
     </Card>

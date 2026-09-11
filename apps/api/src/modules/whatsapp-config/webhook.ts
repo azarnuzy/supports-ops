@@ -3,6 +3,7 @@ import {
   baseMimeType,
   parseWhatsAppWebhook,
   refuseWhatsAppAttachment,
+  whatsAppTimerDelayMs,
   verifyWhatsAppSignature,
   type WhatsAppInboundEvent,
 } from "@repo/channels";
@@ -13,6 +14,7 @@ import { unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { decryptToolSecret } from "../tools/secrets";
 import { enqueueWhatsAppTurn } from "./queue";
+import { resetTimersAfterCustomerMessage } from "../follow-up/queue";
 
 export const whatsAppWebhookRouter = new Hono()
   .get("/", async (c) => {
@@ -50,10 +52,7 @@ export const whatsAppWebhookRouter = new Hono()
     if (!config) return c.text("Unknown phone number", 404);
 
     const signature = c.req.header("x-hub-signature-256") ?? "";
-    const appSecret = decryptToolSecret(
-      config.appSecretEncrypted,
-      toolEncryptionConfig.masterKey,
-    );
+    const appSecret = decryptToolSecret(config.appSecretEncrypted, toolEncryptionConfig.masterKey);
     if (!(await verifyWhatsAppSignature(rawBody, signature, appSecret))) {
       return c.text("Invalid signature", 401);
     }
@@ -84,7 +83,10 @@ export const whatsAppWebhookRouter = new Hono()
         },
       });
       if (seen) {
-        sessions.set(seen.sessionId, { sessionId: seen.sessionId, workspaceId: config.workspaceId });
+        sessions.set(seen.sessionId, {
+          sessionId: seen.sessionId,
+          workspaceId: config.workspaceId,
+        });
         continue;
       }
 
@@ -106,6 +108,9 @@ export const whatsAppWebhookRouter = new Hono()
         text: event.text ?? "",
         workspaceId: config.workspaceId,
       });
+      if (stored.created && stored.ticketId) {
+        await resetTimersAfterCustomerMessage(stored.ticketId, stored.workspaceId);
+      }
       sessions.set(stored.sessionId, stored);
     }
     await Promise.all([...sessions.values()].map(enqueueWhatsAppTurn));
@@ -203,6 +208,7 @@ async function persistInboundMessage(input: {
       return {
         created: false,
         sessionId: existing.sessionId,
+        ticketId: existing.ticketId,
         workspaceId: input.workspaceId,
       };
     }
@@ -234,7 +240,7 @@ async function persistInboundMessage(input: {
       select: {
         customerLastMessageAt: true,
         id: true,
-        ticket: { select: { id: true } },
+        ticket: { select: { assignedHumanAgentId: true, id: true, status: true } },
       },
       where: {
         channelId: input.channelId,
@@ -243,6 +249,36 @@ async function persistInboundMessage(input: {
         workspaceId: input.workspaceId,
       },
     });
+    if (
+      session?.customerLastMessageAt &&
+      whatsAppTimerDelayMs(
+        session.customerLastMessageAt,
+        Number.POSITIVE_INFINITY,
+        input.customerMessageAt,
+      ) === 0
+    ) {
+      await tx.session.update({
+        data: { closedAt: input.customerMessageAt, status: "CLOSED" },
+        where: { id: session.id },
+      });
+      if (session.ticket && session.ticket.status !== "RESOLVED") {
+        await tx.ticket.update({
+          data: {
+            resolvedAt: input.customerMessageAt,
+            resolvedBy: "PLATFORM",
+            resolutionReason:
+              session.ticket.status === "AI_HANDLING"
+                ? "CUSTOMER_INACTIVE"
+                : session.ticket.assignedHumanAgentId
+                  ? "CUSTOMER_INACTIVE_HUMAN_HANDLING"
+                  : "CUSTOMER_INACTIVE_SHARED_QUEUE",
+            status: "RESOLVED",
+          },
+          where: { id: session.ticket.id },
+        });
+      }
+      session = null;
+    }
     if (!session) {
       const sessionId = randomUUID();
       session = await tx.session.create({
@@ -264,7 +300,7 @@ async function persistInboundMessage(input: {
         select: {
           customerLastMessageAt: true,
           id: true,
-          ticket: { select: { id: true } },
+          ticket: { select: { assignedHumanAgentId: true, id: true, status: true } },
         },
       });
     }
@@ -292,16 +328,18 @@ async function persistInboundMessage(input: {
         workspaceId: input.workspaceId,
       },
     });
-    if (
-      !session.customerLastMessageAt ||
-      input.customerMessageAt > session.customerLastMessageAt
-    ) {
+    if (!session.customerLastMessageAt || input.customerMessageAt > session.customerLastMessageAt) {
       await tx.session.update({
         data: { customerLastMessageAt: input.customerMessageAt },
         where: { id: session.id },
       });
     }
-    return { created: true, sessionId: session.id, workspaceId: input.workspaceId };
+    return {
+      created: true,
+      sessionId: session.id,
+      ticketId: session.ticket?.id ?? null,
+      workspaceId: input.workspaceId,
+    };
   });
 }
 
