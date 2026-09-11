@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { classifyMessage, createClassificationModel } from "@repo/ai-agent";
 import { generateAiReply } from "@repo/api/ai-agent-turn";
 import { decryptToolSecret } from "@repo/api/secrets";
+import { enqueueWhatsAppDelivery, type WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
 import { classifyWhatsAppError, renderWhatsAppMessage } from "@repo/channels";
 import { createStorage } from "@repo/storage";
 import { UnrecoverableError } from "bullmq";
@@ -36,6 +37,10 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
 
   for (const attachment of incoming.flatMap((message) => message.attachments)) {
     if (attachment.processingStatus === "PROCESSING") Object.assign(attachment, await read(attachment));
+  }
+  // Once a Ticket leaves AI_HANDLING the AI Agent never speaks again; a person owns it.
+  if (session.ticket && session.ticket.status !== "AI_HANDLING") {
+    return deliverPendingMessages(session.id);
   }
   const unreadable = incoming.flatMap((message) => message.attachments);
   if (
@@ -248,7 +253,29 @@ async function deliverPendingMessages(sessionId: string) {
     orderBy: { position: "asc" },
     where: { deliveryStatus: "PENDING", senderType: { not: "CUSTOMER" }, sessionId },
   });
-  for (const message of messages) await deliverMessage(message.id);
+  for (const message of messages) await enqueueWhatsAppDelivery(message.id);
+}
+
+export async function processWhatsAppDelivery(job: {
+  attemptsMade: number;
+  data: WhatsAppDeliveryJob;
+  opts: { attempts?: number };
+}) {
+  try {
+    await deliverMessage(job.data.messageId);
+  } catch (error) {
+    // A transient failure that exhausts its retries must still end visibly failed.
+    if (!(error instanceof UnrecoverableError) && job.attemptsMade + 1 >= (job.opts.attempts ?? 1)) {
+      await prisma.message.update({
+        data: {
+          deliveryFailureReason: error instanceof Error ? error.message : "Delivery failed.",
+          deliveryStatus: "FAILED",
+        },
+        where: { id: job.data.messageId },
+      });
+    }
+    throw error;
+  }
 }
 
 async function deliverMessage(messageId: string) {
@@ -264,6 +291,7 @@ async function deliverMessage(messageId: string) {
     },
     where: { id: messageId },
   });
+  if (message.deliveryStatus !== "PENDING") return;
   const config = message.session.channel.whatsAppConfig;
   const phone = message.session.customerIdentity.phoneE164;
   if (!config || !phone) {
@@ -321,6 +349,13 @@ async function deliverMessage(messageId: string) {
       },
       where: { id: message.id },
     });
+    // Meta code 190 / HTTP 401: the access token itself stopped working.
+    if (body.error?.code === 190 || response.status === 401) {
+      await prisma.whatsAppConfig.update({
+        data: { accessTokenFailedAt: new Date() },
+        where: { id: config.id },
+      });
+    }
     if (kind === "permanent") throw new UnrecoverableError(reason);
     throw new Error(reason);
   }
@@ -329,11 +364,18 @@ async function deliverMessage(messageId: string) {
   await prisma.message.update({
     data: {
       deliveryAttempts: { increment: 1 },
+      deliveryFailureReason: null,
       deliveryStatus: "SENT",
       ...(providerMessageId ? { externalMessageId: providerMessageId } : {}),
     },
     where: { id: message.id },
   });
+  if (config.accessTokenFailedAt) {
+    await prisma.whatsAppConfig.update({
+      data: { accessTokenFailedAt: null },
+      where: { id: config.id },
+    });
+  }
 }
 
 /** Meta's media id is used for this one send and then discarded; storage

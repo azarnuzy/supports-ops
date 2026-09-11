@@ -11,7 +11,8 @@ import {
   processTicketKnowledgeIndexJob,
   type TicketKnowledgeIndexJob,
 } from "./ticket-knowledge-index";
-import { processWhatsAppTurn, type WhatsAppTurnJob } from "./whatsapp-turn";
+import { processWhatsAppDelivery, processWhatsAppTurn, type WhatsAppTurnJob } from "./whatsapp-turn";
+import type { WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
 
 export type { ExampleJob } from "./types";
 
@@ -98,7 +99,14 @@ export function startTicketKnowledgeIndexWorker() {
 }
 
 export function startWhatsAppTurnWorker() {
-  return new Worker<WhatsAppTurnJob>("whatsapp-turn", processWhatsAppTurn, { connection });
+  return new Worker<WhatsAppTurnJob | WhatsAppDeliveryJob>(
+    "whatsapp-turn",
+    (job) =>
+      job.name === "deliver"
+        ? processWhatsAppDelivery(job as Job<WhatsAppDeliveryJob>)
+        : processWhatsAppTurn(job as Job<WhatsAppTurnJob>),
+    { connection },
+  );
 }
 
 export function runWorker() {

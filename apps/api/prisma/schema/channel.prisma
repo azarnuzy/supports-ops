@@ -97,6 +97,8 @@ model WhatsAppConfig {
   businessAccountId    String
   accessTokenEncrypted String
   accessTokenLastFour  String
+  /// Set when Meta rejects the access token; cleared by the next successful send.
+  accessTokenFailedAt  DateTime?
   appSecretEncrypted   String
   verifyToken          String    @unique
   displayPhoneNumber   String

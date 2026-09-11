@@ -129,6 +129,7 @@ export async function setWhatsAppEnabled(enabled: boolean) {
 }
 
 function toDto(config: {
+  accessTokenFailedAt: Date | null;
   accessTokenLastFour: string;
   businessAccountId: string;
   channel: { status: "ACTIVE" | "INACTIVE" };
@@ -148,7 +149,9 @@ function toDto(config: {
     enabled,
     health: !enabled
       ? ("DISABLED" as const)
-      : config.webhookVerifiedAt
+      : config.accessTokenFailedAt
+        ? ("TOKEN_INVALID" as const)
+        : config.webhookVerifiedAt
         ? ("HEALTHY" as const)
         : ("AWAITING_WEBHOOK" as const),
     phoneNumberId: config.phoneNumberId,

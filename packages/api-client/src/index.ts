@@ -560,7 +560,7 @@ export type WhatsAppConfig = {
   callbackUrl: string;
   displayPhoneNumber: string;
   enabled: boolean;
-  health: "AWAITING_WEBHOOK" | "HEALTHY" | "DISABLED";
+  health: "AWAITING_WEBHOOK" | "HEALTHY" | "DISABLED" | "TOKEN_INVALID";
   phoneNumberId: string;
   verifiedAt: string;
   verifiedName: string | null;

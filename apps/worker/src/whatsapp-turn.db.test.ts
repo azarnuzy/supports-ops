@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createTestDatabase, type TestDatabase, truncateAll } from "@repo/test-db";
+import { UnrecoverableError } from "bullmq";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   classifyMessage: vi.fn(),
+  enqueueWhatsAppDelivery: vi.fn(),
   extractAttachment: vi.fn(),
   generateAiReply: vi.fn(),
 }));
@@ -14,11 +16,15 @@ vi.mock("@repo/ai-agent", () => ({
 }));
 vi.mock("@repo/api/ai-agent-turn", () => ({ generateAiReply: mocks.generateAiReply }));
 vi.mock("@repo/api/secrets", () => ({ decryptToolSecret: vi.fn(() => "access-token") }));
+vi.mock("@repo/api/whatsapp-queue", () => ({
+  enqueueWhatsAppDelivery: mocks.enqueueWhatsAppDelivery,
+}));
 vi.mock("./attachment-process", () => ({ extractAttachment: mocks.extractAttachment }));
 
 let database: TestDatabase;
 let prisma: typeof import("./prisma").prisma;
 let processWhatsAppTurn: typeof import("./whatsapp-turn").processWhatsAppTurn;
+let processWhatsAppDelivery: typeof import("./whatsapp-turn").processWhatsAppDelivery;
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -26,7 +32,7 @@ beforeAll(async () => {
   process.env.OPENROUTER_API_KEY = "test-key";
   process.env.TOOL_MASTER_KEY = Buffer.alloc(32).toString("base64");
   ({ prisma } = await import("./prisma"));
-  ({ processWhatsAppTurn } = await import("./whatsapp-turn"));
+  ({ processWhatsAppDelivery, processWhatsAppTurn } = await import("./whatsapp-turn"));
 }, 60_000);
 
 afterAll(async () => {
@@ -39,6 +45,7 @@ beforeEach(async () => {
   mocks.classifyMessage.mockReset();
   mocks.extractAttachment.mockReset();
   mocks.generateAiReply.mockReset();
+  mocks.enqueueWhatsAppDelivery.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -143,7 +150,7 @@ async function seedSession(
       },
     });
   }
-  return { sessionId, workspaceId };
+  return { channelId, customerIdentityId, memorySessionId, sessionId, workspaceId };
 }
 
 describe("WhatsApp turn worker", () => {
@@ -217,9 +224,6 @@ describe("WhatsApp turn worker", () => {
         content: "",
       },
     ]);
-    const fetch = vi.fn(async () => Response.json({ messages: [{ id: "wamid.out" }] }));
-    vi.stubGlobal("fetch", fetch);
-
     await processWhatsAppTurn({ data: { sessionId, workspaceId } });
 
     const reply = await prisma.message.findFirstOrThrow({
@@ -227,9 +231,155 @@ describe("WhatsApp turn worker", () => {
     });
     expect(reply).toMatchObject({
       content: "Sorry, this file is larger than 16 MB, so we couldn't receive it.",
-      deliveryStatus: "SENT",
+      deliveryStatus: "PENDING",
     });
+    expect(mocks.enqueueWhatsAppDelivery).toHaveBeenCalledWith(reply.id);
     expect(mocks.classifyMessage).not.toHaveBeenCalled();
     expect(mocks.generateAiReply).not.toHaveBeenCalled();
   });
+
+  it("never lets the AI Agent speak on an escalated Ticket", async () => {
+    const ids = await seed();
+    await createTicket(ids, "ESCALATED");
+    const pending = await addOutbound(ids, 3, "HUMAN_AGENT");
+
+    await processWhatsAppTurn({ data: ids });
+
+    expect(mocks.generateAiReply).not.toHaveBeenCalled();
+    expect(mocks.enqueueWhatsAppDelivery).toHaveBeenCalledWith(pending.id);
+  });
 });
+
+describe("WhatsApp delivery", () => {
+  const job = (messageId: string, attemptsMade = 0) => ({
+    attemptsMade,
+    data: { messageId },
+    opts: { attempts: 6 },
+  });
+
+  it("marks the Message sent and clears a stale token failure", async () => {
+    const ids = await seed();
+    await prisma.whatsAppConfig.updateMany({ data: { accessTokenFailedAt: new Date() } });
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT");
+    stubMeta(200, { messages: [{ id: "wamid.out" }] });
+
+    await processWhatsAppDelivery(job(message.id));
+
+    const stored = await prisma.message.findUniqueOrThrow({ where: { id: message.id } });
+    expect(stored).toMatchObject({ deliveryStatus: "SENT", externalMessageId: "wamid.out" });
+    expect((await prisma.whatsAppConfig.findFirstOrThrow()).accessTokenFailedAt).toBeNull();
+  });
+
+  it("retries a transient failure and fails visibly once retries run out", async () => {
+    const ids = await seed();
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT");
+    stubMeta(503, { error: { code: 2, message: "Service unavailable" } });
+
+    await expect(processWhatsAppDelivery(job(message.id))).rejects.not.toBeInstanceOf(
+      UnrecoverableError,
+    );
+    expect(
+      (await prisma.message.findUniqueOrThrow({ where: { id: message.id } })).deliveryStatus,
+    ).toBe("PENDING");
+
+    await expect(processWhatsAppDelivery(job(message.id, 5))).rejects.toThrow();
+    expect(await prisma.message.findUniqueOrThrow({ where: { id: message.id } })).toMatchObject({
+      deliveryFailureReason: "Service unavailable",
+      deliveryStatus: "FAILED",
+    });
+  });
+
+  it("fails a permanent error at once, with its reason, and raises no Escalation", async () => {
+    const ids = await seed();
+    const ticketId = await createTicket(ids, "HUMAN_HANDLING");
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT", ticketId);
+    stubMeta(400, { error: { code: 131047, message: "Re-engagement message" } });
+
+    await expect(processWhatsAppDelivery(job(message.id))).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+
+    expect(await prisma.message.findUniqueOrThrow({ where: { id: message.id } })).toMatchObject({
+      deliveryFailureReason: "Re-engagement message",
+      deliveryStatus: "FAILED",
+    });
+    expect((await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })).status).toBe(
+      "HUMAN_HANDLING",
+    );
+    expect(await prisma.aiActivity.count({ where: { eventType: "ESCALATED" } })).toBe(0);
+  });
+
+  it("flags the access token when Meta stops accepting it", async () => {
+    const ids = await seed();
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT");
+    stubMeta(401, { error: { code: 190, message: "Invalid OAuth access token" } });
+
+    await expect(processWhatsAppDelivery(job(message.id))).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+
+    expect((await prisma.whatsAppConfig.findFirstOrThrow()).accessTokenFailedAt).toBeInstanceOf(
+      Date,
+    );
+  });
+});
+
+function stubMeta(status: number, body: unknown) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(body), { status })),
+  );
+}
+
+async function createTicket(
+  ids: Awaited<ReturnType<typeof seed>>,
+  status: "ESCALATED" | "HUMAN_HANDLING",
+) {
+  const ticket = await prisma.ticket.create({
+    data: {
+      aiAgentId: `ai-${ids.workspaceId.slice("workspace-".length)}`,
+      channelId: ids.channelId,
+      customerIdentityId: ids.customerIdentityId,
+      id: randomUUID(),
+      sessionId: ids.sessionId,
+      status,
+      title: "Tagihan",
+      workspaceId: ids.workspaceId,
+    },
+  });
+  await prisma.message.updateMany({
+    data: { ticketId: ticket.id },
+    where: { sessionId: ids.sessionId },
+  });
+  return ticket.id;
+}
+
+function addOutbound(
+  ids: Awaited<ReturnType<typeof seed>>,
+  position: number,
+  senderType: "HUMAN_AGENT" | "SYSTEM",
+  ticketId?: string,
+) {
+  return prisma.message.create({
+    data: {
+      content: "Halo, saya bantu.",
+      deliveryStatus: "PENDING",
+      externalMessageId: `human:${randomUUID()}`,
+      id: randomUUID(),
+      memorySessionId: ids.memorySessionId,
+      message: { content: "Halo, saya bantu." },
+      position,
+      role: "assistant",
+      runId: randomUUID(),
+      senderType,
+      sessionId: ids.sessionId,
+      ticketId,
+      turn: position,
+      workspaceId: ids.workspaceId,
+    },
+  });
+}
+
+function seed() {
+  return seedSession([{ content: "Tagihan saya" }, { content: "belum masuk" }]);
+}
