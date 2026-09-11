@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
+import { useTicketCategoriesQuery } from "../../../ticket-categories";
 import { formatEnumLabel, getInitials } from "../../../../lib/utils";
 import { meQueryOptions, workspaceUsersQueryOptions } from "../../../auth";
 import { describeActivity } from "../../../tickets/activity-description";
@@ -72,7 +73,6 @@ import {
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
 import {
-  categoryFilterOptions,
   priorityFilterOptions,
   scopeRoutes,
   statusFilterOptions,
@@ -168,6 +168,15 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
       replace: true,
       search: (prev: Record<string, string | undefined>) => ({ ...prev, q: value || undefined }),
     });
+  // Categories are Workspace-configured, so the filter list is fetched rather than hard-coded.
+  const ticketCategories = useTicketCategoriesQuery();
+  const categoryFilterOptions = [
+    { label: "All categories", value: "ALL" },
+    ...(ticketCategories.data?.categories ?? []).map((category) => ({
+      label: category.label,
+      value: category.key,
+    })),
+  ];
   const activeFilterEntries = [
     { key: "status", options: statusFilterOptions, value: statusFilter },
     { key: "priority", options: priorityFilterOptions, value: priorityFilter },

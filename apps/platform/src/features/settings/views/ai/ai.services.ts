@@ -3,7 +3,6 @@ import {
   fetchAiSettings,
   listCatalogTools,
   removeToolPolicy,
-  setToolAssignment,
   setToolPolicy,
   updateAiSettings,
   type AiSettings,
@@ -23,18 +22,6 @@ export function saveAiSettings(input: AiSettings) {
 
 export function getAgentTools(aiAgentId: string) {
   return listCatalogTools(apiClient, aiAgentId);
-}
-
-export function assignTool({
-  toolId,
-  aiAgentId,
-  assigned,
-}: {
-  toolId: string;
-  aiAgentId: string;
-  assigned: boolean;
-}) {
-  return setToolAssignment(apiClient, toolId, aiAgentId, assigned);
 }
 
 export function setCategoryPolicy({

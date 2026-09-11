@@ -3,11 +3,9 @@ import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "@repo/ui/components/sonner";
 import type { McpTool } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { PlusIcon } from "lucide-react";
+import { PlugIcon, PlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { PlatformAppShell } from "../../../app-shell";
-import { SettingsNav } from "../../components/settings-nav";
-import { ReviewToolDialog, ServerDialog, ServerRow } from "./components";
+import { ReviewToolDialog, ServerDialog, ServerRow, ServerSheet } from "./components";
 import {
   mcpServersQueryOptions,
   useCreateServerMutation,
@@ -20,7 +18,7 @@ import {
 } from "./mcp.hooks";
 import { emptyMcpServerForm, type McpServerFormState } from "./mcp.types";
 
-const McpServersSettingsView = () => {
+export const McpPanel = () => {
   const servers = useQuery(mcpServersQueryOptions);
   const createServer = useCreateServerMutation();
   const updateServer = useUpdateServerMutation();
@@ -34,9 +32,14 @@ const McpServersSettingsView = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<McpServerFormState>(emptyMcpServerForm);
   const [toolsByServer, setToolsByServer] = useState<Record<string, McpTool[]>>({});
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [lastTestByServer, setLastTestByServer] = useState<
+    Record<string, { message?: string; ok: boolean }>
+  >({});
   const [reviewing, setReviewing] = useState<McpTool | null>(null);
 
   const items = servers.data?.servers ?? [];
+  const detailServer = items.find((server) => server.id === detailId) ?? null;
 
   function closeDialog() {
     setDialogOpen(false);
@@ -108,8 +111,15 @@ const McpServersSettingsView = () => {
 
   function handleTest(id: string) {
     testConnection.mutate(id, {
-      onError: () => toast.error("Failed to test the MCP Server."),
+      onError: () => {
+        setLastTestByServer((current) => ({ ...current, [id]: { ok: false } }));
+        toast.error("Failed to test the MCP server.");
+      },
       onSuccess: (result) => {
+        setLastTestByServer((current) => ({
+          ...current,
+          [id]: result.data.ok ? { ok: true } : { message: result.data.error, ok: false },
+        }));
         if (result.data.ok) toast.success("Connection succeeded.");
         else toast.error(result.data.error);
       },
@@ -166,61 +176,94 @@ const McpServersSettingsView = () => {
   }
 
   return (
-    <PlatformAppShell>
-      <section className="mx-auto grid w-full max-w-6xl gap-8">
-        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Workspace settings</p>
-            <h1 className="mt-1 text-3xl font-semibold text-balance">MCP Servers</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Connect remote Streamable HTTP MCP Servers and enable discovered Tools.
-            </p>
-          </div>
-          <Button onClick={openCreate}>
-            <PlusIcon className="size-4" /> Add MCP Server
-          </Button>
-        </div>
-        <SettingsNav />
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Connect a remote Streamable HTTP MCP server to import its tools. Nothing it exposes is
+          callable until you review and enable it.
+        </p>
+        <Button onClick={openCreate}>
+          <PlusIcon className="size-4" />
+          Add server
+        </Button>
+      </div>
 
-        <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
           {servers.isPending ? (
             <div className="grid gap-3 p-5">
-              {Array.from({ length: 3 }, (_, index) => (
-                <Skeleton key={index} className="h-16 w-full" />
+              {["a", "b", "c"].map((key) => (
+                <Skeleton key={key} className="h-16 w-full rounded-lg" />
               ))}
             </div>
           ) : null}
           {servers.isError ? (
             <div className="grid place-items-center gap-3 p-12 text-center">
-              <p className="text-sm text-destructive">Unable to load MCP Servers.</p>
+              <p className="text-sm text-destructive">Unable to load MCP servers.</p>
               <Button variant="outline" onClick={() => void servers.refetch()}>
                 Retry
               </Button>
             </div>
           ) : null}
           {!servers.isPending && !servers.isError && items.length === 0 ? (
-            <p className="p-12 text-center text-sm text-muted-foreground">No MCP Servers yet.</p>
+            <div className="grid place-items-center gap-3 p-12 text-center">
+              <div className="grid size-10 place-items-center rounded-lg bg-muted">
+                <PlugIcon className="size-5 text-muted-foreground" />
+              </div>
+              <div className="grid gap-1">
+                <p className="text-base font-medium">No MCP servers found</p>
+                <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+                  This agent has no connected MCP servers yet.
+                </p>
+              </div>
+              <Button className="mt-1" size="sm" variant="outline" onClick={openCreate}>
+                <PlusIcon className="size-4" />
+                Add MCP Server
+              </Button>
+            </div>
           ) : null}
           {items.map((server) => (
             <ServerRow
               key={server.id}
               server={server}
-              tools={toolsByServer[server.id]}
-              isTesting={testConnection.isPending && testConnection.variables === server.id}
-              isDiscovering={discoverTools.isPending && discoverTools.variables === server.id}
-              onTest={() => handleTest(server.id)}
-              onDiscover={() => handleDiscover(server.id)}
-              onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
-              onEdit={() => openEdit(server.id)}
-              onDelete={() => handleDelete(server.id)}
-              onToggleToolEnabled={(toolId, enabled) =>
-                handleToggleToolEnabled(server.id, toolId, enabled)
+              activeToolCount={
+                toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length
               }
-              onReviewTool={setReviewing}
+              onOpenDetail={() => setDetailId(server.id)}
+              onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
+              onDelete={() => handleDelete(server.id)}
             />
           ))}
-        </div>
-      </section>
+      </div>
+
+      <ServerSheet
+        open={detailId !== null}
+        onOpenChange={(open) => !open && setDetailId(null)}
+        server={detailServer}
+        tools={detailId ? toolsByServer[detailId] : undefined}
+        lastTest={detailId ? lastTestByServer[detailId] : undefined}
+        isTesting={testConnection.isPending && testConnection.variables === detailId}
+        isDiscovering={discoverTools.isPending && discoverTools.variables === detailId}
+        onTest={() => detailId && handleTest(detailId)}
+        onDiscover={() => detailId && handleDiscover(detailId)}
+        onToggleServerEnabled={(enabled) =>
+          detailId && handleToggleServerEnabled(detailId, enabled)
+        }
+        onEdit={() => {
+          if (!detailId) return;
+          const id = detailId;
+          setDetailId(null);
+          openEdit(id);
+        }}
+        onDelete={() => {
+          if (!detailId) return;
+          handleDelete(detailId);
+          setDetailId(null);
+        }}
+        onToggleToolEnabled={(toolId, enabled) =>
+          detailId && handleToggleToolEnabled(detailId, toolId, enabled)
+        }
+        onReviewTool={setReviewing}
+      />
 
       <ServerDialog
         open={dialogOpen}
@@ -238,8 +281,8 @@ const McpServersSettingsView = () => {
         onSubmit={handleReviewSubmit}
         isPending={reviewTool.isPending}
       />
-    </PlatformAppShell>
+    </div>
   );
 };
 
-export default McpServersSettingsView;
+export default McpPanel;

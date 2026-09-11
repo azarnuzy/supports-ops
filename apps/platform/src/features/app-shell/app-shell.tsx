@@ -26,15 +26,19 @@ import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
+  BotIcon,
   ChevronRightIcon,
   InboxIcon,
   LayoutDashboardIcon,
   LayoutListIcon,
   LibraryBigIcon,
   LogOutIcon,
+  MessageSquareCodeIcon,
   MonitorIcon,
-  SettingsIcon,
+  TagsIcon,
   TicketCheckIcon,
+  UsersRoundIcon,
+  WrenchIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -42,19 +46,39 @@ import { meQueryOptions, useLogoutMutation } from "../auth";
 import { getInitials } from "../../lib/utils";
 import { HeaderControls } from "./components/header-controls";
 
-type NavItem = { icon: LucideIcon; label: string; to: string };
+type NavItem = {
+  icon: LucideIcon;
+  label: string;
+  /** Subtrees this item owns; defaults to [`to`]. */
+  owns?: string[];
+  /** Subtrees owned by sibling items that this one must never claim. */
+  notUnder?: string[];
+  to: string;
+};
 
 type NavSection = { collapsible?: boolean; items: NavItem[]; label?: string };
 
-/** Root needs an exact match; every other item also matches its nested routes. */
-function isNavActive(pathname: string, to: string) {
-  if (to === "/") return pathname === "/";
-  return pathname === to || pathname.startsWith(`${to}/`);
+/** The deepest matching item owns `pathname`; `notUnder` carves out sibling-owned subtrees. */
+function activeNavItemTo(pathname: string, items: NavItem[]) {
+  let best: NavItem | undefined;
+  for (const item of items) {
+    if (item.notUnder?.some((base) => pathname === base || pathname.startsWith(`${base}/`))) {
+      continue;
+    }
+    const ownedSubtrees = item.owns ?? [item.to];
+    const owned = ownedSubtrees.some((base) =>
+      base === "/" ? pathname === "/" : pathname === base || pathname.startsWith(`${base}/`),
+    );
+    if (owned && (!best || item.to.length > best.to.length)) {
+      best = item;
+    }
+  }
+  return best?.to;
 }
 
-function NavMenuButton({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavMenuButton({ active, item }: { active: boolean; item: NavItem }) {
   return (
-    <SidebarMenuButton asChild isActive={isNavActive(pathname, item.to)} tooltip={item.label}>
+    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
       <Link to={item.to}>
         <item.icon className="size-4 shrink-0" />
         <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
@@ -88,13 +112,21 @@ export function PlatformAppShell({
   }
 
   const conversationItems: NavItem[] = [
-    { icon: InboxIcon, label: "Mine", to: "/chat" },
+    {
+      icon: InboxIcon,
+      label: "Mine",
+      notUnder: ["/chat/ai-live"],
+      to: "/chat",
+    },
     { icon: TicketCheckIcon, label: "Unassigned", to: "/chat/unassigned" },
   ];
   const navSections: NavSection[] =
     user.data.role === "ADMIN"
       ? [
-          { items: [{ icon: LayoutDashboardIcon, label: "Dashboard", to: "/" }] },
+          {
+            items: [{ icon: LayoutDashboardIcon, label: "Dashboard", to: "/" }],
+            label: "Overview",
+          },
           {
             collapsible: true,
             items: [
@@ -105,12 +137,30 @@ export function PlatformAppShell({
           },
           {
             items: [
+              { icon: BotIcon, label: "AI Agent", to: "/agent" },
+              { icon: WrenchIcon, label: "Tools", to: "/agent/tools" },
               { icon: LibraryBigIcon, label: "Knowledge", to: "/knowledge" },
-              { icon: SettingsIcon, label: "Settings", to: "/settings/agents" },
             ],
+            label: "Configure",
+          },
+          {
+            items: [{ icon: MessageSquareCodeIcon, label: "Web Widget", to: "/widget" }],
+            label: "Deploy",
+          },
+          {
+            items: [
+              { icon: UsersRoundIcon, label: "Users", to: "/workspace/users" },
+              { icon: TagsIcon, label: "Ticket categories", to: "/workspace/categories" },
+            ],
+            label: "Workspace",
           },
         ]
       : [{ collapsible: true, items: conversationItems, label: "Conversations" }];
+
+  const activeTo = activeNavItemTo(
+    location.pathname,
+    navSections.flatMap((section) => section.items),
+  );
 
   return (
     <SidebarProvider>
@@ -135,7 +185,7 @@ export function PlatformAppShell({
           {navSections.map((section) => {
             const items = section.items.map((item) => (
               <SidebarMenuItem key={item.to}>
-                <NavMenuButton item={item} pathname={location.pathname} />
+                <NavMenuButton active={item.to === activeTo} item={item} />
               </SidebarMenuItem>
             ));
             return (

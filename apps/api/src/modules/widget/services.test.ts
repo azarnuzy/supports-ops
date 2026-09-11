@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  ticketCategoryFindMany: vi.fn(),
   aiActivityCreate: vi.fn(),
   aiActivityCreateMany: vi.fn(),
   classificationConfig: {
@@ -43,6 +44,7 @@ class FakePrismaKnownRequestError extends Error {
 vi.mock("../../utils/prisma", () => ({
   unscopedPrisma: {
     $transaction: mocks.transaction,
+    ticketCategory: { findMany: mocks.ticketCategoryFindMany },
     webSession: {
       findUnique: mocks.webSessionFindUnique,
       findUniqueOrThrow: mocks.webSessionFindUniqueOrThrow,
@@ -107,6 +109,9 @@ function resetMocks() {
   mocks.aiActivityCreate.mockReset();
   mocks.aiActivityCreateMany.mockReset();
   mocks.classifyMessage.mockReset();
+  mocks.ticketCategoryFindMany.mockReset().mockResolvedValue([
+    { description: "Anything else.", isFallback: true, key: "GENERAL", label: "General" },
+  ]);
   mocks.conversationCreate.mockReset();
   mocks.conversationFindUniqueOrThrow.mockReset();
   mocks.createClassificationModel.mockReset().mockReturnValue({ id: "fake-model" });

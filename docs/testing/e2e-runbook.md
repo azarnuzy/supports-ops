@@ -53,7 +53,7 @@ Seed ini idempoten dan menyiapkan:
 | --- | --- |
 | Admin | `admin@demo.supportops.dev` / `DemoAdmin123!` |
 | Human Agent | `agent@demo.supportops.dev` / `DemoAgent123!` |
-| Origin Widget yang diizinkan | `localhost:3001`, `localhost:4000` |
+| Origin Widget yang diizinkan | `localhost:3002`, `localhost:4000` |
 | Knowledge | Lima Customer-Safe dan dua Internal-Only, dipublish bila `OPENROUTER_API_KEY` tersedia |
 | Business System | Customer demo, termasuk `budi@example.com` dan `siti@example.com` |
 | AI Agent | Instructions dan Handoff/AI Resolution Message demo terpasang |
@@ -92,7 +92,7 @@ Untuk menguji aturan keamanan origin, buka demo host dari origin yang belum diiz
 ### Menguji logo pada header Widget
 
 1. Di **Settings → Web Widget**, unggah logo (PNG/JPG/SVG, maks. 2MB).
-2. Muat ulang demo host (`http://localhost:3001/demo.html?widgetKey=<widget-key>`), buka launcher, dan konfirmasi logo tersebut muncul di header panel chat. Tombol launcher tetap memakai ikon generik.
+2. Muat ulang demo host (`http://localhost:3002/demo.html?widgetKey=<widget-key>`), buka launcher, dan konfirmasi logo tersebut muncul di header panel chat. Tombol launcher tetap memakai ikon generik.
 3. Hapus logo dari Settings, muat ulang demo host lagi, dan konfirmasi header kembali memakai ikon chat generik.
 
 ### Menguji Session Link dengan Mailpit

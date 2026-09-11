@@ -103,7 +103,19 @@ export type CreateHumanAgentInput = {
 
 export type TicketPriority = "LOW" | "NORMAL" | "HIGH";
 export type TicketStatus = "AI_HANDLING" | "ESCALATED" | "HUMAN_HANDLING" | "RESOLVED";
-export type TicketCategory = "ACCOUNT" | "BILLING" | "SUBSCRIPTION" | "TECHNICAL" | "GENERAL";
+/** A Workspace-configured category key. The label to show a human lives on `TicketCategoryOption`. */
+export type TicketCategory = string;
+
+export type TicketCategoryOption = {
+  id: string;
+  key: string;
+  label: string;
+  description: string;
+  isFallback: boolean;
+  sortOrder: number;
+};
+
+export type TicketCategoryInput = { label: string; description: string };
 export type TicketMessage = {
   content: string;
   createdAt: string;
@@ -788,7 +800,24 @@ export type CatalogTool = {
   updatedAt: string;
   assigned: boolean;
   availability: ToolAvailability;
+  lastCall: { at: string; succeeded: boolean } | null;
   requiredForCategories: TicketCategory[];
+};
+
+export type HttpToolTestResult =
+  | { ok: true; body: string; latencyMs: number; status: number }
+  | { ok: false; code: "DENIED" | "HTTP" | "NETWORK" | "OVERSIZED_RESULT" | "TIMEOUT" | "VALIDATION" };
+
+export type ToolCall = {
+  at: string;
+  latencyMs: number;
+  succeeded: boolean;
+  ticketId: string;
+};
+
+export type ToolCallLog = {
+  calls: ToolCall[];
+  stats: { avgLatencyMs: number; failed: number; total: number };
 };
 
 export type HttpToolInput = {
@@ -867,6 +896,22 @@ export async function updateHttpTool(client: ApiClient, id: string, input: HttpT
   const response = await client.tools[":id"].$put({ json: input, param: { id } });
   if (!response.ok) throw await readToolError(response, "Failed to save the HTTP Tool.");
   return (await response.json()) as { tool: HttpTool };
+}
+
+export async function listToolCalls(client: ApiClient, id: string) {
+  const response = await client.tools[":id"].logs.$get({ param: { id } });
+  if (!response.ok) throw await readToolError(response, "Failed to load the tool logs.");
+  return (await response.json()) as ToolCallLog;
+}
+
+export async function testHttpTool(
+  client: ApiClient,
+  id: string,
+  input: Record<string, unknown>,
+) {
+  const response = await client.tools[":id"].test.$post({ json: { input }, param: { id } });
+  if (!response.ok) throw await readToolError(response, "Failed to test the Webhook.");
+  return (await response.json()) as { result: HttpToolTestResult };
 }
 
 export async function deleteHttpTool(client: ApiClient, id: string) {
@@ -1027,4 +1072,35 @@ export async function reviewMcpTool(
   });
   if (!response.ok) throw await readMcpError(response, "Failed to review the MCP Tool.");
   return (await response.json()) as { data: McpTool };
+}
+
+export async function listTicketCategories(client: ApiClient) {
+  const response = await client["ticket-categories"].$get();
+  if (!response.ok) throw new Error("Failed to load ticket categories.");
+  return (await response.json()) as { categories: TicketCategoryOption[] };
+}
+
+export async function createTicketCategory(client: ApiClient, input: TicketCategoryInput) {
+  const response = await client["ticket-categories"].$post({ json: input });
+  if (response.status === 409)
+    throw new Error("A category with a matching name already exists.");
+  if (!response.ok) throw new Error("Failed to create the category.");
+  return (await response.json()) as { category: TicketCategoryOption };
+}
+
+export async function updateTicketCategory(
+  client: ApiClient,
+  id: string,
+  input: TicketCategoryInput,
+) {
+  const response = await client["ticket-categories"][":id"].$put({ json: input, param: { id } });
+  if (!response.ok) throw new Error("Failed to save the category.");
+  return (await response.json()) as { category: TicketCategoryOption };
+}
+
+export async function deleteTicketCategory(client: ApiClient, id: string) {
+  const response = await client["ticket-categories"][":id"].$delete({ param: { id } });
+  if (response.status === 409)
+    throw new Error("The fallback category cannot be deleted — every ticket needs somewhere to land.");
+  if (!response.ok) throw new Error("Failed to delete the category.");
 }

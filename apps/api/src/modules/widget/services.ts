@@ -37,6 +37,7 @@ import {
 import { enqueueAttachmentProcess } from "./attachment-queue";
 import { cancelFollowUpTimers, scheduleFollowUp } from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "../tickets/queue";
+import { ticketCategoryOptions } from "../ticket-categories/services";
 import { resolveTools } from "../tools/services";
 import {
   createOptionalToolExecutor,
@@ -208,7 +209,11 @@ export async function createCustomerMessage(
   if (!apiKey) throw new ClassificationNotConfiguredError();
 
   const model = createClassificationModel({ ...classificationConfig, apiKey });
-  const decision = await classifyMessage({ content: input.content, model });
+  const decision = await classifyMessage({
+    categories: await ticketCategoryOptions(session.workspaceId),
+    content: input.content,
+    model,
+  });
 
   if (!decision.qualifies) {
     await persistSessionExchange(session.id, session.workspaceId, input, decision.reply);
@@ -351,6 +356,7 @@ export async function generateAttachmentReply(ticketId: string, workspaceId: str
     if (apiKey) {
       try {
         const decision = await classifyMessage({
+          categories: await ticketCategoryOptions(workspaceId),
           content: context,
           model: createClassificationModel({ ...classificationConfig, apiKey }),
         });

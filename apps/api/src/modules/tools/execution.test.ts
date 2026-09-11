@@ -14,7 +14,7 @@ vi.mock("../../config", () => ({
 }));
 vi.mock("./secrets", () => ({ decryptToolSecret: (value: string) => value }));
 
-const { executeHttpTool } = await import("./execution");
+const { executeHttpTool, HttpToolFailure, testHttpTool } = await import("./execution");
 const resolvePublic = vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]) as never;
 
 function configuredTool(overrides: Record<string, unknown> = {}) {
@@ -128,5 +128,46 @@ describe("executeHttpTool", () => {
         { fetch: hangingFetch, resolve: resolvePublic },
       ),
     ).rejects.toMatchObject({ code: "TIMEOUT", message: "HTTP Tool failed." });
+  });
+});
+
+describe("testHttpTool", () => {
+  it("reports status, body, and latency without needing a Ticket or an assignment", async () => {
+    const fetcher = vi.fn(async () => new Response('{"ok":true}', { status: 200 })) as never;
+    const result = await testHttpTool(
+      { input: { customerId: "customer-1" }, toolId: "tool-1" },
+      { fetch: fetcher, resolve: resolvePublic },
+    );
+    expect(result.status).toBe(200);
+    expect(result.body).toBe('{"ok":true}');
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(mocks.ticketFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("reports a failing status instead of retrying or throwing HTTP", async () => {
+    const fetcher = vi.fn(async () => new Response("boom", { status: 500 })) as never;
+    const result = await testHttpTool(
+      { input: { customerId: "customer-1" }, toolId: "tool-1" },
+      { fetch: fetcher, resolve: resolvePublic },
+    );
+    expect(result.status).toBe(500);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects input that does not match the schema", async () => {
+    await expect(
+      testHttpTool({ input: { wrong: 1 }, toolId: "tool-1" }, { resolve: resolvePublic }),
+    ).rejects.toThrow(HttpToolFailure);
+  });
+
+  it("runs a MUTATING Tool that executeHttpTool would deny", async () => {
+    mocks.toolFindFirst.mockResolvedValue(configuredTool({ risk: "MUTATING" }));
+    const fetcher = vi.fn(async () => new Response("{}", { status: 200 })) as never;
+    await expect(
+      testHttpTool(
+        { input: { customerId: "customer-1" }, toolId: "tool-1" },
+        { fetch: fetcher, resolve: resolvePublic },
+      ),
+    ).resolves.toMatchObject({ status: 200 });
   });
 });

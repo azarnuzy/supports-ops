@@ -1,16 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireAdmin } from "../../features/auth";
-import { AiSettingsView } from "../../features/settings";
+import { AiAgentView } from "../../features/settings";
 import { pageMetadata } from "../../lib/seo";
 
-export const Route = createFileRoute("/settings/ai")({
+export const Route = createFileRoute("/agent/")({
   beforeLoad: requireAdmin,
   head: () =>
     pageMetadata({
       title: "AI Agent",
-      description: "Configure Follow-Up and Auto-Resolution.",
-      path: "/settings/ai",
+      description: "Instructions, handoff messages, and routing rules for your AI Agent.",
+      path: "/agent",
       noIndex: true,
     }),
-  component: AiSettingsView,
+  component: AiAgentView,
 });

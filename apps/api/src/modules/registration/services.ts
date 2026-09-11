@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
+import { seedDefaultTicketCategories } from "../ticket-categories/services";
 import { Prisma, unscopedPrisma } from "../../utils/prisma";
 import {
   defaultBotName,
@@ -41,7 +42,9 @@ export async function registerAdminWorkspace(input: RegisterInput) {
 
       const userId = randomUUID();
 
-      await tx.aiSettings.create({
+      await seedDefaultTicketCategories(tx, workspace.id);
+
+    await tx.aiSettings.create({
         data: { id: randomUUID(), workspaceId: workspace.id },
       });
 

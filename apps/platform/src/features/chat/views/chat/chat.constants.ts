@@ -25,11 +25,3 @@ export const priorityFilterOptions: { label: string; value: TicketPriority | "AL
   { label: "Low", value: "LOW" },
 ];
 
-export const categoryFilterOptions: { label: string; value: TicketCategory | "ALL" }[] = [
-  { label: "All categories", value: "ALL" },
-  { label: "Account", value: "ACCOUNT" },
-  { label: "Billing", value: "BILLING" },
-  { label: "Subscription", value: "SUBSCRIPTION" },
-  { label: "Technical", value: "TECHNICAL" },
-  { label: "General", value: "GENERAL" },
-];

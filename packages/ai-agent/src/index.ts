@@ -2,8 +2,8 @@ export {
   ClassificationFailedError,
   classifyMessage,
   createClassificationModel,
-  ticketCategorySchema,
   ticketPrioritySchema,
+  type TicketCategoryOption,
 } from "./classification";
 export { createReplyModel, ReplyGenerationFailedError, streamReply } from "./reply";
 export { createAssignedTools } from "./tools";

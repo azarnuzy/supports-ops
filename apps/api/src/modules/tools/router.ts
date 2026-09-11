@@ -7,9 +7,11 @@ import {
   setToolAssignmentSchema,
   setToolEnabledSchema,
   setToolPolicySchema,
+  testHttpToolSchema,
   toolPolicyParamsSchema,
   updateHttpToolSchema,
 } from "./schema";
+import { HttpToolFailure, testHttpTool } from "./execution";
 import {
   AiAgentNotFoundError,
   createHttpTool,
@@ -18,6 +20,7 @@ import {
   HttpToolNotFoundError,
   InvalidToolSchemaError,
   listHttpTools,
+  listToolCalls,
   listTools,
   removeToolPolicy,
   setToolAssignment,
@@ -129,6 +132,22 @@ export const toolsRouter = new Hono<{ Variables: AuthVariables }>()
       if (error instanceof HttpToolNotFoundError) return c.json({ error: "not_found" }, 404);
       if (error instanceof InvalidToolSchemaError)
         return c.json({ error: "invalid_schema", message: error.message }, 422);
+      throw error;
+    }
+  })
+  .get("/:id/logs", async (c) => {
+    return c.json(await listToolCalls(c.req.param("id")), 200);
+  })
+  .post("/:id/test", zValidator("json", testHttpToolSchema), async (c) => {
+    try {
+      const result = await testHttpTool({
+        input: c.req.valid("json").input,
+        toolId: c.req.param("id"),
+      });
+      return c.json({ result: { ...result, ok: true as const } }, 200);
+    } catch (error) {
+      if (error instanceof HttpToolFailure)
+        return c.json({ result: { code: error.code, ok: false as const } }, 200);
       throw error;
     }
   })

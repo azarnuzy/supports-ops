@@ -6,7 +6,7 @@ model Ticket {
   webSessionId       String           @unique
   customerIdentityId String
   title              String
-  category           TicketCategory   @default(GENERAL)
+  category           String           @default("GENERAL")
   priority           TicketPriority   @default(NORMAL)
   status             TicketStatus     @default(AI_HANDLING)
   escalationReason   EscalationReason?
