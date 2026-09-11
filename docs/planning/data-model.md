@@ -12,7 +12,7 @@ prisma/
 │   ├── schema.prisma        generator, datasource, extensions
 │   ├── auth.prisma          Better Auth models, extended
 │   ├── workspace.prisma     Workspace, AiAgent, AiSettings
-│   ├── channel.prisma       Channel, WebWidgetConfig, WebSession, CustomerIdentity
+│   ├── channel.prisma       Channel, WebWidgetConfig, Session, CustomerIdentity
 │   ├── ticket.prisma        Ticket, AiActivity
 │   ├── message.prisma       Conversation, Message, ConversationError, Attachment
 │   ├── knowledge.prisma     KnowledgeSource, Chunk
@@ -56,11 +56,11 @@ Channel-to-AI-Agent is modelled as a direct reference rather than a join table. 
 **WebWidgetConfig** — `id`, `workspaceId`, `channelId` (unique), `widgetKey` (unique), `botName`, `welcomeMessage`, `primaryColor`, `allowedDomains` (string array), `createdAt`, `updatedAt`.
 Typed rather than a JSON blob on `Channel`, because every field is read by the widget on load and `allowedDomains` is security-relevant — it decides whether a Web Session may be created at all. `widgetKey` is what the embed script carries publicly; it identifies, it does not authorise.
 
-**CustomerIdentity** — `id`, `workspaceId`, `channelType`, `name`, `email`, `externalCustomerId`, `createdAt`, `deletedAt`.
-Indexed on `(workspaceId, channelType, email)`. `externalCustomerId` is filled from the Business System when the email resolves; null means Customer-specific Business Tools are unavailable and the AI Agent must escalate rather than guess. Deliberately **not** unique on email: the same email may hold several concurrent Web Sessions, and nothing merges them.
+**CustomerIdentity** — `id`, `workspaceId`, `channelType`, `canonicalId`, `name`, `email`, `externalCustomerId`, `createdAt`, `deletedAt`.
+Unique on `(workspaceId, channelType, canonicalId)`. `canonicalId` is the one value a Channel can always produce — the lowercased email on the Web Widget, the phone number on WhatsApp — which makes find-or-create a single upsert on every Channel. `externalCustomerId` is filled from the Business System when the email resolves; null means Customer-specific Business Tools are unavailable and the AI Agent must escalate rather than guess. A Customer may hold several concurrent Sessions; they share one identity.
 
-**WebSession** — `id`, `workspaceId`, `channelId`, `customerIdentityId`, `accessToken` (unique), `status`, `createdAt`, `closedAt`.
-`accessToken` is high-entropy random, never derived from the id. A Session stays active until its Ticket resolves; closing the browser does nothing. Once closed it cannot reopen, and the Session Link renders a read-only transcript.
+**Session** — `id`, `workspaceId`, `channelId`, `customerIdentityId`, `accessToken` (unique, nullable), `status`, `messageSeq`, `customerLastMessageAt`, `createdAt`, `closedAt`.
+`accessToken` is high-entropy random, never derived from the id, and null on a Channel that identifies its Customer by their own address. `messageSeq` is the conversation's single Message counter and `customerLastMessageAt` the clock every silence rule reads. A Session stays active until its Ticket resolves; closing the browser does nothing. Once closed it cannot reopen, and the Session Link renders a read-only transcript.
 
 ## Ticket
 
@@ -69,7 +69,7 @@ Indexed on `(workspaceId, channelType, email)`. `externalCustomerId` is filled f
 | Field | Notes |
 |---|---|
 | `id`, `workspaceId` | |
-| `webSessionId` | unique — a Web Session yields at most one Ticket |
+| `sessionId` | unique — a Session yields at most one Ticket |
 | `channelId`, `aiAgentId`, `customerIdentityId` | |
 | `assigneeId` | a `User`; null while the AI Agent owns it |
 | `title` | AI-generated once, human-overridable, never regenerated |
@@ -77,7 +77,6 @@ Indexed on `(workspaceId, channelType, email)`. `externalCustomerId` is filled f
 | `escalationReason`, `escalatedAt` | |
 | `claimedAt` | |
 | `resolvedBy`, `resolutionReason`, `resolvedAt` | |
-| `messageSeq` | integer high-water mark; see Message ordering |
 | `clarificationCount` | enforces the two-turn clarification cap |
 | `firstMessageId` | the message that caused the Ticket to exist |
 | `aiFailureCount` | enforces "AI failed twice → escalate" |
@@ -108,21 +107,21 @@ This is the one place where a library's schema and the product's schema become t
 
 | Required by Anvia | Added here |
 |---|---|
-| `id`, `scopeKey` (unique), `sessionId`, `userId`, `metadata` (JSON), `createdAt`, `updatedAt` | `workspaceId`, `ticketId` (unique) |
+| `id`, `scopeKey` (unique), `sessionId`, `userId`, `metadata` (JSON), `createdAt`, `updatedAt` | `workspaceId` |
 
-`scopeKey` is derived deterministically from the Ticket, and derived the same way for reads, writes, deletion, and inspection.
+Anvia's `sessionId` is the foreign key to our `Session`, unique, and the row is created when the Session opens — so the AI Agent has memory from the first turn, before any Ticket exists. `scopeKey` is derived deterministically from the Session, and derived the same way for reads, writes, deletion, and inspection. See [ADR-0017](../adr/0017-agent-memory-belongs-to-the-session.md).
 
 **Message** (Anvia's message model)
 
 | Required by Anvia | Added here |
 |---|---|
-| `id`, `memorySessionId`, `runId`, `turn`, `position`, `role`, `message` (JSON), `createdAt` | `workspaceId`, `ticketId`, `senderType`, `senderUserId`, `content`, `externalMessageId`, `deliveryStatus`, `deliveryAttempts`, `deletedAt`, `deletedBy` |
+| `id`, `memorySessionId`, `runId`, `turn`, `position`, `role`, `message` (JSON), `createdAt` | `workspaceId`, `ticketId`, `sessionId`, `senderType`, `senderUserId`, `content`, `externalMessageId`, `deliveryStatus`, `deliveryAttempts`, `deletedAt`, `deletedBy` |
 
-Constraints: `@@unique([memorySessionId, position])` — Anvia's own; `@@unique([workspaceId, externalMessageId])` — the idempotency guarantee, enforced by the database rather than by an application check. Indexes on `(ticketId, position)` for rendering and `(runId)` for tracing.
+Constraints: `@@unique([sessionId, position])` — one ordering per conversation; `@@unique([workspaceId, externalMessageId])` — the idempotency guarantee, enforced by the database rather than by an application check. Indexes on `(ticketId, position)` and `(memorySessionId, position)` for rendering and reading back memory, and `(runId)` for tracing.
 
 `content` is the plain text the interface renders; `message` is the runtime's structured form. Both are written, because the interface must render messages the runtime never produced — a Human Agent's reply, a handoff, a closing message.
 
-**Message ordering is the subtle part.** Two writers append to this table: the agent runtime through the wrapped store, and the Channel layer directly. Both take `position` from `Ticket.messageSeq`, incremented inside the same transaction as the insert. Anvia's uniqueness constraint then catches any mistake rather than letting the conversation silently interleave.
+**Message ordering is the subtle part.** Two writers append to this table: the agent runtime through the wrapped store, and the Channel layer directly. Both take `position` from `Session.messageSeq`, incremented inside the same transaction as the insert, so one monotonic sequence covers the whole conversation — including the turns that precede the Ticket. The uniqueness constraint then catches any mistake rather than letting the conversation silently interleave. This revises ADR-0004's per-Ticket sequence; see [ADR-0017](../adr/0017-agent-memory-belongs-to-the-session.md).
 
 Messages written outside an agent run still need Anvia's required fields. `runId` carries a Channel-generated identifier and `turn` the Ticket's current turn, so the row remains valid for the store to read back. **Confirming that the wrapped store round-trips these rows is part of the first spike**; if it cannot, the fallback is Anvia's documented memory interface implemented directly against this same table, which changes no columns.
 
@@ -167,7 +166,7 @@ An HNSW index sits on `embedding`; a composite index on `(workspaceId, kind, isP
 | `Role` | `ADMIN`, `HUMAN_AGENT` — replaces Better Auth's comma-separated string |
 | `ChannelType` | `WEB`, `WHATSAPP` |
 | `ChannelStatus` | `ACTIVE`, `INACTIVE` |
-| `WebSessionStatus` | `ACTIVE`, `CLOSED` |
+| `SessionStatus` | `ACTIVE`, `CLOSED` |
 | `TicketStatus` | `AI_HANDLING`, `ESCALATED`, `HUMAN_HANDLING`, `RESOLVED` |
 | `TicketCategory` | `ACCOUNT`, `BILLING`, `SUBSCRIPTION`, `TECHNICAL`, `GENERAL` |
 | `TicketPriority` | `LOW`, `NORMAL`, `HIGH` |

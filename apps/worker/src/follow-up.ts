@@ -22,6 +22,29 @@ async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: number) {
   });
 }
 
+/** The worker writes into the same transcript as the API, so it claims its
+ * Message position from the same counter on the Session. The API's own copy
+ * lives in `apps/api/src/utils/session-messages.ts`. */
+async function claimMessageSlot(
+  tx: Pick<typeof prisma, "session">,
+  sessionId: string,
+  memorySessionId: string,
+) {
+  const session = await tx.session.update({
+    data: { messageSeq: { increment: 1 } },
+    select: { messageSeq: true },
+    where: { id: sessionId },
+  });
+  return {
+    id: randomUUID(),
+    memorySessionId,
+    position: session.messageSeq,
+    runId: randomUUID(),
+    sessionId,
+    turn: session.messageSeq,
+  };
+}
+
 let publisher: Redis | undefined;
 
 async function publish(ticketId: string, event: unknown) {
@@ -49,8 +72,8 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
     const [ticket, settings] = await Promise.all([
       tx.ticket.findFirst({
         include: {
-          conversation: true,
           messages: { orderBy: { position: "desc" }, take: 1 },
+          session: { include: { conversation: true } },
         },
         where: { id: job.data.ticketId, status: "AI_HANDLING", workspaceId: job.data.workspaceId },
       }),
@@ -58,7 +81,7 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
     ]);
     const last = ticket?.messages[0];
     if (
-      !ticket?.conversation ||
+      !ticket?.session.conversation ||
       !last ||
       last.id !== job.data.aiMessageId ||
       last.senderType !== "AI_AGENT"
@@ -66,27 +89,17 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
       return null;
     }
 
-    const updated = await tx.ticket.update({
-      data: { messageSeq: { increment: 1 } },
-      where: { id: ticket.id },
-      select: { messageSeq: true },
-    });
     const content = `I’m following up on ${ticket.title}. Did my previous answer resolve this for you?`;
     const message = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId, ticket.session.conversation.id)),
         content,
         deliveryStatus: "PENDING",
         externalMessageId: `follow-up:${ticket.id}`,
-        id: randomUUID(),
-        memorySessionId: ticket.conversation.id,
         message: { content },
-        position: updated.messageSeq,
         role: "assistant",
-        runId: randomUUID(),
         senderType: "AI_AGENT",
         ticketId: ticket.id,
-        turn: updated.messageSeq,
-        webSessionId: ticket.webSessionId,
         workspaceId: ticket.workspaceId,
       },
     });
@@ -124,8 +137,8 @@ export async function processAutoResolveJob(job: { data: AutoResolveJob }) {
     const [ticket, settings] = await Promise.all([
       tx.ticket.findFirst({
         include: {
-          conversation: true,
           messages: { orderBy: { position: "desc" }, take: 1 },
+          session: { include: { conversation: true } },
           workspace: { select: { closingMessage: true } },
         },
         where: { id: job.data.ticketId, status: "AI_HANDLING", workspaceId: job.data.workspaceId },
@@ -134,42 +147,35 @@ export async function processAutoResolveJob(job: { data: AutoResolveJob }) {
     ]);
     const last = ticket?.messages[0];
     if (
-      !ticket?.conversation ||
+      !ticket?.session.conversation ||
       !settings?.autoResolveEnabled ||
       !last ||
       last.id !== job.data.followUpMessageId
     )
       return null;
-    const updated = await tx.ticket.update({
+    await tx.ticket.update({
       data: {
-        messageSeq: { increment: 1 },
         resolvedAt: new Date(),
         resolvedBy: "AI_AGENT",
         resolutionReason: "CUSTOMER_INACTIVE",
         status: "RESOLVED",
       },
       where: { id: ticket.id },
-      select: { messageSeq: true },
     });
-    await tx.webSession.update({ data: { status: "CLOSED" }, where: { id: ticket.webSessionId } });
     const content = ticket.workspace.closingMessage ?? "This conversation has been resolved.";
     const message = await tx.message.create({
       data: {
+        ...(await claimMessageSlot(tx, ticket.sessionId, ticket.session.conversation.id)),
         content,
         deliveryStatus: "PENDING",
         externalMessageId: `auto-resolution:${ticket.id}`,
-        id: randomUUID(),
-        memorySessionId: ticket.conversation.id,
         message: { content },
-        position: updated.messageSeq,
         role: "system",
-        runId: randomUUID(),
         senderType: "SYSTEM",
-        turn: updated.messageSeq,
-        webSessionId: ticket.webSessionId,
         workspaceId: ticket.workspaceId,
       },
     });
+    await tx.session.update({ data: { status: "CLOSED" }, where: { id: ticket.sessionId } });
     await tx.aiActivity.create({
       data: {
         eventType: "RESOLVED",

@@ -182,7 +182,7 @@ export type TicketDetail = TicketListItem & {
   escalationSummary: string | null;
   escalationSummaryStatus: "PENDING" | "READY" | "FAILED";
   messages: TicketDetailMessage[];
-  webSession: { createdAt: string };
+  session: { createdAt: string };
   resolutionReason: string | null;
   resolvedBy: string | null;
 };

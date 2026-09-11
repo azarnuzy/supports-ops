@@ -3,7 +3,7 @@ model Ticket {
   workspaceId        String
   channelId          String
   aiAgentId          String
-  webSessionId       String           @unique
+  sessionId          String           @unique
   customerIdentityId String
   title              String
   category           String           @default("GENERAL")
@@ -19,16 +19,14 @@ model Ticket {
   resolvedAt           DateTime?
   deletedAt          DateTime?
   deletedBy          String?
-  messageSeq         Int              @default(0)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   workspace          Workspace        @relation(fields: [workspaceId], references: [id])
   channel            Channel          @relation(fields: [workspaceId, channelId], references: [workspaceId, id])
   aiAgent            AiAgent          @relation(fields: [workspaceId, aiAgentId], references: [workspaceId, id])
-  webSession         WebSession       @relation(fields: [webSessionId], references: [id])
+  session            Session          @relation(fields: [sessionId], references: [id])
   customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
   assignedHumanAgent User?           @relation("TicketAssignee", fields: [assignedHumanAgentId], references: [id])
-  conversation       Conversation?
   messages           Message[]
   attachments        Attachment[]
   aiActivities       AiActivity[]
@@ -41,7 +39,7 @@ model Ticket {
 }
 
 /** Tracks, per Workspace user, the last Message position they have read on a
- * Ticket. Position is the same monotonic counter as Ticket.messageSeq, so
+ * Ticket. Position is the same monotonic counter as Session.messageSeq, so
  * unread counts compare directly against it without loading transcripts. */
 model TicketReadState {
   id               String   @id

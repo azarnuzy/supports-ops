@@ -51,9 +51,10 @@ const classificationOutputSchema = z.object({
  * `oneOf`, see docs/planning/spike-anvia.md finding 1). Narrowed into
  * `ClassificationDecision` by `classifyMessage` below.
  */
-const instructions = `You are the classification step of SupportOps' AI Agent. A Customer just sent a message in a Web Session that has no Ticket yet. Decide whether it is a genuine support request or just a greeting, thanks, test message, or other small talk with no real request.
+const instructions = `You are the classification step of SupportOps' AI Agent. A Customer just sent a message in a Session that has no Ticket yet. Decide whether it is a genuine support request or just a greeting, thanks, test message, or other small talk with no real request.
 
 Rules:
+- When earlier turns are shown, classify the latest Customer message in the context of the whole conversation, and write the title from the problem the conversation is actually about rather than from the opening greeting.
 - isSupportRequest is true only for a message that describes a problem, question, or need related to the company's product, account, billing, or service — something a support team should act on.
 - isSupportRequest is false for greetings, thanks, small talk, or anything with no real request. This holds regardless of whether the Customer wrote in Indonesian, English, or another language.
 - When isSupportRequest is true: set title (a concise, specific summary under 120 characters, written in the same language as the Customer's message), category (exactly one of the keys listed under Categories below — copy the key verbatim, and use the fallback key when unsure), and priority (HIGH when the message signals urgency or a blocking problem, LOW for a minor or cosmetic issue, NORMAL otherwise). Leave greetingReply null.
@@ -72,6 +73,19 @@ export function createClassificationModel(options: {
   return client.completionModel({ api: "chat", modelId: options.modelId });
 }
 
+/** The latest message is named as the one being classified, so a decision is
+ * never made about an earlier turn that is only there for context. */
+function describeMessage(
+  content: string,
+  history?: readonly { role: "agent" | "customer"; content: string }[],
+) {
+  if (!history?.length) return content;
+  const transcript = history
+    .map((turn) => `${turn.role === "customer" ? "Customer" : "Assistant"}: ${turn.content}`)
+    .join("\n");
+  return `Conversation so far:\n${transcript}\n\nLatest Customer message to classify:\n${content}`;
+}
+
 function describeCategories(categories: readonly TicketCategoryOption[]) {
   const lines = categories.map(
     (category) =>
@@ -84,6 +98,10 @@ export async function classifyMessage(params: {
   model: ClassificationModel;
   content: string;
   categories: readonly TicketCategoryOption[];
+  /** What was already said on this Session, oldest first. A Session can open
+   * with small talk the AI Agent itself answered, and the message that follows
+   * only makes sense with those turns in view. */
+  history?: readonly { role: "agent" | "customer"; content: string }[];
 }): Promise<ClassificationDecision> {
   return withSpan("ai_agent.classify", {}, async (span) => {
     let output: z.infer<typeof classificationOutputSchema>;
@@ -94,7 +112,7 @@ export async function classifyMessage(params: {
         model: params.model,
         outputSchema: classificationOutputSchema,
         retries: { maxAttempts: 2 },
-        text: params.content,
+        text: describeMessage(params.content, params.history),
       }));
     } catch (error) {
       throw new ClassificationFailedError({ cause: error });

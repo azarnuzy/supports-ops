@@ -10,7 +10,7 @@ model Channel {
   workspace       Workspace        @relation(fields: [workspaceId], references: [id])
   aiAgent         AiAgent          @relation(fields: [aiAgentId], references: [id])
   webWidgetConfig WebWidgetConfig?
-  webSessions     WebSession[]
+  sessions        Session[]
   tickets         Ticket[]
 
   @@unique([workspaceId, type])
@@ -18,36 +18,52 @@ model Channel {
   @@index([workspaceId])
 }
 
+/** One Customer per Channel, keyed by the one value that Channel can always
+ * produce: an email address on the Web Widget, a phone number on WhatsApp.
+ * `canonicalId` carries it so find-or-create is a single upsert everywhere. */
 model CustomerIdentity {
-  id                 String       @id
+  id                 String      @id
   workspaceId        String
   channelType        ChannelType
+  canonicalId        String
   name               String
   email              String
   externalCustomerId String?
-  createdAt          DateTime     @default(now())
+  createdAt          DateTime    @default(now())
   deletedAt          DateTime?
-  workspace          Workspace    @relation(fields: [workspaceId], references: [id])
-  webSessions        WebSession[]
+  workspace          Workspace   @relation(fields: [workspaceId], references: [id])
+  sessions           Session[]
   tickets            Ticket[]
 
+  @@unique([workspaceId, channelType, canonicalId])
   @@index([workspaceId, channelType, email])
 }
 
-model WebSession {
-  id                 String           @id
-  workspaceId        String
-  channelId          String
-  customerIdentityId String
-  accessToken        String           @unique
-  status             WebSessionStatus @default(ACTIVE)
-  createdAt          DateTime         @default(now())
-  closedAt           DateTime?
-  workspace          Workspace        @relation(fields: [workspaceId], references: [id])
-  channel            Channel          @relation(fields: [channelId], references: [id])
-  customerIdentity   CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
-  ticket             Ticket?
-  messages           Message[]
+/** What a Customer experiences as "this conversation", on any Channel. It owns
+ * the Agent Memory and the single monotonic Message counter (`messageSeq`), so
+ * the AI Agent can see the conversation from its first turn — before any Ticket
+ * exists. See ADR-0017.
+ *
+ * `accessToken` is how the Web Widget authenticates; Channels that identify a
+ * Customer by their own address (WhatsApp) leave it null. */
+model Session {
+  id                    String        @id
+  workspaceId           String
+  channelId             String
+  customerIdentityId    String
+  accessToken           String?       @unique
+  status                SessionStatus @default(ACTIVE)
+  messageSeq            Int           @default(0)
+  /** When the Customer last wrote. A Workspace user replying never moves it. */
+  customerLastMessageAt DateTime?
+  createdAt             DateTime      @default(now())
+  closedAt              DateTime?
+  workspace             Workspace        @relation(fields: [workspaceId], references: [id])
+  channel               Channel          @relation(fields: [channelId], references: [id])
+  customerIdentity      CustomerIdentity @relation(fields: [customerIdentityId], references: [id])
+  conversation          Conversation?
+  ticket                Ticket?
+  messages              Message[]
 
   @@index([workspaceId])
   @@index([channelId])

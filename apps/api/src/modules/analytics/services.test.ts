@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Session, User } from "@prisma/client";
+import type { AuthSession, User } from "@prisma/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { app } from "../../app";
 import { unscopedPrisma } from "../../utils/prisma";
@@ -170,6 +170,7 @@ async function seedWorkspaces(): Promise<Seeded> {
     name: "Citra",
     email: "citra@example.com",
     channelType: "WEB" as const,
+    canonicalId: "citra@example.com",
   };
   const waIdentity = {
     id: `identity-wa-${run}`,
@@ -177,6 +178,7 @@ async function seedWorkspaces(): Promise<Seeded> {
     name: "Bima",
     email: "bima@example.com",
     channelType: "WHATSAPP" as const,
+    canonicalId: "bima@example.com",
   };
   const otherIdentity = {
     id: `identity-other-${run}`,
@@ -184,6 +186,7 @@ async function seedWorkspaces(): Promise<Seeded> {
     name: "Citra",
     email: "citra@example.com",
     channelType: "WEB" as const,
+    canonicalId: "citra@example.com",
   };
   const emptyIdentity = {
     id: `identity-empty-${run}`,
@@ -191,6 +194,7 @@ async function seedWorkspaces(): Promise<Seeded> {
     name: "Citra",
     email: "citra@example.com",
     channelType: "WEB" as const,
+    canonicalId: "citra@example.com",
   };
   await unscopedPrisma.customerIdentity.createMany({
     data: [identity, waIdentity, otherIdentity, emptyIdentity],
@@ -306,7 +310,7 @@ async function seedWorkspaces(): Promise<Seeded> {
     customerIdentityId: ticket.customerIdentityId,
     accessToken: `token-${run}-${index}`,
   }));
-  await unscopedPrisma.webSession.createMany({ data: sessions });
+  await unscopedPrisma.session.createMany({ data: sessions });
 
   await unscopedPrisma.ticket.createMany({
     data: tickets.map((ticket, index) => ({
@@ -314,7 +318,7 @@ async function seedWorkspaces(): Promise<Seeded> {
       workspaceId,
       aiAgentId: `aiagent-${run}`,
       channelId: ticket.channelId,
-      webSessionId: sessions[index].id,
+      sessionId: sessions[index].id,
       customerIdentityId: ticket.customerIdentityId,
       title: `Ticket ${ticket.key}`,
       status: ticket.status,
@@ -333,14 +337,14 @@ async function seedWorkspaces(): Promise<Seeded> {
     customerIdentityId: otherIdentity.id,
     accessToken: `token-other-${index}-${run}`,
   }));
-  await unscopedPrisma.webSession.createMany({ data: otherSessions });
+  await unscopedPrisma.session.createMany({ data: otherSessions });
   await unscopedPrisma.ticket.createMany({
     data: otherSessions.map((session, index) => ({
       id: `ticket-other-${index}-${run}`,
       workspaceId: otherWorkspaceId,
       aiAgentId: `aiagent-other-${run}`,
       channelId: otherChannel.id,
-      webSessionId: session.id,
+      sessionId: session.id,
       customerIdentityId: otherIdentity.id,
       title: `Other ticket ${index}`,
       status: index === 2 ? "AI_HANDLING" : "RESOLVED",
@@ -370,7 +374,7 @@ async function deleteSeededWorkspaces() {
   const workspaceIds = workspaces.map((workspace) => workspace.id);
 
   await unscopedPrisma.ticket.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
-  await unscopedPrisma.webSession.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.session.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
   await unscopedPrisma.customerIdentity.deleteMany({
     where: { workspaceId: { in: workspaceIds } },
   });
@@ -381,7 +385,7 @@ async function deleteSeededWorkspaces() {
   await unscopedPrisma.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
 }
 
-function sessionFor(user: WorkspaceUser): { session: Partial<Session>; user: Partial<User> } {
+function sessionFor(user: WorkspaceUser): { session: Partial<AuthSession>; user: Partial<User> } {
   return { session: { id: `session-${user.id}`, userId: user.id }, user };
 }
 
@@ -567,7 +571,7 @@ async function deleteTrafficWorkspaces() {
   const workspaceIds = workspaces.map((workspace) => workspace.id);
 
   await unscopedPrisma.ticket.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
-  await unscopedPrisma.webSession.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.session.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
   await unscopedPrisma.customerIdentity.deleteMany({
     where: { workspaceId: { in: workspaceIds } },
   });
@@ -657,6 +661,7 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
         name: "Citra",
         email: "citra@example.com",
         channelType: "WEB",
+        canonicalId: "citra@example.com",
       },
       {
         id: otherIdentityId,
@@ -664,6 +669,7 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
         name: "Citra",
         email: "citra@example.com",
         channelType: "WEB",
+        canonicalId: "citra@example.com",
       },
     ],
   });
@@ -737,7 +743,7 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
     customerIdentityId: ticket.customerIdentityId,
     accessToken: `traffic-token-${run}-${index}`,
   }));
-  await unscopedPrisma.webSession.createMany({ data: sessions });
+  await unscopedPrisma.session.createMany({ data: sessions });
 
   await unscopedPrisma.ticket.createMany({
     data: tickets.map((ticket, index) => ({
@@ -745,7 +751,7 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
       workspaceId: ticket.workspaceId,
       aiAgentId: ticket.workspaceId === workspaceId ? aiAgentId : otherAiAgentId,
       channelId: ticket.channelId,
-      webSessionId: sessions[index].id,
+      sessionId: sessions[index].id,
       customerIdentityId: ticket.customerIdentityId,
       title: `Ticket ${ticket.key}`,
       status: "RESOLVED" as const,

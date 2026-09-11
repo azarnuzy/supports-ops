@@ -8,19 +8,19 @@ export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, 
     headers: c.req.raw.headers,
   });
 
-  c.set("session", session?.session ?? null);
+  c.set("authSession", session?.session ?? null);
   c.set("user", session?.user ?? null);
-  c.set("webSession", null);
+  c.set("session", null);
 
   await next();
 }
 
 /**
- * Adds the authenticated user's Workspace, or a Web Session resolved by a
- * Channel Adapter, to the data-layer request context.
+ * Adds the authenticated user's Workspace, or a Session resolved by a Channel
+ * Adapter, to the data-layer request context.
  */
 export async function loadWorkspaceContext(c: Context<{ Variables: AuthVariables }>, next: Next) {
-  const workspaceId = c.get("user")?.workspaceId ?? c.get("webSession")?.workspaceId;
+  const workspaceId = c.get("user")?.workspaceId ?? c.get("session")?.workspaceId;
 
   if (!workspaceId) {
     await next();

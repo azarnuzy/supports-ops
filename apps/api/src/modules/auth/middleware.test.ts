@@ -25,9 +25,9 @@ describe("loadWorkspaceContext", () => {
     });
   });
 
-  it("uses the Workspace of a resolved Web Session", async () => {
+  it("uses the Workspace of a resolved Session", async () => {
     const get = vi.fn((key: string) =>
-      key === "webSession" ? { workspaceId: "workspace-session" } : null,
+      key === "session" ? { workspaceId: "workspace-session" } : null,
     );
 
     await loadWorkspaceContext({ get } as never, async () => {
