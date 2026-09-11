@@ -23,6 +23,11 @@ export const updateAiSettingsSchema = z.object({
     .min(1)
     .max(60 * 60 * 24 * 30),
   autoResolveEnabled: z.boolean(),
+  idleCloseAfterSeconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(60 * 60 * 24 * 30),
   instructions: z.string().trim().max(10_000),
   handoffMessage: handoffMessageSchema,
   resolutionMessage: z.string().trim().min(1).max(1000),

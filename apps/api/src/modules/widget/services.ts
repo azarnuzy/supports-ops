@@ -36,7 +36,12 @@ import {
   setTicketGenerating,
 } from "./realtime";
 import { enqueueAttachmentProcess } from "./attachment-queue";
-import { cancelFollowUpTimers, scheduleFollowUp } from "../follow-up/queue";
+import {
+  cancelFollowUpTimers,
+  resetTimersAfterCustomerMessage,
+  scheduleFollowUp,
+  scheduleIdleClosureForTicket,
+} from "../follow-up/queue";
 import { enqueueTicketKnowledgeIndex } from "../tickets/queue";
 import { ticketCategoryOptions } from "../ticket-categories/services";
 import { resolveTools } from "../tools/services";
@@ -223,7 +228,10 @@ export async function createCustomerMessage(
 
   if (session.ticket) {
     const message = await appendMessage(session, input);
-    if (message.created) void cancelFollowUpTimers(session.ticket.id);
+    if (message.created)
+      void resetTimersAfterCustomerMessage(session.ticket.id, session.workspaceId).catch(
+        () => undefined,
+      );
     return { created: message.created, kind: "message", message: message.message };
   }
 
@@ -347,6 +355,10 @@ export async function createCustomerAttachments(
   if (!result) return null;
   const ticketId = result.message.ticketId;
   if (!ticketId) return null;
+
+  void resetTimersAfterCustomerMessage(ticketId, result.message.workspaceId).catch(
+    () => undefined,
+  );
 
   const attachments = await Promise.all(
     uploads.map(({ file, id, storageKey }) =>
@@ -794,6 +806,7 @@ export async function escalate(
   });
   if (!result) return;
   await cancelFollowUpTimers(ticketId);
+  await scheduleIdleClosureForTicket(ticketId, workspaceId);
   await publishWidgetEvent(ticketId, { type: "message.created", data: result });
   await publishWidgetEvent(ticketId, { type: "ticket.status", data: { status: "escalated" } });
   await publishTicketQueueEvent(workspaceId);

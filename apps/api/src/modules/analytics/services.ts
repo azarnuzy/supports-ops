@@ -67,6 +67,8 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
     totalTickets,
     confirmedCount,
     inactiveCount,
+    handledIdleCount,
+    sharedQueueIdleCount,
     escalatedCount,
     statusGroups,
     channelGroups,
@@ -76,6 +78,12 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
     prisma.ticket.count({ where: notDeleted }),
     prisma.ticket.count({ where: { ...notDeleted, resolutionReason: "CUSTOMER_CONFIRMED" } }),
     prisma.ticket.count({ where: { ...notDeleted, resolutionReason: "CUSTOMER_INACTIVE" } }),
+    prisma.ticket.count({
+      where: { ...notDeleted, resolutionReason: "CUSTOMER_INACTIVE_HUMAN_HANDLING" },
+    }),
+    prisma.ticket.count({
+      where: { ...notDeleted, resolutionReason: "CUSTOMER_INACTIVE_SHARED_QUEUE" },
+    }),
     prisma.ticket.count({ where: { ...notDeleted, escalatedAt: { not: null } } }),
     prisma.ticket.groupBy({ by: ["status"], where: notDeleted, _count: { _all: true } }),
     prisma.ticket.groupBy({ by: ["channelId"], where: notDeleted, _count: { _all: true } }),
@@ -102,6 +110,13 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   const humanEscalation: ResolutionFigure = {
     count: escalatedCount,
     rate: rateShare(escalatedCount, totalTickets),
+  };
+  const humanIdleClosure = {
+    handled: { count: handledIdleCount, rate: rateShare(handledIdleCount, totalTickets) },
+    sharedQueue: {
+      count: sharedQueueIdleCount,
+      rate: rateShare(sharedQueueIdleCount, totalTickets),
+    },
   };
 
   const statusCounts = ticketStatuses.map((status) => ({
@@ -138,6 +153,7 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
     totalTickets,
     aiResolution: { customerConfirmed, customerInactive },
     humanEscalation,
+    humanIdleClosure,
     statusCounts,
     channelCounts,
     activeTicketsPerHumanAgent,
