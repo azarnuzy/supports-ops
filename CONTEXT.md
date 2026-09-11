@@ -27,13 +27,13 @@ The person outside the Workspace asking for support. Never a platform user; has 
 _Avoid_: End user, Client, Requester
 
 **Customer Identity**:
-The Workspace-scoped record of who a Customer is on a given Channel — their name, email, and the external customer ID resolved from the Business System. The same email may hold several concurrent Web Sessions, and they are never merged.
+The Workspace-scoped record of who a Customer is on one Channel, keyed by the single value that identifies them there — an email address on the Web Widget, a phone number on WhatsApp. Also carries the name and the external customer ID resolved from the Business System. The same person reaching the Workspace on two Channels is two Customer Identities, and they are never merged.
 _Avoid_: Contact, Profile, Lead
 
 ### Channel and session
 
 **Channel**:
-A configured route through which Customers reach the Workspace — Web Widget today, WhatsApp later. Owns transport, session rules, and delivery; owns no support logic.
+A configured route through which Customers reach the Workspace — the Web Widget and WhatsApp. Owns transport, session rules, and delivery; owns no support logic. Each Channel declares what it can carry and what it can report back — attachment limits, delivery states — rather than the platform assuming every Channel behaves like the Web Widget.
 _Avoid_: Integration, Source, Platform
 
 **Channel Adapter**:
@@ -44,22 +44,38 @@ _Avoid_: Connector, Driver, Provider
 The embeddable chat interface a Workspace installs on its own website with a single script tag. A Workspace has exactly one.
 _Avoid_: Chat bubble, Embed, Plugin
 
-**Web Session**:
-One Customer's continuous conversation on the Web Widget, opened after the Pre-Chat form and staying open until its Ticket is resolved. Closing the browser does not close it. Produces at most one Ticket.
-_Avoid_: Conversation, Visit, Thread
+**WhatsApp Channel**:
+The Workspace's own WhatsApp Business number, reached through the Meta Cloud API. The Workspace brings its own Meta App and grants SupportOps access to it; SupportOps never owns the number. A Workspace has exactly one.
+_Avoid_: WhatsApp integration, WA inbox, Meta channel
+
+**Session**:
+One Customer's continuous conversation on one Channel. Produces at most one Ticket, and carries the Agent Memory from its first turn — before any Ticket exists. How it opens and what closes it belong to the Channel: a Web Session opens after Pre-Chat and is reachable by Session Link; a WhatsApp Session opens on the Customer's first message and is required to end within a day.
+_Avoid_: Conversation, Visit, Thread. Never "Web Session" as the general term — Web is one Channel, not the shape of the concept
+
+**Last Customer Message At**:
+The single clock every silence rule reads: when this Session's Customer last wrote. Follow-Up, Auto-Resolution, Idle Closure, and the Customer Service Window are all measured from it, and any Customer message resets all four at once. A Workspace user replying never moves it.
+_Avoid_: Last activity, Updated at, Idle since
+
+**Customer Service Window**:
+The 24 hours after a Customer's last WhatsApp message during which Meta allows free-form replies. It governs how a Message may be sent, never whether a Ticket is alive — outside it, only a Message Template may leave the platform. Owned by the Channel, invisible to the AI Agent.
+_Avoid_: 24-hour window, Session window, Conversation window
+
+**Message Template**:
+The Meta-approved message SupportOps sends when the Customer Service Window has closed. It never carries an answer — it only invites the Customer back, because their reply is what reopens the window. SupportOps operates exactly one, and a Customer replying to it starts a new Ticket.
+_Avoid_: Template message, HSM, Notification
 
 **Pre-Chat**:
-The name-and-email form a Customer submits before a Web Session opens. The email is taken at face value — nothing verifies it.
+The name-and-email form a Customer submits before a Web Session opens. Web Widget only — WhatsApp identifies a Customer by their phone number and asks nothing. The email is taken at face value — nothing verifies it.
 _Avoid_: Intake form, Onboarding, Registration
 
 **Session Link**:
-The unguessable URL emailed to a Customer after Pre-Chat, granting access to that one Web Session and nothing else. Once the Session closes, it still opens the transcript, read-only.
+The unguessable URL emailed to a Customer after Pre-Chat, granting access to that one Web Session and nothing else. Web Widget only — a WhatsApp Customer already holds the transcript on their phone. Once the Session closes, it still opens the transcript, read-only.
 _Avoid_: Magic link, Access token URL, Invite
 
 ### Ticket lifecycle
 
 **Ticket**:
-One support case. Created only when a Customer sends their first meaningful support message, so an abandoned Web Session leaves nothing behind. Carries a title, category, and priority that the AI Agent assigns and a human may override.
+One support case. Created only when a Customer sends their first meaningful support message, so a Session abandoned after small talk leaves no Ticket behind — though its Agent Memory persists, because the AI Agent must remember what was already said. Carries a title, category, and priority that the AI Agent assigns and a human may override.
 _Avoid_: Case, Issue, Request, Conversation
 
 **Message**:
@@ -103,11 +119,11 @@ The briefing generated for a Human Agent at Claim time: what the Customer wants,
 _Avoid_: Handover note, Brief, Context dump
 
 **Resolution**:
-A Ticket reaching its end. Records both who ended it — the AI Agent or a Human Agent — and the Resolution Reason, because the two are counted separately.
+A Ticket reaching its end. Records both who ended it — the AI Agent, a Human Agent, or the platform itself when a timer expires — and the Resolution Reason, because they are counted separately. The platform is never recorded as the AI Agent, so a Ticket no human answered can never be counted as AI effectiveness.
 _Avoid_: Closure, Completion, Done
 
 **Resolution Reason**:
-Why a Ticket ended: the Customer confirmed it was solved, the Customer went quiet, a human decided it was done, or the Channel session expired. A Customer confirming is a materially different outcome from a Customer going quiet, and the distinction is never collapsed.
+Why a Ticket ended: the Customer confirmed it was solved, the Customer went quiet while the AI Agent held it, a human decided it was done, a Human Agent held it but fell silent, or nobody ever claimed it out of the Shared Human Queue. Each names a materially different outcome and the distinctions are never collapsed — "abandoned in the queue" is the only number that tells an Admin the team is understaffed, so it never merges with "abandoned while being handled".
 _Avoid_: Outcome, Status, Result
 
 **Follow-Up**:
@@ -118,6 +134,10 @@ _Avoid_: Reminder, Nudge, Check-in
 A Ticket ending because the Customer never replied to a Follow-Up. Counted apart from a confirmed Resolution so AI effectiveness is never overstated.
 _Avoid_: Timeout close, Auto-close, Expiry
 
+**Idle Closure**:
+A Ticket ending after its Customer has been silent past the Workspace's configured limit while humans owned it — whether a Human Agent was handling it or nobody ever claimed it. The human counterpart to Auto-Resolution, and the rule that keeps a WhatsApp Session from outliving its Customer Service Window. Sends a closing Message first, while it can still be delivered.
+_Avoid_: Auto-close, Timeout, Expiry, Stale ticket
+
 **Activity Timeline**:
 The human-readable, ordered record of a Ticket's lifecycle events — created, classified, knowledge retrieved, tool called, escalated, claimed, resolved.
 _Avoid_: Log, History, Audit log
@@ -125,6 +145,10 @@ _Avoid_: Log, History, Audit log
 **AI Activity**:
 One structured, recorded step the AI Agent took: knowledge retrieved, a Business Tool called and its outcome, a decision made, a classification assigned. Never the AI's private reasoning, which is not stored.
 _Avoid_: Trace, Event, Thought
+
+**Agent Memory**:
+The turn-by-turn record the AI Agent reasons over. Belongs to a Session, not to a Ticket, so the opening exchange that happens before anything qualifies as support is still remembered — and so the message that does qualify is classified with everything said before it. Stored as the `Conversation` model; the word "Conversation" is not domain language here.
+_Avoid_: Conversation, History, Context window, Thread
 
 ### Knowledge and tools
 
@@ -181,7 +205,7 @@ The Workspace's own product database, external to SupportOps, holding customers,
 _Avoid_: Backend, Mock API, CRM
 
 **Attachment**:
-A file carried by a Message inside a Ticket, whether sent by a Customer or a Human Agent. Its allowed direction, format, size, and count depend on the Channel; extracted content becomes context for that Ticket only and never joins the Workspace's Knowledge Sources.
+A file carried by a Message inside a Ticket, whether sent by a Customer or a Human Agent — a document, an image, or a voice note. Its allowed direction, format, size, and count depend on the Channel. Whatever text can be extracted from it, including a voice note's transcript, becomes context for that Ticket only and never joins the Workspace's Knowledge Sources. A transcript is always Attachment content, never rewritten into the Customer's own words, so a mis-heard word can never be mistaken for something the Customer typed.
 _Avoid_: Upload, File, Media
 
 **AI Copilot**:
