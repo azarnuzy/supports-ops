@@ -18,6 +18,8 @@ import { ticketCategoriesRouter } from "./modules/ticket-categories/router";
 import { ticketsRouter } from "./modules/tickets/router";
 import { toolsRouter } from "./modules/tools/router";
 import { mcpRouter } from "./modules/mcp/router";
+import { whatsAppConfigRouter } from "./modules/whatsapp-config/router";
+import { whatsAppWebhookRouter } from "./modules/whatsapp-config/webhook";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   .post("/internal/tickets/:ticketId/generate", async (c) => {
@@ -33,6 +35,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
     return c.body(null, 202);
   })
   .route("/widget", widgetRouter)
+  .route("/webhooks/whatsapp", whatsAppWebhookRouter)
   .use(
     "*",
     cors({
@@ -69,6 +72,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/register", registrationRouter)
   .route("/users", usersRouter)
   .route("/widget-config", widgetConfigRouter)
+  .route("/whatsapp-config", whatsAppConfigRouter)
   .route("/ai-settings", aiSettingsRouter)
   .route("/mcp-servers", mcpRouter)
   .route("/tools", toolsRouter);

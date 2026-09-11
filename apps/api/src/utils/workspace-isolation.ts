@@ -9,6 +9,7 @@ const workspaceScopedModels = new Set([
   "AiSettings",
   "Channel",
   "WebWidgetConfig",
+  "WhatsAppConfig",
   "CustomerIdentity",
   "Session",
   "Ticket",
