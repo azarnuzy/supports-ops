@@ -546,7 +546,7 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
 
   for (const conversation of demoConversations) {
     const accessToken = `demo-session-${conversation.key}`;
-    if (await prisma.webSession.findUnique({ select: { id: true }, where: { accessToken } })) {
+    if (await prisma.session.findUnique({ select: { id: true }, where: { accessToken } })) {
       console.log(`Example conversation already seeded: ${conversation.title}`);
       continue;
     }
@@ -557,6 +557,7 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
       })) ??
       (await prisma.customerIdentity.create({
         data: {
+          canonicalId: conversation.customer.email.toLowerCase(),
           channelType: "WEB",
           email: conversation.customer.email,
           id: randomUUID(),
@@ -565,13 +566,26 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
         },
       }));
 
-    const webSession = await prisma.webSession.create({
+    const sessionId = randomUUID();
+    await prisma.session.create({
       data: {
         accessToken,
         channelId: channel.id,
         customerIdentityId: customerIdentity.id,
-        id: randomUUID(),
+        id: sessionId,
+        messageSeq: conversation.turns.length,
         status: conversation.outcome.status === "AI_HANDLING" ? "ACTIVE" : "CLOSED",
+        workspaceId,
+      },
+    });
+
+    const memory = await prisma.conversation.create({
+      data: {
+        id: randomUUID(),
+        metadata: {},
+        scopeKey: `session:${sessionId}`,
+        sessionId,
+        userId: customerIdentity.id,
         workspaceId,
       },
     });
@@ -589,7 +603,6 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
         escalatedAt: escalated ? new Date() : null,
         escalationReason: escalated?.reason ?? null,
         id: ticketId,
-        messageSeq: conversation.turns.length,
         resolutionReason: resolved
           ? resolved.by === "AI_AGENT"
             ? "CUSTOMER_CONFIRMED"
@@ -597,21 +610,9 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
           : null,
         resolvedAt: resolved ? new Date() : null,
         resolvedBy: resolved?.by ?? null,
+        sessionId,
         status: conversation.outcome.status,
         title: conversation.title,
-        webSessionId: webSession.id,
-        workspaceId,
-      },
-    });
-
-    const memory = await prisma.conversation.create({
-      data: {
-        id: randomUUID(),
-        metadata: {},
-        scopeKey: `ticket:${ticketId}`,
-        sessionId: ticketId,
-        ticketId,
-        userId: customerIdentity.id,
         workspaceId,
       },
     });
@@ -640,8 +641,8 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
           senderType: turn.senderType,
           senderUserId: turn.senderType === "HUMAN_AGENT" ? humanAgentId : null,
           ticketId,
+          sessionId,
           turn: index + 1,
-          webSessionId: webSession.id,
           workspaceId,
         },
       });
@@ -683,7 +684,7 @@ async function resetDemoWorkspace() {
     prisma.message.deleteMany(where),
     prisma.conversation.deleteMany(where),
     prisma.ticket.deleteMany(where),
-    prisma.webSession.deleteMany(where),
+    prisma.session.deleteMany(where),
     prisma.customerIdentity.deleteMany(where),
     prisma.chunk.deleteMany(where),
     prisma.knowledgeSource.deleteMany(where),
