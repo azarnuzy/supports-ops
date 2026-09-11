@@ -1,10 +1,12 @@
 import { Queue, type ConnectionOptions } from "bullmq";
+import { whatsAppTimerDelayMs } from "@repo/channels";
 import { unscopedPrisma } from "../../utils/prisma";
 
 export type FollowUpJob = { ticketId: string; workspaceId: string; aiMessageId: string };
 export type AutoResolveJob = { ticketId: string; workspaceId: string; followUpMessageId: string };
 export type IdleClosureJob = {
   assignedHumanAgentId: string | null;
+  channelType?: "WEB" | "WHATSAPP";
   customerLastMessageAt: string;
   status: "ESCALATED" | "HUMAN_HANDLING";
   ticketId: string;
@@ -25,9 +27,20 @@ function getQueue() {
 
 export async function scheduleFollowUp(job: FollowUpJob, delaySeconds: number) {
   const jobs = getQueue();
+  const ticket = await unscopedPrisma.ticket.findFirst({
+    select: {
+      channel: { select: { type: true } },
+      session: { select: { customerLastMessageAt: true } },
+    },
+    where: { id: job.ticketId, workspaceId: job.workspaceId },
+  });
+  const delay =
+    ticket?.channel.type === "WHATSAPP" && ticket.session.customerLastMessageAt
+      ? whatsAppTimerDelayMs(ticket.session.customerLastMessageAt, delaySeconds * 1_000, new Date())
+      : delaySeconds * 1_000;
   await jobs.remove(`follow-up-${job.ticketId}`).catch(() => undefined);
   await jobs.add("follow-up", job, {
-    delay: delaySeconds * 1_000,
+    delay,
     jobId: `follow-up-${job.ticketId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
@@ -47,11 +60,12 @@ export async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: num
 
 export async function scheduleIdleClosure(job: IdleClosureJob, idleCloseAfterSeconds: number) {
   const jobs = getQueue();
+  const customerLastMessageAt = new Date(job.customerLastMessageAt);
   await jobs.add("idle-close", job, {
-    delay: Math.max(
-      0,
-      new Date(job.customerLastMessageAt).getTime() + idleCloseAfterSeconds * 1_000 - Date.now(),
-    ),
+    delay:
+      job.channelType === "WHATSAPP"
+        ? whatsAppTimerDelayMs(customerLastMessageAt, idleCloseAfterSeconds * 1_000, new Date())
+        : Math.max(0, customerLastMessageAt.getTime() + idleCloseAfterSeconds * 1_000 - Date.now()),
     jobId: [
       "idle-close",
       job.ticketId,
@@ -69,6 +83,7 @@ export async function scheduleIdleClosureForTicket(ticketId: string, workspaceId
     unscopedPrisma.ticket.findFirst({
       select: {
         assignedHumanAgentId: true,
+        channel: { select: { type: true } },
         session: { select: { customerLastMessageAt: true } },
         status: true,
       },
@@ -84,6 +99,7 @@ export async function scheduleIdleClosureForTicket(ticketId: string, workspaceId
   await scheduleIdleClosure(
     {
       assignedHumanAgentId: ticket.assignedHumanAgentId,
+      channelType: ticket.channel.type,
       customerLastMessageAt: ticket.session.customerLastMessageAt.toISOString(),
       status: ticket.status,
       ticketId,

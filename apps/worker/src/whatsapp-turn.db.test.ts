@@ -184,7 +184,10 @@ describe("WhatsApp turn worker", () => {
 
   it("answers a voice note from its transcript without rewriting the Customer's Message", async () => {
     const { sessionId, workspaceId } = await seedSession([
-      { attachment: { mimeType: "audio/ogg", storageKey: "attachments/inbound/voice" }, content: "" },
+      {
+        attachment: { mimeType: "audio/ogg", storageKey: "attachments/inbound/voice" },
+        content: "",
+      },
     ]);
     mocks.extractAttachment.mockResolvedValue("My invoice was charged twice");
     mocks.classifyMessage.mockResolvedValue({
@@ -248,6 +251,50 @@ describe("WhatsApp turn worker", () => {
     expect(mocks.generateAiReply).not.toHaveBeenCalled();
     expect(mocks.enqueueWhatsAppDelivery).toHaveBeenCalledWith(pending.id);
   });
+
+  it("starts a new Ticket when a Customer returns after their previous Session closed", async () => {
+    const ids = await seedSession([{ content: "Yes" }]);
+    const previousSessionId = `previous-${randomUUID()}`;
+    await prisma.session.create({
+      data: {
+        channelId: ids.channelId,
+        closedAt: new Date(),
+        customerIdentityId: ids.customerIdentityId,
+        id: previousSessionId,
+        status: "CLOSED",
+        workspaceId: ids.workspaceId,
+        conversation: {
+          create: {
+            id: randomUUID(),
+            metadata: {},
+            scopeKey: `session:${previousSessionId}`,
+            userId: ids.customerIdentityId,
+            workspaceId: ids.workspaceId,
+          },
+        },
+        ticket: {
+          create: {
+            aiAgentId: `ai-${ids.workspaceId.slice("workspace-".length)}`,
+            category: "GENERAL",
+            channelId: ids.channelId,
+            customerIdentityId: ids.customerIdentityId,
+            id: randomUUID(),
+            status: "RESOLVED",
+            title: "Previous problem",
+            workspaceId: ids.workspaceId,
+          },
+        },
+      },
+    });
+    mocks.classifyMessage.mockResolvedValue({ qualifies: false, reply: "How can I help?" });
+    mocks.generateAiReply.mockResolvedValue(undefined);
+
+    await processWhatsAppTurn({ data: ids });
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { sessionId: ids.sessionId } });
+    expect(ticket.title).toBe("Previous problem");
+    expect(mocks.generateAiReply).toHaveBeenCalledWith(ticket.id, ids.workspaceId, "Yes");
+  });
 });
 
 describe("WhatsApp delivery", () => {
@@ -268,6 +315,27 @@ describe("WhatsApp delivery", () => {
     const stored = await prisma.message.findUniqueOrThrow({ where: { id: message.id } });
     expect(stored).toMatchObject({ deliveryStatus: "SENT", externalMessageId: "wamid.out" });
     expect((await prisma.whatsAppConfig.findFirstOrThrow()).accessTokenFailedAt).toBeNull();
+  });
+
+  it("sends only the invitation template after the Customer Service Window closes", async () => {
+    const ids = await seed();
+    await prisma.session.update({
+      data: { customerLastMessageAt: new Date(Date.now() - 24 * 60 * 60 * 1_000) },
+      where: { id: ids.sessionId },
+    });
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT");
+    stubMeta(200, { messages: [{ id: "wamid.template" }] });
+
+    await processWhatsAppDelivery(job(message.id));
+
+    const request = vi.mocked(fetch).mock.calls[0]?.[1];
+    expect(JSON.parse(String(request?.body))).toEqual({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: "628123",
+      type: "template",
+      template: { language: { code: "en_US" }, name: "supportops_reopen_conversation" },
+    });
   });
 
   it("retries a transient failure and fails visibly once retries run out", async () => {
