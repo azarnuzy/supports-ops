@@ -11,14 +11,17 @@ model User {
   deletedAt     DateTime?
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
   assignedTickets Ticket[] @relation("TicketAssignee")
-  sessions      Session[]
+  authSessions  AuthSession[]
   accounts      Account[]
   ticketReadStates TicketReadState[]
 
   @@index([workspaceId])
 }
 
-model Session {
+/** Better Auth's sign-in session for a Workspace user. Named apart from the
+ * domain's Session — a Customer's conversation on a Channel — which is the
+ * `Session` model. Better Auth is pointed at this one by `session.modelName`. */
+model AuthSession {
   id             String   @id
   expiresAt      DateTime
   token          String   @unique

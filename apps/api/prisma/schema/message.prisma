@@ -1,20 +1,23 @@
+/** The AI Agent's memory store. Created when a Session opens, so the Agent
+ * remembers the conversation from its first turn. `sessionId` is both Anvia's
+ * memory scope and the foreign key to our Session — one identifier, one
+ * conversation. See ADR-0017. */
 model Conversation {
   id          String    @id
   scopeKey    String    @unique
-  sessionId   String
+  sessionId   String    @unique
   userId      String
   metadata    Json
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   workspaceId String
-  ticketId    String    @unique
-  ticket      Ticket    @relation(fields: [ticketId], references: [id])
+  session     Session   @relation(fields: [sessionId], references: [id])
   messages    Message[]
 }
 
 model Message {
   id                String                @id
-  memorySessionId   String?
+  memorySessionId   String
   runId             String
   turn              Int
   position          Int
@@ -23,7 +26,7 @@ model Message {
   createdAt         DateTime              @default(now())
   workspaceId       String
   ticketId          String?
-  webSessionId      String
+  sessionId         String
   senderType        MessageSenderType
   senderUserId      String?
   content           String
@@ -32,14 +35,14 @@ model Message {
   deliveryAttempts  Int                   @default(0)
   deletedAt         DateTime?
   deletedBy         String?
-  conversation      Conversation?         @relation(fields: [memorySessionId], references: [id])
+  conversation      Conversation          @relation(fields: [memorySessionId], references: [id])
   ticket            Ticket?               @relation(fields: [ticketId], references: [id])
-  webSession        WebSession            @relation(fields: [webSessionId], references: [id])
+  session           Session               @relation(fields: [sessionId], references: [id])
   attachments       Attachment[]
 
-  @@unique([memorySessionId, position])
+  @@unique([sessionId, position])
   @@unique([workspaceId, externalMessageId])
   @@index([ticketId, position])
-  @@index([webSessionId, position])
+  @@index([memorySessionId, position])
   @@index([runId])
 }

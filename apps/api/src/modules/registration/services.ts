@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { seedDefaultTicketCategories } from "../ticket-categories/services";
-import { Prisma, unscopedPrisma } from "../../utils/prisma";
+import { isUniqueConstraintError, unscopedPrisma } from "../../utils/prisma";
 import {
   defaultBotName,
   defaultPrimaryColor,
@@ -137,7 +137,7 @@ export async function registerAdminWorkspace(input: RegisterInput) {
       return { user, workspace };
     });
   } catch (error) {
-    if (isUniqueConstraintViolation(error, "email")) {
+    if (isUniqueConstraintError(error, "email")) {
       throw new EmailAlreadyInUseError();
     }
 
@@ -157,12 +157,4 @@ function workspaceSlugFor(adminName: string) {
   const suffix = randomBytes(4).toString("hex");
 
   return `${base || "workspace"}-${suffix}`;
-}
-
-function isUniqueConstraintViolation(error: unknown, field: string) {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002" &&
-    (error.meta?.target as string[] | undefined)?.includes(field)
-  );
 }

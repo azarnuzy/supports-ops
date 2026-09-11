@@ -17,7 +17,8 @@ class FakePrismaClientKnownRequestError extends Error {
   }
 }
 
-vi.mock("../../utils/prisma", () => ({
+vi.mock("../../utils/prisma", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/prisma")>()),
   Prisma: { PrismaClientKnownRequestError: FakePrismaClientKnownRequestError },
   unscopedPrisma: {
     $transaction: mocks.transaction,

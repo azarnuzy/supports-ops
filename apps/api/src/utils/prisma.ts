@@ -19,4 +19,21 @@ if (!appConfig.isProduction) {
 
 export const prisma = unscopedPrisma.$extends(workspaceIsolation);
 
+/** True when `error` is a unique-constraint violation naming `field`.
+ *
+ * The field is matched against the whole `meta` object rather than
+ * `meta.target`: with the pg driver adapter Prisma reports the offending
+ * columns under `meta.driverAdapterError`, and reading one fixed path silently
+ * stopped recognising any conflict at all. */
+export function isUniqueConstraintError(error: unknown, field: string) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002" &&
+    "meta" in error &&
+    JSON.stringify(error.meta ?? {}).includes(field)
+  );
+}
+
 export * from "@prisma/client";

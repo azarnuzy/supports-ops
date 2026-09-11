@@ -8,4 +8,4 @@ Extending the store keeps one ordering, makes idempotency a real unique constrai
 
 ## Consequences
 
-Message ordering positions are assigned from a single per-Ticket sequence, claimed inside the writing transaction, because both the agent runtime and the Channel layer insert into the same table.
+Message ordering positions are assigned from a single sequence, claimed inside the writing transaction, because both the agent runtime and the Channel layer insert into the same table. That sequence was originally per-Ticket; [ADR-0017](0017-agent-memory-belongs-to-the-session.md) moves it to the Session, which is what makes the turns before a Ticket part of the same ordering.
