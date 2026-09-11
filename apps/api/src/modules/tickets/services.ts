@@ -103,7 +103,7 @@ const ticketDetailSelect = {
     orderBy: { createdAt: "asc" },
     select: { createdAt: true, eventType: true, id: true, metadata: true },
   },
-  session: { select: { createdAt: true, id: true } },
+  session: { select: { createdAt: true, customerLastMessageAt: true, id: true } },
 } as const;
 
 const transcriptSelect = {

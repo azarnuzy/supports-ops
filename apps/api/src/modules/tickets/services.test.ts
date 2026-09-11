@@ -150,6 +150,7 @@ describe("listTickets", () => {
             OR: [
               { name: { contains: "olivia", mode: "insensitive" } },
               { email: { contains: "olivia", mode: "insensitive" } },
+              { phoneE164: { contains: "olivia", mode: "insensitive" } },
             ],
           },
         },
@@ -213,7 +214,7 @@ describe("getTicketDetail", () => {
     const sessionCreatedAt = new Date("2026-01-01T00:00:00Z");
     mocks.ticketFindFirst.mockResolvedValue({
       id: "t-1",
-      session: { createdAt: sessionCreatedAt, id: "session-1" },
+      session: { createdAt: sessionCreatedAt, customerLastMessageAt: null, id: "session-1" },
     });
     mocks.messageFindMany.mockResolvedValue([
       { content: "halo", position: -2, senderType: "CUSTOMER" },
@@ -227,7 +228,7 @@ describe("getTicketDetail", () => {
       id: "t-1",
       messages: [{ content: "halo", position: -2, senderType: "CUSTOMER" }],
       unreadCount: 0,
-      session: { createdAt: sessionCreatedAt, id: "session-1" },
+      session: { createdAt: sessionCreatedAt, customerLastMessageAt: null, id: "session-1" },
     });
     const messageCall = mocks.messageFindMany.mock.calls[0]?.[0];
     expect(messageCall.where).toEqual({ deletedAt: null, sessionId: "session-1" });
@@ -236,7 +237,9 @@ describe("getTicketDetail", () => {
     expect(call.where).toEqual({ AND: [{ deletedAt: null, id: "t-1" }, {}] });
     // The timeline opens with the Web Session's creation, and attachments are
     // opened through the download endpoint, so no storage key is exposed.
-    expect(call.select.session).toEqual({ select: { createdAt: true, id: true } });
+    expect(call.select.session).toEqual({
+      select: { createdAt: true, customerLastMessageAt: true, id: true },
+    });
     expect(call.select.messages).toBeUndefined();
     expect(call.select).not.toHaveProperty("messages");
   });
