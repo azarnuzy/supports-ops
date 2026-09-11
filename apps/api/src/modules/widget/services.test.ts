@@ -14,6 +14,7 @@ vi.mock("@repo/storage", () => ({ createStorage: () => ({ getObjectUrl: mocks.ge
 vi.mock("@repo/ai-agent", () => ({
   classifyMessage: vi.fn(),
   createClassificationModel: vi.fn(),
+  runAiAgentTurn: vi.fn(),
 }));
 vi.mock("./realtime", () => ({
   publishTicketQueueEvent: vi.fn(),
