@@ -50,6 +50,7 @@ model AiSettings {
   followUpAfterSeconds    Int       @default(900)
   autoResolveAfterSeconds Int       @default(3600)
   autoResolveEnabled      Boolean   @default(true)
+  idleCloseAfterSeconds   Int       @default(28800)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   workspace               Workspace @relation(fields: [workspaceId], references: [id])
