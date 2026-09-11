@@ -3,6 +3,7 @@ import { queryKeys } from "../../lib/query-keys";
 import {
   getWhatsAppConfig,
   getWebWidgetConfig,
+  replaceWhatsAppCredentials,
   updateWhatsAppConfig,
   updateWebWidgetConfig,
   uploadWebWidgetLogo,
@@ -32,6 +33,14 @@ export function useUpdateWhatsAppConfigMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: updateWhatsAppConfig,
+    onSuccess: (config) => queryClient.setQueryData(whatsAppConfigQueryOptions.queryKey, config),
+  });
+}
+
+export function useReplaceWhatsAppCredentialsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: replaceWhatsAppCredentials,
     onSuccess: (config) => queryClient.setQueryData(whatsAppConfigQueryOptions.queryKey, config),
   });
 }

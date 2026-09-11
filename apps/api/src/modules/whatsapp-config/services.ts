@@ -2,8 +2,11 @@ import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { betterAuthConfig, toolEncryptionConfig } from "../../config";
 import { isUniqueConstraintError, prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
-import { encryptToolSecret } from "../tools/secrets";
-import type { VerifyWhatsAppConfigInput } from "./schema";
+import { decryptToolSecret, encryptToolSecret } from "../tools/secrets";
+import type {
+  ReplaceWhatsAppCredentialsInput,
+  VerifyWhatsAppConfigInput,
+} from "./schema";
 
 export class InvalidWhatsAppCredentialsError extends Error {}
 export class WhatsAppAlreadyConnectedError extends Error {}
@@ -126,6 +129,45 @@ export async function setWhatsAppEnabled(enabled: boolean) {
     where: { id: config.channelId },
   });
   return getWhatsAppConfig();
+}
+
+export async function replaceWhatsAppCredentials(input: ReplaceWhatsAppCredentialsInput) {
+  const current = await prisma.whatsAppConfig.findFirst({
+    select: {
+      appSecretEncrypted: true,
+      businessAccountId: true,
+      id: true,
+      phoneNumberId: true,
+    },
+  });
+  if (!current) throw new WhatsAppConfigNotFoundError();
+
+  const appSecret =
+    input.appSecret ??
+    decryptToolSecret(current.appSecretEncrypted, toolEncryptionConfig.masterKey);
+  const phone = await verifyMetaCredentials({
+    accessToken: input.accessToken,
+    appSecret,
+    businessAccountId: current.businessAccountId,
+    phoneNumberId: current.phoneNumberId,
+  });
+
+  const config = await prisma.whatsAppConfig.update({
+    data: {
+      accessTokenEncrypted: encryptToolSecret(input.accessToken, toolEncryptionConfig.masterKey),
+      accessTokenFailedAt: null,
+      accessTokenLastFour: input.accessToken.slice(-4),
+      ...(input.appSecret
+        ? { appSecretEncrypted: encryptToolSecret(input.appSecret, toolEncryptionConfig.masterKey) }
+        : {}),
+      displayPhoneNumber: phone.display_phone_number ?? current.phoneNumberId,
+      verifiedAt: new Date(),
+      verifiedName: phone.verified_name,
+    },
+    include: { channel: { select: { status: true } } },
+    where: { id: current.id },
+  });
+  return { whatsAppConfig: toDto(config) };
 }
 
 function toDto(config: {

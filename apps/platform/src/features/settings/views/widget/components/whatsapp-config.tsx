@@ -15,6 +15,7 @@ import { Switch } from "@repo/ui/components/switch";
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import {
+  useReplaceWhatsAppCredentialsMutation,
   useUpdateWhatsAppConfigMutation,
   useVerifyWhatsAppConfigMutation,
   whatsAppConfigQueryOptions,
@@ -23,6 +24,7 @@ import {
 export default function WhatsAppConfig() {
   const query = useQuery(whatsAppConfigQueryOptions);
   const verify = useVerifyWhatsAppConfigMutation();
+  const replaceCredentials = useReplaceWhatsAppCredentialsMutation();
   const update = useUpdateWhatsAppConfigMutation();
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
@@ -50,6 +52,21 @@ export default function WhatsAppConfig() {
       onError: (error) => toast.error(error.message),
       onSuccess: () => toast.success(`WhatsApp Channel ${enabled ? "enabled" : "disabled"}.`),
     });
+  }
+
+  function handleReplacement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    replaceCredentials.mutate(
+      { accessToken, ...(appSecret ? { appSecret } : {}) },
+      {
+        onError: (error) => toast.error(error.message),
+        onSuccess: () => {
+          setAccessToken("");
+          setAppSecret("");
+          toast.success("WhatsApp credentials replaced.");
+        },
+      },
+    );
   }
 
   async function copy(value: string, label: string) {
@@ -134,6 +151,37 @@ export default function WhatsAppConfig() {
 
             <Credential label="Callback URL" value={current.callbackUrl} onCopy={copy} />
             <Credential label="Verify token" value={current.verifyToken} onCopy={copy} />
+
+            <form className="grid gap-4 border-t pt-5" onSubmit={handleReplacement}>
+              <Field>
+                <FieldLabel htmlFor="whatsapp-replacement-access-token">
+                  New permanent access token
+                </FieldLabel>
+                <Input
+                  required
+                  autoComplete="off"
+                  id="whatsapp-replacement-access-token"
+                  type="password"
+                  value={accessToken}
+                  onChange={(event) => setAccessToken(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="whatsapp-replacement-app-secret">
+                  New App Secret (optional)
+                </FieldLabel>
+                <Input
+                  autoComplete="off"
+                  id="whatsapp-replacement-app-secret"
+                  type="password"
+                  value={appSecret}
+                  onChange={(event) => setAppSecret(event.target.value)}
+                />
+              </Field>
+              <Button disabled={replaceCredentials.isPending} type="submit">
+                {replaceCredentials.isPending ? "Verifying…" : "Replace credentials"}
+              </Button>
+            </form>
           </div>
         ) : (
           <form className="grid gap-4" onSubmit={handleSubmit}>

@@ -2,12 +2,14 @@ import {
   createApiClient,
   fetchWebWidgetConfig,
   fetchWhatsAppConfig,
+  replaceWhatsAppCredentials as replaceWhatsAppCredentialsRequest,
   updateWebWidgetConfig as updateWebWidgetConfigRequest,
   updateWhatsAppConfig as updateWhatsAppConfigRequest,
   uploadWebWidgetLogo as uploadWebWidgetLogoRequest,
   verifyWhatsAppConfig as verifyWhatsAppConfigRequest,
 } from "@repo/api-client";
 import type {
+  ReplaceWhatsAppCredentialsInput,
   UpdateWebWidgetConfigInput,
   VerifyWhatsAppConfigInput,
 } from "./widget-config.types";
@@ -29,6 +31,10 @@ export async function updateWebWidgetConfig(input: UpdateWebWidgetConfigInput) {
 
 export async function updateWhatsAppConfig(enabled: boolean) {
   return updateWhatsAppConfigRequest(apiClient, enabled);
+}
+
+export async function replaceWhatsAppCredentials(input: ReplaceWhatsAppCredentialsInput) {
+  return replaceWhatsAppCredentialsRequest(apiClient, input);
 }
 
 export async function uploadWebWidgetLogo(file: File) {
