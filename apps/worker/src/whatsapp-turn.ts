@@ -4,8 +4,10 @@ import { generateAiReply } from "@repo/api/ai-agent-turn";
 import { decryptToolSecret } from "@repo/api/secrets";
 import { enqueueWhatsAppDelivery, type WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
 import { classifyWhatsAppError, renderWhatsAppMessage } from "@repo/channels";
+import { createStorage } from "@repo/storage";
 import { UnrecoverableError } from "bullmq";
-import { classificationConfig } from "./config";
+import { extractAttachment } from "./attachment-process";
+import { classificationConfig, storageConfig } from "./config";
 import { claimMessageSlot } from "./follow-up";
 import { prisma } from "./prisma";
 
@@ -15,7 +17,10 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   const session = await prisma.session.findFirst({
     include: {
       channel: { include: { whatsAppConfig: true } },
-      messages: { orderBy: { position: "asc" } },
+      messages: {
+        include: { attachments: { where: { deletedAt: null } } },
+        orderBy: { position: "asc" },
+      },
       ticket: true,
     },
     where: { id: job.data.sessionId, status: "ACTIVE", workspaceId: job.data.workspaceId },
@@ -30,12 +35,32 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   );
   if (!incoming.length) return deliverPendingMessages(session.id);
 
+  for (const attachment of incoming.flatMap((message) => message.attachments)) {
+    if (attachment.processingStatus === "PROCESSING") Object.assign(attachment, await read(attachment));
+  }
   // Once a Ticket leaves AI_HANDLING the AI Agent never speaks again; a person owns it.
   if (session.ticket && session.ticket.status !== "AI_HANDLING") {
     return deliverPendingMessages(session.id);
   }
+  const unreadable = incoming.flatMap((message) => message.attachments);
+  if (
+    !incoming.some(
+      (message) =>
+        message.content.trim() ||
+        message.attachments.some((attachment) => attachment.processingStatus === "READY"),
+    )
+  ) {
+    await appendReply(
+      session.id,
+      session.workspaceId,
+      incoming.at(-1)?.externalMessageId ?? randomUUID(),
+      unreadable.map(customerFacingFailure).join("\n"),
+      session.ticket?.id ?? null,
+    );
+    return deliverPendingMessages(session.id);
+  }
 
-  const customerMessage = incoming.map((message) => message.content).join("\n");
+  const customerMessage = incoming.map(describeCustomerMessage).join("\n");
   let ticketId = session.ticket?.id;
   if (!ticketId) {
     if (!classificationConfig.apiKey) throw new Error("OPENROUTER_API_KEY is required.");
@@ -63,7 +88,8 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
       history: session.messages
         .filter((message) => message.position < incoming[0].position)
         .map((message) => ({
-          content: message.content,
+          content:
+            message.senderType === "CUSTOMER" ? describeCustomerMessage(message) : message.content,
           role: message.senderType === "CUSTOMER" ? ("customer" as const) : ("agent" as const),
         })),
       model: createClassificationModel({
@@ -111,6 +137,10 @@ async function createTicket(
       },
     });
     await tx.message.updateMany({ data: { ticketId }, where: { sessionId, ticketId: null } });
+    await tx.attachment.updateMany({
+      data: { ticketId },
+      where: { message: { sessionId }, ticketId: null },
+    });
     await tx.aiActivity.createMany({
       data: [
         {
@@ -133,11 +163,65 @@ async function createTicket(
   });
 }
 
+type TurnAttachment = {
+  extractedText: string | null;
+  failureReason: string | null;
+  fileName: string;
+  id: string;
+  mimeType: string;
+  processingStatus: "PROCESSING" | "READY" | "FAILED";
+  storageKey: string;
+};
+
+/** Extraction happens before the turn so the AI Agent never reasons over an
+ * empty context; a failure is recorded rather than silently skipped. */
+async function read(attachment: TurnAttachment) {
+  try {
+    const extractedText = await extractAttachment(attachment.storageKey, attachment.mimeType);
+    if (!extractedText.trim()) throw new Error("The attachment did not contain readable text.");
+    return prisma.attachment.update({
+      data: { extractedText, failureReason: null, processingStatus: "READY" },
+      where: { id: attachment.id },
+    });
+  } catch (error) {
+    return prisma.attachment.update({
+      data: {
+        failureReason: error instanceof Error ? error.message : "Attachment processing failed.",
+        processingStatus: "FAILED",
+      },
+      where: { id: attachment.id },
+    });
+  }
+}
+
+/** A transcript stays labelled as Attachment content, so a mis-heard word is
+ * never mistaken for something the Customer typed. */
+function describeCustomerMessage(message: { attachments: TurnAttachment[]; content: string }) {
+  return [
+    message.content,
+    ...message.attachments.map((attachment) =>
+      attachment.processingStatus === "READY"
+        ? `[${attachment.mimeType.startsWith("audio/") ? "Automatic transcript of a voice note — may contain mistakes" : `Content of attached file ${attachment.fileName}`}]\n${attachment.extractedText}`
+        : `[Attached file ${attachment.fileName} could not be read. Tell the Customer.]`,
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function customerFacingFailure(attachment: TurnAttachment) {
+  // Nothing is stored for a file the Channel refused; its reason is already Customer-facing.
+  return !attachment.storageKey && attachment.failureReason
+    ? attachment.failureReason
+    : `Sorry, we couldn't read ${attachment.fileName}. Could you describe the problem in a message?`;
+}
+
 async function appendReply(
   sessionId: string,
   workspaceId: string,
   inboundId: string,
   content: string,
+  ticketId: string | null = null,
 ) {
   await prisma.$transaction(async (tx) => {
     const externalMessageId = `whatsapp-reply:${inboundId}`;
@@ -157,6 +241,7 @@ async function appendReply(
         message: { content },
         role: "assistant",
         senderType: "AI_AGENT",
+        ticketId,
         workspaceId,
       },
     });
@@ -196,6 +281,7 @@ export async function processWhatsAppDelivery(job: {
 async function deliverMessage(messageId: string) {
   const message = await prisma.message.findUniqueOrThrow({
     include: {
+      attachments: { where: { deletedAt: null } },
       session: {
         include: {
           channel: { include: { whatsAppConfig: true } },
@@ -213,14 +299,29 @@ async function deliverMessage(messageId: string) {
   }
 
   const accessToken = decryptToolSecret(config.accessTokenEncrypted, requiredMasterKey());
+  const to = phone.replace(/^\+/, "");
+  const [attachment] = message.attachments;
   let response: Response;
   try {
+    const payload = attachment
+      ? renderWhatsAppMessage({
+          attachment: {
+            caption: message.content || undefined,
+            fileName: attachment.fileName,
+            id: await uploadMedia(config.phoneNumberId, accessToken, attachment),
+            type: attachment.mimeType.startsWith("image/")
+              ? "image"
+              : attachment.mimeType.startsWith("audio/")
+                ? "audio"
+                : "document",
+          },
+          to,
+        })
+      : renderWhatsAppMessage({ text: message.content, to });
     response = await fetch(
       `https://graph.facebook.com/v23.0/${encodeURIComponent(config.phoneNumberId)}/messages`,
       {
-        body: JSON.stringify(
-          renderWhatsAppMessage({ text: message.content, to: phone.replace(/^\+/, "") }),
-        ),
+        body: JSON.stringify(payload),
         headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
         method: "POST",
         signal: AbortSignal.timeout(15_000),
@@ -275,6 +376,43 @@ async function deliverMessage(messageId: string) {
       where: { id: config.id },
     });
   }
+}
+
+/** Meta's media id is used for this one send and then discarded; storage
+ * stays the source of truth for the file. */
+async function uploadMedia(
+  phoneNumberId: string,
+  accessToken: string,
+  attachment: { fileName: string; mimeType: string; storageKey: string },
+) {
+  const object = await createStorage(storageConfig).getObject(attachment.storageKey);
+  if (!object.Body) throw new UnrecoverableError("Attachment file is missing.");
+  const form = new FormData();
+  form.set("messaging_product", "whatsapp");
+  form.set("type", attachment.mimeType);
+  form.set(
+    "file",
+    new Blob([new Uint8Array(await object.Body.transformToByteArray())], {
+      type: attachment.mimeType,
+    }),
+    attachment.fileName,
+  );
+  const response = await fetch(
+    `https://graph.facebook.com/v23.0/${encodeURIComponent(phoneNumberId)}/media`,
+    {
+      body: form,
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: { message?: string };
+    id?: string;
+  };
+  if (!response.ok || !body.id)
+    throw new Error(body.error?.message ?? `Meta media upload returned HTTP ${response.status}.`);
+  return body.id;
 }
 
 function requiredMasterKey() {

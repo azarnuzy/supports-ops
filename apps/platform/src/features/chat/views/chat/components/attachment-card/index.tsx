@@ -14,10 +14,14 @@ export default function AttachmentCard({
   const isPreviewableDocument =
     attachment.mimeType === "application/pdf" || attachment.mimeType === "text/plain";
 
+  const isVoiceNote = attachment.mimeType.startsWith("audio/");
+
   useEffect(() => {
-    if (!isImage(attachment)) return;
-    void getAttachmentPreviewUrl(attachment.id).then(({ url }) => setPreviewUrl(url));
-  }, [attachment]);
+    if (!isImage(attachment) && !isVoiceNote) return;
+    void getAttachmentPreviewUrl(attachment.id)
+      .then(({ url }) => setPreviewUrl(url))
+      .catch(() => undefined);
+  }, [attachment, isVoiceNote]);
 
   const readability =
     attachment.processingStatus === "PROCESSING"
@@ -25,6 +29,29 @@ export default function AttachmentCard({
       : attachment.processingStatus === "FAILED"
         ? `Could not be read${attachment.failureReason ? `: ${attachment.failureReason}` : ""}`
         : "✓";
+
+  // A transcript sits beneath the recording, never in the Message text, so a
+  // mis-heard word stays distinguishable from what the Customer typed.
+  if (isVoiceNote) {
+    return (
+      <article className="grid min-w-0 gap-2 rounded-md border p-3">
+        {previewUrl ? (
+          // biome-ignore lint/a11y/useMediaCaption: the transcript below is the caption
+          <audio className="w-64 max-w-full" controls preload="none" src={previewUrl} />
+        ) : (
+          <p className="text-xs text-muted-foreground">Voice note</p>
+        )}
+        {attachment.extractedText ? (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium">Transcript (automatic): </span>
+            {attachment.extractedText}
+          </p>
+        ) : showReadability ? (
+          <p className="text-xs text-muted-foreground">{readability}</p>
+        ) : null}
+      </article>
+    );
+  }
 
   if (isImage(attachment)) {
     return (

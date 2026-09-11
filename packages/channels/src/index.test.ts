@@ -3,6 +3,7 @@ import {
   classifyWhatsAppError,
   mapWhatsAppDeliveryStatus,
   parseWhatsAppWebhook,
+  refuseWhatsAppAttachment,
   renderWhatsAppMessage,
   verifyWhatsAppSignature,
   webDeliveryStates,
@@ -283,5 +284,17 @@ describe("whatsAppAttachmentCapability", () => {
     expect(whatsAppAttachmentCapability.maxFileSizeBytesByMimeType["application/pdf"]).toBe(
       100 * 1024 * 1024,
     );
+  });
+});
+
+describe("refuseWhatsAppAttachment", () => {
+  it("accepts a voice note whose MIME type carries codec parameters", () => {
+    expect(refuseWhatsAppAttachment("audio/ogg; codecs=opus", 200_000)).toBeUndefined();
+  });
+
+  it("explains an unsupported type and a file over its type's limit", () => {
+    expect(refuseWhatsAppAttachment("video/mp4", 1_000)).toMatch(/can't read this type/);
+    expect(refuseWhatsAppAttachment("image/png", 6 * 1024 * 1024)).toMatch(/larger than 5 MB/);
+    expect(refuseWhatsAppAttachment("application/pdf", 6 * 1024 * 1024)).toBeUndefined();
   });
 });

@@ -49,6 +49,20 @@ export const whatsAppAttachmentCapability = {
   maxFilesPerMessage: 1,
 } satisfies AttachmentCapability;
 
+/** The Customer-facing reason a WhatsApp file is refused, or undefined when it fits the Channel. */
+export function refuseWhatsAppAttachment(mimeType: string, sizeBytes: number): string | undefined {
+  const limit = (whatsAppFileSizeLimits as Record<string, number>)[baseMimeType(mimeType)];
+  if (!limit)
+    return "Sorry, we can't read this type of file. Please send an image, a PDF, a document, or a voice note.";
+  if (sizeBytes > limit)
+    return `Sorry, this file is larger than ${limit / MB} MB, so we couldn't receive it.`;
+}
+
+/** WhatsApp voice notes arrive as `audio/ogg; codecs=opus`; limits are keyed by the bare type. */
+export function baseMimeType(mimeType: string) {
+  return mimeType.split(";")[0].trim().toLowerCase();
+}
+
 type WhatsAppDeliveryStatus = "sent" | "delivered" | "read" | "failed";
 
 export const whatsAppDeliveryStates = [
