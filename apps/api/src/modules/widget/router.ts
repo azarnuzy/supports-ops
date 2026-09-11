@@ -240,7 +240,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
     const attachment = await unscopedPrisma.attachment.findFirst({
-      where: { id: c.req.param("id"), deletedAt: null, session: { accessToken } },
+      where: { id: c.req.param("id"), deletedAt: null, ticket: { session: { accessToken } } },
     });
     if (!attachment) return c.json({ error: "not_found" }, 404);
     const preview = c.req.param("mode") === "preview";
