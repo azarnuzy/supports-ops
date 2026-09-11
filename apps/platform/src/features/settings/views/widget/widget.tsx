@@ -14,6 +14,7 @@ import { PlatformAppShell } from "../../../app-shell";
 import { SettingsHeader } from "../../components/settings-header";
 import { useWidgetSettingsForm } from "./widget.hooks";
 import { ConfigForm, PreviewCard } from "./components";
+import WhatsAppConfig from "./components/whatsapp-config";
 
 const WebWidgetView = () => {
   const form = useWidgetSettingsForm();
@@ -43,8 +44,8 @@ const WebWidgetView = () => {
     <PlatformAppShell>
       <section className="grid gap-6">
         <SettingsHeader
-          title="Web Widget"
-          description="Match the widget to your brand, control where it can load, then drop the snippet into your site."
+          title="Channels"
+          description="Configure the Web Widget and connect the channels Customers use to reach you."
         />
 
         {config.isPending ? (
@@ -112,6 +113,8 @@ const WebWidgetView = () => {
             </Card>
           </>
         ) : null}
+
+        <WhatsAppConfig />
       </section>
     </PlatformAppShell>
   );
