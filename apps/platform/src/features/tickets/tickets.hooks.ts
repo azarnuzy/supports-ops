@@ -133,69 +133,26 @@ export function useTicketDetailEvents(ticketId: string | undefined) {
   return { reconnecting };
 }
 
-/** Marks a Ticket read only while its view is active, the browser is
- * focused, and the newest Message is visible in the transcript (per
- * `newestMessageVisible`, driven by an IntersectionObserver on the last
- * bubble) — never while backgrounded, on a different Ticket, or scrolled
- * away from the newest Message. */
-export function useMarkTicketReadOnView(
-  ticket: TicketDetail | undefined,
-  newestMessageVisible: boolean,
-) {
+/** Marks a Ticket read as soon as its detail response is rendered. */
+export function useMarkTicketReadOnView(ticket: TicketDetail | undefined) {
   const queryClient = useQueryClient();
+  const invalidateLists = useTicketInvalidation();
   const lastSent = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!ticket || !newestMessageVisible) return;
+    if (!ticket) return;
     const latestPosition = ticket.messages.at(-1)?.position;
     if (latestPosition === undefined) return;
     const key = `${ticket.id}:${latestPosition}`;
-
-    const attempt = () => {
-      if (lastSent.current === key) return;
-      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
-      lastSent.current = key;
-      void markTicketRead({ id: ticket.id, position: latestPosition }).then(() =>
-        queryClient.setQueryData(
-          queryKeys.workspace.ticket(ticket.id),
-          (current: { ticket: TicketDetail } | undefined) =>
-            current ? { ticket: { ...current.ticket, unreadCount: 0 } } : current,
-        ),
-      );
-    };
-
-    attempt();
-    document.addEventListener("visibilitychange", attempt);
-    window.addEventListener("focus", attempt);
-    return () => {
-      document.removeEventListener("visibilitychange", attempt);
-      window.removeEventListener("focus", attempt);
-    };
-  }, [newestMessageVisible, queryClient, ticket]);
-}
-
-/** Reports whether `element` is currently intersecting the viewport, for
- * gating "the newest Message is visible" — re-observes whenever the
- * observed node changes (e.g. a new Message becomes the last bubble). */
-export function useIsElementVisible(element: Element | null) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!element) {
-      setVisible(false);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => setVisible(entry?.isIntersecting ?? false),
-      {
-        threshold: 0.5,
-      },
+    if (lastSent.current === key) return;
+    lastSent.current = key;
+    queryClient.setQueryData(
+      queryKeys.workspace.ticket(ticket.id),
+      (current: { ticket: TicketDetail } | undefined) =>
+        current ? { ticket: { ...current.ticket, unreadCount: 0 } } : current,
     );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [element]);
-
-  return visible;
+    void markTicketRead({ id: ticket.id, position: latestPosition }).then(invalidateLists);
+  }, [invalidateLists, queryClient, ticket]);
 }
 
 export function useClaimTicketMutation() {
