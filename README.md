@@ -47,6 +47,24 @@ pnpm test
 
 This runs the base Vitest suites for API, Platform, and Worker.
 
+### Database-backed tests
+
+Tests named `*.db.test.ts` run against a real, migrated Postgres instead of a
+mocked Prisma client. They need nothing beyond the development database:
+
+```sh
+docker compose -f docker-compose.dev.yaml up -d postgres
+pnpm test
+```
+
+`createTestDatabase()` from `@repo/test-db` creates a randomly named database on
+that server, applies `prisma migrate deploy` to it, and hands back a connection
+string; `drop()` removes it afterwards. Names are random, so API and Worker
+suites can run in parallel. Point `TEST_DATABASE_URL` at another server to use
+one instead of the compose Postgres.
+
+See `apps/api/src/modules/registration/services.db.test.ts` for the shape.
+
 For a manual end-to-end run through the Web Widget, AI Agent, Human Agent,
 Langfuse telemetry, and the AI eval matrix, see the
 [local end-to-end runbook](docs/testing/e2e-runbook.md).
