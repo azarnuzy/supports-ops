@@ -2,12 +2,17 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { updateWhatsAppConfigSchema, verifyWhatsAppConfigSchema } from "./schema";
+import {
+  replaceWhatsAppCredentialsSchema,
+  updateWhatsAppConfigSchema,
+  verifyWhatsAppConfigSchema,
+} from "./schema";
 import {
   connectWhatsApp,
   getWhatsAppConfig,
   InvalidWhatsAppCredentialsError,
   PhoneNumberAlreadyConnectedError,
+  replaceWhatsAppCredentials,
   setWhatsAppEnabled,
   WhatsAppAlreadyConnectedError,
   WhatsAppConfigNotFoundError,
@@ -31,6 +36,19 @@ export const whatsAppConfigRouter = new Hono<{ Variables: AuthVariables }>()
         error instanceof WhatsAppAlreadyConnectedError
       ) {
         return c.json({ error: "already_connected", message: error.message }, 409);
+      }
+      throw error;
+    }
+  })
+  .patch("/credentials", zValidator("json", replaceWhatsAppCredentialsSchema), async (c) => {
+    try {
+      return c.json(await replaceWhatsAppCredentials(c.req.valid("json")), 200);
+    } catch (error) {
+      if (error instanceof InvalidWhatsAppCredentialsError) {
+        return c.json({ error: "invalid_credentials", message: error.message }, 422);
+      }
+      if (error instanceof WhatsAppConfigNotFoundError) {
+        return c.json({ error: "not_found", message: "No WhatsApp Channel is connected." }, 404);
       }
       throw error;
     }

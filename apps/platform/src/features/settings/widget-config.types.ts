@@ -31,3 +31,8 @@ export type VerifyWhatsAppConfigInput = {
   businessAccountId: string;
   phoneNumberId: string;
 };
+
+export type ReplaceWhatsAppCredentialsInput = {
+  accessToken: string;
+  appSecret?: string;
+};

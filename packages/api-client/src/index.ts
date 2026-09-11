@@ -574,6 +574,11 @@ export type VerifyWhatsAppConfigInput = {
   phoneNumberId: string;
 };
 
+export type ReplaceWhatsAppCredentialsInput = {
+  accessToken: string;
+  appSecret?: string;
+};
+
 export async function fetchWhatsAppConfig(client: ApiClient) {
   const response = await client["whatsapp-config"].$get();
   if (response.status === 403) throw new Error("Only an Admin can manage WhatsApp.");
@@ -589,6 +594,18 @@ export async function verifyWhatsAppConfig(
   if (!response.ok) {
     const body = (await response.json()) as { message?: string };
     throw new Error(body.message ?? "Failed to verify the WhatsApp credentials.");
+  }
+  return (await response.json()) as { whatsAppConfig: WhatsAppConfig };
+}
+
+export async function replaceWhatsAppCredentials(
+  client: ApiClient,
+  input: ReplaceWhatsAppCredentialsInput,
+) {
+  const response = await client["whatsapp-config"].credentials.$patch({ json: input });
+  if (!response.ok) {
+    const body = (await response.json()) as { message?: string };
+    throw new Error(body.message ?? "Failed to replace the WhatsApp credentials.");
   }
   return (await response.json()) as { whatsAppConfig: WhatsAppConfig };
 }
