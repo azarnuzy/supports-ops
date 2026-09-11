@@ -61,7 +61,6 @@ import {
   ticketDetailQueryOptions,
   useClaimTicketMutation,
   useGenerateSuggestedReplyMutation,
-  useIsElementVisible,
   useMarkTicketReadOnView,
   useReassignTicketMutation,
   useResolveHumanTicketMutation,
@@ -138,9 +137,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   });
   useTicketEvents();
   const { reconnecting } = useTicketDetailEvents(ticketId);
-  const [lastMessageNode, setLastMessageNode] = useState<HTMLDivElement | null>(null);
-  const newestMessageVisible = useIsElementVisible(lastMessageNode);
-  useMarkTicketReadOnView(ticket.data?.ticket, newestMessageVisible);
+  useMarkTicketReadOnView(ticket.data?.ticket);
 
   const sendReply = useSendHumanReplyMutation();
   const sendAttachments = useSendHumanAttachmentsMutation();
@@ -662,11 +659,8 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
               </header>
               <MessageScroller>
                 <MessageScrollerContent className="gap-4 bg-muted/40 px-4 py-4">
-                  {detail.messages.map((message, index) => (
-                    <div
-                      key={message.id}
-                      ref={index === detail.messages.length - 1 ? setLastMessageNode : undefined}
-                    >
+                  {detail.messages.map((message) => (
+                    <div key={message.id}>
                       <TranscriptMessage
                         message={message}
                         onRetry={() =>
