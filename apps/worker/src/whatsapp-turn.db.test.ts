@@ -8,6 +8,13 @@ const mocks = vi.hoisted(() => ({
   enqueueWhatsAppDelivery: vi.fn(),
   extractAttachment: vi.fn(),
   generateAiReply: vi.fn(),
+  publish: vi.fn(),
+}));
+
+vi.mock("ioredis", () => ({
+  default: class {
+    publish = mocks.publish;
+  },
 }));
 
 vi.mock("@repo/ai-agent", () => ({
@@ -45,6 +52,7 @@ beforeEach(async () => {
   mocks.classifyMessage.mockReset();
   mocks.extractAttachment.mockReset();
   mocks.generateAiReply.mockReset();
+  mocks.publish.mockReset();
   mocks.enqueueWhatsAppDelivery.mockReset();
   vi.unstubAllGlobals();
 });
@@ -307,13 +315,18 @@ describe("WhatsApp delivery", () => {
   it("marks the Message sent and clears a stale token failure", async () => {
     const ids = await seed();
     await prisma.whatsAppConfig.updateMany({ data: { accessTokenFailedAt: new Date() } });
-    const message = await addOutbound(ids, 3, "HUMAN_AGENT");
+    const ticketId = await createTicket(ids, "HUMAN_HANDLING");
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT", ticketId);
     stubMeta(200, { messages: [{ id: "wamid.out" }] });
 
     await processWhatsAppDelivery(job(message.id));
 
     const stored = await prisma.message.findUniqueOrThrow({ where: { id: message.id } });
     expect(stored).toMatchObject({ deliveryStatus: "SENT", externalMessageId: "wamid.out" });
+    expect(mocks.publish).toHaveBeenCalledWith(
+      `supportops:ticket:${message.ticketId}`,
+      expect.stringContaining('"type":"message.updated"'),
+    );
     expect((await prisma.whatsAppConfig.findFirstOrThrow()).accessTokenFailedAt).toBeNull();
   });
 
@@ -340,7 +353,8 @@ describe("WhatsApp delivery", () => {
 
   it("retries a transient failure and fails visibly once retries run out", async () => {
     const ids = await seed();
-    const message = await addOutbound(ids, 3, "HUMAN_AGENT");
+    const ticketId = await createTicket(ids, "HUMAN_HANDLING");
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT", ticketId);
     stubMeta(503, { error: { code: 2, message: "Service unavailable" } });
 
     await expect(processWhatsAppDelivery(job(message.id))).rejects.not.toBeInstanceOf(
@@ -355,6 +369,7 @@ describe("WhatsApp delivery", () => {
       deliveryFailureReason: "Service unavailable",
       deliveryStatus: "FAILED",
     });
+    expect(mocks.publish).toHaveBeenCalledOnce();
   });
 
   it("fails a permanent error at once, with its reason, and raises no Escalation", async () => {
@@ -371,6 +386,7 @@ describe("WhatsApp delivery", () => {
       deliveryFailureReason: "Re-engagement message",
       deliveryStatus: "FAILED",
     });
+    expect(mocks.publish).toHaveBeenCalledOnce();
     expect((await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })).status).toBe(
       "HUMAN_HANDLING",
     );

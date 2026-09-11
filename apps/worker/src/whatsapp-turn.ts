@@ -6,12 +6,26 @@ import { enqueueWhatsAppDelivery, type WhatsAppDeliveryJob } from "@repo/api/wha
 import { classifyWhatsAppError, renderWhatsAppMessage } from "@repo/channels";
 import { createStorage } from "@repo/storage";
 import { UnrecoverableError } from "bullmq";
+import Redis from "ioredis";
 import { extractAttachment } from "./attachment-process";
 import { classificationConfig, storageConfig } from "./config";
 import { claimMessageSlot } from "./follow-up";
 import { prisma } from "./prisma";
 
 export type WhatsAppTurnJob = { sessionId: string; workspaceId: string };
+
+let publisher: Redis | undefined;
+
+async function publishMessageUpdated(message: { id: string; ticketId: string | null }) {
+  if (!message.ticketId) return;
+  publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
+    maxRetriesPerRequest: null,
+  });
+  await publisher.publish(
+    `supportops:ticket:${message.ticketId}`,
+    JSON.stringify({ data: message, type: "message.updated" }),
+  );
+}
 
 export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   const session = await prisma.session.findFirst({
@@ -289,13 +303,14 @@ export async function processWhatsAppDelivery(job: {
       !(error instanceof UnrecoverableError) &&
       job.attemptsMade + 1 >= (job.opts.attempts ?? 1)
     ) {
-      await prisma.message.update({
+      const message = await prisma.message.update({
         data: {
           deliveryFailureReason: error instanceof Error ? error.message : "Delivery failed.",
           deliveryStatus: "FAILED",
         },
         where: { id: job.data.messageId },
       });
+      await publishMessageUpdated(message);
     }
     throw error;
   }
@@ -314,7 +329,7 @@ async function deliverMessage(messageId: string) {
     },
     where: { id: messageId },
   });
-  if (message.deliveryStatus !== "PENDING") return;
+  if (message.deliveryStatus !== "PENDING") return publishMessageUpdated(message);
   const config = message.session.channel.whatsAppConfig;
   const phone = message.session.customerIdentity.phoneE164;
   if (!config || !phone) {
@@ -359,10 +374,11 @@ async function deliverMessage(messageId: string) {
       },
     );
   } catch (error) {
-    await prisma.message.update({
+    const updated = await prisma.message.update({
       data: { deliveryAttempts: { increment: 1 } },
       where: { id: message.id },
     });
+    if (kind === "permanent") await publishMessageUpdated(updated);
     throw error;
   }
 
@@ -394,7 +410,7 @@ async function deliverMessage(messageId: string) {
   }
 
   const providerMessageId = body.messages?.[0]?.id;
-  await prisma.message.update({
+  const updated = await prisma.message.update({
     data: {
       deliveryAttempts: { increment: 1 },
       deliveryFailureReason: null,
@@ -403,6 +419,7 @@ async function deliverMessage(messageId: string) {
     },
     where: { id: message.id },
   });
+  await publishMessageUpdated(updated);
   if (config.accessTokenFailedAt) {
     await prisma.whatsAppConfig.update({
       data: { accessTokenFailedAt: null },
