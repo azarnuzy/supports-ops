@@ -10,6 +10,7 @@ model Channel {
   workspace       Workspace        @relation(fields: [workspaceId], references: [id])
   aiAgent         AiAgent          @relation(fields: [aiAgentId], references: [id])
   webWidgetConfig WebWidgetConfig?
+  whatsAppConfig  WhatsAppConfig?
   sessions        Session[]
   tickets         Ticket[]
 
@@ -84,5 +85,28 @@ model WebWidgetConfig {
   updatedAt      DateTime @updatedAt
   channel        Channel  @relation(fields: [channelId], references: [id])
 
+  @@index([workspaceId])
+}
+
+model WhatsAppConfig {
+  id                   String    @id
+  workspaceId          String
+  channelId            String    @unique
+  phoneNumberId        String    @unique
+  businessAccountId    String
+  accessTokenEncrypted String
+  accessTokenLastFour  String
+  appSecretEncrypted   String
+  verifyToken          String    @unique
+  displayPhoneNumber   String
+  verifiedName         String?
+  verifiedAt           DateTime
+  webhookVerifiedAt    DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  workspace            Workspace  @relation(fields: [workspaceId], references: [id])
+  channel              Channel    @relation(fields: [channelId], references: [id])
+
+  @@unique([workspaceId, channelId])
   @@index([workspaceId])
 }
