@@ -23,7 +23,16 @@ export default function TranscriptMessage({
   if (message.senderType === "SYSTEM") {
     return (
       <Marker>
-        <MarkerContent>{message.content}</MarkerContent>
+        <MarkerContent>
+          {message.content}
+          {message.deliveryStatus === "FAILED" ? (
+            <span className="text-destructive">
+              {" "}
+              — Failed to send
+              {message.deliveryFailureReason ? `: ${message.deliveryFailureReason}` : ""}
+            </span>
+          ) : null}
+        </MarkerContent>
       </Marker>
     );
   }
@@ -64,16 +73,18 @@ export default function TranscriptMessage({
         </Bubble>
         <MessageFooter className="flex items-center gap-1.5 text-[11px] tabular-nums">
           {formatTimestamp(message.createdAt)}
-          {isHuman && ["PENDING", "FAILED"].includes(message.deliveryStatus) ? (
+          {message.senderType !== "CUSTOMER" && message.deliveryStatus !== "SENT" ? (
             <span
               className={cn(
                 "text-[11px]",
                 message.deliveryStatus === "FAILED" ? "text-destructive" : "text-muted-foreground",
               )}
             >
-              {message.deliveryStatus === "PENDING"
-                ? "Sending…"
-                : `Failed to send${message.deliveryFailureReason ? `: ${message.deliveryFailureReason}` : ""}`}
+              {message.deliveryStatus === "FAILED"
+                ? `Failed to send${message.deliveryFailureReason ? `: ${message.deliveryFailureReason}` : ""}`
+                : { DELIVERED: "Delivered", PENDING: "Sending…", READ: "Read" }[
+                    message.deliveryStatus
+                  ]}
             </span>
           ) : null}
           {isHuman && message.deliveryStatus === "FAILED" ? (
