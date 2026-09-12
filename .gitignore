@@ -11,6 +11,7 @@ coverage
 .candidate.env
 .release.env
 .deploy.lock
+deploy/env.production
 apps/platform/src/routeTree.gen.ts
 apps/platform/test-results
 apps/platform/playwright-report
