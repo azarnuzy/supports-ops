@@ -98,6 +98,7 @@ services:
     environment:
       <<: *application-environment
       API_INTERNAL_URL: "http://api:8000"
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
       DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=public"
       INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
       MISTRAL_API_KEY: "${MISTRAL_API_KEY:-}"
