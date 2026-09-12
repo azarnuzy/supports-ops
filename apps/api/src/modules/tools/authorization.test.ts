@@ -44,50 +44,107 @@ describe("Tool runtime authorization", () => {
 
   it("resolves assigned, enabled, available Tools only", async () => {
     mocks.toolFindMany.mockResolvedValue([
-      { assignments: [], httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
-      { assignments: [], httpConfig: null, mcpTool: null, name: "unknownBuiltIn", origin: "BUILT_IN" },
+      {
+        assignments: [],
+        httpConfig: null,
+        mcpTool: null,
+        name: "searchKnowledge",
+        origin: "BUILT_IN",
+      },
+      {
+        assignments: [],
+        httpConfig: null,
+        mcpTool: null,
+        name: "unknownBuiltIn",
+        origin: "BUILT_IN",
+      },
     ]);
 
     await expect(resolveTools("agent-1")).resolves.toEqual([
       expect.objectContaining({ name: "searchKnowledge" }),
     ]);
     expect(mocks.toolFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { assignments: { some: { aiAgentId: "agent-1" } }, enabled: true } }),
+      expect.objectContaining({
+        where: { assignments: { some: { aiAgentId: "agent-1" } }, enabled: true },
+      }),
     );
   });
 
   it("denies unassigned Tools and Tickets outside the scoped Workspace", async () => {
     await expect(
-      executeBuiltInTool({ aiAgentId: "agent-1", embedding: [0.1], ticketId: "ticket-1", toolName: "searchKnowledge" }),
+      executeBuiltInTool({
+        aiAgentId: "agent-1",
+        embedding: [0.1],
+        ticketId: "ticket-1",
+        toolName: "searchKnowledge",
+      }),
     ).rejects.toBeInstanceOf(ToolNotAssignedError);
 
     mocks.toolFindMany.mockResolvedValue([
-      { assignments: [], httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
+      {
+        assignments: [],
+        httpConfig: null,
+        mcpTool: null,
+        name: "searchKnowledge",
+        origin: "BUILT_IN",
+      },
     ]);
     mocks.ticketFindFirst.mockResolvedValue(null);
     await expect(
-      executeBuiltInTool({ aiAgentId: "agent-1", embedding: [0.1], ticketId: "other-workspace-ticket", toolName: "searchKnowledge" }),
+      executeBuiltInTool({
+        aiAgentId: "agent-1",
+        embedding: [0.1],
+        ticketId: "other-workspace-ticket",
+        toolName: "searchKnowledge",
+      }),
     ).rejects.toBeInstanceOf(TicketNotFoundError);
   });
 
   it("keeps Knowledge Customer-Safe and Ticket Knowledge scoped to server Ticket context", async () => {
     mocks.toolFindMany
       .mockResolvedValueOnce([
-        { assignments: [], httpConfig: null, mcpTool: null, name: "searchKnowledge", origin: "BUILT_IN" },
+        {
+          assignments: [],
+          httpConfig: null,
+          mcpTool: null,
+          name: "searchKnowledge",
+          origin: "BUILT_IN",
+        },
       ])
       .mockResolvedValueOnce([
-        { assignments: [], httpConfig: null, mcpTool: null, name: "searchCustomerTicketHistory", origin: "BUILT_IN" },
+        {
+          assignments: [],
+          httpConfig: null,
+          mcpTool: null,
+          name: "searchCustomerTicketHistory",
+          origin: "BUILT_IN",
+        },
       ]);
 
-    await executeBuiltInTool({ aiAgentId: "agent-1", embedding: [0.1], ticketId: "ticket-1", toolName: "searchKnowledge" });
-    await executeBuiltInTool({ aiAgentId: "agent-1", embedding: [0.1], ticketId: "ticket-1", toolName: "searchCustomerTicketHistory" });
+    await executeBuiltInTool({
+      aiAgentId: "agent-1",
+      embedding: [0.1],
+      ticketId: "ticket-1",
+      toolName: "searchKnowledge",
+    });
+    await executeBuiltInTool({
+      aiAgentId: "agent-1",
+      embedding: [0.1],
+      ticketId: "ticket-1",
+      toolName: "searchCustomerTicketHistory",
+    });
 
     expect(mocks.searchChunks).toHaveBeenCalledWith(expect.anything(), {
-      embedding: [0.1], retrievalMode: "CUSTOMER", workspaceId: "workspace-1",
+      embedding: [0.1],
+      retrievalMode: "CUSTOMER",
+      workspaceId: "workspace-1",
     });
     expect(mocks.searchTicketChunks).toHaveBeenCalledWith(expect.anything(), {
-      channelType: "WEB", customerIdentityId: "customer-1", embedding: [0.1],
-      excludeTicketId: "ticket-1", workspaceId: "workspace-1",
+      channelType: "WEB",
+      customerIdentityId: "customer-1",
+      embedding: [0.1],
+      excludeTicketId: "ticket-1",
+      workspaceId: "workspace-1",
     });
   });
 });

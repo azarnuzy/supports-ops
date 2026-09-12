@@ -34,10 +34,7 @@ export default function StatusSpreadCard({ counts }: StatusSpreadCardProps) {
       </CardHeader>
       <CardContent className="grid gap-1.5">
         {counts.map((entry) => (
-          <div
-            key={entry.status}
-            className="-mx-2 flex items-center gap-2.5 px-2 py-2"
-          >
+          <div key={entry.status} className="-mx-2 flex items-center gap-2.5 px-2 py-2">
             <div className="w-32 shrink-0">
               <StatusBadge status={entry.status} />
             </div>

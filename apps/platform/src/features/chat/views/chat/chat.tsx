@@ -75,11 +75,7 @@ import {
   useTicketDetailEvents,
   useTicketEvents,
 } from "../../../tickets/tickets.hooks";
-import {
-  priorityFilterOptions,
-  scopeRoutes,
-  statusFilterOptions,
-} from "./chat.constants";
+import { priorityFilterOptions, scopeRoutes, statusFilterOptions } from "./chat.constants";
 import type { DetailsTab, TicketScope } from "./chat.types";
 import { isImage, scopeUnreadTotal } from "./chat.utils";
 import {
@@ -273,8 +269,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     ) ?? [];
 
   useEffect(() => {
+    if (!detail) return;
     transcriptEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [detail?.messages.at(-1)?.id, ticketId]);
+  }, [detail]);
 
   return (
     <PlatformAppShell fullBleed>
@@ -697,10 +694,11 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                       event.preventDefault();
                       const content = draft.trim();
                       if ((!content && !files.length) || !ticketId) return;
+                      replyKey.current ??= crypto.randomUUID();
                       const input = {
                         content,
                         id: ticketId,
-                        idempotencyKey: (replyKey.current ??= crypto.randomUUID()),
+                        idempotencyKey: replyKey.current,
                       };
                       const onSuccess = () =>
                         setDraft((current) => {
@@ -738,7 +736,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                         {files.map((file, index) => (
                           <SelectedFile
                             file={file}
-                            key={`${file.name}-${file.lastModified}-${index}`}
+                            key={`${file.name}-${file.lastModified}-${file.size}`}
                             onRemove={() =>
                               setFiles((current) =>
                                 current.filter((_, currentIndex) => currentIndex !== index),
@@ -762,9 +760,8 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                                   attachmentCapability.mimeTypes.includes(file.type) &&
                                   file.size > 0 &&
                                   file.size <=
-                                    (attachmentCapability.maxFileSizeBytesByMimeType?.[
-                                      file.type
-                                    ] ?? attachmentCapability.maxFileSizeBytes),
+                                    (attachmentCapability.maxFileSizeBytesByMimeType?.[file.type] ??
+                                      attachmentCapability.maxFileSizeBytes),
                               );
                               setFiles((current) =>
                                 [...current, ...additions].slice(
@@ -853,7 +850,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                           ? "Finish or retry the pending reply before resolving this Ticket."
                           : suggestedReply.error instanceof Error
                             ? suggestedReply.error.message
-                          : "Something went wrong updating this Ticket. Please try again."}
+                            : "Something went wrong updating this Ticket. Please try again."}
                       </p>
                     ) : null}
                   </form>

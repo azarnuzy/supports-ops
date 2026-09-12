@@ -75,7 +75,10 @@ export default function HeatmapGrid({ buckets, metricLabel, timeZone }: HeatmapG
           <div className="grid items-end gap-1" style={HEATMAP_GRID_STYLE}>
             <div className="pr-2 text-right text-xs font-medium text-muted-foreground">Hour</div>
             {HOURS.map((hour) => (
-              <div key={hour} className="text-center text-[10px] tabular-nums text-muted-foreground">
+              <div
+                key={hour}
+                className="text-center text-[10px] tabular-nums text-muted-foreground"
+              >
                 {String(hour).padStart(2, "0")}:00
               </div>
             ))}
@@ -145,7 +148,11 @@ export default function HeatmapGrid({ buckets, metricLabel, timeZone }: HeatmapG
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5" aria-label="Heatmap intensity from less to more">
+        <div
+          className="flex items-center gap-1.5"
+          aria-label="Heatmap intensity from less to more"
+          role="group"
+        >
           <span>Less</span>
           {[ZERO_CELL_CLASS, "bg-primary/20", "bg-primary/45", "bg-primary/75", "bg-primary"].map(
             (cellClass) => (

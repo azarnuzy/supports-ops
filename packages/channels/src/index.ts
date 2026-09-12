@@ -230,7 +230,7 @@ function hexBytes(hex: string): Uint8Array<ArrayBuffer> {
 }
 
 export async function verifyWhatsAppSignature(
-  rawBody: BufferSource,
+  rawBody: ArrayBuffer | Uint8Array<ArrayBuffer>,
   signatureHeader: string,
   appSecret: string,
 ): Promise<boolean> {

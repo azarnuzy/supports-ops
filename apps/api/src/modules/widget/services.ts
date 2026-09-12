@@ -13,7 +13,6 @@ import { claimMessageSlot } from "../../utils/session-messages";
 import { generateAiReply } from "../ai-agent/turn";
 import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
-import { publishTicketQueueEvent, publishWidgetEvent } from "./realtime";
 import { enqueueAttachmentProcess } from "./attachment-queue";
 import { resetTimersAfterCustomerMessage } from "../follow-up/queue";
 import { ticketCategoryOptions } from "../ticket-categories/services";
@@ -45,20 +44,6 @@ export class ReplyNotConfiguredError extends Error {
 }
 
 export class InvalidAttachmentError extends Error {}
-
-const escalationReasons = [
-  "LOW_KNOWLEDGE_CONFIDENCE",
-  "NO_RELEVANT_KNOWLEDGE",
-  "CUSTOMER_REQUESTED_HUMAN",
-  "AI_FAILED_ATTEMPTS",
-  "INTERNAL_ACTION_REQUIRED",
-  "BUSINESS_TOOL_FAILURE",
-  "CONFLICTING_KNOWLEDGE",
-  "AI_GENERATION_FAILED",
-  "AI_TIMEOUT",
-] as const;
-
-type EscalationReason = (typeof escalationReasons)[number];
 
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }

@@ -50,14 +50,20 @@ describe("executeHttpTool", () => {
         { fetch: fetcher, resolve: resolvePublic },
       ),
     ).resolves.toBe('{"ok":true}');
-    const [url, options] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [URL, RequestInit];
+    const [url, options] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      URL,
+      RequestInit,
+    ];
     expect(url.searchParams.get("customerId")).toBe("customer 1");
     expect(options.headers).toEqual({ authorization: "Bearer token", "x-api-key": "secret" });
   });
 
   it("sends mutating input as JSON and never retries", async () => {
     mocks.toolFindFirst.mockResolvedValue(
-      configuredTool({ httpConfig: { ...configuredTool().httpConfig, method: "POST" }, risk: "MUTATING" }),
+      configuredTool({
+        httpConfig: { ...configuredTool().httpConfig, method: "POST" },
+        risk: "MUTATING",
+      }),
     );
     const fetcher = vi.fn(async () => new Response("failed", { status: 500 })) as never;
     await expect(
@@ -113,14 +119,20 @@ describe("executeHttpTool", () => {
     await expect(
       executeHttpTool(
         { input: { customerId: "c-1" }, ticketId: "ticket-1", toolId: "tool-1" },
-        { fetch: vi.fn(async () => new Response("x".repeat(65_537))) as never, resolve: resolvePublic },
+        {
+          fetch: vi.fn(async () => new Response("x".repeat(65_537))) as never,
+          resolve: resolvePublic,
+        },
       ),
     ).rejects.toMatchObject({ code: "OVERSIZED_RESULT", message: "HTTP Tool failed." });
 
-    const hangingFetch = vi.fn((_url, options: RequestInit) =>
-      new Promise<Response>((_resolve, reject) =>
-        options.signal?.addEventListener("abort", () => reject(new Error("secret network error"))),
-      ),
+    const hangingFetch = vi.fn(
+      (_url, options: RequestInit) =>
+        new Promise<Response>((_resolve, reject) =>
+          options.signal?.addEventListener("abort", () =>
+            reject(new Error("secret network error")),
+          ),
+        ),
     ) as never;
     await expect(
       executeHttpTool(

@@ -77,7 +77,7 @@ export default function ImageGallery({ images, index, onOpenChange, setIndex }: 
             </>
           ) : null}
         </div>
-        <div aria-label="Image filmstrip" className="flex gap-2 overflow-x-auto">
+        <div aria-label="Image filmstrip" className="flex gap-2 overflow-x-auto" role="group">
           {images.map((entry, imageIndex) => (
             <button
               aria-label={`View image ${imageIndex + 1}`}

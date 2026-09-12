@@ -1,4 +1,4 @@
-import type { TicketCategory, TicketPriority, TicketStatus } from "@repo/api-client";
+import type { TicketPriority, TicketStatus } from "@repo/api-client";
 
 export const scopeRoutes = {
   "ai-live": { list: "/chat/ai-live" as const, ticket: "/chat/ai-live/tickets/$ticketId" as const },
@@ -24,4 +24,3 @@ export const priorityFilterOptions: { label: string; value: TicketPriority | "AL
   { label: "Normal", value: "NORMAL" },
   { label: "Low", value: "LOW" },
 ];
-

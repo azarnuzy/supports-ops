@@ -44,7 +44,7 @@ export async function registerAdminWorkspace(input: RegisterInput) {
 
       await seedDefaultTicketCategories(tx, workspace.id);
 
-    await tx.aiSettings.create({
+      await tx.aiSettings.create({
         data: { id: randomUUID(), workspaceId: workspace.id },
       });
 

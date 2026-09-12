@@ -362,9 +362,9 @@ export async function sendHumanAttachments(
   idempotencyKey: string,
 ) {
   const response = await client.tickets[":id"].attachments.$post({
-    form: { content, files, idempotencyKey } as never,
+    form: { content, files, idempotencyKey },
     param: { id },
-  });
+  } as never);
   if (response.status === 401) throw new UnauthorizedApiError();
   if (response.status === 403) throw new Error("Only the assigned Human Agent can reply.");
   if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
@@ -583,15 +583,12 @@ export type ReplaceWhatsAppCredentialsInput = {
 
 export async function fetchWhatsAppConfig(client: ApiClient) {
   const response = await client["whatsapp-config"].$get();
-  if (response.status === 403) throw new Error("Only an Admin can manage WhatsApp.");
+  if ((response.status as number) === 403) throw new Error("Only an Admin can manage WhatsApp.");
   if (!response.ok) throw new Error("Failed to load the WhatsApp configuration.");
   return (await response.json()) as { whatsAppConfig: WhatsAppConfig | null };
 }
 
-export async function verifyWhatsAppConfig(
-  client: ApiClient,
-  input: VerifyWhatsAppConfigInput,
-) {
+export async function verifyWhatsAppConfig(client: ApiClient, input: VerifyWhatsAppConfigInput) {
   const response = await client["whatsapp-config"].verify.$post({ json: input });
   if (!response.ok) {
     const body = (await response.json()) as { message?: string };
@@ -878,7 +875,10 @@ export type CatalogTool = {
 
 export type HttpToolTestResult =
   | { ok: true; body: string; latencyMs: number; status: number }
-  | { ok: false; code: "DENIED" | "HTTP" | "NETWORK" | "OVERSIZED_RESULT" | "TIMEOUT" | "VALIDATION" };
+  | {
+      ok: false;
+      code: "DENIED" | "HTTP" | "NETWORK" | "OVERSIZED_RESULT" | "TIMEOUT" | "VALIDATION";
+    };
 
 export type ToolCall = {
   at: string;
@@ -974,11 +974,7 @@ export async function listToolCalls(client: ApiClient, id: string) {
   return (await response.json()) as ToolCallLog;
 }
 
-export async function testHttpTool(
-  client: ApiClient,
-  id: string,
-  input: Record<string, unknown>,
-) {
+export async function testHttpTool(client: ApiClient, id: string, input: Record<string, unknown>) {
   const response = await client.tools[":id"].test.$post({ json: { input }, param: { id } });
   if (!response.ok) throw await readToolError(response, "Failed to test the Webhook.");
   return (await response.json()) as { result: HttpToolTestResult };
@@ -1138,8 +1134,7 @@ export async function listTicketCategories(client: ApiClient) {
 
 export async function createTicketCategory(client: ApiClient, input: TicketCategoryInput) {
   const response = await client["ticket-categories"].$post({ json: input });
-  if (response.status === 409)
-    throw new Error("A category with a matching name already exists.");
+  if (response.status === 409) throw new Error("A category with a matching name already exists.");
   if (!response.ok) throw new Error("Failed to create the category.");
   return (await response.json()) as { category: TicketCategoryOption };
 }
@@ -1157,6 +1152,8 @@ export async function updateTicketCategory(
 export async function deleteTicketCategory(client: ApiClient, id: string) {
   const response = await client["ticket-categories"][":id"].$delete({ param: { id } });
   if (response.status === 409)
-    throw new Error("The fallback category cannot be deleted — every ticket needs somewhere to land.");
+    throw new Error(
+      "The fallback category cannot be deleted — every ticket needs somewhere to land.",
+    );
   if (!response.ok) throw new Error("Failed to delete the category.");
 }

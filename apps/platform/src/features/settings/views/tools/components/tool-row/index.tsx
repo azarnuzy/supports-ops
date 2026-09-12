@@ -69,19 +69,19 @@ export default function ToolRow({
           onCheckedChange={onToggleAttached}
         />
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button aria-label={`Actions for ${tool.name}`} size="icon-sm" variant="ghost">
-                <MoreHorizontalIcon className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={onOpenDetail}>View details</DropdownMenuItem>
-              {onDelete ? (
-                <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-                  Delete
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
+          <DropdownMenuTrigger asChild>
+            <Button aria-label={`Actions for ${tool.name}`} size="icon-sm" variant="ghost">
+              <MoreHorizontalIcon className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onOpenDetail}>View details</DropdownMenuItem>
+            {onDelete ? (
+              <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                Delete
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </div>

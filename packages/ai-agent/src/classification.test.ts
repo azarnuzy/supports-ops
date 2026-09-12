@@ -155,7 +155,11 @@ describe("classifyMessage", () => {
     const providerError = new Error("401 User not found.");
     extractMock.mockRejectedValue(providerError);
 
-    const rejection = classifyMessage({ categories, content: "hello", model: { id: "fake-model" } as never });
+    const rejection = classifyMessage({
+      categories,
+      content: "hello",
+      model: { id: "fake-model" } as never,
+    });
 
     await expect(rejection).rejects.toBeInstanceOf(ClassificationFailedError);
     await expect(rejection).rejects.toMatchObject({ cause: providerError });

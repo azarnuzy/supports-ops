@@ -4,8 +4,10 @@
 
 @media (min-width: 64rem) {
   .auth-brand-panel {
-    background-image: url("/auth-background.webp");
-    background-image: image-set(url("/auth-background.avif") type("image/avif"), url("/auth-background.webp") type("image/webp"));
+    background-image: image-set(
+      url("/auth-background.avif") type("image/avif"),
+      url("/auth-background.webp") type("image/webp")
+    );
     background-position: center;
     background-size: cover;
   }

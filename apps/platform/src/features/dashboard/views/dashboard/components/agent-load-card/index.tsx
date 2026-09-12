@@ -35,10 +35,7 @@ export default function AgentLoadCard({ loads }: AgentLoadCardProps) {
               .map((word) => word.charAt(0).toUpperCase())
               .join("");
             return (
-              <div
-                key={load.humanAgentId}
-                className="-mx-2 flex items-center gap-3 px-2 py-2"
-              >
+              <div key={load.humanAgentId} className="-mx-2 flex items-center gap-3 px-2 py-2">
                 <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                   {index + 1}
                 </span>

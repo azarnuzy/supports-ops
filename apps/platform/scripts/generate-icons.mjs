@@ -12,10 +12,7 @@ const background = resolve(assets, "auth-background-source.png");
 await mkdir(publicDir, { recursive: true });
 
 const icon = (size) =>
-  sharp(logo)
-    .resize(size, size, { fit: "contain" })
-    .png({ palette: true, quality: 90 })
-    .toBuffer();
+  sharp(logo).resize(size, size, { fit: "contain" }).png({ palette: true, quality: 90 }).toBuffer();
 const icoImages = await Promise.all([16, 32, 48].map(icon));
 const headerSize = 6 + icoImages.length * 16;
 let offset = headerSize;
@@ -48,9 +45,18 @@ const ogOverlay = Buffer.from(`
 await Promise.all([
   writeFile(resolve(publicDir, "favicon.ico"), Buffer.concat([icoHeader, ...icoImages])),
   writeFile(resolve(publicDir, "support-ops-logo.png"), logoBuffer),
-  sharp(logo).resize(180, 180, { fit: "contain" }).png({ palette: true, quality: 90 }).toFile(resolve(publicDir, "apple-touch-icon.png")),
-  sharp(logo).resize(192, 192, { fit: "contain" }).png({ palette: true, quality: 90 }).toFile(resolve(publicDir, "icon-192.png")),
-  sharp(logo).resize(512, 512, { fit: "contain" }).png({ palette: true, quality: 90 }).toFile(resolve(publicDir, "icon-512.png")),
+  sharp(logo)
+    .resize(180, 180, { fit: "contain" })
+    .png({ palette: true, quality: 90 })
+    .toFile(resolve(publicDir, "apple-touch-icon.png")),
+  sharp(logo)
+    .resize(192, 192, { fit: "contain" })
+    .png({ palette: true, quality: 90 })
+    .toFile(resolve(publicDir, "icon-192.png")),
+  sharp(logo)
+    .resize(512, 512, { fit: "contain" })
+    .png({ palette: true, quality: 90 })
+    .toFile(resolve(publicDir, "icon-512.png")),
   sharp(logo)
     .resize(410, 410, { fit: "contain" })
     .extend({ top: 51, bottom: 51, left: 51, right: 51, background: "transparent" })
@@ -58,13 +64,23 @@ await Promise.all([
     .toFile(resolve(publicDir, "icon-512-maskable.png")),
   sharp({ create: { width: 1200, height: 630, channels: 4, background: "#071a4d" } })
     .composite([
-      { input: await sharp(logo).resize(320, 320, { fit: "contain" }).png().toBuffer(), left: 80, top: 155 },
+      {
+        input: await sharp(logo).resize(320, 320, { fit: "contain" }).png().toBuffer(),
+        left: 80,
+        top: 155,
+      },
       { input: ogOverlay, left: 0, top: 0 },
     ])
     .png({ palette: true, quality: 90 })
     .toFile(resolve(publicDir, "og-image.png")),
-  sharp(background).resize(1280, 1600, { fit: "cover" }).webp({ quality: 75 }).toFile(resolve(publicDir, "auth-background.webp")),
-  sharp(background).resize(1280, 1600, { fit: "cover" }).avif({ quality: 50 }).toFile(resolve(publicDir, "auth-background.avif")),
+  sharp(background)
+    .resize(1280, 1600, { fit: "cover" })
+    .webp({ quality: 75 })
+    .toFile(resolve(publicDir, "auth-background.webp")),
+  sharp(background)
+    .resize(1280, 1600, { fit: "cover" })
+    .avif({ quality: 50 })
+    .toFile(resolve(publicDir, "auth-background.avif")),
   writeFile(
     resolve(publicDir, "favicon.svg"),
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#19b5f5"/><stop offset=".55" stop-color="#1769ee"/><stop offset="1" stop-color="#5b31f4"/></linearGradient></defs><rect width="64" height="64" rx="18" fill="url(#g)"/><path d="M17 23c0-5 4-9 9-9h21v9H27v5h11c5 0 9 4 9 9s-4 9-9 9H17v-9h20v-5H26c-5 0-9-4-9-9Z" fill="white"/></svg>`,
@@ -78,7 +94,12 @@ await Promise.all([
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
-          { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          {
+            src: "/icon-512-maskable.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
         ],
         theme_color: "#1769ee",
         background_color: "#ffffff",

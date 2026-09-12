@@ -461,9 +461,9 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       remove.textContent = "×";
       remove.addEventListener("click", () => {
         const transfer = new DataTransfer();
-        [...(attachmentInput.files ?? [])].forEach(
-          (entry, current) => current !== index && transfer.items.add(entry),
-        );
+        [...(attachmentInput.files ?? [])].forEach((entry, current) => {
+          if (current !== index) transfer.items.add(entry);
+        });
         attachmentInput.files = transfer.files;
         updateAttachmentTray();
       });
@@ -477,7 +477,9 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   attachmentInput?.addEventListener("change", () => {
     if (attachmentInput.files && attachmentInput.files.length > 10) {
       const transfer = new DataTransfer();
-      [...attachmentInput.files].slice(0, 10).forEach((file) => transfer.items.add(file));
+      [...attachmentInput.files].slice(0, 10).forEach((file) => {
+        transfer.items.add(file);
+      });
       attachmentInput.files = transfer.files;
     }
     updateAttachmentTray();
@@ -597,7 +599,9 @@ async function sendAttachments(
   files: File[],
 ) {
   const form = new FormData();
-  files.forEach((file) => form.append("files", file));
+  files.forEach((file) => {
+    form.append("files", file);
+  });
   if (content) form.set("content", content);
   const response = await fetch(
     `${apiUrl.replace(/\/$/, "")}/widget/attachments?token=${encodeURIComponent(accessToken)}`,

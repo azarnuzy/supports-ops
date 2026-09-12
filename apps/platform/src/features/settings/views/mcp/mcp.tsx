@@ -189,50 +189,48 @@ export const McpPanel = () => {
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          {servers.isPending ? (
-            <div className="grid gap-3 p-5">
-              {["a", "b", "c"].map((key) => (
-                <Skeleton key={key} className="h-16 w-full rounded-lg" />
-              ))}
+        {servers.isPending ? (
+          <div className="grid gap-3 p-5">
+            {["a", "b", "c"].map((key) => (
+              <Skeleton key={key} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : null}
+        {servers.isError ? (
+          <div className="grid place-items-center gap-3 p-12 text-center">
+            <p className="text-sm text-destructive">Unable to load MCP servers.</p>
+            <Button variant="outline" onClick={() => void servers.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
+        {!servers.isPending && !servers.isError && items.length === 0 ? (
+          <div className="grid place-items-center gap-3 p-12 text-center">
+            <div className="grid size-10 place-items-center rounded-lg bg-muted">
+              <PlugIcon className="size-5 text-muted-foreground" />
             </div>
-          ) : null}
-          {servers.isError ? (
-            <div className="grid place-items-center gap-3 p-12 text-center">
-              <p className="text-sm text-destructive">Unable to load MCP servers.</p>
-              <Button variant="outline" onClick={() => void servers.refetch()}>
-                Retry
-              </Button>
+            <div className="grid gap-1">
+              <p className="text-base font-medium">No MCP servers found</p>
+              <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+                This agent has no connected MCP servers yet.
+              </p>
             </div>
-          ) : null}
-          {!servers.isPending && !servers.isError && items.length === 0 ? (
-            <div className="grid place-items-center gap-3 p-12 text-center">
-              <div className="grid size-10 place-items-center rounded-lg bg-muted">
-                <PlugIcon className="size-5 text-muted-foreground" />
-              </div>
-              <div className="grid gap-1">
-                <p className="text-base font-medium">No MCP servers found</p>
-                <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                  This agent has no connected MCP servers yet.
-                </p>
-              </div>
-              <Button className="mt-1" size="sm" variant="outline" onClick={openCreate}>
-                <PlusIcon className="size-4" />
-                Add MCP Server
-              </Button>
-            </div>
-          ) : null}
-          {items.map((server) => (
-            <ServerRow
-              key={server.id}
-              server={server}
-              activeToolCount={
-                toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length
-              }
-              onOpenDetail={() => setDetailId(server.id)}
-              onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
-              onDelete={() => handleDelete(server.id)}
-            />
-          ))}
+            <Button className="mt-1" size="sm" variant="outline" onClick={openCreate}>
+              <PlusIcon className="size-4" />
+              Add MCP Server
+            </Button>
+          </div>
+        ) : null}
+        {items.map((server) => (
+          <ServerRow
+            key={server.id}
+            server={server}
+            activeToolCount={toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length}
+            onOpenDetail={() => setDetailId(server.id)}
+            onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
+            onDelete={() => handleDelete(server.id)}
+          />
+        ))}
       </div>
 
       <ServerSheet

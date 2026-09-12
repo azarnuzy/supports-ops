@@ -15,4 +15,3 @@ export function getAiSettings() {
 export function saveAiSettings(input: AiSettings) {
   return updateAiSettings(apiClient, input);
 }
-
