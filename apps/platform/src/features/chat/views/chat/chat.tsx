@@ -215,8 +215,8 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const [inspectorSheetOpen, setInspectorSheetOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<DetailsTab>("details");
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
-  const [suggestedReplyContent, setSuggestedReplyContent] = useState<string>();
   const replyKey = useRef<string | undefined>(undefined);
+  const transcriptEnd = useRef<HTMLDivElement>(null);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
 
   // Entering a populated scope selects the first Ticket so the workspace never
@@ -271,6 +271,10 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
         .filter(isImage)
         .map((attachment) => ({ attachment, messagePosition: message.position })),
     ) ?? [];
+
+  useEffect(() => {
+    transcriptEnd.current?.scrollIntoView({ behavior: "smooth" });
+  }, [detail?.messages.at(-1)?.id, ticketId]);
 
   return (
     <PlatformAppShell fullBleed>
@@ -682,6 +686,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                       />
                     </div>
                   ))}
+                  <div ref={transcriptEnd} />
                 </MessageScrollerContent>
               </MessageScroller>
               <div className="shrink-0 border-t bg-background p-2.5">
@@ -715,7 +720,18 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                           replyKey.current = undefined;
                           setDraft(event.target.value);
                         }}
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "Enter" &&
+                            !event.shiftKey &&
+                            !event.nativeEvent.isComposing
+                          ) {
+                            event.preventDefault();
+                            event.currentTarget.form?.requestSubmit();
+                          }
+                        }}
                         placeholder="Type your message..."
+                        title="Enter to send, Shift+Enter for a new line"
                         value={draft}
                       />
                       <InputGroupAddon align="block-start" className="flex-wrap">
@@ -768,8 +784,8 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                             ticketId &&
                             suggestedReply.mutate(ticketId, {
                               onSuccess: ({ suggestedReply: reply }) => {
-                                if (!draft.trim()) setDraft(reply.content);
-                                else setSuggestedReplyContent(reply.content);
+                                replyKey.current = undefined;
+                                setDraft(reply.content);
                               },
                             })
                           }
@@ -835,42 +851,11 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                       <p className="text-xs text-destructive">
                         {resolve.isError
                           ? "Finish or retry the pending reply before resolving this Ticket."
+                          : suggestedReply.error instanceof Error
+                            ? suggestedReply.error.message
                           : "Something went wrong updating this Ticket. Please try again."}
                       </p>
                     ) : null}
-                    <AlertDialog
-                      open={Boolean(suggestedReplyContent)}
-                      onOpenChange={(open) => !open && setSuggestedReplyContent(undefined)}
-                    >
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Suggested Reply is ready</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Your current draft will not be overwritten. Replace it or insert the
-                            Suggested Reply below it.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Keep current draft</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => {
-                              setDraft(`${draft}\n\n${suggestedReplyContent}`);
-                              setSuggestedReplyContent(undefined);
-                            }}
-                          >
-                            Insert below
-                          </AlertDialogAction>
-                          <AlertDialogAction
-                            onClick={() => {
-                              setDraft(suggestedReplyContent ?? "");
-                              setSuggestedReplyContent(undefined);
-                            }}
-                          >
-                            Replace draft
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
                   </form>
                 ) : (
                   <p className="p-2 text-center text-xs text-muted-foreground">

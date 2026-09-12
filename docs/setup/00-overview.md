@@ -8,6 +8,9 @@ Follow these guides in order to take a new environment from nothing to a demoabl
 4. **[Content services](04-content-services.md)** — Mistral (PDF OCR) and Tavily (documentation crawling) keys used by Knowledge ingestion.
 5. **[Object storage](05-object-storage.md)** — the S3-compatible bucket for attachments and PDF Knowledge Sources, and the internal worker token.
 6. **[Observability](06-observability.md)** — optional OTLP telemetry export for the AI Agent and application traces.
+7. **[WhatsApp](07-whatsapp.md)** — optional second Channel: the Meta Cloud API credentials an Admin connects from Settings, and the public callback URL Meta delivers to.
+
+Steps 1-6 are what a Workspace needs; step 7 is only for Workspaces that take WhatsApp traffic.
 
 Once every credential above is in `.env.local` (development) or `.env` (root Docker Compose production):
 

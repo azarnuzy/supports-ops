@@ -665,10 +665,7 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
       aiAgentId: true,
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
       id: true,
-      messages: {
-        orderBy: { position: "asc" },
-        select: { content: true, senderType: true },
-      },
+      sessionId: true,
     },
     where: {
       assignedHumanAgentId: humanAgentId,
@@ -679,9 +676,15 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
   });
   if (!ticket) throw new TicketNotOwnedError();
 
-  const customerMessage = [...ticket.messages]
+  const messages = await unscopedPrisma.message.findMany({
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: { content: true, senderType: true },
+    where: { deletedAt: null, sessionId: ticket.sessionId },
+  });
+
+  const customerMessage = [...messages]
     .reverse()
-    .find((message) => message.senderType === "CUSTOMER")?.content;
+    .find((message) => message.senderType === "CUSTOMER" && message.content.trim())?.content;
   if (!customerMessage) throw new Error("A Customer message is required to draft a reply.");
 
   const embeddingClient = createEmbeddingClient({
@@ -722,7 +725,7 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
     customerSafeSources: sources
       .filter((source) => source.visibility === "CUSTOMER_SAFE")
       .map((source) => source.content),
-    currentConversation: ticket.messages
+    currentConversation: messages
       .map((message) => `${message.senderType}: ${message.content}`)
       .join("\n"),
     internalOnlySources: sources

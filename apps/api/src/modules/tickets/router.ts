@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { SuggestedReplyGenerationFailedError } from "@repo/ai-agent";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
@@ -230,6 +231,8 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
       if (error instanceof SuggestedReplyNotConfiguredError)
         return c.json({ error: "copilot_not_configured" }, 503);
+      if (error instanceof SuggestedReplyGenerationFailedError)
+        return c.json({ error: "suggested_reply_generation_failed" }, 502);
       throw error;
     }
   })
