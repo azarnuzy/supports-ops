@@ -60,7 +60,7 @@ if [[ " ${SERVICES[*]} " == *" api "* ]]; then
 fi
 
 echo "Starting application services..."
-if ! "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 "${SERVICES[@]}"; then
+if ! "${compose[@]}" up -d --no-deps --remove-orphans --wait --wait-timeout 180 "${SERVICES[@]}"; then
   "${compose[@]}" ps
   "${compose[@]}" logs --tail=150 "${SERVICES[@]}"
   echo "Deployment failed. Re-run this script with the previous commit SHA to roll back the images." >&2
@@ -68,6 +68,9 @@ if ! "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 "${SERVICES[@]}";
 fi
 
 "${compose[@]}" ps
+docker image prune --all --force \
+  --filter "label=org.opencontainers.image.source=https://github.com/azarnuzy/supports-ops" \
+  || echo "Image cleanup failed; deployment remains healthy." >&2
 mv "${CANDIDATE_FILE}" "${RELEASE_FILE}"
 trap - EXIT
 echo "Release ${IMAGE_TAG} is healthy."

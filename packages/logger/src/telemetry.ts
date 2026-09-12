@@ -6,7 +6,6 @@ import {
   type Span,
 } from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
@@ -41,7 +40,6 @@ export function startTelemetry({ config, serviceName }: StartTelemetryOptions) {
   }
 
   sdk = new NodeSDK({
-    instrumentations: [getNodeAutoInstrumentations()],
     resource: resourceFromAttributes({
       [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: config.environment,
       [ATTR_SERVICE_NAME]: serviceName,

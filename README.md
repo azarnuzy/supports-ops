@@ -132,7 +132,7 @@ Trace-aware helpers use OpenTelemetry-compatible `trace_id`, `span_id`, and `tra
 
 ## Telemetry
 
-`packages/logger/telemetry` starts the OpenTelemetry Node SDK before API and worker modules load, so auto-instrumentation can patch supported Node libraries.
+`packages/logger/telemetry` starts the OpenTelemetry Node SDK before API and worker modules load. Only explicit AI Agent, model, retrieval, and Tool spans are exported; infrastructure libraries are not auto-instrumented.
 
 Telemetry is disabled by default. For local span output:
 
