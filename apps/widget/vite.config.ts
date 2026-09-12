@@ -11,7 +11,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         entryFileNames: "widget.js",
-        chunkFileNames: "assets/[name]-[hash].js",
+        inlineDynamicImports: true,
       },
     },
   },
