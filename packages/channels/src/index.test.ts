@@ -197,7 +197,7 @@ describe("parseWhatsAppWebhook", () => {
     ]);
   });
 
-  it("discards webhook fields and message types the platform does not handle", () => {
+  it("parses stickers as a refusable attachment so the Customer hears back", () => {
     expect(
       parseWhatsAppWebhook({
         object: "whatsapp_business_account",
@@ -214,7 +214,54 @@ describe("parseWhatsAppWebhook", () => {
                       id: "m-sticker",
                       timestamp: "1700000000",
                       type: "sticker",
-                      sticker: {},
+                      sticker: { id: "media-1", mime_type: "image/webp" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        kind: "message",
+        messageId: "m-sticker",
+        from: "628123",
+        timestamp: "1700000000",
+        phoneNumberId: "phone-1",
+        customerName: undefined,
+        text: undefined,
+        attachment: {
+          id: "media-1",
+          type: "sticker",
+          mimeType: "image/webp",
+          sha256: undefined,
+          fileName: undefined,
+        },
+      },
+    ]);
+    expect(refuseWhatsAppAttachment("image/webp", 1024)).toBeDefined();
+  });
+
+  it("discards webhook fields and message types the platform does not handle", () => {
+    expect(
+      parseWhatsAppWebhook({
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  metadata: { phone_number_id: "phone-1" },
+                  messages: [
+                    {
+                      from: "628123",
+                      id: "m-location",
+                      timestamp: "1700000000",
+                      type: "location",
+                      location: { latitude: 1, longitude: 2 },
                     },
                   ],
                 },

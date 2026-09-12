@@ -96,7 +96,7 @@ export type WhatsAppInboundEvent =
       text?: string;
       attachment?: {
         id: string;
-        type: "image" | "document" | "audio";
+        type: "image" | "document" | "audio" | "sticker" | "video";
         mimeType: string;
         sha256?: string;
         fileName?: string;
@@ -165,14 +165,18 @@ export function parseWhatsAppWebhook(payload: unknown): WhatsAppInboundEvent[] {
             });
           continue;
         }
-        if (messageType !== "image" && messageType !== "document" && messageType !== "audio")
-          continue;
+        // Stickers and videos are parsed too, even though the Channel refuses
+        // them, so the Customer is told why instead of hearing nothing back.
+        if (!["image", "document", "audio", "sticker", "video"].includes(messageType)) continue;
 
         const media = record(message[messageType]);
         const id = string(media?.id);
         const mimeType = string(media?.mime_type);
         if (!id || !mimeType) continue;
-        const text = messageType === "audio" ? undefined : string(media?.caption);
+        const text =
+          messageType === "audio" || messageType === "sticker"
+            ? undefined
+            : string(media?.caption);
         events.push({
           kind: "message",
           messageId,
@@ -183,7 +187,7 @@ export function parseWhatsAppWebhook(payload: unknown): WhatsAppInboundEvent[] {
           text,
           attachment: {
             id,
-            type: messageType,
+            type: messageType as "image" | "document" | "audio" | "sticker" | "video",
             mimeType,
             sha256: string(media?.sha256),
             fileName: messageType === "document" ? string(media?.filename) : undefined,
