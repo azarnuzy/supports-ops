@@ -304,7 +304,9 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
         senderType: string;
       };
       hideTyping();
-      messages?.querySelectorAll("[data-ephemeral]").forEach((message) => message.remove());
+      messages?.querySelectorAll("[data-ephemeral]").forEach((message) => {
+        message.remove();
+      });
       messages?.querySelector(`[data-provisional-id]`)?.remove();
       appendMessage(message);
     });
