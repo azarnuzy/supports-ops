@@ -59,6 +59,10 @@ export const whatsAppWebhookRouter = new Hono()
     }
     if (config.channel.status !== "ACTIVE") return c.body(null, 200);
 
+    const accessToken = decryptToolSecret(
+      config.accessTokenEncrypted,
+      toolEncryptionConfig.masterKey,
+    );
     const sessions = new Map<string, { sessionId: string; workspaceId: string }>();
     for (const event of parseWhatsAppWebhook(payload)) {
       if (event.kind === "delivery") {
@@ -103,10 +107,7 @@ export const whatsAppWebhookRouter = new Hono()
       // Meta's media URLs expire and need the access token, so the file is
       // copied into our own storage now, while it can still be fetched.
       const attachment = event.attachment
-        ? await receiveMedia(
-            event.attachment,
-            decryptToolSecret(config.accessTokenEncrypted, toolEncryptionConfig.masterKey),
-          )
+        ? await receiveMedia(event.attachment, accessToken)
         : undefined;
       const stored = await persistInboundMessage({
         attachment,
@@ -127,10 +128,34 @@ export const whatsAppWebhookRouter = new Hono()
         await resetTimersAfterCustomerMessage(stored.ticketId, stored.workspaceId);
       }
       sessions.set(stored.sessionId, stored);
+      await markRead(config.phoneNumberId, accessToken, event.messageId);
     }
     await Promise.all([...sessions.values()].map(enqueueWhatsAppTurn));
     return c.body(null, 200);
   });
+
+/** The Customer's blue ticks. Meta only shows them when we ask, and a failure
+ * here must not fail the webhook, or Meta retries the whole delivery. */
+async function markRead(phoneNumberId: string, accessToken: string, messageId: string) {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v23.0/${encodeURIComponent(phoneNumberId)}/messages`,
+      {
+        body: JSON.stringify({
+          message_id: messageId,
+          messaging_product: "whatsapp",
+          status: "read",
+        }),
+        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        method: "POST",
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (!response.ok) console.warn(`WhatsApp read receipt returned HTTP ${response.status}.`);
+  } catch (error) {
+    console.warn("WhatsApp read receipt failed.", error);
+  }
+}
 
 function findPhoneNumberId(payload: unknown) {
   if (!payload || typeof payload !== "object") return undefined;
@@ -165,6 +190,19 @@ async function receiveMedia(
     media.fileName ??
     `${media.type === "audio" ? "voice-note" : media.type}.${mimeType.split("/")[1]}`;
   const headers = { authorization: `Bearer ${accessToken}` };
+  // Stickers, videos and other types the Channel cannot read are refused here,
+  // before spending a Meta round trip on a file we would throw away anyway.
+  const refusedType = refuseWhatsAppAttachment(mimeType, 0);
+  if (refusedType) {
+    return {
+      failureReason: refusedType,
+      fileName,
+      mimeType,
+      processingStatus: "FAILED" as const,
+      sizeBytes: 0,
+      storageKey: "",
+    };
+  }
   const infoResponse = await fetch(
     `https://graph.facebook.com/v23.0/${encodeURIComponent(media.id)}`,
     { headers, signal: AbortSignal.timeout(15_000) },
