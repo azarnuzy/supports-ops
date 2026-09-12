@@ -20,8 +20,18 @@ x-api-service: &api-service
     BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
     BETTER_AUTH_URL: "https://api.support.azarnuzy.com"
     CLIENT_ORIGINS: "https://support.azarnuzy.com,https://widget.support.azarnuzy.com"
+    INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
+    OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in env.production}"
     REDIS_URL: "redis://redis:6379"
     SESSION_LINK_BASE_URL: "https://api.support.azarnuzy.com/widget/session"
+    S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID in env.production}"
+    S3_BUCKET: "${S3_BUCKET:-supportops}"
+    S3_ENDPOINT: "${S3_ENDPOINT:-}"
+    S3_FORCE_PATH_STYLE: "${S3_FORCE_PATH_STYLE:-false}"
+    S3_PUBLIC_BASE_URL: "${S3_PUBLIC_BASE_URL:-}"
+    S3_REGION: "${S3_REGION:-auto}"
+    S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY in env.production}"
+    TOOL_MASTER_KEY: "${TOOL_MASTER_KEY:?Set TOOL_MASTER_KEY in env.production}"
 
 services:
   postgres:
@@ -87,9 +97,23 @@ services:
     restart: unless-stopped
     environment:
       <<: *application-environment
+      API_INTERNAL_URL: "http://api:8000"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=public"
+      INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
+      MISTRAL_API_KEY: "${MISTRAL_API_KEY:-}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in env.production}"
       REDIS_URL: "redis://redis:6379"
       EMAIL_FROM: "${EMAIL_FROM:?Set EMAIL_FROM in env.production}"
       RESEND_API_KEY: "${RESEND_API_KEY:?Set RESEND_API_KEY in env.production}"
+      S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID in env.production}"
+      S3_BUCKET: "${S3_BUCKET:-supportops}"
+      S3_ENDPOINT: "${S3_ENDPOINT:-}"
+      S3_FORCE_PATH_STYLE: "${S3_FORCE_PATH_STYLE:-false}"
+      S3_PUBLIC_BASE_URL: "${S3_PUBLIC_BASE_URL:-}"
+      S3_REGION: "${S3_REGION:-auto}"
+      S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY in env.production}"
+      TAVILY_API_KEY: "${TAVILY_API_KEY:-}"
+      TOOL_MASTER_KEY: "${TOOL_MASTER_KEY:?Set TOOL_MASTER_KEY in env.production}"
     depends_on:
       redis:
         condition: service_healthy
