@@ -118,7 +118,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    networks: [internal]
+    networks: [internal, egress]
 
   business-system:
     image: "ghcr.io/azarnuzy/supports-ops-business-system:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
@@ -174,3 +174,4 @@ networks:
     external: true
   internal:
     internal: true
+  egress:
