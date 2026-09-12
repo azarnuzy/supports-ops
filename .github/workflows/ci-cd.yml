@@ -73,26 +73,58 @@ jobs:
       - name: Build
         run: pnpm build
 
+  changes:
+    name: Detect changed apps
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      any: ${{ steps.apps.outputs.any }}
+      matrix: ${{ steps.apps.outputs.matrix }}
+      services: ${{ steps.apps.outputs.services }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Find affected apps
+        id: apps
+        shell: bash
+        run: |
+          before="${{ github.event.before }}"
+          if [[ "${before}" == "0000000000000000000000000000000000000000" ]]; then
+            mapfile -t files < <(git ls-files)
+          else
+            mapfile -t files < <(git diff --name-only "${before}" "${GITHUB_SHA}")
+          fi
+          apps=()
+          for app in api worker business-system platform widget; do
+            changed=false
+            for file in "${files[@]}"; do
+              case "${file}" in
+                "apps/${app}/"*|packages/*|deploy/*|Dockerfile|.dockerignore|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json)
+                  changed=true
+                  break
+                  ;;
+              esac
+            done
+            [[ "${changed}" == true ]] && apps+=("${app}")
+          done
+          matrix="$(jq -cn '$ARGS.positional' --args "${apps[@]}")"
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+          echo "services=${apps[*]}" >> "${GITHUB_OUTPUT}"
+          [[ ${#apps[@]} -gt 0 ]] && echo "any=true" >> "${GITHUB_OUTPUT}" || echo "any=false" >> "${GITHUB_OUTPUT}"
+
   publish:
     name: Publish ${{ matrix.image }}
-    needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci, changes]
+    if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: api
-            image: api
-          - target: worker
-            image: worker
-          - target: business-system
-            image: business-system
-          - target: platform
-            image: platform
-          - target: widget
-            image: widget
+        image: ${{ fromJSON(needs.changes.outputs.matrix) }}
 
     env:
       IMAGE_PREFIX: ghcr.io/azarnuzy/supports-ops
@@ -115,7 +147,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          target: ${{ matrix.target }}
+          target: ${{ matrix.image }}
           push: true
           build-args: |
             VITE_API_URL=https://api.support.azarnuzy.com
@@ -125,12 +157,13 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
   deploy:
     name: Deploy to VPS
-    needs: publish
+    needs: [changes, publish]
+    if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
@@ -149,11 +182,9 @@ jobs:
 
       - name: Verify published images
         run: |
-          docker buildx imagetools inspect "${IMAGE_PREFIX}-api:${GITHUB_SHA}"
-          docker buildx imagetools inspect "${IMAGE_PREFIX}-worker:${GITHUB_SHA}"
-          docker buildx imagetools inspect "${IMAGE_PREFIX}-business-system:${GITHUB_SHA}"
-          docker buildx imagetools inspect "${IMAGE_PREFIX}-platform:${GITHUB_SHA}"
-          docker buildx imagetools inspect "${IMAGE_PREFIX}-widget:${GITHUB_SHA}"
+          for service in ${{ needs.changes.outputs.services }}; do
+            docker buildx imagetools inspect "${IMAGE_PREFIX}-${service}:${GITHUB_SHA}"
+          done
 
       - name: Configure SSH
         run: |
@@ -174,4 +205,4 @@ jobs:
       - name: Deploy release
         run: |
           ssh -p "${VPS_PORT}" "${VPS_USER}@${VPS_HOST}" \
-            "cd '${REMOTE_APP_DIRECTORY}' && chmod 700 deploy.sh && ./deploy.sh '${GITHUB_SHA}'"
+            "cd '${REMOTE_APP_DIRECTORY}' && chmod 700 deploy.sh && ./deploy.sh '${GITHUB_SHA}' ${{ needs.changes.outputs.services }}"

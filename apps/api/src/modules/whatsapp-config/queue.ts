@@ -18,7 +18,7 @@ function getQueue() {
  * the next and transient failures back off independently. */
 export async function enqueueWhatsAppDelivery(messageId: string) {
   const queue = getQueue();
-  const jobId = `whatsapp-deliver:${messageId}`;
+  const jobId = `whatsapp-deliver-${messageId}`;
   // A finished job would swallow a manual Retry under the same id.
   await queue.remove(jobId).catch(() => undefined);
   await queue.add(
@@ -36,7 +36,7 @@ export async function enqueueWhatsAppDelivery(messageId: string) {
 
 export async function enqueueWhatsAppTurn(job: WhatsAppTurnJob) {
   const queue = getQueue();
-  const jobId = `whatsapp:${job.sessionId}`;
+  const jobId = `whatsapp-${job.sessionId}`;
   await queue.remove(jobId).catch(() => undefined);
   await queue.add("reply", job, {
     attempts: 5,
