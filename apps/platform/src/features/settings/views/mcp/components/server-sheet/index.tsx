@@ -1,4 +1,3 @@
-import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
   Sheet,
@@ -47,9 +46,7 @@ export default function ServerSheet({
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="tools">
-                Tools{tools ? ` (${tools.length})` : ""}
-              </TabsTrigger>
+              <TabsTrigger value="tools">Tools{tools ? ` (${tools.length})` : ""}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="mt-4 grid gap-4">

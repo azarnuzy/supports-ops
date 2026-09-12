@@ -185,7 +185,9 @@ async function ensureTools() {
   const discovered = await discoverMcpTools(mcpServer.id);
   const invoiceMcpTool = discovered.find((tool) => tool.remoteName === demoInvoiceToolRemoteName);
   if (!invoiceMcpTool) {
-    console.warn(`MCP Server "${demoMcpServerName}" did not report a ${demoInvoiceToolRemoteName} Tool.`);
+    console.warn(
+      `MCP Server "${demoMcpServerName}" did not report a ${demoInvoiceToolRemoteName} Tool.`,
+    );
     return;
   }
   if (invoiceMcpTool.discoveryStatus !== "CURRENT" || !invoiceMcpTool.tool.enabled) {
@@ -371,7 +373,6 @@ async function ensureKnowledgeSources(workspaceId: string) {
   }
 }
 
-
 type DemoTurn = {
   senderType: "AI_AGENT" | "CUSTOMER" | "HUMAN_AGENT";
   content: string;
@@ -417,7 +418,11 @@ const demoConversations: DemoConversation[] = [
     outcome: { status: "RESOLVED", by: "AI_AGENT" },
     title: "Is my subscription still active?",
     turns: [
-      { senderType: "CUSTOMER", content: "Hi, is my subscription still active? I want to make sure before the team starts onboarding." },
+      {
+        senderType: "CUSTOMER",
+        content:
+          "Hi, is my subscription still active? I want to make sure before the team starts onboarding.",
+      },
       {
         senderType: "AI_AGENT",
         content:
@@ -453,7 +458,11 @@ const demoConversations: DemoConversation[] = [
     outcome: { status: "ESCALATED", reason: "INTERNAL_ACTION_REQUIRED", claimed: true },
     title: "Refund for an invoice charged last month",
     turns: [
-      { senderType: "CUSTOMER", content: "I was charged for INV-2091 last month but we had already cancelled. Can you refund it?" },
+      {
+        senderType: "CUSTOMER",
+        content:
+          "I was charged for INV-2091 last month but we had already cancelled. Can you refund it?",
+      },
       {
         senderType: "AI_AGENT",
         content: "Let me check that invoice for you.",
@@ -492,7 +501,10 @@ const demoConversations: DemoConversation[] = [
     outcome: { status: "AI_HANDLING" },
     title: "Password reset email never arrives",
     turns: [
-      { senderType: "CUSTOMER", content: "I keep asking for a password reset link but nothing shows up in my inbox." },
+      {
+        senderType: "CUSTOMER",
+        content: "I keep asking for a password reset link but nothing shows up in my inbox.",
+      },
       {
         senderType: "AI_AGENT",
         content:
@@ -512,7 +524,10 @@ const demoConversations: DemoConversation[] = [
     outcome: { status: "RESOLVED", by: "HUMAN_AGENT" },
     title: "API requests timing out since this morning",
     turns: [
-      { senderType: "CUSTOMER", content: "Every API call from our backend has been timing out since around 09:00." },
+      {
+        senderType: "CUSTOMER",
+        content: "Every API call from our backend has been timing out since around 09:00.",
+      },
       {
         senderType: "AI_AGENT",
         content: "I don't have anything published that covers this, so I'm bringing in a teammate.",
@@ -596,7 +611,8 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
     await prisma.ticket.create({
       data: {
         aiAgentId: channel.aiAgentId,
-        assignedHumanAgentId: escalated?.claimed || resolved?.by === "HUMAN_AGENT" ? humanAgentId : null,
+        assignedHumanAgentId:
+          escalated?.claimed || resolved?.by === "HUMAN_AGENT" ? humanAgentId : null,
         category: conversation.category,
         channelId: channel.id,
         customerIdentityId: customerIdentity.id,
@@ -659,7 +675,9 @@ async function ensureDemoConversations(workspaceId: string, humanAgentId: string
       }
     }
 
-    console.log(`Seeded example conversation: ${conversation.title} (${conversation.outcome.status})`);
+    console.log(
+      `Seeded example conversation: ${conversation.title} (${conversation.outcome.status})`,
+    );
   }
 }
 

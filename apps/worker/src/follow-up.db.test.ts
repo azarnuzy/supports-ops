@@ -48,7 +48,12 @@ async function seedTicket(status: "ESCALATED" | "HUMAN_HANDLING", channelType: "
   const customerLastMessageAt = new Date(Date.now() - 9 * 60 * 60 * 1_000);
 
   await prisma.workspace.create({
-    data: { closingMessage: "We’re closing this Ticket for now.", id: workspaceId, name: "Demo", slug: suffix },
+    data: {
+      closingMessage: "We’re closing this Ticket for now.",
+      id: workspaceId,
+      name: "Demo",
+      slug: suffix,
+    },
   });
   await prisma.aiSettings.create({
     data: { id: `settings-${suffix}`, idleCloseAfterSeconds: 28_800, workspaceId },
@@ -138,25 +143,31 @@ describe("Idle Closure worker", () => {
   it.each([
     ["HUMAN_HANDLING", "WEB", "CUSTOMER_INACTIVE_HUMAN_HANDLING"],
     ["ESCALATED", "WHATSAPP", "CUSTOMER_INACTIVE_SHARED_QUEUE"],
-  ] as const)("closes a %s Ticket on %s with its distinct reason", async (status, channel, reason) => {
-    const seeded = await seedTicket(status, channel);
+  ] as const)(
+    "closes a %s Ticket on %s with its distinct reason",
+    async (status, channel, reason) => {
+      const seeded = await seedTicket(status, channel);
 
-    await processIdleClosureJob(jobFor(seeded));
+      await processIdleClosureJob(jobFor(seeded));
 
-    const ticket = await prisma.ticket.findUniqueOrThrow({
-      include: { messages: true, session: true },
-      where: { id: seeded.ticketId },
-    });
-    expect(ticket).toMatchObject({
-      resolutionReason: reason,
-      resolvedBy: "PLATFORM",
-      status: "RESOLVED",
-      session: { status: "CLOSED" },
-    });
-    expect(ticket.messages).toEqual([
-      expect.objectContaining({ content: "We’re closing this Ticket for now.", senderType: "SYSTEM" }),
-    ]);
-  });
+      const ticket = await prisma.ticket.findUniqueOrThrow({
+        include: { messages: true, session: true },
+        where: { id: seeded.ticketId },
+      });
+      expect(ticket).toMatchObject({
+        resolutionReason: reason,
+        resolvedBy: "PLATFORM",
+        status: "RESOLVED",
+        session: { status: "CLOSED" },
+      });
+      expect(ticket.messages).toEqual([
+        expect.objectContaining({
+          content: "We’re closing this Ticket for now.",
+          senderType: "SYSTEM",
+        }),
+      ]);
+    },
+  );
 
   it("lets a Customer message beat a stale due timer", async () => {
     const seeded = await seedTicket("ESCALATED", "WEB");
@@ -167,10 +178,12 @@ describe("Idle Closure worker", () => {
 
     await processIdleClosureJob(jobFor(seeded));
 
-    expect(await prisma.ticket.findUniqueOrThrow({ where: { id: seeded.ticketId } })).toMatchObject({
-      resolutionReason: null,
-      status: "ESCALATED",
-    });
+    expect(await prisma.ticket.findUniqueOrThrow({ where: { id: seeded.ticketId } })).toMatchObject(
+      {
+        resolutionReason: null,
+        status: "ESCALATED",
+      },
+    );
   });
 
   it("lets a Claim beat a stale due timer", async () => {
@@ -193,10 +206,12 @@ describe("Idle Closure worker", () => {
 
     await processIdleClosureJob(jobFor(seeded));
 
-    expect(await prisma.ticket.findUniqueOrThrow({ where: { id: seeded.ticketId } })).toMatchObject({
-      resolutionReason: null,
-      status: "HUMAN_HANDLING",
-    });
+    expect(await prisma.ticket.findUniqueOrThrow({ where: { id: seeded.ticketId } })).toMatchObject(
+      {
+        resolutionReason: null,
+        status: "HUMAN_HANDLING",
+      },
+    );
   });
 
   it("lets a Takeover beat a due AI timer", async () => {
@@ -247,9 +262,11 @@ describe("Idle Closure worker", () => {
       data: { followUpMessageId, ticketId: seeded.ticketId, workspaceId: seeded.workspaceId },
     });
 
-    expect(await prisma.ticket.findUniqueOrThrow({ where: { id: seeded.ticketId } })).toMatchObject({
-      resolutionReason: null,
-      status: "HUMAN_HANDLING",
-    });
+    expect(await prisma.ticket.findUniqueOrThrow({ where: { id: seeded.ticketId } })).toMatchObject(
+      {
+        resolutionReason: null,
+        status: "HUMAN_HANDLING",
+      },
+    );
   });
 });

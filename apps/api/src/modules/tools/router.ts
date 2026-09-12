@@ -104,10 +104,7 @@ export const toolsRouter = new Hono<{ Variables: AuthVariables }>()
   })
   .put("/:id", zValidator("json", updateHttpToolSchema), async (c) => {
     try {
-      return c.json(
-        { tool: await updateHttpTool(c.req.param("id"), c.req.valid("json")) },
-        200,
-      );
+      return c.json({ tool: await updateHttpTool(c.req.param("id"), c.req.valid("json")) }, 200);
     } catch (error) {
       if (error instanceof HttpToolNotFoundError) return c.json({ error: "not_found" }, 404);
       if (error instanceof InvalidToolSchemaError)

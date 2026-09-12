@@ -210,8 +210,8 @@ const KnowledgeView = () => {
         <div className="overflow-hidden rounded-lg border">
           {knowledgeSources.isPending ? (
             <div className="grid gap-3 p-5">
-              {Array.from({ length: 5 }, (_, index) => (
-                <Skeleton key={index} className="h-16 w-full" />
+              {["first", "second", "third", "fourth", "fifth"].map((key) => (
+                <Skeleton key={key} className="h-16 w-full" />
               ))}
             </div>
           ) : null}

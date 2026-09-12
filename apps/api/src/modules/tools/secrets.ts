@@ -11,7 +11,9 @@ export function encryptToolSecret(value: string, masterKey: string) {
 }
 
 export function decryptToolSecret(value: string, masterKey: string) {
-  const [iv, tag, encrypted, extra] = value.split(".").map((part) => Buffer.from(part, "base64url"));
+  const [iv, tag, encrypted, extra] = value
+    .split(".")
+    .map((part) => Buffer.from(part, "base64url"));
   if (!iv || !tag || !encrypted || extra) throw new Error("Invalid encrypted Tool secret.");
   const decipher = createDecipheriv(algorithm, decodeMasterKey(masterKey), iv);
   decipher.setAuthTag(tag);

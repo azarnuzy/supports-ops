@@ -117,7 +117,10 @@ const TicketCategoriesView = () => {
             </div>
           ) : null}
           {items.map((category) => (
-            <div key={category.id} className="flex flex-wrap items-center gap-3 border-b p-4 last:border-b-0">
+            <div
+              key={category.id}
+              className="flex flex-wrap items-center gap-3 border-b p-4 last:border-b-0"
+            >
               <button
                 type="button"
                 className="min-w-[12rem] flex-1 cursor-pointer text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -150,8 +153,8 @@ const TicketCategoriesView = () => {
         </div>
 
         <p className="text-[13px] leading-relaxed text-muted-foreground">
-          Deleting a category never deletes tickets: they move to the fallback category. Renaming
-          a category is safe at any time — existing tickets keep their place.
+          Deleting a category never deletes tickets: they move to the fallback category. Renaming a
+          category is safe at any time — existing tickets keep their place.
         </p>
       </section>
 
@@ -161,8 +164,8 @@ const TicketCategoriesView = () => {
             <DialogHeader>
               <DialogTitle>{editing ? "Edit category" : "Add category"}</DialogTitle>
               <DialogDescription>
-                Two categories that sound alike get confused with each other, which files tickets
-                in the wrong place and skews every report built on them.
+                Two categories that sound alike get confused with each other, which files tickets in
+                the wrong place and skews every report built on them.
               </DialogDescription>
             </DialogHeader>
             <Field>
@@ -173,7 +176,9 @@ const TicketCategoriesView = () => {
                 maxLength={60}
                 placeholder="Shipping"
                 value={draft.label}
-                onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, label: event.target.value }))
+                }
               />
             </Field>
             <Field>

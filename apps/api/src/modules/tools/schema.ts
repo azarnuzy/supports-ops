@@ -1,12 +1,14 @@
 import { z } from "zod";
 
-const secretHeadersSchema = z.record(z.string().trim().min(1), z.string()).refine(
-  (headers) =>
-    Object.keys(headers).every(
-      (name) => !["authorization", "content-length", "host"].includes(name.toLowerCase()),
-    ),
-  "Authorization, Content-Length, and Host cannot be custom secret headers.",
-);
+const secretHeadersSchema = z
+  .record(z.string().trim().min(1), z.string())
+  .refine(
+    (headers) =>
+      Object.keys(headers).every(
+        (name) => !["authorization", "content-length", "host"].includes(name.toLowerCase()),
+      ),
+    "Authorization, Content-Length, and Host cannot be custom secret headers.",
+  );
 
 const httpToolFields = {
   bearerToken: z.string().optional().nullable(),

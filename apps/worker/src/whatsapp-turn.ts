@@ -374,11 +374,10 @@ async function deliverMessage(messageId: string) {
       },
     );
   } catch (error) {
-    const updated = await prisma.message.update({
+    await prisma.message.update({
       data: { deliveryAttempts: { increment: 1 } },
       where: { id: message.id },
     });
-    if (kind === "permanent") await publishMessageUpdated(updated);
     throw error;
   }
 
@@ -389,7 +388,7 @@ async function deliverMessage(messageId: string) {
   if (!response.ok) {
     const reason = body.error?.message ?? `Meta returned HTTP ${response.status}.`;
     const kind = classifyWhatsAppError({ code: body.error?.code, status: response.status });
-    await prisma.message.update({
+    const updated = await prisma.message.update({
       data: {
         deliveryAttempts: { increment: 1 },
         ...(kind === "permanent"
@@ -405,7 +404,10 @@ async function deliverMessage(messageId: string) {
         where: { id: config.id },
       });
     }
-    if (kind === "permanent") throw new UnrecoverableError(reason);
+    if (kind === "permanent") {
+      await publishMessageUpdated(updated);
+      throw new UnrecoverableError(reason);
+    }
     throw new Error(reason);
   }
 

@@ -10,11 +10,13 @@ export type McpCredentials = {
   secretHeaders?: Record<string, string>;
 };
 
+type FetchRequest = (request: Request) => Promise<Response> | Response;
+
 export async function withMcpClient<T>(
   endpoint: string,
   credentials: McpCredentials,
   operation: (client: Client) => Promise<T>,
-  options: { allowPrivateNetwork?: boolean; fetch?: typeof fetch } = {},
+  options: { allowPrivateNetwork?: boolean; fetch?: FetchRequest } = {},
 ) {
   const url = new URL(endpoint);
   await assertSafeUrl(url, options.allowPrivateNetwork);
@@ -24,13 +26,14 @@ export async function withMcpClient<T>(
   const guardedFetch: typeof fetch = async (input, init) => {
     const requestUrl = new URL(input instanceof Request ? input.url : input.toString());
     await assertSafeUrl(requestUrl, options.allowPrivateNetwork);
-    return (options.fetch ?? fetch)(input, {
+    const request = new Request(input, {
       ...init,
       redirect: "error",
       signal: init?.signal
         ? AbortSignal.any([init.signal, AbortSignal.timeout(timeoutMs)])
         : AbortSignal.timeout(timeoutMs),
     });
+    return (options.fetch ?? fetch)(request);
   };
 
   const client = new Client({ name: "SupportOps", version: "0.1.0" });
@@ -47,8 +50,10 @@ export async function withMcpClient<T>(
 }
 
 async function assertSafeUrl(url: URL, allowPrivateNetwork = false) {
-  if (url.protocol !== "https:" && !allowPrivateNetwork) throw new Error("MCP endpoint must use HTTPS.");
-  if (url.username || url.password) throw new Error("MCP endpoint credentials must use secret fields.");
+  if (url.protocol !== "https:" && !allowPrivateNetwork)
+    throw new Error("MCP endpoint must use HTTPS.");
+  if (url.username || url.password)
+    throw new Error("MCP endpoint credentials must use secret fields.");
   if (allowPrivateNetwork) return;
 
   const addresses = isIP(url.hostname)

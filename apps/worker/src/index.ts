@@ -11,7 +11,11 @@ import {
   processTicketKnowledgeIndexJob,
   type TicketKnowledgeIndexJob,
 } from "./ticket-knowledge-index";
-import { processWhatsAppDelivery, processWhatsAppTurn, type WhatsAppTurnJob } from "./whatsapp-turn";
+import {
+  processWhatsAppDelivery,
+  processWhatsAppTurn,
+  type WhatsAppTurnJob,
+} from "./whatsapp-turn";
 import type { WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
 
 export type { ExampleJob } from "./types";

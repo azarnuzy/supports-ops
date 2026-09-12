@@ -76,7 +76,8 @@ export async function executeHttpTool(
         }
         return await readLimited(response);
       } catch (error) {
-        if (error instanceof HttpToolFailure && error.code !== "NETWORK") throw error;
+        if (error instanceof HttpToolFailure) throw error;
+        if (controller.signal.aborted) throw new HttpToolFailure("TIMEOUT");
         if (attempt + 1 === attempts) throw new HttpToolFailure("NETWORK");
       }
     }

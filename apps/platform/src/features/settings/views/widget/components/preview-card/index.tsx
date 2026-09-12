@@ -118,70 +118,70 @@ export default function PreviewCard({
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto">
-              {state === "welcome" ? (
-                <div className="p-4 text-center">
-                  <div
-                    className="mx-auto grid size-14 place-items-center rounded-full"
-                    style={{
-                      backgroundColor: `color-mix(in srgb, ${color} 12%, white)`,
-                      color,
-                    }}
-                  >
-                    <WidgetBotIcon className="size-7" />
-                  </div>
-                  <p className="mt-3 text-[19px] leading-tight font-semibold tracking-tight">
-                    Hi there! 👋
-                  </p>
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#64748b]">{welcome}</p>
-                  <div className="mt-4 grid gap-2 text-left">
-                    <div className="rounded-[10px] border border-[#cbd5e1] px-3 py-2.5 text-[13px] text-[#94a3b8]">
-                      Your name
+                {state === "welcome" ? (
+                  <div className="p-4 text-center">
+                    <div
+                      className="mx-auto grid size-14 place-items-center rounded-full"
+                      style={{
+                        backgroundColor: `color-mix(in srgb, ${color} 12%, white)`,
+                        color,
+                      }}
+                    >
+                      <WidgetBotIcon className="size-7" />
                     </div>
-                    <div className="rounded-[10px] border border-[#cbd5e1] px-3 py-2.5 text-[13px] text-[#94a3b8]">
-                      you@company.com
+                    <p className="mt-3 text-[19px] leading-tight font-semibold tracking-tight">
+                      Hi there! 👋
+                    </p>
+                    <p className="mt-2 text-[13px] leading-relaxed text-[#64748b]">{welcome}</p>
+                    <div className="mt-4 grid gap-2 text-left">
+                      <div className="rounded-[10px] border border-[#cbd5e1] px-3 py-2.5 text-[13px] text-[#94a3b8]">
+                        Your name
+                      </div>
+                      <div className="rounded-[10px] border border-[#cbd5e1] px-3 py-2.5 text-[13px] text-[#94a3b8]">
+                        you@company.com
+                      </div>
+                      <div
+                        className="mt-0.5 rounded-[10px] py-2.5 text-center text-[13px] font-bold text-white"
+                        style={{ backgroundColor: color }}
+                      >
+                        Start chat
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-2 p-4">
+                    <div className="max-w-[85%] rounded-[12px_12px_12px_3px] bg-[#f1f5f9] px-3 py-2 text-[13px] leading-relaxed">
+                      {welcome}
                     </div>
                     <div
-                      className="mt-0.5 rounded-[10px] py-2.5 text-center text-[13px] font-bold text-white"
+                      className="ml-auto max-w-[85%] rounded-[12px_12px_3px] px-3 py-2 text-[13px] leading-relaxed text-white"
                       style={{ backgroundColor: color }}
                     >
-                      Start chat
+                      My last invoice looks wrong — can you check it?
+                    </div>
+                    <div className="max-w-[85%] rounded-[12px_12px_12px_3px] bg-[#f1f5f9] px-3 py-2 text-[13px] leading-relaxed">
+                      Of course. I've pulled up invoice #4821 — let me take a look.
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 rounded-full border border-[#cbd5e1] py-1.5 pr-1.5 pl-3.5">
+                      <span className="flex-1 truncate text-[13px] text-[#94a3b8]">
+                        Type your message…
+                      </span>
+                      <span
+                        className="grid size-7 shrink-0 place-items-center rounded-full text-white"
+                        style={{ backgroundColor: color }}
+                      >
+                        <svg
+                          aria-hidden="true"
+                          className="size-3.5"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="m3 11.5 18-8-8 18-2.5-7.5L3 11.5Z" />
+                        </svg>
+                      </span>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="grid gap-2 p-4">
-                  <div className="max-w-[85%] rounded-[12px_12px_12px_3px] bg-[#f1f5f9] px-3 py-2 text-[13px] leading-relaxed">
-                    {welcome}
-                  </div>
-                  <div
-                    className="ml-auto max-w-[85%] rounded-[12px_12px_3px] px-3 py-2 text-[13px] leading-relaxed text-white"
-                    style={{ backgroundColor: color }}
-                  >
-                    My last invoice looks wrong — can you check it?
-                  </div>
-                  <div className="max-w-[85%] rounded-[12px_12px_12px_3px] bg-[#f1f5f9] px-3 py-2 text-[13px] leading-relaxed">
-                    Of course. I've pulled up invoice #4821 — let me take a look.
-                  </div>
-                  <div className="mt-2 flex items-center gap-2 rounded-full border border-[#cbd5e1] py-1.5 pr-1.5 pl-3.5">
-                    <span className="flex-1 truncate text-[13px] text-[#94a3b8]">
-                      Type your message…
-                    </span>
-                    <span
-                      className="grid size-7 shrink-0 place-items-center rounded-full text-white"
-                      style={{ backgroundColor: color }}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        className="size-3.5"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="m3 11.5 18-8-8 18-2.5-7.5L3 11.5Z" />
-                      </svg>
-                    </span>
-                  </div>
-                </div>
-              )}
+                )}
               </div>
             </div>
 

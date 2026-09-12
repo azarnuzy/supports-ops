@@ -23,10 +23,7 @@ export type TrafficSummary = {
   peak: { day: string; hour: number; count: number } | null;
 };
 
-export function summarizeBuckets(
-  buckets: AnalyticsHourBucket[],
-  timeZone: string,
-): TrafficSummary {
+export function summarizeBuckets(buckets: AnalyticsHourBucket[], timeZone: string): TrafficSummary {
   const byDayHour = new Map<string, Map<number, number>>();
   const localParts = new Intl.DateTimeFormat("en-CA", {
     day: "2-digit",

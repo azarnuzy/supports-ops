@@ -3,10 +3,7 @@ import { betterAuthConfig, toolEncryptionConfig } from "../../config";
 import { isUniqueConstraintError, prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { decryptToolSecret, encryptToolSecret } from "../tools/secrets";
-import type {
-  ReplaceWhatsAppCredentialsInput,
-  VerifyWhatsAppConfigInput,
-} from "./schema";
+import type { ReplaceWhatsAppCredentialsInput, VerifyWhatsAppConfigInput } from "./schema";
 
 export class InvalidWhatsAppCredentialsError extends Error {}
 export class WhatsAppAlreadyConnectedError extends Error {}
@@ -194,8 +191,8 @@ function toDto(config: {
       : config.accessTokenFailedAt
         ? ("TOKEN_INVALID" as const)
         : config.webhookVerifiedAt
-        ? ("HEALTHY" as const)
-        : ("AWAITING_WEBHOOK" as const),
+          ? ("HEALTHY" as const)
+          : ("AWAITING_WEBHOOK" as const),
     phoneNumberId: config.phoneNumberId,
     verifiedAt: config.verifiedAt,
     verifiedName: config.verifiedName,

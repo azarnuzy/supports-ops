@@ -180,7 +180,9 @@ export default function ToolSheet({
           <Badge variant={tool.risk === "MUTATING" ? "secondary" : "outline"}>
             {tool.risk === "MUTATING" ? "Requires approval" : "Read only"}
           </Badge>
-          {tool.availability === "AVAILABLE" ? null : <Badge variant="destructive">Disconnected</Badge>}
+          {tool.availability === "AVAILABLE" ? null : (
+            <Badge variant="destructive">Disconnected</Badge>
+          )}
         </div>
       </div>
     </aside>
@@ -295,7 +297,9 @@ export default function ToolSheet({
                 key={`${call.ticketId}-${call.at}`}
                 className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5 text-[13px] last:border-b-0"
               >
-                <span className="text-muted-foreground">{timeFormatter.format(new Date(call.at))}</span>
+                <span className="text-muted-foreground">
+                  {timeFormatter.format(new Date(call.at))}
+                </span>
                 <span className="font-mono text-xs text-muted-foreground">{call.latencyMs} ms</span>
                 <Badge variant={call.succeeded ? "outline" : "destructive"}>
                   {call.succeeded ? "Succeeded" : "Failed"}
@@ -310,10 +314,7 @@ export default function ToolSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full gap-0 overflow-y-auto p-0 sm:max-w-3xl"
-      >
+      <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-3xl">
         <SheetHeader className="border-b p-5">
           <SheetTitle>{tool ? tool.name : "Add webhook tool"}</SheetTitle>
           <SheetDescription>
@@ -359,7 +360,8 @@ export default function ToolSheet({
                           onChange={(event) => applyJson(event.target.value)}
                         />
                         <FieldDescription className={jsonError ? "text-destructive" : undefined}>
-                          {jsonError ?? "Edits apply to the form as you type. Secrets are edited in the form."}
+                          {jsonError ??
+                            "Edits apply to the form as you type. Secrets are edited in the form."}
                         </FieldDescription>
                       </Field>
                     ) : (
@@ -433,8 +435,9 @@ export default function ToolSheet({
                             </SelectContent>
                           </Select>
                           <FieldDescription>
-                            A read-only tool runs whenever the agent needs it. One that requires approval only
-                            runs when the customer asks for that action in their own message.
+                            A read-only tool runs whenever the agent needs it. One that requires
+                            approval only runs when the customer asks for that action in their own
+                            message.
                           </FieldDescription>
                         </Field>
                         <Field>
@@ -466,25 +469,36 @@ export default function ToolSheet({
                               <button
                                 type="button"
                                 className="text-destructive underline"
-                                onClick={() => onChange({ bearerToken: "", clearBearerToken: true })}
+                                onClick={() =>
+                                  onChange({ bearerToken: "", clearBearerToken: true })
+                                }
                               >
-                                {form.clearBearerToken ? "Will clear on save" : "Clear stored token"}
+                                {form.clearBearerToken
+                                  ? "Will clear on save"
+                                  : "Clear stored token"}
                               </button>
                             </FieldDescription>
                           ) : null}
                         </Field>
                         <Field>
-                          <FieldLabel htmlFor="http-tool-headers">Secret headers (JSON object)</FieldLabel>
+                          <FieldLabel htmlFor="http-tool-headers">
+                            Secret headers (JSON object)
+                          </FieldLabel>
                           <Textarea
                             id="http-tool-headers"
                             rows={3}
                             className="font-mono text-xs"
                             placeholder={
-                              hasSecretHeaders ? "Configured — leave blank to keep" : '{"X-Api-Key":"..."}'
+                              hasSecretHeaders
+                                ? "Configured — leave blank to keep"
+                                : '{"X-Api-Key":"..."}'
                             }
                             value={form.secretHeaders}
                             onChange={(event) =>
-                              onChange({ secretHeaders: event.target.value, clearSecretHeaders: false })
+                              onChange({
+                                secretHeaders: event.target.value,
+                                clearSecretHeaders: false,
+                              })
                             }
                           />
                           {hasSecretHeaders ? (
@@ -492,16 +506,19 @@ export default function ToolSheet({
                               <button
                                 type="button"
                                 className="text-destructive underline"
-                                onClick={() => onChange({ secretHeaders: "", clearSecretHeaders: true })}
+                                onClick={() =>
+                                  onChange({ secretHeaders: "", clearSecretHeaders: true })
+                                }
                               >
-                                {form.clearSecretHeaders ? "Will clear on save" : "Clear stored headers"}
+                                {form.clearSecretHeaders
+                                  ? "Will clear on save"
+                                  : "Clear stored headers"}
                               </button>
                             </FieldDescription>
                           ) : null}
                         </Field>
                       </>
                     )}
-
 
                     {testPanel}
 

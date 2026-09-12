@@ -10,10 +10,13 @@ function createInvoiceServer() {
     {
       description:
         "Look up a customer's invoice status by customer ID, optionally a specific invoice ID. " +
-        "This demo Workspace has one linked account: customerId \"cus_102\".",
+        'This demo Workspace has one linked account: customerId "cus_102".',
       inputSchema: {
         customerId: z.string().describe("The Business System customer ID, e.g. cus_102."),
-        invoiceId: z.string().optional().describe("A specific invoice ID; defaults to the most recent."),
+        invoiceId: z
+          .string()
+          .optional()
+          .describe("A specific invoice ID; defaults to the most recent."),
       },
     },
     async ({ customerId, invoiceId }) => {
@@ -32,7 +35,10 @@ function createInvoiceServer() {
         invoiceId ? [customerId, invoiceId] : [customerId],
       );
       if (!result.rowCount) {
-        return { content: [{ type: "text", text: "No invoice found for that customer." }], isError: true };
+        return {
+          content: [{ type: "text", text: "No invoice found for that customer." }],
+          isError: true,
+        };
       }
       return { content: [{ type: "text", text: JSON.stringify(result.rows[0]) }] };
     },

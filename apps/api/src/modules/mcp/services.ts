@@ -54,7 +54,10 @@ export async function updateMcpServer(id: string, input: UpdateMcpServerInput) {
 
 export async function deleteMcpServer(id: string) {
   await getServer(id);
-  const tools = await prisma.mcpTool.findMany({ select: { toolId: true }, where: { mcpServerId: id } });
+  const tools = await prisma.mcpTool.findMany({
+    select: { toolId: true },
+    where: { mcpServerId: id },
+  });
   const toolIds = tools.map(({ toolId }) => toolId);
   await prisma.$transaction([
     prisma.toolAssignment.deleteMany({ where: { toolId: { in: toolIds } } }),
@@ -78,10 +81,16 @@ export async function testMcpConnection(id: string) {
 }
 
 export async function discoverMcpTools(id: string) {
+  const workspaceId = requireWorkspaceId();
   const server = await getServer(id);
-  const remote = await withMcpClient(server.url, credentials(server), (client) => client.listTools(), {
-    allowPrivateNetwork: httpToolConfig.allowLocalHttp,
-  });
+  const remote = await withMcpClient(
+    server.url,
+    credentials(server),
+    (client) => client.listTools(),
+    {
+      allowPrivateNetwork: httpToolConfig.allowLocalHttp,
+    },
+  );
   const seen: string[] = [];
 
   for (const discovered of remote.tools) {
@@ -115,6 +124,7 @@ export async function discoverMcpTools(id: string) {
           // raw "Server Name/toolName" broke every AI Agent reply, not just this Tool's.
           name: `${server.name}_${discovered.name}`.replace(/[^a-zA-Z0-9_-]+/g, "_"),
           origin: "MCP",
+          workspace: { connect: { id: workspaceId } },
         },
       });
     } else {
@@ -173,8 +183,7 @@ export async function executeMcpTool(
     where: { toolId },
   });
   if (
-    !record ||
-    !record.mcpServer.enabled ||
+    !record?.mcpServer.enabled ||
     !record.tool.enabled ||
     record.discoveryStatus !== "CURRENT" ||
     record.tool.assignments.length === 0
@@ -226,15 +235,13 @@ function credentials(server: {
       ? decryptToolSecret(server.bearerTokenEncrypted, toolEncryptionConfig.masterKey)
       : undefined,
     secretHeaders: server.secretHeadersEncrypted
-      ? JSON.parse(
-          decryptToolSecret(server.secretHeadersEncrypted, toolEncryptionConfig.masterKey),
-        )
+      ? JSON.parse(decryptToolSecret(server.secretHeadersEncrypted, toolEncryptionConfig.masterKey))
       : undefined,
   } satisfies McpCredentials;
 }
 
 function redact(value: string, secrets: McpCredentials) {
   return [secrets.bearerToken, ...Object.values(secrets.secretHeaders ?? {})]
-    .filter(Boolean)
-    .reduce((result, secret) => result.replaceAll(secret!, "[REDACTED]"), value);
+    .filter((secret): secret is string => Boolean(secret))
+    .reduce((result, secret) => result.replaceAll(secret, "[REDACTED]"), value);
 }

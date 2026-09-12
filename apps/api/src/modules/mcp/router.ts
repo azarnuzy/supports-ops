@@ -22,9 +22,7 @@ import {
 } from "./services";
 
 export const mcpRouter = new Hono<{ Variables: AuthVariables }>()
-  .use("*", async (c, next) =>
-    requireAdmin(c) ? next() : c.json({ error: "forbidden" }, 403),
-  )
+  .use("*", async (c, next) => (requireAdmin(c) ? next() : c.json({ error: "forbidden" }, 403)))
   .get("/", async (c) => c.json({ servers: await listMcpServers() }))
   .post("/", zValidator("json", createMcpServerSchema), async (c) =>
     c.json({ server: await createMcpServer(c.req.valid("json")) }, 201),
@@ -50,15 +48,13 @@ export const mcpRouter = new Hono<{ Variables: AuthVariables }>()
     }),
   );
 
-async function handle(
-  c: Context<{ Variables: AuthVariables }>,
-  operation: () => Promise<unknown>,
-) {
+async function handle(c: Context<{ Variables: AuthVariables }>, operation: () => Promise<unknown>) {
   try {
     return c.json({ data: await operation() }, 200);
   } catch (error) {
     if (error instanceof McpNotFoundError) return c.json({ error: "not_found" }, 404);
-    if (error instanceof McpToolDeniedError) return c.json({ error: "tool_denied", message: error.message }, 409);
+    if (error instanceof McpToolDeniedError)
+      return c.json({ error: "tool_denied", message: error.message }, 409);
     throw error;
   }
 }

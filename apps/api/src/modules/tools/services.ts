@@ -21,9 +21,9 @@ type BuiltInName = (typeof builtInNames)[number];
 const includeHttpConfig = { httpConfig: true } as const;
 
 export async function listHttpTools() {
-  return (await prisma.tool.findMany({ include: includeHttpConfig, where: { origin: "HTTP" } })).map(
-    toDto,
-  );
+  return (
+    await prisma.tool.findMany({ include: includeHttpConfig, where: { origin: "HTTP" } })
+  ).map(toDto);
 }
 
 /** Last call per Tool, read from the AI Activity log so no new table is needed.
@@ -92,18 +92,16 @@ export async function listTools(aiAgentId: string) {
     orderBy: { name: "asc" },
   });
 
-  return tools.map(({ assignments, httpConfig, mcpTool, ...tool }) => ({
-    ...tool,
-    assigned: assignments.length > 0,
-    availability: isAvailable({ ...tool, httpConfig, mcpTool }) ? "AVAILABLE" : "UNAVAILABLE",
-    lastCall: lastCallByToolId.get(tool.id)
-      ? {
-          at: lastCallByToolId.get(tool.id)!.at.toISOString(),
-          succeeded: lastCallByToolId.get(tool.id)!.succeeded,
-        }
-      : null,
-    usageInstruction: assignments[0]?.usageInstruction ?? null,
-  }));
+  return tools.map(({ assignments, httpConfig, mcpTool, ...tool }) => {
+    const lastCall = lastCallByToolId.get(tool.id);
+    return {
+      ...tool,
+      assigned: assignments.length > 0,
+      availability: isAvailable({ ...tool, httpConfig, mcpTool }) ? "AVAILABLE" : "UNAVAILABLE",
+      lastCall: lastCall ? { at: lastCall.at.toISOString(), succeeded: lastCall.succeeded } : null,
+      usageInstruction: assignments[0]?.usageInstruction ?? null,
+    };
+  });
 }
 
 export async function setToolEnabled(toolId: string, enabled: boolean) {
@@ -167,13 +165,15 @@ export async function executeBuiltInTool(input: {
 }) {
   const workspaceId = requireWorkspaceId();
   const [tool, ticket] = await Promise.all([
-    resolveTools(input.aiAgentId).then((tools) => tools.find((item) => item.name === input.toolName)),
+    resolveTools(input.aiAgentId).then((tools) =>
+      tools.find((item) => item.name === input.toolName),
+    ),
     prisma.ticket.findFirst({
       select: { channel: { select: { type: true } }, customerIdentityId: true },
       where: { aiAgentId: input.aiAgentId, id: input.ticketId },
     }),
   ]);
-  if (!tool || tool.origin !== "BUILT_IN") throw new ToolNotAssignedError();
+  if (tool?.origin !== "BUILT_IN") throw new ToolNotAssignedError();
   if (!ticket) throw new TicketNotFoundError();
 
   return input.toolName === "searchKnowledge"
@@ -217,13 +217,19 @@ async function findAssignableTool(toolId: string) {
 }
 
 async function requireAiAgent(aiAgentId: string) {
-  const aiAgent = await prisma.aiAgent.findFirst({ select: { id: true }, where: { id: aiAgentId } });
+  const aiAgent = await prisma.aiAgent.findFirst({
+    select: { id: true },
+    where: { id: aiAgentId },
+  });
   if (!aiAgent) throw new AiAgentNotFoundError();
   return aiAgent;
 }
 
 export async function getHttpTool(id: string) {
-  const tool = await prisma.tool.findFirst({ include: includeHttpConfig, where: { id, origin: "HTTP" } });
+  const tool = await prisma.tool.findFirst({
+    include: includeHttpConfig,
+    where: { id, origin: "HTTP" },
+  });
   if (!tool) throw new HttpToolNotFoundError();
   return toDto(tool);
 }
@@ -263,12 +269,15 @@ export async function createHttpTool(input: CreateHttpToolInput) {
       skipDuplicates: true,
     });
   }
-  return toDto(tool);
+  return getHttpTool(tool.id);
 }
 
 export async function updateHttpTool(id: string, input: UpdateHttpToolInput) {
   validateSchema(input.inputSchema);
-  const existing = await prisma.tool.findFirst({ include: includeHttpConfig, where: { id, origin: "HTTP" } });
+  const existing = await prisma.tool.findFirst({
+    include: includeHttpConfig,
+    where: { id, origin: "HTTP" },
+  });
   if (!existing?.httpConfig) throw new HttpToolNotFoundError();
   const secrets = secretConfig(input, existing.httpConfig);
   const tool = await prisma.tool.update({
@@ -283,7 +292,7 @@ export async function updateHttpTool(id: string, input: UpdateHttpToolInput) {
     include: includeHttpConfig,
     where: { id },
   });
-  return toDto(tool);
+  return getHttpTool(tool.id);
 }
 
 export async function deleteHttpTool(id: string) {
@@ -299,7 +308,9 @@ function validateSchema(schema: Record<string, unknown>) {
   try {
     new Ajv({ strict: true }).compile(schema);
   } catch (error) {
-    throw new InvalidToolSchemaError(error instanceof Error ? error.message : "Invalid JSON Schema.");
+    throw new InvalidToolSchemaError(
+      error instanceof Error ? error.message : "Invalid JSON Schema.",
+    );
   }
 }
 
