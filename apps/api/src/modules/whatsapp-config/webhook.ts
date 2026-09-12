@@ -210,7 +210,7 @@ async function persistInboundMessage(input: {
   workspaceId: string;
 }) {
   return unscopedPrisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${input.channelId}), hashtext(${input.phoneE164}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.channelId}), hashtext(${input.phoneE164}))`;
     const existing = await tx.message.findUnique({
       where: {
         workspaceId_externalMessageId: {

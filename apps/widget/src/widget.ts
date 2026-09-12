@@ -242,6 +242,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   const appendEphemeral = (content: string, senderType: "CUSTOMER" | "AI_AGENT") => {
     const bubble = document.createElement("div");
     bubble.className = `message ${senderType === "CUSTOMER" ? "message-customer" : ""}`;
+    bubble.dataset.ephemeral = "";
     if (senderType === "CUSTOMER") {
       bubble.textContent = content;
     } else {
@@ -303,6 +304,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
         senderType: string;
       };
       hideTyping();
+      messages?.querySelectorAll("[data-ephemeral]").forEach((message) => message.remove());
       messages?.querySelector(`[data-provisional-id]`)?.remove();
       appendMessage(message);
     });
