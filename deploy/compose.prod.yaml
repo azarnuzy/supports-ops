@@ -156,7 +156,7 @@ services:
     restart: unless-stopped
     expose: ["80"]
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/"]
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/widget.js"]
       interval: 10s
       timeout: 5s
       retries: 6
