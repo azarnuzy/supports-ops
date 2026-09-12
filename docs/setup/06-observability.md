@@ -1,6 +1,6 @@
 # Observability
 
-The AI Agent's Telemetry — spans, token counts, latency — is exported over OpenTelemetry to an OTLP endpoint, on the same pipeline as the application traces the platform already emits (`ENABLE_TELEMETRY` and the `TELEMETRY_*` variables configure both). See [ADR-0010](../adr/0010-otlp-observability-and-manual-evals.md) for why the backend is configuration, not architecture.
+The AI Agent's Telemetry — spans, token counts, latency — is exported over OpenTelemetry to an OTLP endpoint (`ENABLE_TELEMETRY` and the `TELEMETRY_*` variables configure it). Only explicit AI Agent, model, retrieval, and Tool spans are exported; automatic HTTP, database, DNS, and network spans are disabled. See [ADR-0010](../adr/0010-otlp-observability-and-manual-evals.md) for why the backend is configuration, not architecture.
 
 Telemetry is a developer tool and is captured in redacted ("safe") form: prompt and response bodies never leave the process, so Internal-Only material that reached a prompt is not exported in raw form. It is not the audit trail — AI Activity remains the product record behind the Activity Timeline, is written to our own database, and is unaffected by any of this. Telemetry backends are free to expire data; nothing here is a substitute for Messages or AI Activity.
 
