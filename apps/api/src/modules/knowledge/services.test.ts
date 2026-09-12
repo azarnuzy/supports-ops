@@ -47,6 +47,10 @@ vi.mock("../../utils/workspace-context", () => ({
   requireWorkspaceId: mocks.requireWorkspaceId,
 }));
 
+vi.mock("../widget/realtime", () => ({
+  publishKnowledgeSourceEvent: vi.fn(),
+}));
+
 vi.mock("./queue", () => ({
   enqueueKnowledgeIngest: mocks.enqueueKnowledgeIngest,
 }));
