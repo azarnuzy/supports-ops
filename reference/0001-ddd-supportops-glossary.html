@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Referensi DDD untuk SupportOps</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Referensi cepat · Learn 01</p>
+  <h1>DDD dalam bahasa SupportOps</h1>
+  <p class="lead">Gunakan lembar ini untuk membedakan konsep DDD dari bentuk kode yang kebetulan dipakai hari ini.</p>
+
+  <dl>
+    <div class="term"><dt>Domain</dt><dd>Ruang masalah bisnis: pada SupportOps, menangani dukungan pelanggan dari pesan masuk sampai Resolution.</dd></div>
+    <div class="term"><dt>Subdomain</dt><dd>Bagian kemampuan bisnis. Secara analitis: Ticket handling, Channel delivery, Knowledge, serta Workspace administration. Klasifikasi ini belum menjadi keputusan formal repo.</dd></div>
+    <div class="term"><dt>Ubiquitous Language</dt><dd>Kosakata bersama domain expert dan developer, dipakai konsisten dalam percakapan, dokumentasi, dan kode. Sumber SupportOps adalah <a href="../CONTEXT.md"><code>CONTEXT.md</code></a>.</dd></div>
+    <div class="term"><dt>Bounded Context</dt><dd>Batas tempat satu model dan bahasanya berlaku. SupportOps saat ini sengaja memakai satu konteks bahasa; folder atau deployable bukan otomatis Bounded Context.</dd></div>
+    <div class="term"><dt>Context Map</dt><dd>Peta hubungan dan pola integrasi antar-Bounded Context. Repo belum memiliki Context Map formal karena hanya mendokumentasikan satu konteks.</dd></div>
+    <div class="term"><dt>Entity</dt><dd>Objek yang kesinambungannya ditentukan identitas, bukan kesamaan atribut. <code>Ticket</code> dengan <code>id</code> tetap Ticket yang sama ketika status berubah.</dd></div>
+    <div class="term"><dt>Value Object</dt><dd>Nilai tanpa identitas, dibandingkan dari isinya dan idealnya immutable. Enum <code>TicketStatus</code> adalah nilai terkontrol, tetapi bukan rich value object tersendiri.</dd></div>
+    <div class="term"><dt>Aggregate</dt><dd>Batas konsistensi transaksi dengan satu root. <code>Ticket</code> dapat dibaca sebagai calon aggregate root untuk Claim, tetapi repo tidak menamainya secara eksplisit.</dd></div>
+    <div class="term"><dt>Invariant</dt><dd>Aturan yang harus selalu benar. Claim: hanya Ticket <code>ESCALATED</code> yang belum memiliki assignee dapat berpindah ke satu Human Agent.</dd></div>
+    <div class="term"><dt>Anti-Corruption Layer</dt><dd>Adapter yang menerjemahkan model eksternal agar tidak mencemari model internal. Parser di <code>packages/channels</code> menerjemahkan payload dan status Meta ke bentuk SupportOps.</dd></div>
+  </dl>
+
+  <h2>Tiga pertanyaan saat membaca kode</h2>
+  <ol>
+    <li>Istilah bisnis apa yang sedang diwujudkan?</li>
+    <li>Aturan apa yang tidak boleh dilanggar?</li>
+    <li>Di batas mana bentuk data diterjemahkan?</li>
+  </ol>
+
+  <footer><a href="../lessons/0001-bahasa-domain-dan-claim.html">Kembali ke lesson Learn 01</a></footer>
+</main>
+</body>
+</html>

@@ -37,8 +37,12 @@ export async function runAiAgentTurn(params: {
   ticketId: string;
   workspaceId: string;
 }) {
+  // Anvia Lens lists traces by this name; a static "ai_agent.run" forced
+  // opening every trace to find the right session. The Customer's message
+  // makes the list itself searchable/skimmable.
+  const traceName = `ai_agent.run: ${params.customerMessage.trim().slice(0, 60)}`;
   return withSpan(
-    "ai_agent.run",
+    traceName,
     {
       "supportops.ticket_id": params.ticketId,
       "supportops.workspace_id": params.workspaceId,

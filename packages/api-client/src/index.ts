@@ -1083,6 +1083,7 @@ export type McpServer = {
   name: string;
   url: string;
   enabled: boolean;
+  staticArguments?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1093,6 +1094,7 @@ export type McpServerInput = {
   enabled?: boolean;
   bearerToken?: string | null;
   secretHeaders?: Record<string, string> | null;
+  staticArguments?: Record<string, unknown> | null;
 };
 
 export type McpTool = {

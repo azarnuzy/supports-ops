@@ -71,6 +71,7 @@ export function startSessionEmailWorker() {
 
 export function startKnowledgeIngestWorker() {
   return new Worker<KnowledgeIngestJob>("knowledge-ingest", processKnowledgeIngestJob, {
+    concurrency: 5,
     connection,
   });
 }

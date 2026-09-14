@@ -2,10 +2,13 @@ import { z } from "zod";
 
 const secretHeaders = z.record(z.string().trim().min(1), z.string().min(1)).optional();
 
+const staticArguments = z.record(z.string(), z.unknown()).optional();
+
 export const createMcpServerSchema = z.object({
   bearerToken: z.string().min(1).optional(),
   name: z.string().trim().min(1).max(100),
   secretHeaders,
+  staticArguments,
   url: z.url(),
 });
 
@@ -13,6 +16,7 @@ export const updateMcpServerSchema = createMcpServerSchema.partial().extend({
   bearerToken: z.string().min(1).nullable().optional(),
   enabled: z.boolean().optional(),
   secretHeaders: secretHeaders.unwrap().nullable().optional(),
+  staticArguments: staticArguments.unwrap().nullable().optional(),
 });
 
 export const reviewMcpToolSchema = z.object({

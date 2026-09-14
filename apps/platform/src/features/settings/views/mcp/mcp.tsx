@@ -55,7 +55,14 @@ export const McpPanel = () => {
 
   function openEdit(id: string) {
     const server = items.find((item) => item.id === id);
-    setForm({ ...emptyMcpServerForm, name: server?.name ?? "", url: server?.url ?? "" });
+    setForm({
+      ...emptyMcpServerForm,
+      name: server?.name ?? "",
+      staticArguments: server?.staticArguments
+        ? JSON.stringify(server.staticArguments, null, 2)
+        : "",
+      url: server?.url ?? "",
+    });
     setEditingId(id);
     setDialogOpen(true);
   }
@@ -74,10 +81,22 @@ export const McpPanel = () => {
       }
     }
 
+    let staticArguments: Record<string, unknown> | null | undefined;
+    if (form.clearStaticArguments) staticArguments = null;
+    else if (form.staticArguments.trim()) {
+      try {
+        staticArguments = JSON.parse(form.staticArguments);
+      } catch {
+        toast.error("Static arguments must be a valid JSON object.");
+        return;
+      }
+    }
+
     const input = {
       bearerToken: form.clearBearerToken ? null : form.bearerToken.trim() || undefined,
       name: form.name.trim(),
       secretHeaders,
+      staticArguments,
       url: form.url.trim(),
     };
 

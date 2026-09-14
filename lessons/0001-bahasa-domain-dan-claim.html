@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Learn 01 — Bahasa Domain dan Claim</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">SupportOps · Learn 01 · ±15 menit</p>
+  <h1>Dari kata “Claim” ke transaksi yang aman</h1>
+  <p class="lead">Setelah lesson ini, Anda dapat membaca satu fitur SupportOps sebagai rangkaian keputusan domain—bukan sekadar React, HTTP, dan Prisma.</p>
+  <p class="meta">Snapshot kode: commit <code>5c559c1</code> · 14 September 2026</p>
+
+  <section>
+    <h2>1. Mulai dari perilaku, bukan framework</h2>
+    <p>Seorang <strong>Human Agent</strong> melihat Ticket yang sudah <strong>Escalated</strong> di <strong>Shared Human Queue</strong>, menekan <strong>Claim</strong>, lalu Ticket berpindah ke <strong>My Tickets</strong>. Hanya satu Human Agent boleh berhasil.</p>
+    <div class="callout"><strong>Bahasa domain</strong> menjawab “apa arti perilaku ini bagi bisnis?” Bahasa teknis—React mutation, HTTP POST, transaksi Prisma—menjawab “bagaimana perilaku itu diwujudkan?”</div>
+    <p><a href="../CONTEXT.md"><code>CONTEXT.md</code></a> menetapkan arti dan istilah yang dihindari. Karena itu kode memakai <code>claimTicket</code>, <code>ESCALATED</code>, dan <code>HUMAN_HANDLING</code>, bukan sinonim seperti “assign case” atau status “pending”. Inilah <strong>Ubiquitous Language</strong>: kosakata yang dibentuk bersama dan dipakai konsisten dalam diskusi, dokumentasi, dan kode. <a href="https://learn.microsoft.com/en-us/azure/architecture/microservices/model/domain-analysis">Microsoft Learn menjelaskan tujuan yang sama</a>: mengurangi salah paham dan membuat model mencerminkan maksud bisnis.</p>
+  </section>
+
+  <section>
+    <h2>2. Sembilan konsep, dari first principles</h2>
+    <p><strong>Domain</strong> adalah ruang masalah yang hendak diselesaikan; di sini, operasi dukungan pelanggan. <strong>Subdomain</strong> membagi kemampuan yang berhubungan—misalnya Ticket handling, Channel delivery, Knowledge, dan Workspace administration. Pembagian ini adalah lensa analisis, <em>bukan</em> daftar Bounded Context resmi SupportOps. DDD biasanya membedakan core, supporting, dan generic subdomain agar investasi desain mengikuti nilai bisnis. <a href="https://learn.microsoft.com/en-us/azure/architecture/microservices/model/domain-analysis">Sumber resmi</a>.</p>
+    <p><strong>Bounded Context</strong> adalah batas tempat satu model dan satu arti istilah berlaku. <strong>Context Map</strong> mencatat hubungan antar-konteks serta cara mereka berintegrasi. SupportOps saat ini memiliki <strong>satu konteks bahasa</strong> untuk seluruh monorepo (<a href="../docs/agents/domain.md"><code>docs/agents/domain.md</code></a>); maka <code>apps/api</code>, <code>apps/platform</code>, dan <code>packages/channels</code> bukan otomatis Bounded Context terpisah. Tidak ada Context Map formal—masuk akal untuk bentuk saat ini, tetapi perlu ditinjau jika model independen mulai mempunyai arti istilah yang berbeda.</p>
+    <p><strong>Entity</strong> memiliki identitas yang bertahan saat atribut berubah. Model <code>Ticket</code> mempunyai <code>id</code>; status dan assignee-nya dapat berubah tanpa menjadikannya Ticket baru (<code>apps/api/prisma/schema/ticket.prisma:1–39</code>). <strong>Value object</strong> tidak memiliki identitas, ditentukan oleh nilainya, dan idealnya immutable. Claim memakai enum <code>TicketStatus</code> sebagai nilai terkontrol (<code>apps/api/prisma/schema/enums.prisma:51–56</code>), tetapi repo tidak membentuk rich value object untuk status tersebut. <a href="https://learn.microsoft.com/en-us/azure/architecture/microservices/model/tactical-domain-driven-design">Definisi resmi entity dan value object</a>.</p>
+    <p><strong>Aggregate</strong> adalah batas konsistensi transaksi dengan satu entity sebagai root; <strong>invariant</strong> adalah aturan domain yang harus selalu benar di dalam batas itu. Dalam flow Claim, Ticket dapat <em>dibaca</em> sebagai aggregate root karena transisi Ticket dan catatan <code>CLAIMED</code> dibuat atomik. Ini interpretasi terhadap kode, bukan deklarasi eksplisit repo. Invariant-nya: hanya Ticket berstatus <code>ESCALATED</code> tanpa assignee yang boleh berpindah ke tepat satu Human Agent. Aggregate sebaiknya kecil dan hanya memasukkan data yang memang harus konsisten bersama. <a href="https://learn.microsoft.com/en-us/azure/architecture/microservices/model/tactical-domain-driven-design">Sumber resmi</a>.</p>
+    <p><strong>Anti-Corruption Layer (ACL)</strong> menerjemahkan semantik sistem luar ke model sendiri. <code>parseWhatsAppWebhook</code> mengubah payload Meta menjadi <code>WhatsAppInboundEvent</code>, sedangkan <code>mapWhatsAppDeliveryStatus</code> mengubah <code>sent</code> menjadi <code>SENT</code> (<code>packages/channels/src/index.ts:66–112,132–227</code>). Dengan begitu bentuk Meta tidak menyebar ke Ticket handling. Ini contoh adapter bergaya ACL, walau repo tidak memberinya label formal tersebut. <a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer">Pola ACL resmi</a>.</p>
+    <p><a href="../reference/0001-ddd-supportops-glossary.html">Buka glossary ringkas untuk mengulang sembilan istilah ini.</a></p>
+  </section>
+
+  <section>
+    <h2>3. Trace end-to-end: Claim</h2>
+    <ol class="flow">
+      <li><span class="tag">UI</span> <code>chat.tsx:243–246,599–607</code> hanya menampilkan tombol bila scope <code>unassigned</code>, status <code>ESCALATED</code>, dan pengguna adalah Human Agent. Klik memanggil mutation.</li>
+      <li><span class="tag">Server state</span> <code>tickets.hooks.ts:158–160</code> menjalankan request dan menginvalidasi query setelah selesai agar daftar kembali cocok dengan server.</li>
+      <li><span class="tag">Client contract</span> <code>packages/api-client/src/index.ts:315–324</code> mengirim <code>POST /tickets/:id/claim</code> dan menerjemahkan HTTP <code>409</code> menjadi <code>TicketAlreadyClaimedApiError</code>.</li>
+      <li><span class="tag">Boundary</span> <code>apps/api/src/app.ts:48–69</code> memuat auth dan Workspace context sebelum memasang <code>ticketsRouter</code>. Route di <code>tickets/router.ts:123–135</code> mengecek role, memanggil use case, lalu mengembalikan <code>409</code> bila sudah diklaim.</li>
+      <li><span class="tag">Invariant</span> <code>tickets/services.ts:339–358</code> menjalankan satu conditional <code>UPDATE</code> dan menulis AI Activity <code>CLAIMED</code> dalam transaksi yang sama.</li>
+      <li><span class="tag">Side effects</span> Setelah commit, <code>tickets/services.ts:359–361</code> menerbitkan perubahan queue dan mengatur ulang timer. Route memulai Handoff secara terpisah (<code>tickets/router.ts:129–131</code>), sehingga kegagalan summary tidak membatalkan Claim.</li>
+      <li><span class="tag">Output</span> UI menerima Ticket baru, meng-refresh cache, dan kalah-race ditampilkan sebagai pesan “just claimed by another Human Agent” (<code>chat.tsx:527–532</code>).</li>
+    </ol>
+
+    <pre><code>await tx.ticket.updateMany({
+  data: { assignedHumanAgentId: humanAgentId, status: "HUMAN_HANDLING" },
+  where: { assignedHumanAgentId: null, id: ticketId, status: "ESCALATED" },
+});</code></pre>
+    <p>Predikat <code>where</code> adalah aturan bisnis sekaligus concurrency guard. Dua request boleh datang bersamaan, tetapi setelah satu update menang, request kedua tidak lagi menemukan baris yang memenuhi syarat. Kebenaran berada di database, bukan di kondisi tombol UI atau event realtime. ADR-0005 menegaskan prinsip itu pada <code>docs/adr/0005-sse-for-realtime-single-widget-channel.md:15</code>.</p>
+  </section>
+
+  <section>
+    <h2>4. Apa yang diterapkan, dipilih, dan belum diterapkan?</h2>
+    <h3>Diterapkan saat ini</h3>
+    <ul>
+      <li>Ubiquitous Language nyata dari glossary sampai nama enum, fungsi, UI, dan error.</li>
+      <li>Invariant Claim ditegakkan atomik bersama AI Activity, bukan dipercayakan kepada UI.</li>
+      <li>Model eksternal Meta diterjemahkan di package Channel sebelum masuk ke alur internal.</li>
+    </ul>
+
+    <h3>Trade-off / keputusan sadar</h3>
+    <ul>
+      <li>Satu konteks bahasa dan modular monolith menghindari koordinasi antar-service. ADR-0001 (<code>docs/adr/0001-monorepo-app-and-package-topology.md:3–7</code>) hanya mengekstrak package ketika ada batas nyata seperti reasoning versus transport.</li>
+      <li>Model domain bersifat relatif <em>anemic</em>: aturan Claim hidup di service function, bukan method pada entity. Ini lebih sederhana bersama Prisma, tetapi penemuan aturan bergantung pada penelusuran service.</li>
+      <li>Handoff berjalan setelah Claim. Konsistensi kuat dipakai untuk ownership; summary dan pengiriman memakai recovery terpisah agar kegagalannya tidak merebut kembali Ticket.</li>
+    </ul>
+
+    <h3>Best practice eksternal yang belum diterapkan</h3>
+    <ul>
+      <li>Tidak ada Context Map formal atau klasifikasi subdomain resmi.</li>
+      <li>Tidak ada rich domain entity/value object yang mengenkapsulasi transisi status; panduan tactical DDD merekomendasikan perilaku berada dekat entity.</li>
+      <li>Tidak ada abstraksi Aggregate eksplisit. Menambahkannya sekarang belum otomatis memperbaiki fitur; layak dilakukan bila aturan lifecycle tersebar dan mulai tidak konsisten.</li>
+    </ul>
+
+    <div class="callout warning"><strong>Failure modes:</strong> menamai folder sebagai Bounded Context tanpa perbedaan model; mengandalkan <code>canClaim</code> di browser sebagai invariant; atau memasukkan seluruh Handoff/network delivery ke transaksi Claim sehingga lock hidup selama I/O.</div>
+    <p><strong>Alternatif yang relevan:</strong> rich domain model dapat memusatkan transisi; database constraint atau serializable transaction dapat memperkuat aturan yang lebih kompleks; microservices dapat memisahkan konteks yang benar-benar independen. Belum ada kebutuhan nyata dalam flow ini yang membayar kompleksitas tersebut.</p>
+  </section>
+
+  <section>
+    <h2>5. Cek pemahaman</h2>
+    <p>Jawab dari ingatan sebelum membuka jawabannya.</p>
+    <details><summary>Mengapa tombol <code>Claim</code> yang disembunyikan bukan invariant?</summary><p>Browser dapat stale atau dipanggil langsung. Conditional update di transaksi adalah titik yang menentukan hanya satu Claim berhasil.</p></details>
+    <details><summary>Apakah <code>apps/api</code> dan <code>apps/platform</code> dua Bounded Context?</summary><p>Tidak. Repo menyatakan satu konteks bahasa; pemisahan deployable atau folder saja tidak membuktikan model yang berbeda.</p></details>
+    <details><summary>Mengapa status Meta perlu diterjemahkan?</summary><p>Agar vocabulary dan perubahan provider berhenti di boundary Channel, bukan bocor ke model serta use case Ticket.</p></details>
+  </section>
+
+  <section>
+    <h2>6. Latihan read-only</h2>
+    <p>Tanpa mengubah kode, prediksi hasil dua Human Agent yang menekan Claim hampir bersamaan. Lalu buktikan prediksi dengan membaca, berurutan:</p>
+    <ol>
+      <li><code>apps/platform/src/features/chat/views/chat/chat.tsx:243–246,599–607</code></li>
+      <li><code>packages/api-client/src/index.ts:315–324</code></li>
+      <li><code>apps/api/src/modules/tickets/router.ts:123–135</code></li>
+      <li><code>apps/api/src/modules/tickets/services.ts:339–367</code></li>
+      <li><code>apps/api/prisma/schema/ticket.prisma:1–39</code></li>
+      <li><code>docs/adr/0005-sse-for-realtime-single-widget-channel.md:15</code></li>
+    </ol>
+    <p>Tuliskan empat kalimat: siapa menang, apa yang tersimpan atomik, respons yang diterima pihak kalah, dan side effect apa yang terjadi setelah commit. Kirim jawaban Anda kepada saya; saya akan memberi feedback dan mencatat pemahaman yang sudah terbukti.</p>
+  </section>
+
+  <section>
+    <h2>Bacaan utama</h2>
+    <p>Baca bagian “Introduction” dan “Define bounded contexts” pada <a href="https://learn.microsoft.com/en-us/azure/architecture/microservices/model/domain-analysis">Use domain analysis to model microservices</a>. Fokus pada bahasa dan batas model; nama artikelnya menyebut microservices, tetapi konsepnya tetap berguna bagi modular monolith SupportOps.</p>
+  </section>
+
+  <footer>Jika ada istilah atau langkah trace yang belum jelas, tanyakan kepada saya—sertakan path atau nomor langkahnya agar kita dapat membedahnya bersama.</footer>
+</main>
+</body>
+</html>
