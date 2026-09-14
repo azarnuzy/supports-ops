@@ -96,6 +96,39 @@ export default function ServerDialog({
               </FieldDescription>
             ) : null}
           </Field>
+          <Field>
+            <FieldLabel htmlFor="mcp-static-arguments">
+              Static arguments (JSON object, merged into every tool call)
+            </FieldLabel>
+            <Textarea
+              id="mcp-static-arguments"
+              rows={3}
+              className="font-mono text-xs"
+              placeholder={
+                mode === "edit"
+                  ? "Leave blank to keep current"
+                  : '{"meta":{"ucp-agent":{"profile":"..."}}}'
+              }
+              value={form.staticArguments}
+              onChange={(event) =>
+                onChange({ staticArguments: event.target.value, clearStaticArguments: false })
+              }
+            />
+            <FieldDescription>
+              Always overrides matching keys the model sends, e.g. a UCP agent profile URL.
+            </FieldDescription>
+            {mode === "edit" ? (
+              <FieldDescription>
+                <button
+                  type="button"
+                  className="text-destructive underline"
+                  onClick={() => onChange({ staticArguments: "", clearStaticArguments: true })}
+                >
+                  {form.clearStaticArguments ? "Will clear on save" : "Clear stored arguments"}
+                </button>
+              </FieldDescription>
+            ) : null}
+          </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

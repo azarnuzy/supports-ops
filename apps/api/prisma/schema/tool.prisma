@@ -53,6 +53,7 @@ model McpServer {
   enabled                Boolean   @default(true)
   bearerTokenEncrypted   String?
   secretHeadersEncrypted String?
+  staticArguments        Json?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
   workspace              Workspace @relation(fields: [workspaceId], references: [id])

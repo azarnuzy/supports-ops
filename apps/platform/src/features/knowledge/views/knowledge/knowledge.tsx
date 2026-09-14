@@ -46,7 +46,7 @@ const KnowledgeView = () => {
   const [query, setQuery] = useState("");
   const [visibility, setVisibility] = useState<KnowledgeVisibility>("CUSTOMER_SAFE");
   const [url, setUrl] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
@@ -64,7 +64,7 @@ const KnowledgeView = () => {
     setDialog(null);
     setVisibility("CUSTOMER_SAFE");
     setUrl("");
-    setFile(null);
+    setFiles([]);
     setTitle("");
     setContent("");
   }
@@ -84,28 +84,30 @@ const KnowledgeView = () => {
     );
   }
 
-  function handleFile(event: FormEvent<HTMLFormElement>) {
+  async function handleFile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      toast.error("Choose a PDF file.");
-      return;
-    }
-    if (file.size > fileLimit) {
-      toast.error("Choose a PDF smaller than 25 MB.");
-      return;
-    }
-    addPdf.mutate(
-      { file, visibility },
-      {
-        onError: (error) =>
-          toast.error(error instanceof Error ? error.message : "PDF upload failed."),
-        onSuccess: () => {
-          toast.success("PDF upload started.");
-          closeDialog();
-        },
-      },
+    if (files.length === 0) return;
+    const invalid = files.find(
+      (file) => file.type !== "application/pdf" || file.size > fileLimit,
     );
+    if (invalid) {
+      toast.error(`"${invalid.name}" must be a PDF up to 25 MB.`);
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      files.map((file) => addPdf.mutateAsync({ file, visibility })),
+    );
+    const failed = results.filter((result) => result.status === "rejected").length;
+
+    if (failed === 0) {
+      toast.success(
+        files.length === 1 ? "PDF upload started." : `${files.length} PDF uploads started.`,
+      );
+      closeDialog();
+    } else {
+      toast.error(`${failed} of ${files.length} PDF uploads failed to start.`);
+    }
   }
 
   function handleText(event: FormEvent<HTMLFormElement>) {
@@ -178,7 +180,7 @@ const KnowledgeView = () => {
             <span>
               <span className="block font-medium">Add File</span>
               <span className="mt-1 block text-sm text-muted-foreground">
-                Upload one PDF up to 25 MB.
+                Upload one or more PDFs, up to 25 MB each.
               </span>
             </span>
           </button>
@@ -281,8 +283,8 @@ const KnowledgeView = () => {
       <AddFileDialog
         open={dialog === "file"}
         onOpenChange={(open) => !open && closeDialog()}
-        file={file}
-        setFile={setFile}
+        files={files}
+        setFiles={setFiles}
         visibility={visibility}
         setVisibility={setVisibility}
         onSubmit={handleFile}

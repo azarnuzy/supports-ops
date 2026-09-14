@@ -14,6 +14,7 @@ const publicServerSelect = {
   enabled: true,
   id: true,
   name: true,
+  staticArguments: true,
   updatedAt: true,
   url: true,
 } as const;
@@ -30,6 +31,7 @@ export async function createMcpServer(input: CreateMcpServerInput) {
     data: {
       id: randomUUID(),
       name: input.name,
+      staticArguments: input.staticArguments as Prisma.InputJsonValue | undefined,
       url: input.url,
       workspaceId: requireWorkspaceId(),
       ...encryptedCredentials(input),
@@ -44,6 +46,7 @@ export async function updateMcpServer(id: string, input: UpdateMcpServerInput) {
     data: {
       enabled: input.enabled,
       name: input.name,
+      staticArguments: input.staticArguments as Prisma.InputJsonValue | undefined,
       url: input.url,
       ...encryptedCredentials(input),
     },
@@ -124,7 +127,7 @@ export async function discoverMcpTools(id: string) {
           // raw "Server Name/toolName" broke every AI Agent reply, not just this Tool's.
           name: `${server.name}_${discovered.name}`.replace(/[^a-zA-Z0-9_-]+/g, "_"),
           origin: "MCP",
-          workspace: { connect: { id: workspaceId } },
+          workspaceId,
         },
       });
     } else {
@@ -192,10 +195,14 @@ export async function executeMcpTool(
   }
 
   const secrets = credentials(record.mcpServer);
+  const mergedArgs = mergeDeep(
+    args,
+    (record.mcpServer.staticArguments as Record<string, unknown> | null) ?? {},
+  );
   const result = await withMcpClient(
     record.mcpServer.url,
     secrets,
-    (client) => client.callTool({ arguments: args, name: record.remoteName }),
+    (client) => client.callTool({ arguments: mergedArgs, name: record.remoteName }),
     { allowPrivateNetwork: httpToolConfig.allowLocalHttp },
   );
   const serialized = JSON.stringify(result);
@@ -238,6 +245,26 @@ function credentials(server: {
       ? JSON.parse(decryptToolSecret(server.secretHeadersEncrypted, toolEncryptionConfig.masterKey))
       : undefined,
   } satisfies McpCredentials;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// Server-configured static arguments always win on conflict — the model must
+// not be able to override values like a UCP agent profile URL.
+function mergeDeep(
+  base: Record<string, unknown>,
+  overrides: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(overrides)) {
+    result[key] =
+      isPlainObject(value) && isPlainObject(result[key])
+        ? mergeDeep(result[key], value)
+        : value;
+  }
+  return result;
 }
 
 function redact(value: string, secrets: McpCredentials) {
