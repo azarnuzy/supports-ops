@@ -1,5 +1,7 @@
 import type { CompletionModel } from "@anvia/core";
 import { detectLanguage, languageName } from "./language";
+import { escalationSummaryPrompt } from "./prompts/escalation-summary";
+import { suggestedReplyPrompt } from "./prompts/suggested-reply";
 import { createAgent } from "./telemetry";
 import { z } from "zod";
 
@@ -66,26 +68,14 @@ export async function generateSuggestedReply(params: {
 }): Promise<string> {
   const agent = createAgent({
     id: "suggested-reply",
-    instructions: `You are SupportOps' AI Copilot helping a Human Agent draft a reply to a Customer. ${languageInstruction(params.currentConversation || params.customerMessage)} Never say you are an AI or address the Human Agent.
-
-Customer-Safe knowledge may be stated directly. Internal-Only knowledge is background for the Human Agent: do not quote, paraphrase closely, name, or reveal it. Do not reveal implementation details, private reasoning, source identifiers, or Business Tool data beyond the Customer-specific facts necessary to answer.
-
-The Human Agent reviews and sends this draft; you cannot message the Customer. Do not claim to perform any change to billing, subscriptions, refunds, or other Business System writes.
-
-Customer-Safe knowledge:
-${params.customerSafeSources.join("\n\n") || "None retrieved."}
-
-Internal-Only knowledge (background only):
-${params.internalOnlySources.join("\n\n") || "None retrieved."}
-
-Live Business Tool data:
-${params.businessData ?? "None available."}
-
-Previous Ticket context for this Customer Identity:
-${params.previousTicketContext || "None recorded."}
-
-Current conversation:
-${params.currentConversation || "None recorded."}`,
+    instructions: suggestedReplyPrompt({
+      languageInstruction: languageInstruction(params.currentConversation || params.customerMessage),
+      customerSafeSources: params.customerSafeSources,
+      internalOnlySources: params.internalOnlySources,
+      businessData: params.businessData,
+      previousTicketContext: params.previousTicketContext,
+      currentConversation: params.currentConversation,
+    }),
     maxTurns: 1,
     model: params.model,
     outputSchema: suggestedReplySchema,
@@ -123,17 +113,7 @@ export function generateEscalationSummary(params: {
     detectedLanguage === "unknown" ? "the Customer's language" : languageName(detectedLanguage);
   const agent = createAgent({
     id: "escalation-summary",
-    instructions: `You are SupportOps' AI Agent briefing a Human Agent who has just claimed a Ticket. Use only the supplied Ticket record; do not infer facts that are not recorded. Do not expose private reasoning or describe yourself as an assistant.
-
-Write a concise Escalation Summary in ${summaryLanguagePhrase} with these exact Markdown headings:
-## Customer need
-## Escalation reason
-## Already tried
-## Relevant knowledge
-## Suggested next action
-## Suggested reply
-
-Where the record has no information for a heading, say "None recorded." The suggested reply must be safe to send to the Customer and must not reveal Internal-Only knowledge or implementation details.`,
+    instructions: escalationSummaryPrompt({ summaryLanguagePhrase }),
     maxTurns: 1,
     model: params.model,
     outputSchema: escalationSummarySchema,
