@@ -224,6 +224,59 @@ export async function listTickets(client: ApiClient, filters: ListTicketsFilters
   return (await response.json()) as { nextCursor: string | null; tickets: TicketListItem[] };
 }
 
+/** A conversation that never opened a Ticket — the AI Agent answered, the
+ * classification decided it was not a support request. Read-only. */
+export type SessionWithoutTicket = {
+  channel: { name: string; type: "WEB" | "WHATSAPP" };
+  createdAt: string;
+  customerIdentity: { email: string | null; id: string; name: string; phoneE164: string | null };
+  customerLastMessageAt: string | null;
+  id: string;
+  lastMessage: { content: string; createdAt: string; senderType: string } | null;
+  status: string;
+};
+
+export type SessionWithoutTicketDetail = Omit<SessionWithoutTicket, "lastMessage"> & {
+  messages: TicketDetailMessage[];
+};
+
+export class SessionNotFoundApiError extends Error {
+  constructor() {
+    super("This conversation no longer exists.");
+    this.name = "SessionNotFoundApiError";
+  }
+}
+
+export async function listSessionsWithoutTicket(
+  client: ApiClient,
+  filters: { cursor?: string; limit?: number } = {},
+) {
+  const response = await client.tickets["without-ticket"].$get({
+    query: {
+      ...(filters.cursor ? { cursor: filters.cursor } : {}),
+      ...(filters.limit ? { limit: String(filters.limit) } : {}),
+    },
+  });
+  if (response.status === 403)
+    throw new Error("Only an Admin can view conversations without a Ticket.");
+  if (!response.ok) throw new Error("Failed to load conversations without a Ticket.");
+  return (await response.json()) as {
+    nextCursor: string | null;
+    sessions: SessionWithoutTicket[];
+  };
+}
+
+export async function getSessionWithoutTicket(client: ApiClient, sessionId: string) {
+  const response = await client.tickets["without-ticket"][":sessionId"].$get({
+    param: { sessionId },
+  });
+  if (response.status === 403)
+    throw new Error("Only an Admin can view conversations without a Ticket.");
+  if (response.status === 404) throw new SessionNotFoundApiError();
+  if (!response.ok) throw new Error("Failed to load the conversation.");
+  return (await response.json()) as { session: SessionWithoutTicketDetail };
+}
+
 export class TicketNotFoundApiError extends Error {
   constructor() {
     super("This Ticket no longer exists.");

@@ -65,6 +65,7 @@ export async function generateSuggestedReply(params: {
   internalOnlySources: string[];
   model: CompletionModel;
   previousTicketContext: string;
+  sessionId?: string;
 }): Promise<string> {
   const agent = createAgent({
     id: "suggested-reply",
@@ -79,6 +80,7 @@ export async function generateSuggestedReply(params: {
     maxTurns: 1,
     model: params.model,
     outputSchema: suggestedReplySchema,
+    sessionId: params.sessionId,
   });
 
   try {
@@ -95,6 +97,7 @@ export async function generateSuggestedReply(params: {
 
 export function generateEscalationSummary(params: {
   model: CompletionModel;
+  sessionId?: string;
   ticket: {
     escalationReason: string;
     messages: Array<{ content: string; senderType: string }>;
@@ -117,6 +120,7 @@ export function generateEscalationSummary(params: {
     maxTurns: 1,
     model: params.model,
     outputSchema: escalationSummarySchema,
+    sessionId: params.sessionId,
   });
 
   return (async () => {

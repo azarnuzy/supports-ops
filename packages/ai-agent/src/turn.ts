@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { withSpan } from "@repo/logger/telemetry";
+import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import {
   createReplyModel,
   ReplyGenerationFailedError,
@@ -21,7 +21,7 @@ export type AiAgentTurnRuntime = {
   escalate(reason: EscalationReason): Promise<void>;
   finish(): Promise<void>;
   isActive(): boolean;
-  loadTicket(): Promise<{ instructions?: string } | null>;
+  loadTicket(): Promise<{ instructions?: string; sessionId: string } | null>;
   publishDelta(delta: string, provisionalId: string): Promise<void> | void;
   reply(decision: "CLARIFY" | "REPLY", content: string, provisionalId: string): Promise<void>;
   resolve(): Promise<void>;
@@ -49,6 +49,10 @@ export async function runAiAgentTurn(params: {
         run.setAttribute("ai_agent.decision", "SKIPPED");
         return;
       }
+      // The Session, not the Ticket, is the conversation: it starts before the
+      // Ticket exists and outlives every run on it, so it is what groups this
+      // run with the Customer's earlier messages and the Human Agent's replies.
+      run.setAttributes(sessionAttributes(ticket.sessionId));
       if (!params.modelConfig) {
         await params.runtime.escalate("AI_GENERATION_FAILED");
         return;
@@ -103,6 +107,7 @@ export async function runAiAgentTurn(params: {
                   return params.runtime.publishDelta(delta, provisionalId);
                 }
               },
+              sessionId: ticket.sessionId,
               sources: [...sources, ...attachments],
               ticketContext,
               tools,

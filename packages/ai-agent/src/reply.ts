@@ -52,6 +52,7 @@ export function streamReply(params: {
   clarificationCount: number;
   onDelta(delta: string): Promise<void> | void;
   instructions?: string;
+  sessionId?: string;
   tools?: AgentTools;
 }): Promise<ReplyDecision> {
   const sources = params.sources.length
@@ -71,6 +72,7 @@ export function streamReply(params: {
     maxTurns: params.tools?.length ? 5 : 1,
     model: params.model,
     outputSchema: replyOutputSchema,
+    sessionId: params.sessionId,
     tools: params.tools,
   });
 

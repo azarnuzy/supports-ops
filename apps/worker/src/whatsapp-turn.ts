@@ -111,6 +111,7 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
         ...classificationConfig,
         apiKey: classificationConfig.apiKey,
       }),
+      sessionId: session.id,
     });
     if (!decision.qualifies) {
       const previous = await prisma.ticket.findFirst({

@@ -2,13 +2,21 @@ import {
   SpanStatusCode,
   trace,
   type Attributes,
+  type Context,
   type Exception,
   type Span,
 } from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
+import {
+  BatchSpanProcessor,
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+  type ReadableSpan,
+  type Span as SdkSpan,
+  type SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import {
   ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
   ATTR_SERVICE_NAME,
@@ -32,6 +40,52 @@ export type StartTelemetryOptions = {
   serviceName: string;
 };
 
+/**
+ * The only tracers whose spans leave the process (ADR-0010): `@repo/logger`'s
+ * own `withSpan` and the AI Agent observer's `@anvia/otel`. Libraries that
+ * instrument themselves against the global tracer share this SDK once it
+ * starts — better-auth emits HTTP, handler, and database spans of its own —
+ * and that infrastructure noise would consume the telemetry backend's quota
+ * for traces nobody reads.
+ */
+const exportedTracerScopes = new Set(["@anvia/otel", "@repo/logger"]);
+
+/** Passes a span to `inner` only when an allowed tracer created it. */
+class AgentScopeSpanProcessor implements SpanProcessor {
+  constructor(private readonly inner: SpanProcessor) {}
+
+  onStart(span: SdkSpan, parentContext: Context) {
+    this.inner.onStart(span, parentContext);
+  }
+
+  onEnd(span: ReadableSpan) {
+    if (exportedTracerScopes.has(span.instrumentationScope.name)) {
+      this.inner.onEnd(span);
+    }
+  }
+
+  forceFlush() {
+    return this.inner.forceFlush();
+  }
+
+  shutdown() {
+    return this.inner.shutdown();
+  }
+}
+
+/**
+ * One Ticket is one conversation, spanning the AI Agent's runs and the Human
+ * Agent's replies. Both backends group traces by session but read a different
+ * attribute — Lens `anvia.trace.session_id`, Langfuse `langfuse.session.id` —
+ * so a trace that should appear in both carries both.
+ */
+export function sessionAttributes(sessionId: string): Attributes {
+  return {
+    "anvia.trace.session_id": sessionId,
+    "langfuse.session.id": sessionId,
+  };
+}
+
 let sdk: NodeSDK | null = null;
 
 export function startTelemetry({ config, serviceName }: StartTelemetryOptions) {
@@ -45,13 +99,18 @@ export function startTelemetry({ config, serviceName }: StartTelemetryOptions) {
       [ATTR_SERVICE_NAME]: serviceName,
       ...(config.serviceNamespace ? { [ATTR_SERVICE_NAMESPACE]: config.serviceNamespace } : {}),
     }),
-    traceExporter:
-      config.exporter === "console"
-        ? new ConsoleSpanExporter()
-        : new OTLPTraceExporter({
-            headers: getTelemetryHeaders(config),
-            url: config.otlpEndpoint,
-          }),
+    spanProcessors: [
+      new AgentScopeSpanProcessor(
+        config.exporter === "console"
+          ? new SimpleSpanProcessor(new ConsoleSpanExporter())
+          : new BatchSpanProcessor(
+              new OTLPTraceExporter({
+                headers: getTelemetryHeaders(config),
+                url: config.otlpEndpoint,
+              }),
+            ),
+      ),
+    ],
   });
 
   sdk.start();

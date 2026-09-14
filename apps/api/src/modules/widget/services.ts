@@ -190,6 +190,7 @@ export async function createCustomerMessage(
     content: input.content,
     history: await sessionHistory(session.id),
     model,
+    sessionId: session.id,
   });
 
   if (!decision.qualifies) {
@@ -360,6 +361,7 @@ export async function generateAttachmentReply(ticketId: string, workspaceId: str
           categories: await ticketCategoryOptions(workspaceId),
           content: context,
           model: createClassificationModel({ ...classificationConfig, apiKey }),
+          sessionId: message.sessionId,
         });
         if (decision.qualifies) {
           await unscopedPrisma.ticket.update({

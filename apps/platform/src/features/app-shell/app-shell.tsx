@@ -31,6 +31,7 @@ import {
   InboxIcon,
   LayoutDashboardIcon,
   LayoutListIcon,
+  MessageCircleOffIcon,
   LibraryBigIcon,
   LogOutIcon,
   MessageSquareCodeIcon,
@@ -132,6 +133,7 @@ export function PlatformAppShell({
             items: [
               ...conversationItems,
               { icon: LayoutListIcon, label: "All Conversations", to: "/chat/all" },
+              { icon: MessageCircleOffIcon, label: "Without Ticket", to: "/chat/no-ticket" },
             ],
             label: "Conversations",
           },

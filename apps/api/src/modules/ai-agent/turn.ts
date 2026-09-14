@@ -62,13 +62,17 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
             aiAgentId: true,
             channel: { select: { type: true } },
             customerIdentity: { select: { id: true } },
+            sessionId: true,
             status: true,
           },
           where: { id: ticketId },
         });
         if (loaded?.status !== "AI_HANDLING") return null;
         ticket = loaded;
-        return { instructions: loaded.aiAgent.instructions ?? undefined };
+        return {
+          instructions: loaded.aiAgent.instructions ?? undefined,
+          sessionId: loaded.sessionId,
+        };
       },
       publishDelta: (delta, provisionalId) =>
         publishWidgetEvent(ticketId, {
