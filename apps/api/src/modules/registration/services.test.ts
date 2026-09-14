@@ -65,8 +65,6 @@ describe("registerAdminWorkspace", () => {
       aiSettings?: unknown;
       channel?: unknown;
       webWidgetConfig?: unknown;
-      tools?: Record<string, unknown>[];
-      toolAssignments?: Record<string, unknown>[];
       ticketCategories?: Record<string, unknown>[];
     } = {};
 
@@ -102,22 +100,9 @@ describe("registerAdminWorkspace", () => {
             return data;
           }),
         },
-        tool: {
-          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-            created.tools ??= [];
-            created.tools.push(data);
-            return data;
-          }),
-        },
         ticketCategory: {
           createMany: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => {
             created.ticketCategories = data;
-            return { count: data.length };
-          }),
-        },
-        toolAssignment: {
-          createMany: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => {
-            created.toolAssignments = data;
             return { count: data.length };
           }),
         },
@@ -175,17 +160,8 @@ describe("registerAdminWorkspace", () => {
     const webWidgetConfig = created.webWidgetConfig as Record<string, unknown>;
 
     expect(aiAgent).toMatchObject({ name: "AI Agent", workspaceId: workspace.id });
-    expect(created.tools).toEqual([
-      expect.objectContaining({ name: "searchKnowledge", origin: "BUILT_IN" }),
-      expect.objectContaining({ name: "searchCustomerTicketHistory", origin: "BUILT_IN" }),
-    ]);
     expect(created.ticketCategories).toHaveLength(5);
     expect(created.ticketCategories?.filter((category) => category.isFallback)).toHaveLength(1);
-    expect(created.toolAssignments).toEqual(
-      created.tools?.map((tool) =>
-        expect.objectContaining({ aiAgentId: aiAgent.id, toolId: tool.id }),
-      ),
-    );
 
     expect(channel).toMatchObject({
       aiAgentId: aiAgent.id,

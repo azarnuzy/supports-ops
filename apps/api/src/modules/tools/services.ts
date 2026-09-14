@@ -18,6 +18,39 @@ export class TicketNotFoundError extends Error {}
 const builtInNames = ["searchKnowledge", "searchCustomerTicketHistory"] as const;
 type BuiltInName = (typeof builtInNames)[number];
 
+const builtInDescriptions: Record<BuiltInName, string> = {
+  searchCustomerTicketHistory:
+    "Search resolved Tickets for the same Customer Identity and Channel.",
+  searchKnowledge: "Search published Customer-Safe Knowledge Sources.",
+};
+
+const builtInInputSchema = {
+  properties: { query: { type: "string" } },
+  required: ["query"],
+  type: "object",
+} as const;
+
+/** searchKnowledge and searchCustomerTicketHistory are a capability of the AI Agent
+ * runtime itself, not an opt-in business integration, so they're available to every
+ * AI Agent without a Tool/ToolAssignment row. */
+function intrinsicBuiltInTools() {
+  return builtInNames.map((name) => ({
+    createdAt: new Date(0),
+    description: builtInDescriptions[name],
+    enabled: true,
+    httpConfig: null,
+    id: `builtin:${name}`,
+    inputSchema: builtInInputSchema,
+    mcpTool: null,
+    name,
+    origin: "BUILT_IN" as const,
+    risk: "READ_ONLY" as const,
+    updatedAt: new Date(0),
+    usageInstruction: null,
+    workspaceId: "",
+  }));
+}
+
 const includeHttpConfig = { httpConfig: true } as const;
 
 export async function listHttpTools() {
@@ -150,10 +183,13 @@ export async function resolveTools(aiAgentId: string) {
     },
     where: { assignments: { some: { aiAgentId } }, enabled: true },
   });
-  return tools.filter(isAvailable).map(({ assignments, ...tool }) => ({
+  const assignedTools = tools.filter(isAvailable).map(({ assignments, ...tool }) => ({
     ...tool,
     usageInstruction: assignments[0]?.usageInstruction ?? null,
   }));
+  const assignedNames = new Set(assignedTools.map((tool) => tool.name));
+  const intrinsicTools = intrinsicBuiltInTools().filter((tool) => !assignedNames.has(tool.name));
+  return [...assignedTools, ...intrinsicTools];
 }
 
 /** Ticket context is loaded server-side; model/customer-provided identities never scope retrieval. */

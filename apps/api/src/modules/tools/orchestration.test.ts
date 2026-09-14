@@ -3,6 +3,7 @@ import type { AssignedTool } from "./orchestration";
 
 const mocks = vi.hoisted(() => ({
   aiActivityCreate: vi.fn(),
+  embed: vi.fn(),
   executeBuiltInTool: vi.fn(),
   executeHttpTool: vi.fn(),
   executeMcpTool: vi.fn(),
@@ -11,6 +12,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../utils/prisma", () => ({
   unscopedPrisma: { aiActivity: { create: mocks.aiActivityCreate } },
+}));
+vi.mock("../../config", () => ({ embeddingConfig: { apiKey: "key" } }));
+vi.mock("@repo/knowledge", () => ({
+  createOpenAiEmbeddingClient: () => ({ embed: mocks.embed }),
 }));
 vi.mock("./execution", () => ({ executeHttpTool: mocks.executeHttpTool }));
 vi.mock("../mcp/services", () => ({ executeMcpTool: mocks.executeMcpTool }));
@@ -54,6 +59,7 @@ const mutatingTool = makeTool({
 
 beforeEach(() => {
   mocks.aiActivityCreate.mockReset();
+  mocks.embed.mockReset().mockResolvedValue([[0.1, 0.2]]);
   mocks.executeBuiltInTool.mockReset();
   mocks.executeHttpTool.mockReset();
   mocks.executeMcpTool.mockReset();
@@ -119,6 +125,50 @@ describe("createAssignedToolExecutor", () => {
     // Grounding data, and the untrusted-data boundary is enforced upstream by
     // Anvia wrapping this value in a role: "tool" message, not by this code.
     await expect(executor({ input: {}, toolId: httpTool.id })).resolves.toBe(injection);
+  });
+
+  it("embeds the model's actual query before dispatching a BUILT_IN Tool", async () => {
+    const builtInTool = makeTool({
+      id: "builtin:searchKnowledge",
+      name: "searchKnowledge",
+      origin: "BUILT_IN",
+      risk: "READ_ONLY",
+    });
+    mocks.embed.mockResolvedValue([[0.4, 0.5]]);
+    mocks.executeBuiltInTool.mockResolvedValue([{ chunkId: "chunk-1" }]);
+    const executor = createAssignedToolExecutor({
+      aiAgentId: "agent-1",
+      ticketId: "t1",
+      tools: [builtInTool],
+      workspaceId: "w1",
+    });
+
+    await expect(
+      executor({ input: { query: "how do I reset my password" }, toolId: builtInTool.id }),
+    ).resolves.toBe('[{"chunkId":"chunk-1"}]');
+    expect(mocks.embed).toHaveBeenCalledWith(["how do I reset my password"]);
+    expect(mocks.executeBuiltInTool).toHaveBeenCalledWith(
+      expect.objectContaining({ embedding: [0.4, 0.5], toolName: "searchKnowledge" }),
+    );
+  });
+
+  it("rejects a BUILT_IN Tool call with no query, without embedding an empty string", async () => {
+    const builtInTool = makeTool({
+      id: "builtin:searchKnowledge",
+      name: "searchKnowledge",
+      origin: "BUILT_IN",
+      risk: "READ_ONLY",
+    });
+    const executor = createAssignedToolExecutor({
+      aiAgentId: "agent-1",
+      ticketId: "t1",
+      tools: [builtInTool],
+      workspaceId: "w1",
+    });
+
+    await expect(executor({ input: {}, toolId: builtInTool.id })).rejects.toThrow(/query/i);
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(mocks.executeBuiltInTool).not.toHaveBeenCalled();
   });
 
   it("dispatches an MCP-origin Tool and normalizes its result to a string", async () => {
