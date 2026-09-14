@@ -1,8 +1,8 @@
-import { Agent, type CompletionModel } from "@anvia/core";
+import type { CompletionModel } from "@anvia/core";
 import { OpenAIClient } from "@anvia/openai";
 import { z } from "zod";
 
-import { agentObservability } from "./telemetry";
+import { createAgent } from "./telemetry";
 import type { AgentTools } from "./tools";
 
 export type ReplyModel = CompletionModel;
@@ -59,8 +59,7 @@ export function streamReply(params: {
   const ticketContext = params.ticketContext?.length
     ? params.ticketContext.map((entry) => `[${entry.id}] ${entry.content}`).join("\n\n")
     : undefined;
-  const agent = new Agent({
-    ...agentObservability(),
+  const agent = createAgent({
     id: "customer-reply",
     instructions: `You are SupportOps' AI Agent speaking to a Customer. Reply in the language of the Customer's message.
 

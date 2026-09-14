@@ -1,5 +1,8 @@
+import { Agent, type CompletionModel } from "@anvia/core";
 import type { AgentObserver } from "@anvia/core/observability";
 import { createOtelObserver } from "@anvia/otel";
+import type { z } from "zod";
+import type { AgentTools } from "./tools";
 
 /**
  * Agent telemetry wiring (ADR-0010). The observer emits agent, generation, and
@@ -17,4 +20,25 @@ export function agentObservability() {
   return {
     observability: { observers: { otel: observer }, primaryTrace: "otel" },
   } as const;
+}
+
+/** Constructs every Anvia `Agent` used by this package, wiring {@link agentObservability} in. */
+export function createAgent<Output>(options: {
+  id: string;
+  instructions: string;
+  model: CompletionModel;
+  outputSchema: z.ZodType<Output>;
+  tools?: AgentTools;
+  maxTurns?: number;
+  sessionId?: string;
+}): Agent<Output> {
+  return new Agent({
+    ...agentObservability(),
+    id: options.id,
+    instructions: options.instructions,
+    maxTurns: options.maxTurns,
+    model: options.model,
+    outputSchema: options.outputSchema,
+    tools: options.tools,
+  });
 }
