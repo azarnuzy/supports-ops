@@ -55,7 +55,9 @@ export function streamReply(params: {
   tools?: AgentTools;
 }): Promise<ReplyDecision> {
   const attachments = params.attachments.length
-    ? params.attachments.map((attachment) => `[${attachment.id}] ${attachment.content}`).join("\n\n")
+    ? params.attachments
+        .map((attachment) => `[${attachment.id}] ${attachment.content}`)
+        .join("\n\n")
     : "No Attachments were provided for this Ticket.";
   const agent = createAgent({
     id: "customer-reply",

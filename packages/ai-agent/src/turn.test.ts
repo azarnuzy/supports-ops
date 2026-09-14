@@ -138,11 +138,7 @@ describe("runAiAgentTurn", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(runtime.reply).toHaveBeenCalledWith(
-      "REPLY",
-      "Here's the answer.",
-      expect.any(String),
-    );
+    expect(runtime.reply).toHaveBeenCalledWith("REPLY", "Here's the answer.", expect.any(String));
   });
 
   it("resolves when the model decides RESOLVE", async () => {
