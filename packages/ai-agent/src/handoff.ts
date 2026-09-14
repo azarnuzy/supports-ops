@@ -1,6 +1,6 @@
-import { Agent, type CompletionModel } from "@anvia/core";
+import type { CompletionModel } from "@anvia/core";
 import { detectLanguage, languageName } from "./language";
-import { agentObservability } from "./telemetry";
+import { createAgent } from "./telemetry";
 import { z } from "zod";
 
 const suggestedReplySchema = z.object({
@@ -64,8 +64,7 @@ export async function generateSuggestedReply(params: {
   model: CompletionModel;
   previousTicketContext: string;
 }): Promise<string> {
-  const agent = new Agent({
-    ...agentObservability(),
+  const agent = createAgent({
     id: "suggested-reply",
     instructions: `You are SupportOps' AI Copilot helping a Human Agent draft a reply to a Customer. ${languageInstruction(params.currentConversation || params.customerMessage)} Never say you are an AI or address the Human Agent.
 
@@ -122,8 +121,7 @@ export function generateEscalationSummary(params: {
   const detectedLanguage = detectLanguage(firstCustomerMessage || transcript);
   const summaryLanguagePhrase =
     detectedLanguage === "unknown" ? "the Customer's language" : languageName(detectedLanguage);
-  const agent = new Agent({
-    ...agentObservability(),
+  const agent = createAgent({
     id: "escalation-summary",
     instructions: `You are SupportOps' AI Agent briefing a Human Agent who has just claimed a Ticket. Use only the supplied Ticket record; do not infer facts that are not recorded. Do not expose private reasoning or describe yourself as an assistant.
 
