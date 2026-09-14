@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { extractMock, OpenAIClientMock, completionModel } = vi.hoisted(() => {
   const extractMock = vi.fn();
-  const completionModel = vi.fn().mockReturnValue({ id: "fake-model" });
+  const completionModel = vi.fn().mockReturnValue({ id: "fake-model", modelId: "fake-model" });
   const OpenAIClientMock = vi.fn().mockImplementation(function (this: {
     completionModel: typeof completionModel;
   }) {
@@ -40,6 +40,14 @@ describe("createClassificationModel", () => {
   });
 });
 
+const fakeUsage = {
+  cacheCreationInputTokens: 0,
+  cachedInputTokens: 0,
+  inputTokens: 10,
+  outputTokens: 5,
+  totalTokens: 15,
+};
+
 const categories = [
   {
     description: "Invoices and payments.",
@@ -69,12 +77,13 @@ describe("classifyMessage", () => {
         priority: "HIGH",
         title: "Invoice charged twice this month",
       },
+      usage: fakeUsage,
     });
 
     const decision = await classifyMessage({
       categories,
       content: "I was charged twice for my invoice this month, please help urgently",
-      model: { id: "fake-model" } as never,
+      model: { id: "fake-model", modelId: "fake-model" } as never,
     });
 
     expect(decision).toEqual({
@@ -94,12 +103,13 @@ describe("classifyMessage", () => {
         priority: null,
         title: null,
       },
+      usage: fakeUsage,
     });
 
     const decision = await classifyMessage({
       categories,
       content: "halo",
-      model: { id: "fake-model" } as never,
+      model: { id: "fake-model", modelId: "fake-model" } as never,
     });
 
     expect(decision).toEqual({ qualifies: false, reply: "Hai! Ada yang bisa saya bantu?" });
@@ -114,12 +124,13 @@ describe("classifyMessage", () => {
         priority: null,
         title: null,
       },
+      usage: fakeUsage,
     });
 
     const decision = await classifyMessage({
       categories,
       content: "x".repeat(200),
-      model: { id: "fake-model" } as never,
+      model: { id: "fake-model", modelId: "fake-model" } as never,
     });
 
     expect(decision).toMatchObject({ category: "GENERAL", priority: "NORMAL", qualifies: true });
@@ -137,12 +148,13 @@ describe("classifyMessage", () => {
         priority: null,
         title: null,
       },
+      usage: fakeUsage,
     });
 
     const decision = await classifyMessage({
       categories,
       content: "thanks!",
-      model: { id: "fake-model" } as never,
+      model: { id: "fake-model", modelId: "fake-model" } as never,
     });
 
     expect(decision.qualifies).toBe(false);
@@ -158,7 +170,7 @@ describe("classifyMessage", () => {
     const rejection = classifyMessage({
       categories,
       content: "hello",
-      model: { id: "fake-model" } as never,
+      model: { id: "fake-model", modelId: "fake-model" } as never,
     });
 
     await expect(rejection).rejects.toBeInstanceOf(ClassificationFailedError);
@@ -180,12 +192,13 @@ describe("category safety", () => {
         priority: "NORMAL",
         title: "Where is my refund",
       },
+      usage: fakeUsage,
     });
 
     const decision = await classifyMessage({
       categories,
       content: "where is my refund",
-      model: { id: "fake-model" } as never,
+      model: { id: "fake-model", modelId: "fake-model" } as never,
     });
 
     expect(decision.qualifies).toBe(true);
@@ -201,12 +214,13 @@ describe("category safety", () => {
         priority: "NORMAL",
         title: "Double charge",
       },
+      usage: fakeUsage,
     });
 
     await classifyMessage({
       categories,
       content: "charged twice",
-      model: { id: "fake-model" } as never,
+      model: { id: "fake-model", modelId: "fake-model" } as never,
     });
 
     const { instructions } = extractMock.mock.calls[0][0];

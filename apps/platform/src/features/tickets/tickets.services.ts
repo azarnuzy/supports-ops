@@ -5,9 +5,11 @@ import {
   generateSuggestedReply as generateSuggestedReplyRequest,
   getAttachmentDownloadUrl,
   getAttachmentUrl,
+  getSessionWithoutTicket as getSessionWithoutTicketRequest,
   getTicketDetail as getTicketDetailRequest,
   listLiveAiTickets as listLiveAiTicketsRequest,
   listMyTickets as listMyTicketsRequest,
+  listSessionsWithoutTicket as listSessionsWithoutTicketRequest,
   listSharedHumanQueue as listSharedHumanQueueRequest,
   listTickets as listTicketsRequest,
   markTicketRead as markTicketReadRequest,
@@ -25,6 +27,14 @@ const apiClient = createApiClient(apiBaseUrl);
 
 export function getSharedHumanQueue() {
   return listSharedHumanQueueRequest(apiClient);
+}
+
+export function getSessionsWithoutTicket(filters: { cursor?: string } = {}) {
+  return listSessionsWithoutTicketRequest(apiClient, filters);
+}
+
+export function getSessionWithoutTicket(sessionId: string) {
+  return getSessionWithoutTicketRequest(apiClient, sessionId);
 }
 
 export function getTicketDetail(id: string) {

@@ -8,6 +8,8 @@ import {
   getAllTickets,
   getLiveAiTickets,
   getMyTickets,
+  getSessionsWithoutTicket,
+  getSessionWithoutTicket,
   getSharedHumanQueue,
   getTicketDetail,
   markTicketRead,
@@ -35,6 +37,25 @@ export const liveAiTicketsQueryOptions = queryOptions({
   queryFn: getLiveAiTickets,
   queryKey: queryKeys.workspace.liveAiTickets,
 });
+
+/** Conversations that never opened a Ticket, newest first. Admin-only on the
+ * API; the nav entry is Admin-only too. */
+export function useSessionsWithoutTicketQuery() {
+  return useInfiniteQuery({
+    getNextPageParam: (lastPage: Awaited<ReturnType<typeof getSessionsWithoutTicket>>) =>
+      lastPage.nextCursor ?? undefined,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => getSessionsWithoutTicket({ cursor: pageParam }),
+    queryKey: queryKeys.workspace.sessionsWithoutTicket,
+  });
+}
+
+export function sessionWithoutTicketQueryOptions(sessionId: string) {
+  return queryOptions({
+    queryFn: () => getSessionWithoutTicket(sessionId),
+    queryKey: queryKeys.workspace.sessionWithoutTicket(sessionId),
+  });
+}
 
 export function useAllTicketsQuery(filters: {
   category?: TicketCategory;

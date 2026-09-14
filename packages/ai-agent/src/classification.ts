@@ -1,7 +1,8 @@
 import { extract } from "@anvia/core/extractor";
 import { OpenAIClient } from "@anvia/openai";
 import type { CompletionModel } from "@anvia/core";
-import { withSpan } from "@repo/logger/telemetry";
+import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
+import { captureMode } from "./telemetry";
 import { z } from "zod";
 
 export const ticketPrioritySchema = z.enum(["LOW", "NORMAL", "HIGH"]);
@@ -102,18 +103,47 @@ export async function classifyMessage(params: {
    * with small talk the AI Agent itself answered, and the message that follows
    * only makes sense with those turns in view. */
   history?: readonly { role: "agent" | "customer"; content: string }[];
+  /** The Ticket this classification belongs to, when one already exists. The
+   * first classification of a Session decides whether a Ticket is opened at
+   * all, so it has no Ticket to be grouped under and traces on its own. */
+  sessionId?: string;
 }): Promise<ClassificationDecision> {
-  return withSpan("ai_agent.classify", {}, async (span) => {
+  const attributes = params.sessionId ? sessionAttributes(params.sessionId) : {};
+  const instructions = describeCategories(params.categories);
+  const text = describeMessage(params.content, params.history);
+  return withSpan("ai_agent.classify", attributes, async (span) => {
+    // `extract()` is a raw completion call, not an `Agent`: no observer is
+    // attached, so — unlike the reply and Copilot Agents — nothing here
+    // records a generation automatically. Recording it by hand on this span
+    // is what makes classification show a Model, tokens, and cost in the
+    // telemetry backend instead of an empty shell around a decision.
+    span.setAttribute("anvia.generation.model_id", params.model.modelId);
+    if (captureMode === "full") {
+      span.setAttribute(
+        "anvia.generation.input",
+        JSON.stringify([{ content: text, role: "user" }]),
+      );
+    }
+
     let output: z.infer<typeof classificationOutputSchema>;
 
     try {
-      ({ output } = await extract({
-        instructions: describeCategories(params.categories),
+      const result = await extract({
+        instructions,
         model: params.model,
         outputSchema: classificationOutputSchema,
         retries: { maxAttempts: 2 },
-        text: describeMessage(params.content, params.history),
-      }));
+        text,
+      });
+      output = result.output;
+      span.setAttributes({
+        "anvia.usage.input_tokens": result.usage.inputTokens,
+        "anvia.usage.output_tokens": result.usage.outputTokens,
+        "anvia.usage.total_tokens": result.usage.totalTokens,
+      });
+      if (captureMode === "full") {
+        span.setAttribute("anvia.generation.output", JSON.stringify(output));
+      }
     } catch (error) {
       throw new ClassificationFailedError({ cause: error });
     }

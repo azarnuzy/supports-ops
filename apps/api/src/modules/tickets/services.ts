@@ -15,6 +15,7 @@ import {
   searchChunks as findKnowledgeChunks,
 } from "@repo/knowledge";
 import { createBusinessTools } from "@repo/tools";
+import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
@@ -69,6 +70,7 @@ export class SuggestedReplyNotConfiguredError extends Error {}
 export class TicketNotAvailableForTakeoverError extends Error {}
 export class TicketNotAvailableForAssignmentError extends Error {}
 export class TicketNotFoundError extends Error {}
+export class SessionNotFoundError extends Error {}
 export class InvalidTicketsCursorError extends Error {
   constructor() {
     super("Invalid Tickets cursor.");
@@ -196,6 +198,94 @@ export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
     nextCursor: tickets.length > filters.limit ? (visibleTickets.at(-1)?.id ?? null) : null,
     tickets: await attachUnreadCounts(user.id, visibleTickets),
   };
+}
+
+/** A conversation that never became a Ticket: the classification decided the
+ * Customer's message was not a support request, so the AI Agent answered and
+ * nothing was opened. Nothing else in the product surfaces these, which makes a
+ * misclassified request invisible — an Admin reads them here.
+ *
+ * Sessions with no Customer Message are skipped: a Widget that was opened and
+ * closed carries no information. Ordering and cursoring match `listTickets`. */
+export async function listSessionsWithoutTicket(filters: { cursor?: string; limit: number }) {
+  const cursorSession = filters.cursor
+    ? await prisma.session.findUnique({
+        select: { createdAt: true, id: true },
+        where: { id: filters.cursor },
+      })
+    : null;
+  if (filters.cursor && !cursorSession) throw new InvalidTicketsCursorError();
+
+  const sessions = await prisma.session.findMany({
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      channel: { select: { name: true, type: true } },
+      createdAt: true,
+      customerIdentity: { select: { email: true, id: true, name: true, phoneE164: true } },
+      customerLastMessageAt: true,
+      id: true,
+      messages: {
+        orderBy: { position: "desc" },
+        select: { content: true, createdAt: true, senderType: true },
+        take: 1,
+        where: { deletedAt: null },
+      },
+      status: true,
+    },
+    take: filters.limit + 1,
+    where: {
+      AND: [
+        { ticket: null },
+        { messages: { some: { deletedAt: null, senderType: "CUSTOMER" } } },
+        ...(cursorSession
+          ? [
+              {
+                OR: [
+                  { createdAt: { lt: cursorSession.createdAt } },
+                  {
+                    AND: [{ createdAt: cursorSession.createdAt }, { id: { lt: cursorSession.id } }],
+                  },
+                ],
+              },
+            ]
+          : []),
+      ],
+    },
+  });
+
+  const visible = sessions.slice(0, filters.limit);
+  return {
+    nextCursor: sessions.length > filters.limit ? (visible.at(-1)?.id ?? null) : null,
+    sessions: visible.map(({ messages, ...session }) => ({
+      ...session,
+      lastMessage: messages[0] ?? null,
+    })),
+  };
+}
+
+/** The transcript of one conversation that has no Ticket. Read-only: a Session
+ * that has since become a Ticket is not found here, because it belongs to the
+ * Ticket view with its own Activity Timeline and reply box. */
+export async function getSessionWithoutTicketTranscript(sessionId: string) {
+  const session = await prisma.session.findFirst({
+    select: {
+      channel: { select: { name: true, type: true } },
+      createdAt: true,
+      customerIdentity: { select: { email: true, id: true, name: true, phoneE164: true } },
+      customerLastMessageAt: true,
+      id: true,
+      status: true,
+    },
+    where: { id: sessionId, ticket: null },
+  });
+  if (!session) throw new SessionNotFoundError();
+
+  const messages = await prisma.message.findMany({
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: transcriptSelect,
+    where: { deletedAt: null, sessionId },
+  });
+  return { ...session, messages };
 }
 
 export async function getTicketDetail(ticketId: string, user: InboxUser) {
@@ -379,6 +469,7 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
         orderBy: { createdAt: "asc" },
         select: { eventType: true, metadata: true },
       },
+      sessionId: true,
       status: true,
       title: true,
     },
@@ -404,6 +495,7 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
     if (!aiAgentConfig.apiKey) throw new Error("AI Agent is not configured.");
     const summary = await generateEscalationSummary({
       model: createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }),
+      sessionId: ticket.sessionId,
       ticket: {
         escalationReason: ticket.escalationReason,
         messages: ticket.messages,
@@ -511,52 +603,64 @@ export async function reassignTicket(ticketId: string, humanAgentId: string, wor
   return ticket;
 }
 
+/** A Human Agent's reply is not an agent run, so nothing else would place it
+ * on the conversation's session in the telemetry backend — this span is what
+ * makes the handover from AI Agent to Human Agent visible as one conversation.
+ * The session id is the Session's, not the Ticket's, and is only known once the
+ * Ticket has been loaded. */
+function humanReplyAttributes(ticketId: string) {
+  return { "supportops.ticket_id": ticketId };
+}
+
 export async function sendHumanReply(
   ticketId: string,
   humanAgentId: string,
   content: string,
   idempotencyKey: string,
 ) {
-  const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
-  const create = () =>
-    unscopedPrisma.$transaction(async (tx) => {
-      const ticket = await tx.ticket.findFirst({
-        where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+  return withSpan("support.human_reply", humanReplyAttributes(ticketId), async (span) => {
+    const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
+    const create = () =>
+      unscopedPrisma.$transaction(async (tx) => {
+        const ticket = await tx.ticket.findFirst({
+          where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+        });
+        if (!ticket) throw new TicketNotOwnedError();
+        const existing = await tx.message.findFirst({ where: { externalMessageId, ticketId } });
+        if (existing) return { deliver: existing.deliveryStatus === "FAILED", message: existing };
+        const message = await tx.message.create({
+          data: {
+            ...(await claimMessageSlot(tx, ticket.sessionId)),
+            content,
+            deliveryStatus: "PENDING",
+            externalMessageId,
+            message: { content },
+            role: "assistant",
+            senderType: "HUMAN_AGENT",
+            senderUserId: humanAgentId,
+            ticketId,
+            workspaceId: ticket.workspaceId,
+          },
+        });
+        return { deliver: true, message };
       });
-      if (!ticket) throw new TicketNotOwnedError();
-      const existing = await tx.message.findFirst({ where: { externalMessageId, ticketId } });
-      if (existing) return { deliver: existing.deliveryStatus === "FAILED", message: existing };
-      const message = await tx.message.create({
-        data: {
-          ...(await claimMessageSlot(tx, ticket.sessionId)),
-          content,
-          deliveryStatus: "PENDING",
-          externalMessageId,
-          message: { content },
-          role: "assistant",
-          senderType: "HUMAN_AGENT",
-          senderUserId: humanAgentId,
-          ticketId,
-          workspaceId: ticket.workspaceId,
-        },
+    let result: Awaited<ReturnType<typeof create>>;
+    try {
+      result = await create();
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002")
+        throw error;
+      const message = await unscopedPrisma.message.findFirst({
+        where: { externalMessageId, ticketId },
       });
-      return { deliver: true, message };
-    });
-  let result: Awaited<ReturnType<typeof create>>;
-  try {
-    result = await create();
-  } catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002")
-      throw error;
-    const message = await unscopedPrisma.message.findFirst({
-      where: { externalMessageId, ticketId },
-    });
-    if (!message) throw error;
-    result = { deliver: message.deliveryStatus === "FAILED", message };
-  }
-  const message = result.deliver ? await deliverMessage(result.message) : result.message;
-  await publishTicketQueueEvent(message.workspaceId);
-  return message;
+      if (!message) throw error;
+      result = { deliver: message.deliveryStatus === "FAILED", message };
+    }
+    span.setAttributes(sessionAttributes(result.message.sessionId));
+    const message = result.deliver ? await deliverMessage(result.message) : result.message;
+    await publishTicketQueueEvent(message.workspaceId);
+    return message;
+  });
 }
 
 export async function sendHumanAttachmentReply(
@@ -566,79 +670,82 @@ export async function sendHumanAttachmentReply(
   files: File[],
   idempotencyKey: string,
 ) {
-  const owner = await unscopedPrisma.ticket.findFirst({
-    select: { channel: { select: { type: true } } },
-    where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
-  });
-  if (!owner) throw new TicketNotOwnedError();
-  const capability: AttachmentCapability =
-    owner.channel.type === "WHATSAPP" ? whatsAppAttachmentCapability : webAttachmentCapability;
-  if (!files.length || files.length > capability.maxFilesPerMessage)
-    throw new InvalidHumanAttachmentError();
-  if (
-    files.some(
-      (file) =>
-        !capability.mimeTypes.includes(file.type) ||
-        !file.size ||
-        file.size >
-          (capability.maxFileSizeBytesByMimeType?.[file.type] ?? capability.maxFileSizeBytes),
-    )
-  )
-    throw new InvalidHumanAttachmentError();
-  const text = content?.trim() ?? "";
-  const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
-  const existing = await unscopedPrisma.message.findFirst({
-    where: { externalMessageId, ticketId },
-  });
-  if (existing) return existing.deliveryStatus === "FAILED" ? deliverMessage(existing) : existing;
-  const uploads = await Promise.all(
-    files.map(async (file) => {
-      const id = randomUUID();
-      const key = `attachments/outbound/${ticketId}/${id}`;
-      await createStorage(storageConfig).putObject({
-        body: Buffer.from(await file.arrayBuffer()),
-        contentType: file.type,
-        key,
-      });
-      return { file, id, key };
-    }),
-  );
-  const message = await unscopedPrisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.findFirst({
+  return withSpan("support.human_reply", humanReplyAttributes(ticketId), async (span) => {
+    const owner = await unscopedPrisma.ticket.findFirst({
+      select: { channel: { select: { type: true } } },
       where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
     });
-    if (!ticket) throw new TicketNotOwnedError();
-    return tx.message.create({
-      data: {
-        ...(await claimMessageSlot(tx, ticket.sessionId)),
-        attachments: {
-          create: uploads.map(({ file, id, key }) => ({
-            fileName: file.name,
-            id,
-            mimeType: file.type,
-            processingStatus: "READY",
-            sizeBytes: file.size,
-            storageKey: key,
-            ticketId,
-            workspaceId: ticket.workspaceId,
-          })),
-        },
-        content: text,
-        deliveryStatus: "PENDING",
-        externalMessageId,
-        message: { content: text },
-        role: "assistant",
-        senderType: "HUMAN_AGENT",
-        senderUserId: humanAgentId,
-        ticketId,
-        workspaceId: ticket.workspaceId,
-      },
-      include: { attachments: true },
+    if (!owner) throw new TicketNotOwnedError();
+    const capability: AttachmentCapability =
+      owner.channel.type === "WHATSAPP" ? whatsAppAttachmentCapability : webAttachmentCapability;
+    if (!files.length || files.length > capability.maxFilesPerMessage)
+      throw new InvalidHumanAttachmentError();
+    if (
+      files.some(
+        (file) =>
+          !capability.mimeTypes.includes(file.type) ||
+          !file.size ||
+          file.size >
+            (capability.maxFileSizeBytesByMimeType?.[file.type] ?? capability.maxFileSizeBytes),
+      )
+    )
+      throw new InvalidHumanAttachmentError();
+    const text = content?.trim() ?? "";
+    const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
+    const existing = await unscopedPrisma.message.findFirst({
+      where: { externalMessageId, ticketId },
     });
+    if (existing) return existing.deliveryStatus === "FAILED" ? deliverMessage(existing) : existing;
+    const uploads = await Promise.all(
+      files.map(async (file) => {
+        const id = randomUUID();
+        const key = `attachments/outbound/${ticketId}/${id}`;
+        await createStorage(storageConfig).putObject({
+          body: Buffer.from(await file.arrayBuffer()),
+          contentType: file.type,
+          key,
+        });
+        return { file, id, key };
+      }),
+    );
+    const message = await unscopedPrisma.$transaction(async (tx) => {
+      const ticket = await tx.ticket.findFirst({
+        where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+      });
+      if (!ticket) throw new TicketNotOwnedError();
+      return tx.message.create({
+        data: {
+          ...(await claimMessageSlot(tx, ticket.sessionId)),
+          attachments: {
+            create: uploads.map(({ file, id, key }) => ({
+              fileName: file.name,
+              id,
+              mimeType: file.type,
+              processingStatus: "READY",
+              sizeBytes: file.size,
+              storageKey: key,
+              ticketId,
+              workspaceId: ticket.workspaceId,
+            })),
+          },
+          content: text,
+          deliveryStatus: "PENDING",
+          externalMessageId,
+          message: { content: text },
+          role: "assistant",
+          senderType: "HUMAN_AGENT",
+          senderUserId: humanAgentId,
+          ticketId,
+          workspaceId: ticket.workspaceId,
+        },
+        include: { attachments: true },
+      });
+    });
+    span.setAttributes(sessionAttributes(message.sessionId));
+    const delivered = await deliverMessage(message);
+    await publishTicketQueueEvent(delivered.workspaceId);
+    return delivered;
   });
-  const delivered = await deliverMessage(message);
-  await publishTicketQueueEvent(delivered.workspaceId);
-  return delivered;
 }
 
 export async function retryHumanReply(ticketId: string, humanAgentId: string, messageId: string) {
@@ -732,6 +839,7 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
       .filter((source) => source.visibility === "INTERNAL_ONLY")
       .map((source) => source.content),
     model: createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }),
+    sessionId: ticket.sessionId,
     previousTicketContext: previousTickets
       .map(
         (previous) =>

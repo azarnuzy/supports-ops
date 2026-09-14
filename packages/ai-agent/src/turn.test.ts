@@ -8,7 +8,7 @@ describe("runAiAgentTurn", () => {
       escalate: vi.fn(async () => undefined),
       finish: vi.fn(async () => undefined),
       isActive: vi.fn(() => true),
-      loadTicket: vi.fn(async () => ({})),
+      loadTicket: vi.fn(async () => ({ sessionId: "session-1" })),
       publishDelta: vi.fn(),
       reply: vi.fn(async () => undefined),
       resolve: vi.fn(async () => undefined),
