@@ -26,8 +26,7 @@ vi.mock("@repo/knowledge", () => ({
 vi.mock("../../config", () => ({ toolEncryptionConfig: { masterKey: "key" } }));
 vi.mock("./secrets", () => ({ encryptToolSecret: vi.fn() }));
 
-const { executeBuiltInTool, resolveTools, TicketNotFoundError, ToolNotAssignedError } =
-  await import("./services");
+const { executeBuiltInTool, resolveTools, TicketNotFoundError } = await import("./services");
 
 describe("Tool runtime authorization", () => {
   beforeEach(() => {
@@ -48,21 +47,14 @@ describe("Tool runtime authorization", () => {
         assignments: [],
         httpConfig: null,
         mcpTool: null,
-        name: "searchKnowledge",
-        origin: "BUILT_IN",
-      },
-      {
-        assignments: [],
-        httpConfig: null,
-        mcpTool: null,
         name: "unknownBuiltIn",
         origin: "BUILT_IN",
       },
     ]);
 
-    await expect(resolveTools("agent-1")).resolves.toEqual([
-      expect.objectContaining({ name: "searchKnowledge" }),
-    ]);
+    await expect(resolveTools("agent-1")).resolves.not.toContainEqual(
+      expect.objectContaining({ name: "unknownBuiltIn" }),
+    );
     expect(mocks.toolFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { assignments: { some: { aiAgentId: "agent-1" } }, enabled: true },
@@ -70,25 +62,16 @@ describe("Tool runtime authorization", () => {
     );
   });
 
-  it("denies unassigned Tools and Tickets outside the scoped Workspace", async () => {
-    await expect(
-      executeBuiltInTool({
-        aiAgentId: "agent-1",
-        embedding: [0.1],
-        ticketId: "ticket-1",
-        toolName: "searchKnowledge",
-      }),
-    ).rejects.toBeInstanceOf(ToolNotAssignedError);
+  it("makes both built-in search Tools available without any Tool/ToolAssignment row", async () => {
+    mocks.toolFindMany.mockResolvedValue([]);
 
-    mocks.toolFindMany.mockResolvedValue([
-      {
-        assignments: [],
-        httpConfig: null,
-        mcpTool: null,
-        name: "searchKnowledge",
-        origin: "BUILT_IN",
-      },
+    await expect(resolveTools("agent-1")).resolves.toEqual([
+      expect.objectContaining({ name: "searchKnowledge", origin: "BUILT_IN" }),
+      expect.objectContaining({ name: "searchCustomerTicketHistory", origin: "BUILT_IN" }),
     ]);
+  });
+
+  it("denies a Ticket outside the scoped Workspace", async () => {
     mocks.ticketFindFirst.mockResolvedValue(null);
     await expect(
       executeBuiltInTool({
