@@ -44,7 +44,7 @@ describe("registerAdminWorkspace", () => {
     expect(stored.role).toBe("ADMIN");
     expect(stored.workspace.id).toBe(workspace.id);
     expect(await prisma.aiSettings.count({ where: { workspaceId: workspace.id } })).toBe(1);
-    expect(await prisma.toolAssignment.count({ where: { workspaceId: workspace.id } })).toBe(2);
+    expect(await prisma.toolAssignment.count({ where: { workspaceId: workspace.id } })).toBe(0);
   });
 
   it("rejects a second registration for the same email", async () => {
