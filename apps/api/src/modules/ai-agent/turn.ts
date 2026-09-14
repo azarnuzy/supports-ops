@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { runAiAgentTurn, type AiAgentTurnRuntime, type EscalationReason } from "@repo/ai-agent";
-import { createOpenAiEmbeddingClient, searchChunks, searchTicketChunks } from "@repo/knowledge";
 import { aiAgentConfig, embeddingConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
@@ -101,18 +100,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
       },
       resolve: () => resolveByAi(ticketId, workspaceId),
       retrieve: async () => {
-        if (!ticket || !embeddingConfig.apiKey) throw new Error("AI Agent runtime is not ready.");
-        const [embedding] = await createOpenAiEmbeddingClient({
-          ...embeddingConfig,
-          apiKey: embeddingConfig.apiKey,
-        }).embed([customerMessage]);
-        const sources = embedding
-          ? await searchChunks(unscopedPrisma, {
-              embedding,
-              retrievalMode: "CUSTOMER",
-              workspaceId,
-            })
-          : [];
+        if (!ticket) throw new Error("AI Agent runtime is not ready.");
         const attachments = await unscopedPrisma.attachment.findMany({
           select: { extractedText: true, id: true },
           where: {
@@ -122,52 +110,12 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
             ticketId,
           },
         });
-        const ticketContext = embedding
-          ? await searchTicketChunks(unscopedPrisma, {
-              channelType: ticket.channel.type,
-              customerIdentityId: ticket.customerIdentity.id,
-              embedding,
-              excludeTicketId: ticketId,
-              workspaceId,
-            })
-          : [];
-        await unscopedPrisma.aiActivity.create({
-          data: {
-            eventType: "KNOWLEDGE_RETRIEVED",
-            id: randomUUID(),
-            metadata: {
-              chunkIds: sources.map((source) => source.chunkId),
-              knowledgeSourceIds: sources.map((source) => source.knowledgeSourceId),
-            },
-            ticketId,
-            workspaceId,
-          },
-        });
-        if (ticketContext.length) {
-          await unscopedPrisma.aiActivity.create({
-            data: {
-              eventType: "TICKET_KNOWLEDGE_RETRIEVED",
-              id: randomUUID(),
-              metadata: {
-                chunkIds: ticketContext.map((chunk) => chunk.chunkId),
-                ticketIds: ticketContext.map((chunk) => chunk.ticketId),
-              },
-              ticketId,
-              workspaceId,
-            },
-          });
-        }
         return {
           attachments: attachments.flatMap((attachment) =>
             attachment.extractedText
               ? [{ content: attachment.extractedText, id: `attachment:${attachment.id}` }]
               : [],
           ),
-          sources: sources.map((source) => ({ content: source.content, id: source.chunkId })),
-          ticketContext: ticketContext.map((chunk) => ({
-            content: chunk.content,
-            id: chunk.chunkId,
-          })),
         };
       },
       start: async () => {

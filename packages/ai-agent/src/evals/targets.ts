@@ -30,7 +30,6 @@ export type ReplyEvalInput = {
   clarificationCount?: number;
   customerMessage: string;
   sources: Array<{ id: string; content: string }>;
-  ticketContext?: Array<{ id: string; content: string }>;
   tools?: ReplyEvalTool[];
 };
 
@@ -55,12 +54,11 @@ function stubTools(tools: ReplyEvalTool[] | undefined) {
 export function createReplyTarget(model: ReplyModel): EvalTarget<ReplyEvalInput, ReplyDecision> {
   return (input) =>
     streamReply({
+      attachments: input.sources,
       clarificationCount: input.clarificationCount ?? 0,
       customerMessage: input.customerMessage,
       model,
       onDelta: () => {},
-      sources: input.sources,
-      ticketContext: input.ticketContext,
       tools: stubTools(input.tools),
     });
 }

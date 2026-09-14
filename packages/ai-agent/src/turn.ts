@@ -25,7 +25,7 @@ export type AiAgentTurnRuntime = {
   publishDelta(delta: string, provisionalId: string): Promise<void> | void;
   reply(decision: "CLARIFY" | "REPLY", content: string, provisionalId: string): Promise<void>;
   resolve(): Promise<void>;
-  retrieve(): Promise<{ attachments: Source[]; sources: Source[]; ticketContext: Source[] }>;
+  retrieve(): Promise<{ attachments: Source[] }>;
   start(): Promise<void>;
   tools(): Promise<{ descriptors: AssignedToolDescriptor[]; execute: AssignedToolExecutor }>;
 };
@@ -61,35 +61,18 @@ export async function runAiAgentTurn(params: {
       const provisionalId = randomUUID();
       await params.runtime.start();
       try {
-        const { attachments, sources, ticketContext } = await withSpan(
+        const { attachments } = await withSpan(
           "ai_agent.retrieve_knowledge",
           {},
           async (retrieval) => {
             const result = await params.runtime.retrieve();
-            retrieval.setAttributes({
-              "ai_agent.attachments": result.attachments.length,
-              "ai_agent.knowledge_chunks": result.sources.length,
-              "ai_agent.ticket_knowledge_chunks": result.ticketContext.length,
-            });
+            retrieval.setAttribute("ai_agent.attachments", result.attachments.length);
             return result;
           },
         );
         const clarificationCount = await params.runtime.countClarifications();
         const assignedTools = await params.runtime.tools();
         run.setAttribute("ai_agent.assigned_tools", assignedTools.descriptors.length);
-        if (
-          !sources.length &&
-          !attachments.length &&
-          !assignedTools.descriptors.length &&
-          !looksLikeResolutionSignal(params.customerMessage)
-        ) {
-          run.setAttributes({
-            "ai_agent.decision": "ESCALATE",
-            "ai_agent.escalation_reason": "NO_RELEVANT_KNOWLEDGE",
-          });
-          await params.runtime.escalate("NO_RELEVANT_KNOWLEDGE");
-          return;
-        }
 
         const model = createReplyModel(params.modelConfig);
         const tools = createAssignedTools(assignedTools.descriptors, assignedTools.execute);
@@ -98,6 +81,7 @@ export async function runAiAgentTurn(params: {
         for (let attempt = 0; attempt < 2; attempt += 1) {
           try {
             decision = await streamReply({
+              attachments,
               clarificationCount,
               customerMessage: params.customerMessage,
               instructions: ticket.instructions,
@@ -108,8 +92,6 @@ export async function runAiAgentTurn(params: {
                 }
               },
               sessionId: ticket.sessionId,
-              sources: [...sources, ...attachments],
-              ticketContext,
               tools,
             });
             break;
@@ -152,11 +134,5 @@ export async function runAiAgentTurn(params: {
         await params.runtime.finish();
       }
     },
-  );
-}
-
-function looksLikeResolutionSignal(content: string) {
-  return /\b(?:thanks?|thank you|solved|resolved|fixed|working|works now|got it|all good|that('?s| is) (?:it|all)|makasih|terima kasih|sudah (?:selesai|beres|bisa|oke?)|beres|selesai|berhasil)\b/i.test(
-    content,
   );
 }

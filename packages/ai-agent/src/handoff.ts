@@ -70,7 +70,9 @@ export async function generateSuggestedReply(params: {
   const agent = createAgent({
     id: "suggested-reply",
     instructions: suggestedReplyPrompt({
-      languageInstruction: languageInstruction(params.currentConversation || params.customerMessage),
+      languageInstruction: languageInstruction(
+        params.currentConversation || params.customerMessage,
+      ),
       customerSafeSources: params.customerSafeSources,
       internalOnlySources: params.internalOnlySources,
       businessData: params.businessData,

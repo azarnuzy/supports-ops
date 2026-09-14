@@ -47,27 +47,24 @@ export function createReplyModel(options: {
 export function streamReply(params: {
   model: ReplyModel;
   customerMessage: string;
-  sources: Array<{ id: string; content: string }>;
-  ticketContext?: Array<{ id: string; content: string }>;
+  attachments: Array<{ id: string; content: string }>;
   clarificationCount: number;
   onDelta(delta: string): Promise<void> | void;
   instructions?: string;
   sessionId?: string;
   tools?: AgentTools;
 }): Promise<ReplyDecision> {
-  const sources = params.sources.length
-    ? params.sources.map((source) => `[${source.id}] ${source.content}`).join("\n\n")
-    : "No published Customer-Safe Knowledge Source was retrieved.";
-  const ticketContext = params.ticketContext?.length
-    ? params.ticketContext.map((entry) => `[${entry.id}] ${entry.content}`).join("\n\n")
-    : undefined;
+  const attachments = params.attachments.length
+    ? params.attachments
+        .map((attachment) => `[${attachment.id}] ${attachment.content}`)
+        .join("\n\n")
+    : "No Attachments were provided for this Ticket.";
   const agent = createAgent({
     id: "customer-reply",
     instructions: replyPrompt({
       instructions: params.instructions,
       clarificationCount: params.clarificationCount,
-      sources,
-      ticketContext,
+      attachments,
     }),
     maxTurns: params.tools?.length ? 5 : 1,
     model: params.model,
