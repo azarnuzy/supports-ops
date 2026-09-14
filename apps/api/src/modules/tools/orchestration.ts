@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createOpenAiEmbeddingClient } from "@repo/knowledge";
+import { embeddingConfig } from "../../config";
 import { executeMcpTool } from "../mcp/services";
 import { unscopedPrisma } from "../../utils/prisma";
 import { executeHttpTool } from "./execution";
@@ -46,9 +48,18 @@ async function dispatchTool(params: {
     throw new Error("Mutating Tool requires an explicit Customer request in the current message.");
   }
   if (tool.origin === "BUILT_IN") {
+    const query = (params.input as { query?: unknown } | null)?.query;
+    if (typeof query !== "string" || !query.trim()) {
+      throw new Error("This Tool requires a non-empty query.");
+    }
+    if (!embeddingConfig.apiKey) throw new Error("Embedding client is not configured.");
+    const [embedding] = await createOpenAiEmbeddingClient({
+      ...embeddingConfig,
+      apiKey: embeddingConfig.apiKey,
+    }).embed([query]);
     const result = await executeBuiltInTool({
       aiAgentId: params.aiAgentId,
-      embedding: [],
+      embedding: embedding ?? [],
       ticketId: params.ticketId,
       toolName: tool.name as "searchKnowledge" | "searchCustomerTicketHistory",
     });
