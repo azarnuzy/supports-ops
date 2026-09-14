@@ -174,9 +174,7 @@ export function parseWhatsAppWebhook(payload: unknown): WhatsAppInboundEvent[] {
         const mimeType = string(media?.mime_type);
         if (!id || !mimeType) continue;
         const text =
-          messageType === "audio" || messageType === "sticker"
-            ? undefined
-            : string(media?.caption);
+          messageType === "audio" || messageType === "sticker" ? undefined : string(media?.caption);
         events.push({
           kind: "message",
           messageId,
