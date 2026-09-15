@@ -10,21 +10,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@repo/ui/components/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@repo/ui/components/empty";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "@repo/ui/components/sonner";
 import { CopyIcon, RefreshCwIcon, UserPlusIcon, UsersRoundIcon } from "lucide-react";
 import { PlatformAppShell } from "../../../app-shell";
 import { getInitials } from "../../../../lib/utils";
 import { SettingsHeader } from "../../components/settings-header";
+import ResourceListState from "../../components/resource-list-state";
 import { useHumanAgentsForm } from "./agents.hooks";
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -162,37 +155,17 @@ const UsersView = () => {
               </CardAction>
             </CardHeader>
             <CardContent>
-              {users.isPending ? (
-                <div className="grid gap-3">
-                  {["a", "b", "c"].map((key) => (
-                    <Skeleton key={key} className="h-16 w-full rounded-lg" />
-                  ))}
-                </div>
-              ) : null}
-
-              {users.isError ? (
-                <div className="grid place-items-center gap-3 rounded-lg border border-dashed p-10 text-center">
-                  <p className="text-sm text-destructive">Unable to load Human Agents.</p>
-                  <Button size="sm" variant="outline" onClick={() => void users.refetch()}>
-                    Try again
-                  </Button>
-                </div>
-              ) : null}
-
-              {isEmpty ? (
-                <Empty className="border p-10">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <UsersRoundIcon />
-                    </EmptyMedia>
-                    <EmptyTitle className="text-base">No Human Agents yet</EmptyTitle>
-                    <EmptyDescription>
-                      Until someone is added, every Ticket stays with the AI Agent. Create the first
-                      account with the form on the left.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              ) : null}
+              <ResourceListState
+                isPending={users.isPending}
+                skeletonCount={3}
+                isError={users.isError}
+                errorLabel="Unable to load Human Agents."
+                onRetry={() => void users.refetch()}
+                isEmpty={isEmpty}
+                emptyIcon={<UsersRoundIcon className="size-5 text-muted-foreground" />}
+                emptyTitle="No Human Agents yet"
+                emptyDescription="Until someone is added, every Ticket stays with the AI Agent. Create the first account with the form on the left."
+              />
 
               {humanAgents.length > 0 ? (
                 <ul className="grid gap-2">

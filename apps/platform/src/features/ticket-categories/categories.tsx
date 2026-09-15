@@ -10,7 +10,6 @@ import {
 } from "@repo/ui/components/dialog";
 import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "@repo/ui/components/sonner";
 import { Textarea } from "@repo/ui/components/textarea";
 import type { TicketCategoryOption } from "@repo/api-client";
@@ -18,6 +17,7 @@ import { PlusIcon, TagsIcon, Trash2Icon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { PlatformAppShell } from "../app-shell";
 import { SettingsHeader } from "../settings/components/settings-header";
+import ResourceListState from "../settings/components/resource-list-state";
 import {
   useCreateCategoryMutation,
   useDeleteCategoryMutation,
@@ -93,29 +93,16 @@ const TicketCategoriesView = () => {
         />
 
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          {categories.isPending ? (
-            <div className="grid gap-3 p-5">
-              {["a", "b", "c"].map((key) => (
-                <Skeleton key={key} className="h-14 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : null}
-          {categories.isError ? (
-            <div className="grid place-items-center gap-3 p-12 text-center">
-              <p className="text-sm text-destructive">Unable to load categories.</p>
-              <Button variant="outline" onClick={() => void categories.refetch()}>
-                Retry
-              </Button>
-            </div>
-          ) : null}
-          {!categories.isPending && !categories.isError && items.length === 0 ? (
-            <div className="grid place-items-center gap-3 p-12 text-center">
-              <div className="grid size-10 place-items-center rounded-lg bg-muted">
-                <TagsIcon className="size-5 text-muted-foreground" />
-              </div>
-              <p className="text-base font-medium">No categories yet</p>
-            </div>
-          ) : null}
+          <ResourceListState
+            isPending={categories.isPending}
+            isError={categories.isError}
+            errorLabel="Unable to load categories."
+            onRetry={() => void categories.refetch()}
+            isEmpty={!categories.isPending && !categories.isError && items.length === 0}
+            emptyIcon={<TagsIcon className="size-5 text-muted-foreground" />}
+            emptyTitle="No categories yet"
+            emptyDescription="Add the first category to start sorting conversations automatically."
+          />
           {items.map((category) => (
             <div
               key={category.id}
