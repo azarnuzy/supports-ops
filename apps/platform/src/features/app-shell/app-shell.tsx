@@ -143,8 +143,10 @@ export function PlatformAppShell({
             label: "Configure",
           },
           {
-            items: [{ icon: MessageSquareCodeIcon, label: "Channels", to: "/widget" }],
-            label: "Deploy",
+            items: [
+              { icon: MessageSquareCodeIcon, label: "Web Widget", to: "/channels/web-widget" },
+            ],
+            label: "Channels",
           },
           {
             items: [

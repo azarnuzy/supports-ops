@@ -2,11 +2,10 @@ import { Button } from "@repo/ui/components/button";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsHeader } from "../../components/settings-header";
-import { useWidgetSettingsForm } from "./widget.hooks";
-import { ConfigForm, InstallationCard, PreviewCard } from "./components";
-import WhatsAppConfig from "./components/whatsapp-config";
+import { useWidgetSettingsForm } from "../widget/widget.hooks";
+import { ConfigForm, InstallationCard, PreviewCard } from "../widget/components";
 
-const WebWidgetView = () => {
+const WebWidgetChannelView = () => {
   const form = useWidgetSettingsForm();
   const {
     allowedDomains,
@@ -23,8 +22,8 @@ const WebWidgetView = () => {
     <PlatformAppShell>
       <section className="grid gap-6">
         <SettingsHeader
-          title="Channels"
-          description="Configure the Web Widget and connect the channels Customers use to reach you."
+          title="Web Widget"
+          description="Configure the Web Widget Customers use to reach you from your site."
         />
 
         {config.isPending ? (
@@ -63,11 +62,9 @@ const WebWidgetView = () => {
             />
           </>
         ) : null}
-
-        <WhatsAppConfig />
       </section>
     </PlatformAppShell>
   );
 };
 
-export default WebWidgetView;
+export default WebWidgetChannelView;
