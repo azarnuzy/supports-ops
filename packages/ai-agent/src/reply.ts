@@ -1,4 +1,4 @@
-import type { CompletionModel } from "@anvia/core";
+import type { CompletionModel, Message } from "@anvia/core";
 import { OpenAIClient } from "@anvia/openai";
 import { z } from "zod";
 
@@ -51,8 +51,11 @@ export function streamReply(params: {
   clarificationCount: number;
   onDelta(delta: string): Promise<void> | void;
   instructions?: string;
+  messages?: Message[];
+  onMessages?(messages: Message[]): Promise<void> | void;
   sessionId?: string;
   tools?: AgentTools;
+  userId?: string;
 }): Promise<ReplyDecision> {
   const attachments = params.attachments.length
     ? params.attachments
@@ -71,16 +74,27 @@ export function streamReply(params: {
     outputSchema: replyOutputSchema,
     sessionId: params.sessionId,
     tools: params.tools,
+    userId: params.userId,
   });
 
   return (async () => {
     try {
-      const stream = agent.stream({ prompt: params.customerMessage });
+      const stream = agent.stream(
+        params.messages?.length
+          ? {
+              messages: [
+                ...params.messages,
+                { content: params.customerMessage, role: "user" as const },
+              ],
+            }
+          : { prompt: params.customerMessage },
+      );
       for await (const event of stream.events) {
         if (event.type === "text_delta") await params.onDelta(event.delta);
       }
       const result = await stream.result;
       if (result.type !== "response") throw new Error(`AI Agent returned ${result.type}.`);
+      await params.onMessages?.(result.messages);
       return result.output;
     } catch (error) {
       throw new ReplyGenerationFailedError({ cause: error });

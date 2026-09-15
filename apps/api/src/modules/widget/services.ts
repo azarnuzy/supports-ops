@@ -191,6 +191,7 @@ export async function createCustomerMessage(
     history: await sessionHistory(session.id),
     model,
     sessionId: session.id,
+    userId: session.customerIdentityId,
   });
 
   if (!decision.qualifies) {

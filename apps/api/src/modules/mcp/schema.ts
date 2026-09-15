@@ -21,7 +21,7 @@ export const updateMcpServerSchema = createMcpServerSchema.partial().extend({
 
 export const reviewMcpToolSchema = z.object({
   enabled: z.boolean(),
-  risk: z.enum(["READ_ONLY", "MUTATING"]),
+  risk: z.enum(["READ_ONLY", "MUTATING", "MUTATING_IRREVERSIBLE"]),
 });
 
 export const executeMcpToolSchema = z.object({

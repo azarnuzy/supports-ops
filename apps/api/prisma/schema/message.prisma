@@ -3,16 +3,17 @@
  * memory scope and the foreign key to our Session — one identifier, one
  * conversation. See ADR-0017. */
 model Conversation {
-  id          String    @id
-  scopeKey    String    @unique
-  sessionId   String    @unique
-  userId      String
-  metadata    Json
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  workspaceId String
-  session     Session   @relation(fields: [sessionId], references: [id])
-  messages    Message[]
+  id            String    @id
+  scopeKey      String    @unique
+  sessionId     String    @unique
+  userId        String
+  metadata      Json
+  agentMessages Json      @default("[]")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workspaceId   String
+  session       Session   @relation(fields: [sessionId], references: [id])
+  messages      Message[]
 }
 
 model Message {

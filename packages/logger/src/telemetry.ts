@@ -1,4 +1,6 @@
 import {
+  context,
+  propagation,
   SpanStatusCode,
   trace,
   type Attributes,
@@ -55,6 +57,11 @@ class AgentScopeSpanProcessor implements SpanProcessor {
   constructor(private readonly inner: SpanProcessor) {}
 
   onStart(span: SdkSpan, parentContext: Context) {
+    for (const [key, entry] of propagation.getBaggage(parentContext)?.getAllEntries() ?? []) {
+      if (key.startsWith("anvia.trace.") || key.startsWith("langfuse.")) {
+        span.setAttribute(key, entry.value);
+      }
+    }
     this.inner.onStart(span, parentContext);
   }
 
@@ -74,15 +81,21 @@ class AgentScopeSpanProcessor implements SpanProcessor {
 }
 
 /**
- * One Ticket is one conversation, spanning the AI Agent's runs and the Human
- * Agent's replies. Both backends group traces by session but read a different
- * attribute — Lens `anvia.trace.session_id`, Langfuse `langfuse.session.id` —
- * so a trace that should appear in both carries both.
+ * One Session is one Customer conversation, spanning the AI Agent's runs and
+ * the Human Agent's replies. Both backends group traces by session but read a
+ * different attribute — Lens `anvia.trace.session_id`, Langfuse
+ * `langfuse.session.id` — so a trace that should appear in both carries both.
  */
-export function sessionAttributes(sessionId: string): Attributes {
+export function sessionAttributes(sessionId: string, userId?: string): Attributes {
   return {
     "anvia.trace.session_id": sessionId,
     "langfuse.session.id": sessionId,
+    ...(userId
+      ? {
+          "anvia.trace.user_id": userId,
+          "langfuse.user.id": userId,
+        }
+      : {}),
   };
 }
 
@@ -135,7 +148,20 @@ export async function withSpan<T>(
   attributes: Attributes,
   fn: (span: Span) => Promise<T>,
 ): Promise<T> {
-  return tracer.startActiveSpan(name, { attributes }, async (span) => {
+  const baggageEntries = Object.fromEntries(
+    propagation.getBaggage(context.active())?.getAllEntries() ?? [],
+  );
+  for (const [key, value] of Object.entries(attributes)) {
+    if (
+      (key.startsWith("anvia.trace.") || key.startsWith("langfuse.")) &&
+      typeof value === "string"
+    ) {
+      baggageEntries[key] = { value };
+    }
+  }
+  const baggage = propagation.createBaggage(baggageEntries);
+  const parentContext = propagation.setBaggage(context.active(), baggage);
+  return tracer.startActiveSpan(name, { attributes }, parentContext, async (span) => {
     try {
       return await fn(span);
     } catch (error) {

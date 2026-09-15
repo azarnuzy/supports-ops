@@ -49,6 +49,7 @@ function ReviewToolForm({
             <SelectContent>
               <SelectItem value="READ_ONLY">Read-only</SelectItem>
               <SelectItem value="MUTATING">Mutating</SelectItem>
+              <SelectItem value="MUTATING_IRREVERSIBLE">Mutating (irreversible)</SelectItem>
             </SelectContent>
           </Select>
         </Field>

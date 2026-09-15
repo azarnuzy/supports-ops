@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { classifyExplicitMutationRequest, type ReplyModel } from "@repo/ai-agent";
 import { createOpenAiEmbeddingClient } from "@repo/knowledge";
 import { embeddingConfig } from "../../config";
 import { executeMcpTool } from "../mcp/services";
@@ -33,19 +34,45 @@ async function recordToolActivity(params: {
   });
 }
 
-/** Dispatches an assigned Tool call to its origin-specific executor. Mutating
- * Tools are denied unless the current Customer Message explicitly requested one;
- * a denial surfaces as a Tool Result, never a crash. */
+/** Dispatches an assigned Tool call to its origin-specific executor. A
+ * MUTATING or MUTATING_IRREVERSIBLE Tool is denied unless
+ * {@link classifyExplicitMutationRequest} confirms the Customer actually
+ * authorized it this turn; a denial surfaces as a Tool Result, never a crash.
+ * `model`/`customerMessage`/`getPriorAiMessage` are only required for those
+ * two risk tiers — a READ_ONLY-only caller (e.g. `executeReadOnlyAssignedTools`)
+ * can omit them, and omitting them denies by default if a risky Tool slips
+ * through anyway. */
 async function dispatchTool(params: {
   aiAgentId: string;
-  explicitCustomerRequest: boolean;
+  customerMessage?: string;
+  getPriorAiMessage?: () => Promise<string | null>;
   input: unknown;
+  model?: ReplyModel;
   ticketId: string;
   tool: AssignedTool;
 }): Promise<string> {
   const { tool } = params;
-  if (tool.risk === "MUTATING" && !params.explicitCustomerRequest) {
-    throw new Error("Mutating Tool requires an explicit Customer request in the current message.");
+  if (tool.risk !== "READ_ONLY") {
+    const requireConfirmation = tool.risk === "MUTATING_IRREVERSIBLE";
+    if (!params.model || params.customerMessage === undefined) {
+      throw new Error("Mutating Tool requires an explicit Customer request in the current message.");
+    }
+    const priorAiMessage = (await params.getPriorAiMessage?.()) ?? null;
+    const explicit = await classifyExplicitMutationRequest({
+      customerMessage: params.customerMessage,
+      model: params.model,
+      priorAiMessage,
+      requireConfirmation,
+      toolDescription: tool.description,
+      toolName: tool.name,
+    });
+    if (!explicit) {
+      throw new Error(
+        requireConfirmation
+          ? "This Tool is irreversible: propose the exact action to the Customer first and wait for their explicit confirmation in a later message before calling it."
+          : "Mutating Tool requires an explicit Customer request in the current message.",
+      );
+    }
   }
   if (tool.origin === "BUILT_IN") {
     const query = (params.input as { query?: unknown } | null)?.query;
@@ -67,7 +94,7 @@ async function dispatchTool(params: {
   }
   if (tool.origin === "HTTP") {
     return executeHttpTool({
-      explicitCustomerRequest: params.explicitCustomerRequest,
+      explicitCustomerRequest: tool.risk === "READ_ONLY" ? undefined : true,
       input: params.input,
       ticketId: params.ticketId,
       toolId: tool.id,
@@ -99,7 +126,6 @@ export async function executeReadOnlyAssignedTools(params: {
       try {
         const result = await dispatchTool({
           aiAgentId: params.aiAgentId,
-          explicitCustomerRequest: false,
           input: params.input,
           ticketId: params.ticketId,
           tool,
@@ -141,15 +167,16 @@ export function describeAssignedTools(tools: readonly AssignedTool[]) {
   }));
 }
 
-/**
- * ponytail: no Customer-intent detector exists yet to prove a Customer Message
- * explicitly requested a mutation, so every model-directed call passes
- * explicitCustomerRequest: false — safe today because every shipped demo Tool
- * is READ_ONLY. Wire a real intent signal (e.g. from classification) before
- * assigning a MUTATING Tool to an AI Agent for real.
- */
+/** Builds the executor Anvia calls for every model-directed Tool call in this
+ * turn. `customerMessage` and `model` let a MUTATING/MUTATING_IRREVERSIBLE
+ * Tool call be judged by {@link classifyExplicitMutationRequest} instead of
+ * being denied outright. The prior AI Agent message lets a short confirmation
+ * such as "yes please" authorize the exact action just proposed. */
 export function createAssignedToolExecutor(params: {
   aiAgentId: string;
+  customerMessage: string;
+  getPriorAiMessage: () => Promise<string | null>;
+  model: ReplyModel;
   ticketId: string;
   tools: readonly AssignedTool[];
   workspaceId: string;
@@ -161,8 +188,10 @@ export function createAssignedToolExecutor(params: {
     try {
       const result = await dispatchTool({
         aiAgentId: params.aiAgentId,
-        explicitCustomerRequest: false,
+        customerMessage: params.customerMessage,
+        getPriorAiMessage: params.getPriorAiMessage,
         input,
+        model: params.model,
         ticketId: params.ticketId,
         tool,
       });

@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReplyDecision } from "./reply";
 import type { AiAgentTurnRuntime } from "./turn";
 
 const { createReplyModelMock, streamReplyMock } = vi.hoisted(() => ({
   createReplyModelMock: vi.fn(() => ({ id: "fake-model" })),
-  streamReplyMock: vi.fn<() => Promise<ReplyDecision>>(),
+  streamReplyMock: vi.fn<typeof import("./reply").streamReply>(),
 }));
 
 vi.mock("./reply", async (importOriginal) => {
@@ -20,11 +19,13 @@ function baseRuntime(overrides: Partial<AiAgentTurnRuntime> = {}): AiAgentTurnRu
     escalate: vi.fn(async () => undefined),
     finish: vi.fn(async () => undefined),
     isActive: vi.fn(() => true),
-    loadTicket: vi.fn(async () => ({ sessionId: "session-1" })),
+    loadMemory: vi.fn(async () => []),
+    loadTicket: vi.fn(async () => ({ sessionId: "session-1", userId: "customer-1" })),
     publishDelta: vi.fn(),
     reply: vi.fn(async () => undefined),
     resolve: vi.fn(async () => undefined),
     retrieve: vi.fn(async () => ({ attachments: [] })),
+    saveMemory: vi.fn(async () => undefined),
     start: vi.fn(async () => undefined),
     tools: vi.fn(async () => ({ descriptors: [], execute: vi.fn() })),
     ...overrides,
@@ -57,6 +58,52 @@ describe("runAiAgentTurn", () => {
     expect(runtime.escalate).toHaveBeenCalledWith("NO_RELEVANT_KNOWLEDGE");
     expect(runtime.reply).not.toHaveBeenCalled();
     expect(runtime.finish).toHaveBeenCalledOnce();
+  });
+
+  it("reuses the Session's structured history, including Tool Results", async () => {
+    const messages = [
+      { content: "Add it", role: "user" as const },
+      {
+        content: [
+          {
+            input: { quantity: 1 },
+            toolCallId: "call-1",
+            toolName: "create_cart",
+            type: "tool-call" as const,
+          },
+        ],
+        role: "assistant" as const,
+      },
+      {
+        content: [
+          {
+            output: { type: "text" as const, value: '{"cartId":"cart-1"}' },
+            toolCallId: "call-1",
+            toolName: "create_cart",
+            type: "tool-result" as const,
+          },
+        ],
+        role: "tool" as const,
+      },
+    ];
+    const runtime = baseRuntime({ loadMemory: vi.fn(async () => messages) });
+    streamReplyMock.mockImplementation(async (params) => {
+      await params.onMessages?.(messages);
+      return { content: "One item.", decision: "REPLY", escalationReason: null };
+    });
+
+    await runAiAgentTurn({
+      customerMessage: "What's currently in my cart?",
+      modelConfig: { apiKey: "test", modelId: "test" },
+      runtime,
+      ticketId: "ticket-1",
+      workspaceId: "workspace-1",
+    });
+
+    expect(streamReplyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ messages, userId: "customer-1" }),
+    );
+    expect(runtime.saveMemory).toHaveBeenCalledWith(messages);
   });
 
   it("escalates with the model's own reason when it decides ESCALATE", async () => {

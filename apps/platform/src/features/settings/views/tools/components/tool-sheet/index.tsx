@@ -30,6 +30,12 @@ const methods: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
 const originLabel = { BUILT_IN: "System", HTTP: "Webhook", MCP: "MCP" } as const;
 
+const riskLabel: Record<ToolRisk, string> = {
+  MUTATING: "Requires approval",
+  MUTATING_IRREVERSIBLE: "Requires confirmation",
+  READ_ONLY: "Read only",
+};
+
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
   timeStyle: "short",
@@ -177,8 +183,8 @@ export default function ToolSheet({
           <Badge variant={tool.assigned ? "default" : "outline"}>
             {tool.assigned ? "On for this agent" : "Off"}
           </Badge>
-          <Badge variant={tool.risk === "MUTATING" ? "secondary" : "outline"}>
-            {tool.risk === "MUTATING" ? "Requires approval" : "Read only"}
+          <Badge variant={tool.risk === "READ_ONLY" ? "outline" : "secondary"}>
+            {riskLabel[tool.risk]}
           </Badge>
           {tool.availability === "AVAILABLE" ? null : (
             <Badge variant="destructive">Disconnected</Badge>
@@ -432,12 +438,17 @@ export default function ToolSheet({
                             <SelectContent>
                               <SelectItem value="READ_ONLY">Read only</SelectItem>
                               <SelectItem value="MUTATING">Requires approval</SelectItem>
+                              <SelectItem value="MUTATING_IRREVERSIBLE">
+                                Requires confirmation
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <FieldDescription>
                             A read-only tool runs whenever the agent needs it. One that requires
                             approval only runs when the customer asks for that action in their own
-                            message.
+                            message. One that requires confirmation (payment, checkout, or similar
+                            irreversible actions) also needs the agent to have already proposed
+                            that exact action and the customer to confirm it in a later message.
                           </FieldDescription>
                         </Field>
                         <Field>

@@ -12,3 +12,5 @@ Checklist before deletion is processed:
 - Note the 30-day retention window to the Customer if they ask: data is recoverable during that period only, and only by contacting support again with the original request reference.
 
 Never process a deletion based solely on an AI Agent's Escalation Summary without an Admin's own review of the conversation.
+
+

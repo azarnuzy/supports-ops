@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { runAiAgentTurn, type AiAgentTurnRuntime, type EscalationReason } from "@repo/ai-agent";
+import type { Prisma } from "@prisma/client";
+import {
+  createReplyModel,
+  runAiAgentTurn,
+  type AgentMessage,
+  type AiAgentTurnRuntime,
+  type EscalationReason,
+} from "@repo/ai-agent";
 import { aiAgentConfig, embeddingConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
@@ -29,6 +36,10 @@ type TurnTicket = {
 export function generateAiReply(ticketId: string, workspaceId: string, customerMessage: string) {
   return withWorkspaceContext(workspaceId, () => {
     let ticket: TurnTicket | null = null;
+    const modelConfig =
+      aiAgentConfig.apiKey && embeddingConfig.apiKey
+        ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }
+        : undefined;
     const runtime: AiAgentTurnRuntime = {
       countClarifications: () =>
         unscopedPrisma.aiActivity.count({
@@ -54,6 +65,10 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         });
       },
       isActive: () => isTicketGenerating(ticketId),
+      loadMemory: async () => {
+        if (!ticket) throw new Error("AI Agent runtime is not ready.");
+        return loadAgentMemory(ticketId, ticket.sessionId);
+      },
       loadTicket: async () => {
         const loaded = await unscopedPrisma.ticket.findUnique({
           select: {
@@ -71,6 +86,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         return {
           instructions: loaded.aiAgent.instructions ?? undefined,
           sessionId: loaded.sessionId,
+          userId: loaded.customerIdentity.id,
         };
       },
       publishDelta: (delta, provisionalId) =>
@@ -118,6 +134,15 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
           ),
         };
       },
+      saveMemory: async (messages) => {
+        if (!ticket) throw new Error("AI Agent runtime is not ready.");
+        await unscopedPrisma.conversation.update({
+          data: {
+            agentMessages: sanitizeAgentMemory(messages) as unknown as Prisma.InputJsonValue,
+          },
+          where: { sessionId: ticket.sessionId },
+        });
+      },
       start: async () => {
         setTicketGenerating(ticketId, true);
         await publishWidgetEvent(ticketId, {
@@ -127,11 +152,15 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
       },
       tools: async () => {
         if (!ticket) throw new Error("AI Agent runtime is not ready.");
+        if (!modelConfig) throw new Error("AI Agent runtime is not ready.");
         const assigned = await resolveTools(ticket.aiAgentId);
         return {
           descriptors: describeAssignedTools(assigned),
           execute: createAssignedToolExecutor({
             aiAgentId: ticket.aiAgentId,
+            customerMessage,
+            getPriorAiMessage: () => getPriorAiMessage(ticketId),
+            model: createReplyModel(modelConfig),
             ticketId,
             tools: assigned,
             workspaceId,
@@ -142,15 +171,58 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
 
     return runAiAgentTurn({
       customerMessage,
-      modelConfig:
-        aiAgentConfig.apiKey && embeddingConfig.apiKey
-          ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }
-          : undefined,
+      modelConfig,
       runtime,
       ticketId,
       workspaceId,
     });
   });
+}
+
+/** Tool calls and Tool Results are replayable state; private model reasoning is not. */
+function sanitizeAgentMemory(messages: AgentMessage[]): AgentMessage[] {
+  return messages.map((message) =>
+    message.role === "assistant" && Array.isArray(message.content)
+      ? { ...message, content: message.content.filter((part) => part.type !== "reasoning") }
+      : message,
+  );
+}
+
+/** Loads the model-facing history. Before the first AI run snapshot exists,
+ * rebuild the pre-Ticket exchange from the Customer-visible transcript and
+ * omit the trailing Customer messages that make up the current prompt. */
+async function loadAgentMemory(ticketId: string, sessionId: string): Promise<AgentMessage[]> {
+  const conversation = await unscopedPrisma.conversation.findUniqueOrThrow({
+    select: { agentMessages: true },
+    where: { sessionId },
+  });
+  if (Array.isArray(conversation.agentMessages) && conversation.agentMessages.length) {
+    return conversation.agentMessages as unknown as AgentMessage[];
+  }
+
+  const messages = await unscopedPrisma.message.findMany({
+    orderBy: { position: "asc" },
+    select: { content: true, senderType: true },
+    where: { deletedAt: null, ticketId },
+  });
+  while (messages.at(-1)?.senderType === "CUSTOMER") messages.pop();
+  return messages.flatMap(({ content, senderType }) => {
+    if (senderType === "CUSTOMER") return [{ content, role: "user" as const }];
+    if (senderType === "AI_AGENT") return [{ content, role: "assistant" as const }];
+    return [];
+  });
+}
+
+/** The Agent's own prior message in this Ticket — the proposal a
+ * MUTATING_IRREVERSIBLE Tool call must point back to before its Customer
+ * confirmation counts. Queried lazily: most turns never call such a Tool. */
+async function getPriorAiMessage(ticketId: string): Promise<string | null> {
+  const message = await unscopedPrisma.message.findFirst({
+    orderBy: { position: "desc" },
+    select: { content: true },
+    where: { senderType: "AI_AGENT", ticketId },
+  });
+  return message?.content ?? null;
 }
 
 async function appendAiMessage(ticketId: string, workspaceId: string, content: string) {

@@ -6,6 +6,10 @@ export {
   type TicketCategoryOption,
 } from "./classification";
 export { createReplyModel, ReplyGenerationFailedError, streamReply } from "./reply";
+export {
+  classifyExplicitMutationRequest,
+  MutationIntentClassificationFailedError,
+} from "./mutation-intent";
 export { createAssignedTools } from "./tools";
 export { runAiAgentTurn, type AiAgentTurnRuntime, type EscalationReason } from "./turn";
 export {
@@ -22,3 +26,4 @@ export type {
 } from "./classification";
 export type { ReplyDecision, ReplyModel } from "./reply";
 export type { AgentTools, AssignedToolDescriptor, AssignedToolExecutor } from "./tools";
+export type { Message as AgentMessage } from "@anvia/core";
