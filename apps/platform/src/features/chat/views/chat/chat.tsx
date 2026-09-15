@@ -572,7 +572,9 @@ const ChatView = ({
           ) : null}
           {!ticketId && !sessionId ? (
             <Empty className="m-auto border-0">
-              <EmptyTitle>{scope === "all" ? "Select a Conversation" : "Select a Ticket"}</EmptyTitle>
+              <EmptyTitle>
+                {scope === "all" ? "Select a Conversation" : "Select a Ticket"}
+              </EmptyTitle>
               <EmptyDescription>
                 {scope === "all"
                   ? "Choose a Conversation to view its transcript."
