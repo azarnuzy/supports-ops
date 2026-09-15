@@ -3,6 +3,7 @@ export { default as WebWidgetView } from "./views/widget/widget";
 export { default as WebWidgetChannelView } from "./views/web-widget/web-widget";
 export { default as AiAgentView } from "./views/ai/ai";
 export { default as ToolsView } from "./views/tools/tools";
+export { default as McpServersView } from "./views/mcp/mcp";
 export {
   useUpdateWebWidgetConfigMutation,
   webWidgetConfigQueryOptions,
