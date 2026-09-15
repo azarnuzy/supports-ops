@@ -8,7 +8,6 @@ import {
   SelectValue,
 } from "@repo/ui/components/select";
 import { toast } from "@repo/ui/components/sonner";
-import { cn } from "@repo/ui/lib/utils";
 import type { HttpToolTestResult } from "@repo/api-client";
 import { PlusIcon, SearchIcon, WrenchIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -16,7 +15,6 @@ import { PlatformAppShell } from "../../../app-shell";
 import { SettingsHeader } from "../../components/settings-header";
 import ResourceListState from "../../components/resource-list-state";
 import ResourcePagination from "../../components/resource-pagination";
-import { McpPanel } from "../mcp/mcp";
 import { SystemToolsCard, ToolRow, ToolSheet } from "./components";
 import {
   useAiAgentId,
@@ -33,13 +31,7 @@ import {
 import { getTool } from "./tools.services";
 import { emptyHttpToolForm, type HttpToolFormState } from "./tools.types";
 
-type Tab = "tools" | "mcp";
 type OriginFilter = "ALL" | "HTTP" | "MCP";
-
-const tabs: ReadonlyArray<{ id: Tab; label: string }> = [
-  { id: "tools", label: "Tools" },
-  { id: "mcp", label: "MCP" },
-];
 
 const PAGE_SIZE = 8;
 
@@ -54,7 +46,6 @@ const ToolsView = () => {
   const setUsage = useSetUsageInstructionMutation(aiAgentId);
   const testTool = useTestToolMutation();
 
-  const [tab, setTab] = useState<Tab>("tools");
   const [search, setSearch] = useState("");
   const [originFilter, setOriginFilter] = useState<OriginFilter>("ALL");
   const [page, setPage] = useState(1);
@@ -220,123 +211,93 @@ const ToolsView = () => {
     attach();
   }
 
-  const addButton =
-    tab === "tools" ? (
-      <Button onClick={openCreate}>
-        <PlusIcon className="size-4" />
-        Add tool
-      </Button>
-    ) : null;
-
   return (
     <PlatformAppShell>
       <section className="grid gap-6">
         <SettingsHeader
           title="Tools"
-          description="Give your agent a way to read from and act on your own systems. A tool only runs once you switch it on here."
-          action={addButton}
+          description="Give your agent a way to read from and act on your own systems. A tool only runs once you switch it on here. Connect MCP servers from the dedicated MCP Servers page."
+          action={
+            <Button onClick={openCreate}>
+              <PlusIcon className="size-4" />
+              Add tool
+            </Button>
+          }
         />
 
-        <div
-          role="tablist"
-          aria-label="Tool sources"
-          className="inline-flex w-max gap-1 rounded-lg border bg-muted/60 p-1"
-        >
-          {tabs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === item.id}
-              className={cn(
-                "rounded-md px-4 py-1.5 text-[13px] font-medium text-muted-foreground outline-none transition-colors",
-                "hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                tab === item.id && "bg-background text-foreground shadow-sm dark:bg-input/60",
-              )}
-              onClick={() => setTab(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        {tab === "mcp" ? (
-          <McpPanel />
-        ) : (
-          <div className="grid items-start gap-5 lg:grid-cols-[1fr_20rem]">
-            <div className="grid gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-[12rem] flex-1">
-                  <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    aria-label="Search tools"
-                    className="pl-9"
-                    placeholder="Search tools…"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                  />
-                </div>
-                <Select
-                  value={originFilter}
-                  onValueChange={(value) => setOriginFilter(value as OriginFilter)}
-                >
-                  <SelectTrigger aria-label="Filter by type" className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All types</SelectItem>
-                    <SelectItem value="HTTP">Webhook</SelectItem>
-                    <SelectItem value="MCP">MCP</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-                <ResourceListState
-                  isPending={tools.isPending}
-                  isError={tools.isError}
-                  errorLabel="Unable to load tools."
-                  onRetry={() => void tools.refetch()}
-                  isEmpty={items.length === 0}
-                  emptyIcon={<WrenchIcon className="size-5 text-muted-foreground" />}
-                  emptyTitle={configuredCount === 0 ? "No tools found" : "No matching tools"}
-                  emptyDescription={
-                    configuredCount === 0
-                      ? "This agent has no attached tools yet. Add a webhook to call your own API, or connect an MCP server to import its tools."
-                      : "Try a different search term or type filter."
-                  }
-                  emptyAction={
-                    configuredCount === 0 ? (
-                      <Button size="sm" onClick={openCreate}>
-                        <PlusIcon className="size-4" />
-                        Add tool
-                      </Button>
-                    ) : undefined
-                  }
+        <div className="grid items-start gap-5 lg:grid-cols-[1fr_20rem]">
+          <div className="grid gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[12rem] flex-1">
+                <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="Search tools"
+                  className="pl-9"
+                  placeholder="Search tools…"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
                 />
-                {!tools.isPending && !tools.isError && items.length > 0
-                  ? pageItems.map((tool) => (
-                      <ToolRow
-                        key={tool.id}
-                        tool={tool}
-                        isToggling={setAttached.isPending || toggleEnabled.isPending}
-                        onToggleAttached={(attached) =>
-                          handleToggleAttached(tool.id, tool.enabled, attached)
-                        }
-                        onOpenDetail={() =>
-                          tool.origin === "HTTP" ? void openEdit(tool.id) : openDetail(tool.id)
-                        }
-                        onDelete={tool.origin === "HTTP" ? () => handleDelete(tool.id) : undefined}
-                      />
-                    ))
-                  : null}
-                <ResourcePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
               </div>
+              <Select
+                value={originFilter}
+                onValueChange={(value) => setOriginFilter(value as OriginFilter)}
+              >
+                <SelectTrigger aria-label="Filter by type" className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All types</SelectItem>
+                  <SelectItem value="HTTP">Webhook</SelectItem>
+                  <SelectItem value="MCP">MCP</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <SystemToolsCard tools={allTools} />
+            <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+              <ResourceListState
+                isPending={tools.isPending}
+                isError={tools.isError}
+                errorLabel="Unable to load tools."
+                onRetry={() => void tools.refetch()}
+                isEmpty={items.length === 0}
+                emptyIcon={<WrenchIcon className="size-5 text-muted-foreground" />}
+                emptyTitle={configuredCount === 0 ? "No tools found" : "No matching tools"}
+                emptyDescription={
+                  configuredCount === 0
+                    ? "This agent has no attached tools yet. Add a webhook to call your own API, or connect an MCP server to import its tools."
+                    : "Try a different search term or type filter."
+                }
+                emptyAction={
+                  configuredCount === 0 ? (
+                    <Button size="sm" onClick={openCreate}>
+                      <PlusIcon className="size-4" />
+                      Add tool
+                    </Button>
+                  ) : undefined
+                }
+              />
+              {!tools.isPending && !tools.isError && items.length > 0
+                ? pageItems.map((tool) => (
+                    <ToolRow
+                      key={tool.id}
+                      tool={tool}
+                      isToggling={setAttached.isPending || toggleEnabled.isPending}
+                      onToggleAttached={(attached) =>
+                        handleToggleAttached(tool.id, tool.enabled, attached)
+                      }
+                      onOpenDetail={() =>
+                        tool.origin === "HTTP" ? void openEdit(tool.id) : openDetail(tool.id)
+                      }
+                      onDelete={tool.origin === "HTTP" ? () => handleDelete(tool.id) : undefined}
+                    />
+                  ))
+                : null}
+              <ResourcePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
+            </div>
           </div>
-        )}
+
+          <SystemToolsCard tools={allTools} />
+        </div>
       </section>
 
       <ToolSheet
