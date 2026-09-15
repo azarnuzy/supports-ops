@@ -1,10 +1,11 @@
 import { Button } from "@repo/ui/components/button";
-import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "@repo/ui/components/sonner";
 import type { McpTool, ToolRisk } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
 import { PlugIcon, PlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import ResourceListState from "../../components/resource-list-state";
+import ResourcePagination from "../../components/resource-pagination";
 import { ReviewToolDialog, ServerDialog, ServerRow, ServerSheet } from "./components";
 import {
   mcpServersQueryOptions,
@@ -17,6 +18,8 @@ import {
   useUpdateServerMutation,
 } from "./mcp.hooks";
 import { emptyMcpServerForm, type McpServerFormState } from "./mcp.types";
+
+const PAGE_SIZE = 8;
 
 export const McpPanel = () => {
   const servers = useQuery(mcpServersQueryOptions);
@@ -37,9 +40,13 @@ export const McpPanel = () => {
     Record<string, { message?: string; ok: boolean }>
   >({});
   const [reviewing, setReviewing] = useState<McpTool | null>(null);
+  const [page, setPage] = useState(1);
 
   const items = servers.data?.servers ?? [];
   const detailServer = items.find((server) => server.id === detailId) ?? null;
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageItems = items.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   function closeDialog() {
     setDialogOpen(false);
@@ -208,48 +215,38 @@ export const McpPanel = () => {
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        {servers.isPending ? (
-          <div className="grid gap-3 p-5">
-            {["a", "b", "c"].map((key) => (
-              <Skeleton key={key} className="h-16 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : null}
-        {servers.isError ? (
-          <div className="grid place-items-center gap-3 p-12 text-center">
-            <p className="text-sm text-destructive">Unable to load MCP servers.</p>
-            <Button variant="outline" onClick={() => void servers.refetch()}>
-              Retry
-            </Button>
-          </div>
-        ) : null}
-        {!servers.isPending && !servers.isError && items.length === 0 ? (
-          <div className="grid place-items-center gap-3 p-12 text-center">
-            <div className="grid size-10 place-items-center rounded-lg bg-muted">
-              <PlugIcon className="size-5 text-muted-foreground" />
-            </div>
-            <div className="grid gap-1">
-              <p className="text-base font-medium">No MCP servers found</p>
-              <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                This agent has no connected MCP servers yet.
-              </p>
-            </div>
-            <Button className="mt-1" size="sm" variant="outline" onClick={openCreate}>
+        <ResourceListState
+          isPending={servers.isPending}
+          skeletonCount={3}
+          isError={servers.isError}
+          errorLabel="Unable to load MCP servers."
+          onRetry={() => void servers.refetch()}
+          isEmpty={items.length === 0}
+          emptyIcon={<PlugIcon className="size-5 text-muted-foreground" />}
+          emptyTitle="No MCP servers found"
+          emptyDescription="This agent has no connected MCP servers yet."
+          emptyAction={
+            <Button size="sm" variant="outline" onClick={openCreate}>
               <PlusIcon className="size-4" />
               Add MCP Server
             </Button>
-          </div>
-        ) : null}
-        {items.map((server) => (
-          <ServerRow
-            key={server.id}
-            server={server}
-            activeToolCount={toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length}
-            onOpenDetail={() => setDetailId(server.id)}
-            onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
-            onDelete={() => handleDelete(server.id)}
-          />
-        ))}
+          }
+        />
+        {!servers.isPending && !servers.isError && items.length > 0
+          ? pageItems.map((server) => (
+              <ServerRow
+                key={server.id}
+                server={server}
+                activeToolCount={
+                  toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length
+                }
+                onOpenDetail={() => setDetailId(server.id)}
+                onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
+                onDelete={() => handleDelete(server.id)}
+              />
+            ))
+          : null}
+        <ResourcePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
       </div>
 
       <ServerSheet
