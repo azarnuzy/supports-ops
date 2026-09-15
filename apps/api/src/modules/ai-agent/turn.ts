@@ -354,7 +354,10 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
   await publishTicketQueueEvent(workspaceId);
 }
 
-function acknowledgementFor(customerMessage: string) {
+/** The Customer-visible message an escalation sends. Exported so the eval
+ * suite can report the same text a Customer would actually see when the
+ * Agent escalates, instead of an empty reply. */
+export function acknowledgementFor(customerMessage: string) {
   return /\b(?:saya|aku|mau|tolong|dengan|bicara|hubungkan|masalah|langganan|tagihan)\b/i.test(
     customerMessage,
   )
