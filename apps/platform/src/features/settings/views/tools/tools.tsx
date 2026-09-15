@@ -7,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/select";
-import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "@repo/ui/components/sonner";
 import { cn } from "@repo/ui/lib/utils";
 import type { HttpToolTestResult } from "@repo/api-client";
@@ -15,6 +14,8 @@ import { PlusIcon, SearchIcon, WrenchIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { SettingsHeader } from "../../components/settings-header";
+import ResourceListState from "../../components/resource-list-state";
+import ResourcePagination from "../../components/resource-pagination";
 import { McpPanel } from "../mcp/mcp";
 import { SystemToolsCard, ToolRow, ToolSheet } from "./components";
 import {
@@ -40,6 +41,8 @@ const tabs: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: "mcp", label: "MCP" },
 ];
 
+const PAGE_SIZE = 8;
+
 const ToolsView = () => {
   const aiAgentId = useAiAgentId();
   const tools = useToolsQuery(aiAgentId);
@@ -54,6 +57,7 @@ const ToolsView = () => {
   const [tab, setTab] = useState<Tab>("tools");
   const [search, setSearch] = useState("");
   const [originFilter, setOriginFilter] = useState<OriginFilter>("ALL");
+  const [page, setPage] = useState(1);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [hasBearerToken, setHasBearerToken] = useState(false);
@@ -75,6 +79,9 @@ const ToolsView = () => {
         tool.description.toLowerCase().includes(query)),
   );
   const configuredCount = allTools.filter((tool) => tool.origin !== "BUILT_IN").length;
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageItems = items.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   function closeSheet() {
     setSheetOpen(false);
@@ -285,58 +292,45 @@ const ToolsView = () => {
               </div>
 
               <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-                {tools.isPending ? (
-                  <div className="grid gap-3 p-5">
-                    {["a", "b", "c", "d"].map((key) => (
-                      <Skeleton key={key} className="h-14 w-full rounded-lg" />
-                    ))}
-                  </div>
-                ) : null}
-                {tools.isError ? (
-                  <div className="grid place-items-center gap-3 p-12 text-center">
-                    <p className="text-sm text-destructive">Unable to load tools.</p>
-                    <Button variant="outline" onClick={() => void tools.refetch()}>
-                      Retry
-                    </Button>
-                  </div>
-                ) : null}
-                {!tools.isPending && !tools.isError && items.length === 0 ? (
-                  <div className="grid place-items-center gap-3 p-12 text-center">
-                    <div className="grid size-10 place-items-center rounded-lg bg-muted">
-                      <WrenchIcon className="size-5 text-muted-foreground" />
-                    </div>
-                    <div className="grid gap-1">
-                      <p className="text-base font-medium">
-                        {configuredCount === 0 ? "No tools found" : "No matching tools"}
-                      </p>
-                      <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                        {configuredCount === 0
-                          ? "This agent has no attached tools yet. Add a webhook to call your own API, or connect an MCP server to import its tools."
-                          : "Try a different search term or type filter."}
-                      </p>
-                    </div>
-                    {configuredCount === 0 ? (
-                      <Button className="mt-1" size="sm" onClick={openCreate}>
+                <ResourceListState
+                  isPending={tools.isPending}
+                  isError={tools.isError}
+                  errorLabel="Unable to load tools."
+                  onRetry={() => void tools.refetch()}
+                  isEmpty={items.length === 0}
+                  emptyIcon={<WrenchIcon className="size-5 text-muted-foreground" />}
+                  emptyTitle={configuredCount === 0 ? "No tools found" : "No matching tools"}
+                  emptyDescription={
+                    configuredCount === 0
+                      ? "This agent has no attached tools yet. Add a webhook to call your own API, or connect an MCP server to import its tools."
+                      : "Try a different search term or type filter."
+                  }
+                  emptyAction={
+                    configuredCount === 0 ? (
+                      <Button size="sm" onClick={openCreate}>
                         <PlusIcon className="size-4" />
                         Add tool
                       </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {items.map((tool) => (
-                  <ToolRow
-                    key={tool.id}
-                    tool={tool}
-                    isToggling={setAttached.isPending || toggleEnabled.isPending}
-                    onToggleAttached={(attached) =>
-                      handleToggleAttached(tool.id, tool.enabled, attached)
-                    }
-                    onOpenDetail={() =>
-                      tool.origin === "HTTP" ? void openEdit(tool.id) : openDetail(tool.id)
-                    }
-                    onDelete={tool.origin === "HTTP" ? () => handleDelete(tool.id) : undefined}
-                  />
-                ))}
+                    ) : undefined
+                  }
+                />
+                {!tools.isPending && !tools.isError && items.length > 0
+                  ? pageItems.map((tool) => (
+                      <ToolRow
+                        key={tool.id}
+                        tool={tool}
+                        isToggling={setAttached.isPending || toggleEnabled.isPending}
+                        onToggleAttached={(attached) =>
+                          handleToggleAttached(tool.id, tool.enabled, attached)
+                        }
+                        onOpenDetail={() =>
+                          tool.origin === "HTTP" ? void openEdit(tool.id) : openDetail(tool.id)
+                        }
+                        onDelete={tool.origin === "HTTP" ? () => handleDelete(tool.id) : undefined}
+                      />
+                    ))
+                  : null}
+                <ResourcePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
               </div>
             </div>
 
