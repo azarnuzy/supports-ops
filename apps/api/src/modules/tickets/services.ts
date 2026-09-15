@@ -93,6 +93,32 @@ const ticketListSelect = {
   updatedAt: true,
 } as const;
 
+const conversationTicketSelect = {
+  assignedHumanAgent: { select: { id: true, name: true } },
+  category: true,
+  id: true,
+  priority: true,
+  resolvedAt: true,
+  status: true,
+  title: true,
+  updatedAt: true,
+} as const;
+
+const conversationSessionSelect = {
+  channel: { select: { name: true, type: true } },
+  createdAt: true,
+  customerIdentity: { select: { email: true, id: true, name: true, phoneE164: true } },
+  customerLastMessageAt: true,
+  id: true,
+  messages: {
+    orderBy: { position: "desc" },
+    select: { content: true, createdAt: true, senderType: true },
+    take: 1,
+    where: { deletedAt: null },
+  },
+  ticket: { select: conversationTicketSelect },
+} as const;
+
 const ticketDetailSelect = {
   ...ticketListSelect,
   escalatedAt: true,
@@ -143,23 +169,52 @@ export function ticketVisibilityWhere(user: InboxUser): Prisma.TicketWhereInput 
   };
 }
 
-export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
-  const cursorTicket = filters.cursor
-    ? await prisma.ticket.findUnique({
+/** All Conversations: one Session-based read model with an optional Ticket
+ * projection, so a Customer conversation that never opened a Ticket is not a
+ * separate destination — it is a row here with `ticket: null`. An Admin sees
+ * every Session in the Workspace; a Human Agent sees only Sessions whose
+ * Ticket is visible to them (see `ticketVisibilityWhere`) and never a
+ * Ticket-less Session, matching the standalone "Without Ticket" view this
+ * replaces, which was Admin-only.
+ *
+ * Ticket-scoped filters (status, category, priority, assignee) only make
+ * sense for a Session that has a Ticket, so applying any of them narrows the
+ * result to ticketed Sessions — same as a Human Agent's fixed visibility. */
+export async function listConversations(user: InboxUser, filters: ListTicketsQuery) {
+  const cursorSession = filters.cursor
+    ? await prisma.session.findUnique({
         select: { createdAt: true, id: true },
         where: { id: filters.cursor },
       })
     : null;
-  if (filters.cursor && !cursorTicket) throw new InvalidTicketsCursorError();
+  if (filters.cursor && !cursorSession) throw new InvalidTicketsCursorError();
 
-  const where: Prisma.TicketWhereInput = {
+  const hasTicketOnlyFilters = Boolean(
+    filters.status?.length ||
+      filters.category?.length ||
+      filters.priority?.length ||
+      filters.assigneeId,
+  );
+  const ticketGate: Prisma.SessionWhereInput =
+    user.role !== "ADMIN" || hasTicketOnlyFilters
+      ? {
+          ticket: {
+            AND: [
+              ticketVisibilityWhere(user),
+              { deletedAt: null },
+              ...(filters.status?.length ? [{ status: { in: filters.status } }] : []),
+              ...(filters.category?.length ? [{ category: { in: filters.category } }] : []),
+              ...(filters.priority?.length ? [{ priority: { in: filters.priority } }] : []),
+              ...(filters.assigneeId ? [{ assignedHumanAgentId: filters.assigneeId }] : []),
+            ],
+          },
+        }
+      : { OR: [{ ticket: null }, { ticket: { deletedAt: null } }] };
+
+  const where: Prisma.SessionWhereInput = {
     AND: [
-      ticketVisibilityWhere(user),
-      { deletedAt: null },
-      ...(filters.status?.length ? [{ status: { in: filters.status } }] : []),
-      ...(filters.category?.length ? [{ category: { in: filters.category } }] : []),
-      ...(filters.priority?.length ? [{ priority: { in: filters.priority } }] : []),
-      ...(filters.assigneeId ? [{ assignedHumanAgentId: filters.assigneeId }] : []),
+      ticketGate,
+      { messages: { some: { deletedAt: null, senderType: "CUSTOMER" } } },
       ...(filters.search
         ? [
             {
@@ -173,12 +228,12 @@ export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
             },
           ]
         : []),
-      ...(cursorTicket
+      ...(cursorSession
         ? [
             {
               OR: [
-                { createdAt: { lt: cursorTicket.createdAt } },
-                { AND: [{ createdAt: cursorTicket.createdAt }, { id: { lt: cursorTicket.id } }] },
+                { createdAt: { lt: cursorSession.createdAt } },
+                { AND: [{ createdAt: cursorSession.createdAt }, { id: { lt: cursorSession.id } }] },
               ],
             },
           ]
@@ -186,87 +241,37 @@ export async function listTickets(user: InboxUser, filters: ListTicketsQuery) {
     ],
   };
 
-  const tickets = await prisma.ticket.findMany({
+  const sessions = await prisma.session.findMany({
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: ticketListSelect,
+    select: conversationSessionSelect,
     take: filters.limit + 1,
     where,
   });
 
-  const visibleTickets = tickets.slice(0, filters.limit);
-  return {
-    nextCursor: tickets.length > filters.limit ? (visibleTickets.at(-1)?.id ?? null) : null,
-    tickets: await attachUnreadCounts(user.id, visibleTickets),
-  };
-}
-
-/** A conversation that never became a Ticket: the classification decided the
- * Customer's message was not a support request, so the AI Agent answered and
- * nothing was opened. Nothing else in the product surfaces these, which makes a
- * misclassified request invisible — an Admin reads them here.
- *
- * Sessions with no Customer Message are skipped: a Widget that was opened and
- * closed carries no information. Ordering and cursoring match `listTickets`. */
-export async function listSessionsWithoutTicket(filters: { cursor?: string; limit: number }) {
-  const cursorSession = filters.cursor
-    ? await prisma.session.findUnique({
-        select: { createdAt: true, id: true },
-        where: { id: filters.cursor },
-      })
-    : null;
-  if (filters.cursor && !cursorSession) throw new InvalidTicketsCursorError();
-
-  const sessions = await prisma.session.findMany({
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: {
-      channel: { select: { name: true, type: true } },
-      createdAt: true,
-      customerIdentity: { select: { email: true, id: true, name: true, phoneE164: true } },
-      customerLastMessageAt: true,
-      id: true,
-      messages: {
-        orderBy: { position: "desc" },
-        select: { content: true, createdAt: true, senderType: true },
-        take: 1,
-        where: { deletedAt: null },
-      },
-      status: true,
-    },
-    take: filters.limit + 1,
-    where: {
-      AND: [
-        { ticket: null },
-        { messages: { some: { deletedAt: null, senderType: "CUSTOMER" } } },
-        ...(cursorSession
-          ? [
-              {
-                OR: [
-                  { createdAt: { lt: cursorSession.createdAt } },
-                  {
-                    AND: [{ createdAt: cursorSession.createdAt }, { id: { lt: cursorSession.id } }],
-                  },
-                ],
-              },
-            ]
-          : []),
-      ],
-    },
-  });
-
   const visible = sessions.slice(0, filters.limit);
+  const ticketedRows = visible.flatMap((row) => (row.ticket ? [row.ticket] : []));
+  const unreadById = new Map(
+    (await attachUnreadCounts(user.id, ticketedRows)).map((ticket) => [
+      ticket.id,
+      ticket.unreadCount,
+    ]),
+  );
+
   return {
-    nextCursor: sessions.length > filters.limit ? (visible.at(-1)?.id ?? null) : null,
-    sessions: visible.map(({ messages, ...session }) => ({
+    conversations: visible.map(({ messages, ticket, ...session }) => ({
       ...session,
       lastMessage: messages[0] ?? null,
+      ticket: ticket ? { ...ticket, unreadCount: unreadById.get(ticket.id) ?? 0 } : null,
     })),
+    nextCursor: sessions.length > filters.limit ? (visible.at(-1)?.id ?? null) : null,
   };
 }
 
-/** The transcript of one conversation that has no Ticket. Read-only: a Session
- * that has since become a Ticket is not found here, because it belongs to the
- * Ticket view with its own Activity Timeline and reply box. */
-export async function getSessionWithoutTicketTranscript(sessionId: string) {
+/** The transcript of one conversation that has no Ticket, read from within
+ * All Conversations. Read-only: a Session that has since become a Ticket is
+ * not found here, because it belongs to the Ticket view with its own
+ * Activity Timeline and reply box. */
+export async function getConversationSessionDetail(sessionId: string) {
   const session = await prisma.session.findFirst({
     select: {
       channel: { select: { name: true, type: true } },

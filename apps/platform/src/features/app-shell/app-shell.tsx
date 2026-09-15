@@ -31,7 +31,6 @@ import {
   InboxIcon,
   LayoutDashboardIcon,
   LayoutListIcon,
-  MessageCircleOffIcon,
   LibraryBigIcon,
   LogOutIcon,
   MessageSquareCodeIcon,
@@ -132,7 +131,6 @@ export function PlatformAppShell({
             items: [
               ...conversationItems,
               { icon: LayoutListIcon, label: "All Conversations", to: "/chat/all" },
-              { icon: MessageCircleOffIcon, label: "Without Ticket", to: "/chat/no-ticket" },
             ],
             label: "Conversations",
           },
@@ -171,11 +169,7 @@ export function PlatformAppShell({
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild tooltip="SupportOps">
                 <Link to="/">
-                  <img
-                    src="/support-ops-logo.png"
-                    alt=""
-                    className="size-7 shrink-0 rounded-md"
-                  />
+                  <img src="/support-ops-logo.png" alt="" className="size-7 shrink-0 rounded-md" />
                   <span className="text-[13px] font-semibold group-data-[collapsible=icon]:hidden">
                     SupportOps
                   </span>

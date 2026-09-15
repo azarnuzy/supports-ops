@@ -1,17 +1,16 @@
-import type { ListTicketsFilters } from "@repo/api-client";
+import type { ListConversationsFilters } from "@repo/api-client";
 import {
   claimTicket as claimTicketRequest,
   createApiClient,
   generateSuggestedReply as generateSuggestedReplyRequest,
   getAttachmentDownloadUrl,
   getAttachmentUrl,
-  getSessionWithoutTicket as getSessionWithoutTicketRequest,
+  getConversationSession as getConversationSessionRequest,
   getTicketDetail as getTicketDetailRequest,
+  listConversations as listConversationsRequest,
   listLiveAiTickets as listLiveAiTicketsRequest,
   listMyTickets as listMyTicketsRequest,
-  listSessionsWithoutTicket as listSessionsWithoutTicketRequest,
   listSharedHumanQueue as listSharedHumanQueueRequest,
-  listTickets as listTicketsRequest,
   markTicketRead as markTicketReadRequest,
   reassignTicket as reassignTicketRequest,
   resolveHumanTicket as resolveHumanTicketRequest,
@@ -29,12 +28,8 @@ export function getSharedHumanQueue() {
   return listSharedHumanQueueRequest(apiClient);
 }
 
-export function getSessionsWithoutTicket(filters: { cursor?: string } = {}) {
-  return listSessionsWithoutTicketRequest(apiClient, filters);
-}
-
-export function getSessionWithoutTicket(sessionId: string) {
-  return getSessionWithoutTicketRequest(apiClient, sessionId);
+export function getConversationSession(sessionId: string) {
+  return getConversationSessionRequest(apiClient, sessionId);
 }
 
 export function getTicketDetail(id: string) {
@@ -63,8 +58,8 @@ export function getLiveAiTickets() {
   return listLiveAiTicketsRequest(apiClient);
 }
 
-export function getAllTickets(filters: ListTicketsFilters) {
-  return listTicketsRequest(apiClient, filters);
+export function getConversations(filters: ListConversationsFilters) {
+  return listConversationsRequest(apiClient, filters);
 }
 
 export function takeOverTicket(id: string) {

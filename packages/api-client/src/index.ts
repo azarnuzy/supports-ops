@@ -195,7 +195,7 @@ export type TicketDetail = TicketListItem & {
   resolvedBy: string | null;
 };
 
-export type ListTicketsFilters = {
+export type ListConversationsFilters = {
   assigneeId?: string;
   category?: TicketCategory[];
   cursor?: string;
@@ -207,7 +207,33 @@ export type ListTicketsFilters = {
 
 export class TicketAlreadyClaimedApiError extends Error {}
 
-export async function listTickets(client: ApiClient, filters: ListTicketsFilters = {}) {
+/** All Conversations: a Session, with its Ticket projected only when one
+ * exists. A `ticket: null` row is a conversation the AI Agent answered
+ * without ever opening a Ticket — it carries no status, priority, category,
+ * assignee, or unread count, because it never had any. */
+export type ConversationTicket = {
+  assignedHumanAgent: { id: string; name: string } | null;
+  category: TicketCategory;
+  id: string;
+  priority: TicketPriority;
+  resolvedAt: string | null;
+  status: TicketStatus;
+  title: string;
+  unreadCount: number;
+  updatedAt: string;
+};
+
+export type ConversationListItem = {
+  channel: { name: string; type: "WEB" | "WHATSAPP" };
+  createdAt: string;
+  customerIdentity: { email: string | null; id: string; name: string; phoneE164: string | null };
+  customerLastMessageAt: string | null;
+  id: string;
+  lastMessage: { content: string; createdAt: string; senderType: string } | null;
+  ticket: ConversationTicket | null;
+};
+
+export async function listConversations(client: ApiClient, filters: ListConversationsFilters = {}) {
   const response = await client.tickets.$get({
     query: {
       ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
@@ -220,24 +246,21 @@ export async function listTickets(client: ApiClient, filters: ListTicketsFilters
     },
   });
   if (response.status === 401) throw new UnauthorizedApiError();
-  if (!response.ok) throw new Error("Failed to load Tickets.");
-  return (await response.json()) as { nextCursor: string | null; tickets: TicketListItem[] };
+  if (!response.ok) throw new Error("Failed to load Conversations.");
+  return (await response.json()) as {
+    conversations: ConversationListItem[];
+    nextCursor: string | null;
+  };
 }
 
-/** A conversation that never opened a Ticket — the AI Agent answered, the
- * classification decided it was not a support request. Read-only. */
-export type SessionWithoutTicket = {
+export type ConversationSessionDetail = {
   channel: { name: string; type: "WEB" | "WHATSAPP" };
   createdAt: string;
   customerIdentity: { email: string | null; id: string; name: string; phoneE164: string | null };
   customerLastMessageAt: string | null;
   id: string;
-  lastMessage: { content: string; createdAt: string; senderType: string } | null;
-  status: string;
-};
-
-export type SessionWithoutTicketDetail = Omit<SessionWithoutTicket, "lastMessage"> & {
   messages: TicketDetailMessage[];
+  status: string;
 };
 
 export class SessionNotFoundApiError extends Error {
@@ -247,34 +270,16 @@ export class SessionNotFoundApiError extends Error {
   }
 }
 
-export async function listSessionsWithoutTicket(
-  client: ApiClient,
-  filters: { cursor?: string; limit?: number } = {},
-) {
-  const response = await client.tickets["without-ticket"].$get({
-    query: {
-      ...(filters.cursor ? { cursor: filters.cursor } : {}),
-      ...(filters.limit ? { limit: String(filters.limit) } : {}),
-    },
-  });
-  if (response.status === 403)
-    throw new Error("Only an Admin can view conversations without a Ticket.");
-  if (!response.ok) throw new Error("Failed to load conversations without a Ticket.");
-  return (await response.json()) as {
-    nextCursor: string | null;
-    sessions: SessionWithoutTicket[];
-  };
-}
-
-export async function getSessionWithoutTicket(client: ApiClient, sessionId: string) {
-  const response = await client.tickets["without-ticket"][":sessionId"].$get({
+/** The read-only transcript of a Conversation row whose Session never opened
+ * a Ticket. Tickets are opened through `getTicketDetail` instead. */
+export async function getConversationSession(client: ApiClient, sessionId: string) {
+  const response = await client.tickets.conversations[":sessionId"].$get({
     param: { sessionId },
   });
-  if (response.status === 403)
-    throw new Error("Only an Admin can view conversations without a Ticket.");
+  if (response.status === 403) throw new Error("Only an Admin can view this conversation.");
   if (response.status === 404) throw new SessionNotFoundApiError();
   if (!response.ok) throw new Error("Failed to load the conversation.");
-  return (await response.json()) as { session: SessionWithoutTicketDetail };
+  return (await response.json()) as { session: ConversationSessionDetail };
 }
 
 export class TicketNotFoundApiError extends Error {
