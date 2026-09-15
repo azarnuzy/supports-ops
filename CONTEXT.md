@@ -52,6 +52,10 @@ _Avoid_: WhatsApp integration, WA inbox, Meta channel
 One Customer's continuous conversation on one Channel. Produces at most one Ticket, and carries the Agent Memory from its first turn — before any Ticket exists. How it opens and what closes it belong to the Channel: a Web Session opens after Pre-Chat and is reachable by Session Link; a WhatsApp Session opens on the Customer's first message and is required to end within a day.
 _Avoid_: Conversation, Visit, Thread. Never "Web Session" as the general term — Web is one Channel, not the shape of the concept
 
+**All Conversations**:
+The Admin view of every Session in a Workspace, whether or not it has produced a Ticket. A Session without a Ticket remains part of this view rather than becoming a separate queue or navigation area.
+_Avoid_: Without Ticket inbox, Ticket list
+
 **Last Customer Message At**:
 The single clock every silence rule reads: when this Session's Customer last wrote. Follow-Up, Auto-Resolution, Idle Closure, and the Customer Service Window are all measured from it, and any Customer message resets all four at once. A Workspace user replying never moves it.
 _Avoid_: Last activity, Updated at, Idle since
