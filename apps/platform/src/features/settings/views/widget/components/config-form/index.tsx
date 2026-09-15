@@ -77,8 +77,29 @@ export default function ConfigForm({ form }: ConfigFormProps) {
           <Separator />
 
           <SectionHeading
-            title="Branding"
-            description="How the widget introduces itself in the launcher and panel header."
+            title="General configuration"
+            description="The name Customers see when the widget introduces itself."
+          />
+
+          <Field>
+            <FieldLabel className="text-sm font-medium" htmlFor="widget-bot-name">
+              Display name
+            </FieldLabel>
+            <Input
+              id="widget-bot-name"
+              maxLength={60}
+              placeholder="Acme Support"
+              value={botName}
+              onChange={(event) => setBotName(event.target.value)}
+            />
+            <FieldDescription>Shown in the panel header, up to 60 characters.</FieldDescription>
+          </Field>
+
+          <Separator />
+
+          <SectionHeading
+            title="Appearance"
+            description="The logo and brand colour shown in the launcher and panel header."
           />
 
           <Field>
@@ -145,51 +166,35 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             />
           </Field>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <Field>
-              <FieldLabel className="text-sm font-medium" htmlFor="widget-bot-name">
-                Display name
-              </FieldLabel>
-              <Input
-                id="widget-bot-name"
-                maxLength={60}
-                placeholder="Acme Support"
-                value={botName}
-                onChange={(event) => setBotName(event.target.value)}
+          <Field>
+            <FieldLabel className="text-sm font-medium" htmlFor="widget-primary-color">
+              Brand colour
+            </FieldLabel>
+            <div className="flex items-center gap-2">
+              <input
+                aria-label="Brand colour picker"
+                className="size-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1 transition-shadow hover:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                type="color"
+                value={colorIsValid ? primaryColor : "#2563eb"}
+                onChange={(event) => setPrimaryColor(event.target.value)}
               />
-              <FieldDescription>Shown in the panel header, up to 60 characters.</FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel className="text-sm font-medium" htmlFor="widget-primary-color">
-                Brand colour
-              </FieldLabel>
-              <div className="flex items-center gap-2">
-                <input
-                  aria-label="Brand colour picker"
-                  className="size-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1 transition-shadow hover:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  type="color"
-                  value={colorIsValid ? primaryColor : "#2563eb"}
-                  onChange={(event) => setPrimaryColor(event.target.value)}
-                />
-                <Input
-                  id="widget-primary-color"
-                  aria-invalid={!colorIsValid}
-                  className="font-mono uppercase"
-                  placeholder="#2563EB"
-                  value={primaryColor}
-                  onChange={(event) => setPrimaryColor(event.target.value)}
-                />
-              </div>
-              <FieldDescription>Used for the launcher, header, and sent messages.</FieldDescription>
-            </Field>
-          </div>
+              <Input
+                id="widget-primary-color"
+                aria-invalid={!colorIsValid}
+                className="font-mono uppercase"
+                placeholder="#2563EB"
+                value={primaryColor}
+                onChange={(event) => setPrimaryColor(event.target.value)}
+              />
+            </div>
+            <FieldDescription>Used for the launcher, header, and sent messages.</FieldDescription>
+          </Field>
 
           <Separator />
 
           <SectionHeading
-            title="Messages"
-            description="The copy Customers read at the start and end of a conversation."
+            title="Behavior"
+            description="The copy a Customer reads when they open the panel."
           />
 
           <Field>
@@ -209,6 +214,13 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             </FieldDescription>
           </Field>
 
+          <Separator />
+
+          <SectionHeading
+            title="Handoff"
+            description="The message sent automatically when a conversation wraps up."
+          />
+
           <Field>
             <FieldLabel className="text-sm font-medium" htmlFor="widget-closing-message">
               Closing message
@@ -227,7 +239,7 @@ export default function ConfigForm({ form }: ConfigFormProps) {
           <Separator />
 
           <SectionHeading
-            title="Security"
+            title="Advanced settings"
             description="Where this widget is allowed to load. Requests from anywhere else are refused."
           />
 
