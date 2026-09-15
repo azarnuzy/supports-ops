@@ -38,10 +38,11 @@ export default function TranscriptMessage({
   }
 
   const isHuman = message.senderType === "HUMAN_AGENT";
+  const isWorkspaceAuthored = isHuman || message.senderType === "AI_AGENT";
   const legacyAttachmentText =
     /^I need help with the attached file: .+$/.test(message.content) && message.attachments.length;
   return (
-    <Message align={isHuman ? "end" : "start"}>
+    <Message align={isWorkspaceAuthored ? "end" : "start"}>
       <MessageAvatar>
         <Avatar className="size-7">
           <AvatarFallback className="text-[11px] ring-1 ring-border">
