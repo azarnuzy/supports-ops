@@ -35,7 +35,6 @@ import {
   LibraryBigIcon,
   LogOutIcon,
   MessageSquareCodeIcon,
-  MonitorIcon,
   TagsIcon,
   TicketCheckIcon,
   UsersRoundIcon,
@@ -170,13 +169,15 @@ export function PlatformAppShell({
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild tooltip="Platform">
+              <SidebarMenuButton size="lg" asChild tooltip="SupportOps">
                 <Link to="/">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-                    <MonitorIcon className="size-3.5" />
-                  </span>
+                  <img
+                    src="/support-ops-logo.png"
+                    alt=""
+                    className="size-7 shrink-0 rounded-md"
+                  />
                   <span className="text-[13px] font-semibold group-data-[collapsible=icon]:hidden">
-                    Platform
+                    SupportOps
                   </span>
                 </Link>
               </SidebarMenuButton>
@@ -264,7 +265,7 @@ export function PlatformAppShell({
         <header className="flex h-12 shrink-0 items-center justify-between border-b px-3">
           <div className="flex items-center gap-1.5">
             <SidebarTrigger />
-            <span className="text-[13px] font-medium text-muted-foreground">Platform</span>
+            <span className="text-[13px] font-medium text-muted-foreground">SupportOps</span>
           </div>
           <HeaderControls />
         </header>
