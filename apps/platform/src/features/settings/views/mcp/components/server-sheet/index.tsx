@@ -9,6 +9,7 @@ import {
 import { Switch } from "@repo/ui/components/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { RefreshCwIcon } from "lucide-react";
+import ConnectionStateBadge from "../connection-state-badge";
 import DiscoveredToolRow from "../discovered-tool-row";
 import type { ServerSheetProps } from "./index.types";
 
@@ -16,6 +17,7 @@ export default function ServerSheet({
   open,
   onOpenChange,
   server,
+  connectionState,
   tools,
   lastTest,
   isTesting,
@@ -38,7 +40,10 @@ export default function ServerSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-2xl">
         <SheetHeader className="border-b p-5">
-          <SheetTitle>{server.name}</SheetTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <SheetTitle>{server.name}</SheetTitle>
+            <ConnectionStateBadge state={connectionState} />
+          </div>
           <SheetDescription className="truncate font-mono text-xs">{server.url}</SheetDescription>
         </SheetHeader>
 
