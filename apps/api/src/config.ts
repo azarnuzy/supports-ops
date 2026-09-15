@@ -13,7 +13,13 @@ const productionSecretMinimumLength = 32;
 const defaultEmbeddingModel = "openai/text-embedding-3-small";
 const defaultFastModel = "openai/gpt-4.1-nano";
 const defaultMainModel = "openai/gpt-4o-mini";
-export const modelGatewayBaseUrl = "https://openrouter.ai/api/v1";
+/** Embeddings stay on OpenRouter: the vector store holds chunks embedded by
+ * `EMBEDDING_MODEL`, so moving this provider would invalidate every stored
+ * chunk and force a full re-ingest. Completions are free to move. */
+export const embeddingGatewayBaseUrl = "https://openrouter.ai/api/v1";
+/** Defaults to OpenRouter so an environment that only sets OPENROUTER_API_KEY
+ * keeps working; .env.local points it at the Devscale gateway. */
+const defaultCompletionGatewayBaseUrl = embeddingGatewayBaseUrl;
 
 const runtimeEnvSchema = z.enum(["development", "test", "production"]).default("development");
 const logLevelSchema = z
@@ -59,6 +65,10 @@ const apiEnvSchema = z
     INTERNAL_WORKER_TOKEN: optionalStringSchema,
     LOG_LEVEL: logLevelSchema,
     OPENROUTER_API_KEY: optionalStringSchema,
+    COMPLETION_GATEWAY_API_KEY: optionalStringSchema,
+    EVAL_JUDGE_MODEL: optionalStringSchema,
+    EVAL_WORKSPACE_ID: optionalStringSchema,
+    COMPLETION_GATEWAY_BASE_URL: z.string().trim().url().default(defaultCompletionGatewayBaseUrl),
     S3_ACCESS_KEY_ID: optionalStringSchema,
     S3_BUCKET: z.string().trim().min(1).default("supportops"),
     S3_ENDPOINT: optionalStringSchema,
@@ -128,20 +138,27 @@ export const databaseConfig = {
 
 export const embeddingConfig = {
   apiKey: env.OPENROUTER_API_KEY,
-  baseUrl: modelGatewayBaseUrl,
+  baseUrl: embeddingGatewayBaseUrl,
   modelId: env.EMBEDDING_MODEL,
 } as const;
 
 export const classificationConfig = {
-  apiKey: env.OPENROUTER_API_KEY,
-  baseUrl: modelGatewayBaseUrl,
+  apiKey: env.COMPLETION_GATEWAY_API_KEY ?? env.OPENROUTER_API_KEY,
+  baseUrl: env.COMPLETION_GATEWAY_BASE_URL,
   modelId: env.LLM_MODEL_FAST,
 } as const;
 
 export const aiAgentConfig = {
-  apiKey: env.OPENROUTER_API_KEY,
-  baseUrl: modelGatewayBaseUrl,
+  apiKey: env.COMPLETION_GATEWAY_API_KEY ?? env.OPENROUTER_API_KEY,
+  baseUrl: env.COMPLETION_GATEWAY_BASE_URL,
   modelId: env.LLM_MODEL_MAIN,
+} as const;
+
+/** The eval suite runs by hand against one configured Workspace (ADR-0010).
+ * The judge is deliberately a different model from the one under test. */
+export const evalConfig = {
+  judgeModelId: env.EVAL_JUDGE_MODEL ?? env.LLM_MODEL_FAST,
+  workspaceId: env.EVAL_WORKSPACE_ID,
 } as const;
 
 export const toolEncryptionConfig = {

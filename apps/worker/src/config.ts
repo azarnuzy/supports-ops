@@ -15,7 +15,13 @@ const defaultDatabaseUrl =
   "postgresql://postgres:postgres@localhost:15432/supportops?schema=public";
 const defaultEmbeddingModel = "openai/text-embedding-3-small";
 const defaultFastModel = "openai/gpt-4.1-nano";
-export const modelGatewayBaseUrl = "https://openrouter.ai/api/v1";
+/** Embeddings stay on OpenRouter: the vector store holds chunks embedded by
+ * `EMBEDDING_MODEL`, so moving this provider would invalidate every stored
+ * chunk and force a full re-ingest. Completions are free to move. */
+export const embeddingGatewayBaseUrl = "https://openrouter.ai/api/v1";
+/** Defaults to OpenRouter so an environment that only sets OPENROUTER_API_KEY
+ * keeps working; .env.local points it at the Devscale gateway. */
+const defaultCompletionGatewayBaseUrl = embeddingGatewayBaseUrl;
 const booleanSchema = z.preprocess((value) => {
   if (typeof value !== "string") {
     return value;
@@ -42,6 +48,8 @@ const workerEnvSchema = z.object({
   LOG_LEVEL: logLevelSchema,
   LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
   OPENROUTER_API_KEY: optionalStringSchema,
+  COMPLETION_GATEWAY_API_KEY: optionalStringSchema,
+  COMPLETION_GATEWAY_BASE_URL: z.string().trim().url().default(defaultCompletionGatewayBaseUrl),
   MISTRAL_API_KEY: optionalStringSchema,
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:16379"),
   EMAIL_FROM: emailFromSchema,
@@ -80,13 +88,13 @@ export const databaseConfig = {
 
 export const embeddingConfig = {
   apiKey: env.OPENROUTER_API_KEY,
-  baseUrl: modelGatewayBaseUrl,
+  baseUrl: embeddingGatewayBaseUrl,
   modelId: env.EMBEDDING_MODEL,
 } as const;
 
 export const classificationConfig = {
-  apiKey: env.OPENROUTER_API_KEY,
-  baseUrl: modelGatewayBaseUrl,
+  apiKey: env.COMPLETION_GATEWAY_API_KEY ?? env.OPENROUTER_API_KEY,
+  baseUrl: env.COMPLETION_GATEWAY_BASE_URL,
   modelId: env.LLM_MODEL_FAST,
 } as const;
 
