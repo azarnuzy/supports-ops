@@ -33,6 +33,7 @@ import {
   LayoutListIcon,
   LibraryBigIcon,
   LogOutIcon,
+  MessageCircleIcon,
   MessageSquareCodeIcon,
   TagsIcon,
   TicketCheckIcon,
@@ -145,6 +146,7 @@ export function PlatformAppShell({
           {
             items: [
               { icon: MessageSquareCodeIcon, label: "Web Widget", to: "/channels/web-widget" },
+              { icon: MessageCircleIcon, label: "WhatsApp", to: "/channels/whatsapp" },
             ],
             label: "Channels",
           },
