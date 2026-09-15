@@ -8,9 +8,15 @@ import {
   type Exception,
   type Span,
 } from "@opentelemetry/api";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
+import {
+  BatchLogRecordProcessor,
+  ConsoleLogRecordExporter,
+  SimpleLogRecordProcessor,
+} from "@opentelemetry/sdk-logs";
 import {
   BatchSpanProcessor,
   ConsoleSpanExporter,
@@ -124,12 +130,34 @@ export function startTelemetry({ config, serviceName }: StartTelemetryOptions) {
             ),
       ),
     ],
+    // Eval results are published as OTel log records, not spans (see
+    // `createOtelEvalReporter` in `@anvia/otel`). Without a log pipeline the
+    // eval reporter is silently a no-op and nothing reaches the backend's
+    // Evaluations view, so the logs exporter is wired here alongside traces.
+    logRecordProcessors: [
+      config.exporter === "console"
+        ? new SimpleLogRecordProcessor({ exporter: new ConsoleLogRecordExporter() })
+        : new BatchLogRecordProcessor({
+            exporter: new OTLPLogExporter({
+              headers: getTelemetryHeaders(config),
+              url: otlpLogsEndpoint(config.otlpEndpoint),
+            }),
+          }),
+    ],
   });
 
   sdk.start();
   registerTelemetryShutdown();
 
   return sdk;
+}
+
+/** The OTLP signals share a base path and differ only in their last segment,
+ * so the logs endpoint is derived from the configured traces one rather than
+ * asking every environment to set a second, near-identical variable. */
+function otlpLogsEndpoint(tracesEndpoint: string | undefined) {
+  if (!tracesEndpoint) return undefined;
+  return tracesEndpoint.replace(/\/v1\/traces\/?$/, "/v1/logs");
 }
 
 export async function shutdownTelemetry() {
@@ -163,7 +191,14 @@ export async function withSpan<T>(
   const parentContext = propagation.setBaggage(context.active(), baggage);
   return tracer.startActiveSpan(name, { attributes }, parentContext, async (span) => {
     try {
-      return await fn(span);
+      const result = await fn(span);
+      // OpenTelemetry leaves a span UNSET unless success is stated explicitly,
+      // and a trace takes its status from its root span. `ai_agent.turn` is the
+      // root of every AI Agent trace, so without this every successful turn
+      // reports as "unset" in the telemetry backend and cannot be told apart
+      // from one that never finished.
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
     } catch (error) {
       span.recordException(error as Exception);
       span.setStatus({ code: SpanStatusCode.ERROR });
