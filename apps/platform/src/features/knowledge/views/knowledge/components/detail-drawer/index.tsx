@@ -153,8 +153,38 @@ export default function KnowledgeDetailDrawer({
 
           <div className="grid gap-6 px-4 pb-6">
             <dl className="grid gap-3 text-sm">
-              <Row label="ID" value={<span className="font-mono text-xs">{source.id}</span>} />
+              <Row
+                label="Status"
+                value={
+                  <Badge variant={statusVariant(source.status)}>
+                    {source.status === "PROCESSING" && source.stage
+                      ? statusLabel(source.stage)
+                      : statusLabel(source.status)}
+                  </Badge>
+                }
+              />
               <Row label="Type" value={sourceTypeLabel(source.sourceType)} />
+              <Row
+                label="Visibility"
+                value={<Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>}
+              />
+              <Row label="Last updated" value={formatUpdatedAt(source.updatedAt)} />
+              <Row
+                label="Chunks"
+                value={source.chunkCount === 1 ? "1 chunk" : `${source.chunkCount} chunks`}
+              />
+              {source.status === "FAILED" ? (
+                <Row
+                  label="Failure"
+                  value={
+                    <span className="text-destructive">
+                      {source.failedStage ? `Failed at ${statusLabel(source.failedStage)}: ` : ""}
+                      {source.failureReason ?? "Ingestion failed."}
+                    </span>
+                  }
+                />
+              ) : null}
+              <Row label="ID" value={<span className="font-mono text-xs">{source.id}</span>} />
               {source.sourceUrl ? (
                 <Row
                   label="Source URL"
@@ -170,35 +200,9 @@ export default function KnowledgeDetailDrawer({
                   }
                 />
               ) : null}
-              <Row
-                label="Visibility"
-                value={<Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>}
-              />
-              <Row
-                label="Status"
-                value={
-                  <Badge variant={statusVariant(source.status)}>
-                    {source.status === "PROCESSING" && source.stage
-                      ? statusLabel(source.stage)
-                      : statusLabel(source.status)}
-                  </Badge>
-                }
-              />
               <Row label="Created" value={formatUpdatedAt(source.createdAt)} />
-              <Row label="Last updated" value={formatUpdatedAt(source.updatedAt)} />
               {source.publishedAt ? (
                 <Row label="Published" value={formatUpdatedAt(source.publishedAt)} />
-              ) : null}
-              {source.status === "FAILED" ? (
-                <Row
-                  label="Failure"
-                  value={
-                    <span className="text-destructive">
-                      {source.failedStage ? `${statusLabel(source.failedStage)}: ` : ""}
-                      {source.failureReason ?? "Ingestion failed."}
-                    </span>
-                  }
-                />
               ) : null}
             </dl>
 

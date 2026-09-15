@@ -7,12 +7,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/select";
-import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
-import { FileTextIcon, Globe2Icon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
+import {
+  FileTextIcon,
+  Globe2Icon,
+  LibraryIcon,
+  PlusIcon,
+  SearchIcon,
+  SparklesIcon,
+} from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
+import ResourceListState from "../../../settings/components/resource-list-state";
+import ResourcePagination from "../../../settings/components/resource-pagination";
+import { SettingsHeader } from "../../../settings/components/settings-header";
 import {
   knowledgeSourcesQueryOptions,
   useCreateDocumentationUrlMutation,
@@ -32,6 +41,8 @@ import {
   RetrievalTestDialog,
 } from "./components";
 
+const PAGE_SIZE = 8;
+
 const KnowledgeView = () => {
   useKnowledgeSourceEvents();
   const knowledgeSources = useQuery(knowledgeSourcesQueryOptions);
@@ -44,6 +55,7 @@ const KnowledgeView = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<SourceFilter>("ALL");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [visibility, setVisibility] = useState<KnowledgeVisibility>("CUSTOMER_SAFE");
   const [url, setUrl] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -59,6 +71,9 @@ const KnowledgeView = () => {
         .toLowerCase()
         .includes(query.trim().toLowerCase()),
   );
+  const pageCount = Math.max(1, Math.ceil(visibleSources.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageSources = visibleSources.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   function closeDialog() {
     setDialog(null);
@@ -87,9 +102,7 @@ const KnowledgeView = () => {
   async function handleFile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (files.length === 0) return;
-    const invalid = files.find(
-      (file) => file.type !== "application/pdf" || file.size > fileLimit,
-    );
+    const invalid = files.find((file) => file.type !== "application/pdf" || file.size > fileLimit);
     if (invalid) {
       toast.error(`"${invalid.name}" must be a PDF up to 25 MB.`);
       return;
@@ -135,23 +148,21 @@ const KnowledgeView = () => {
   return (
     <PlatformAppShell>
       <section className="mx-auto grid w-full max-w-6xl gap-8">
-        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Workspace knowledge</p>
-            <h1 className="mt-1 text-3xl font-semibold text-balance">Knowledge Base</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Add and manage the Knowledge Sources the AI Agent can use.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setRetrievalTestOpen(true)}>
-              <SparklesIcon className="size-4" /> Test retrieval
-            </Button>
-            <Button variant="outline" onClick={() => setDialog("text")}>
-              <PlusIcon className="size-4" /> Create Text
-            </Button>
-          </div>
-        </div>
+        <SettingsHeader
+          title="Knowledge Base"
+          eyebrow="Workspace knowledge"
+          description="Add and manage the Knowledge Sources the AI Agent can use."
+          action={
+            <>
+              <Button variant="outline" onClick={() => setRetrievalTestOpen(true)}>
+                <SparklesIcon className="size-4" /> Test retrieval
+              </Button>
+              <Button variant="outline" onClick={() => setDialog("text")}>
+                <PlusIcon className="size-4" /> Create Text
+              </Button>
+            </>
+          }
+        />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <button
@@ -209,57 +220,49 @@ const KnowledgeView = () => {
           </Select>
         </div>
 
-        <div className="overflow-hidden rounded-lg border">
-          {knowledgeSources.isPending ? (
-            <div className="grid gap-3 p-5">
-              {["first", "second", "third", "fourth", "fifth"].map((key) => (
-                <Skeleton key={key} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : null}
-          {knowledgeSources.isError ? (
-            <div className="grid place-items-center gap-3 p-12 text-center">
-              <p className="text-sm text-destructive">Unable to load Knowledge Sources.</p>
-              <Button variant="outline" onClick={() => void knowledgeSources.refetch()}>
-                Retry
-              </Button>
-            </div>
-          ) : null}
-          {!knowledgeSources.isPending && !knowledgeSources.isError && sources.length === 0 ? (
-            <div className="grid place-items-center gap-4 p-12 text-center">
-              <div>
-                <p className="font-medium">No Knowledge Sources yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Start with a website, PDF, or text.
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button variant="outline" onClick={() => setDialog("website")}>
-                  Add Website
-                </Button>
-                <Button variant="outline" onClick={() => setDialog("file")}>
-                  Add File
-                </Button>
-                <Button onClick={() => setDialog("text")}>Create Text</Button>
-              </div>
-            </div>
-          ) : null}
-          {!knowledgeSources.isPending &&
-          !knowledgeSources.isError &&
-          sources.length > 0 &&
-          visibleSources.length === 0 ? (
-            <p className="p-12 text-center text-sm text-muted-foreground">
-              No Knowledge Sources match this search or type.
-            </p>
-          ) : null}
-          {visibleSources.map((source) => (
-            <KnowledgeSourceRow
-              key={source.id}
-              source={source}
-              onSelect={() => setSelectedId(source.id)}
-              onDelete={() => handleDeleteSource(source.id)}
-            />
-          ))}
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <ResourceListState
+            isPending={knowledgeSources.isPending}
+            isError={knowledgeSources.isError}
+            errorLabel="Unable to load Knowledge Sources."
+            onRetry={() => void knowledgeSources.refetch()}
+            isEmpty={visibleSources.length === 0}
+            emptyIcon={<LibraryIcon className="size-5 text-muted-foreground" />}
+            emptyTitle={
+              sources.length === 0 ? "No Knowledge Sources yet" : "No matching Knowledge Sources"
+            }
+            emptyDescription={
+              sources.length === 0
+                ? "Start with a website, PDF, or text."
+                : "Try a different search term or type filter."
+            }
+            emptyAction={
+              sources.length === 0 ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setDialog("website")}>
+                    Add Website
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setDialog("file")}>
+                    Add File
+                  </Button>
+                  <Button size="sm" onClick={() => setDialog("text")}>
+                    Create Text
+                  </Button>
+                </div>
+              ) : undefined
+            }
+          />
+          {!knowledgeSources.isPending && !knowledgeSources.isError && visibleSources.length > 0
+            ? pageSources.map((source) => (
+                <KnowledgeSourceRow
+                  key={source.id}
+                  source={source}
+                  onSelect={() => setSelectedId(source.id)}
+                  onDelete={() => handleDeleteSource(source.id)}
+                />
+              ))
+            : null}
+          <ResourcePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
         </div>
       </section>
 
