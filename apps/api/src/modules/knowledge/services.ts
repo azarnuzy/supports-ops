@@ -154,6 +154,7 @@ export async function createDocumentationUrl(input: CreateDocumentationUrlInput)
 
 export async function listKnowledgeSources(): Promise<KnowledgeSourcesResponse> {
   const knowledgeSources = await prisma.knowledgeSource.findMany({
+    include: { _count: { select: { chunks: true } } },
     orderBy: { createdAt: "desc" },
     where: { deletedAt: null },
   });
@@ -163,6 +164,7 @@ export async function listKnowledgeSources(): Promise<KnowledgeSourcesResponse> 
 
 export async function getKnowledgeSource(id: string): Promise<KnowledgeSourceDto> {
   const knowledgeSource = await prisma.knowledgeSource.findFirst({
+    include: { _count: { select: { chunks: true } } },
     where: { deletedAt: null, id },
   });
 
@@ -445,8 +447,10 @@ function toDto(knowledgeSource: {
   createdAt: Date;
   updatedAt: Date;
   publishedAt: Date | null;
+  _count?: { chunks: number };
 }): KnowledgeSourceDto {
   return {
+    chunkCount: knowledgeSource._count?.chunks ?? 0,
     content: knowledgeSource.content,
     createdAt: knowledgeSource.createdAt,
     failedStage: knowledgeSource.failedStage ?? null,

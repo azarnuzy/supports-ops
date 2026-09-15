@@ -730,6 +730,7 @@ export type KnowledgeSource = {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+  chunkCount: number;
 };
 
 export type ManualFaqInput = {
