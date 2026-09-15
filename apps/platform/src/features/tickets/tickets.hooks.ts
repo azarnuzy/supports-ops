@@ -5,11 +5,10 @@ import { queryKeys } from "../../lib/query-keys";
 import {
   claimTicket,
   generateSuggestedReply,
-  getAllTickets,
+  getConversations,
+  getConversationSession,
   getLiveAiTickets,
   getMyTickets,
-  getSessionsWithoutTicket,
-  getSessionWithoutTicket,
   getSharedHumanQueue,
   getTicketDetail,
   markTicketRead,
@@ -38,26 +37,9 @@ export const liveAiTicketsQueryOptions = queryOptions({
   queryKey: queryKeys.workspace.liveAiTickets,
 });
 
-/** Conversations that never opened a Ticket, newest first. Admin-only on the
- * API; the nav entry is Admin-only too. */
-export function useSessionsWithoutTicketQuery() {
-  return useInfiniteQuery({
-    getNextPageParam: (lastPage: Awaited<ReturnType<typeof getSessionsWithoutTicket>>) =>
-      lastPage.nextCursor ?? undefined,
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => getSessionsWithoutTicket({ cursor: pageParam }),
-    queryKey: queryKeys.workspace.sessionsWithoutTicket,
-  });
-}
-
-export function sessionWithoutTicketQueryOptions(sessionId: string) {
-  return queryOptions({
-    queryFn: () => getSessionWithoutTicket(sessionId),
-    queryKey: queryKeys.workspace.sessionWithoutTicket(sessionId),
-  });
-}
-
-export function useAllTicketsQuery(filters: {
+/** All Conversations: every Session in the Workspace, newest first, with its
+ * Ticket projected only when one exists. Admin-only on the API. */
+export function useConversationsQuery(filters: {
   category?: TicketCategory;
   enabled: boolean;
   priority?: TicketPriority;
@@ -66,23 +48,32 @@ export function useAllTicketsQuery(filters: {
 }) {
   return useInfiniteQuery({
     enabled: filters.enabled,
-    getNextPageParam: (lastPage: Awaited<ReturnType<typeof getAllTickets>>) =>
+    getNextPageParam: (lastPage: Awaited<ReturnType<typeof getConversations>>) =>
       lastPage.nextCursor ?? undefined,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
-      getAllTickets({
+      getConversations({
         category: filters.category ? [filters.category] : undefined,
         cursor: pageParam,
         priority: filters.priority ? [filters.priority] : undefined,
         search: filters.search,
         status: filters.status ? [filters.status] : undefined,
       }),
-    queryKey: queryKeys.workspace.allTickets({
+    queryKey: queryKeys.workspace.conversations({
       category: filters.category,
       priority: filters.priority,
       search: filters.search,
       status: filters.status,
     }),
+  });
+}
+
+/** The read-only transcript of a Conversation row whose Session never opened
+ * a Ticket. */
+export function conversationSessionQueryOptions(sessionId: string) {
+  return queryOptions({
+    queryFn: () => getConversationSession(sessionId),
+    queryKey: queryKeys.workspace.conversationSession(sessionId),
   });
 }
 
@@ -101,7 +92,7 @@ function useTicketInvalidation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.workspace.sharedHumanQueue }),
         queryClient.invalidateQueries({ queryKey: queryKeys.workspace.myTickets }),
         queryClient.invalidateQueries({ queryKey: queryKeys.workspace.liveAiTickets }),
-        queryClient.invalidateQueries({ queryKey: ["workspace", "all-tickets"] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace", "conversations"] }),
       ]),
     [queryClient],
   );

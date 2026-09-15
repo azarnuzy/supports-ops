@@ -16,18 +16,17 @@ export const queryKeys = {
     myTickets: ["workspace", "my-tickets"] as const,
     sharedHumanQueue: ["workspace", "shared-human-queue"] as const,
     liveAiTickets: ["workspace", "live-ai-tickets"] as const,
-    allTickets: (filters: {
+    conversations: (filters: {
       category?: string;
       priority?: string;
       search?: string;
       status?: string;
-    }) => ["workspace", "all-tickets", filters] as const,
+    }) => ["workspace", "conversations", filters] as const,
     analytics: ["workspace", "analytics"] as const,
     analyticsTraffic: ["workspace", "analytics-traffic"] as const,
     aiSettings: ["workspace", "ai-settings"] as const,
     ticket: (id: string) => ["workspace", "tickets", id] as const,
-    sessionsWithoutTicket: ["workspace", "sessions-without-ticket"] as const,
-    sessionWithoutTicket: (id: string) => ["workspace", "sessions-without-ticket", id] as const,
+    conversationSession: (id: string) => ["workspace", "conversation-session", id] as const,
     tools: (aiAgentId: string) => ["workspace", "tools", aiAgentId] as const,
     mcpServers: ["workspace", "mcp-servers"] as const,
   },

@@ -63,3 +63,25 @@ describe("GET /tickets/queue/events", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("GET /tickets/conversations/:sessionId", () => {
+  beforeEach(() => {
+    mocks.getSession.mockReset();
+  });
+
+  it("is forbidden to a Human Agent, since a Ticket-less Session is Admin-only", async () => {
+    mocks.getSession.mockResolvedValue({ session: { id: "session-1" }, user: sessionUser });
+
+    const res = await app.request("/tickets/conversations/session-1");
+
+    expect(res.status).toBe(403);
+  });
+
+  it("is forbidden when signed out too, since the Admin guard has no separate unauthenticated case", async () => {
+    mocks.getSession.mockResolvedValue(null);
+
+    const res = await app.request("/tickets/conversations/session-1");
+
+    expect(res.status).toBe(403);
+  });
+});

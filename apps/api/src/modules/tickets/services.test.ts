@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   messageFindMany: vi.fn(),
   queryRaw: vi.fn(),
+  sessionFindMany: vi.fn(),
+  sessionFindUnique: vi.fn(),
   ticketFindFirst: vi.fn(),
   ticketFindMany: vi.fn(),
   ticketFindUnique: vi.fn(),
@@ -20,6 +22,10 @@ vi.mock("../../utils/prisma", async () => {
       $executeRaw: mocks.executeRaw,
       $queryRaw: mocks.queryRaw,
       message: { findMany: mocks.messageFindMany },
+      session: {
+        findMany: mocks.sessionFindMany,
+        findUnique: mocks.sessionFindUnique,
+      },
       ticket: {
         findFirst: mocks.ticketFindFirst,
         findMany: mocks.ticketFindMany,
@@ -74,7 +80,7 @@ vi.mock("./queue", () => ({
 const {
   getTicketDetail,
   InvalidTicketsCursorError,
-  listTickets,
+  listConversations,
   markTicketRead,
   reassignTicket,
   TicketNotAvailableForAssignmentError,
@@ -84,6 +90,8 @@ const {
 function resetMocks() {
   mocks.executeRaw.mockReset().mockResolvedValue(1);
   mocks.queryRaw.mockReset().mockResolvedValue([]);
+  mocks.sessionFindMany.mockReset().mockResolvedValue([]);
+  mocks.sessionFindUnique.mockReset();
   mocks.ticketFindFirst.mockReset();
   mocks.ticketFindMany.mockReset().mockResolvedValue([]);
   mocks.ticketFindUnique.mockReset();
@@ -93,31 +101,50 @@ function resetMocks() {
   mocks.userFindFirst.mockReset().mockResolvedValue({ id: "agent-2" });
 }
 
-describe("listTickets", () => {
+function conversationRow(overrides: { id: string; ticket?: unknown }) {
+  return {
+    channel: { name: "Web Widget", type: "WEB" },
+    createdAt: new Date(),
+    customerIdentity: { email: null, id: "customer-1", name: "Olivia", phoneE164: null },
+    customerLastMessageAt: null,
+    id: overrides.id,
+    messages: [],
+    ticket: overrides.ticket ?? null,
+  };
+}
+
+describe("listConversations", () => {
   beforeEach(resetMocks);
 
-  it("gives an Admin every Ticket, with no visibility restriction", async () => {
-    await listTickets({ id: "admin-1", role: "ADMIN" }, { limit: 20 });
+  it("gives an Admin every Session, ticketed or not, with no visibility restriction", async () => {
+    await listConversations({ id: "admin-1", role: "ADMIN" }, { limit: 20 });
 
-    const call = mocks.ticketFindMany.mock.calls[0]?.[0];
-    expect(call.where.AND[0]).toEqual({});
+    const call = mocks.sessionFindMany.mock.calls[0]?.[0];
+    expect(call.where.AND[0]).toEqual({ OR: [{ ticket: null }, { ticket: { deletedAt: null } }] });
   });
 
-  it("restricts a Human Agent to the queue, their own Tickets, and Tickets they resolved", async () => {
-    await listTickets({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
+  it("restricts a Human Agent to Sessions whose Ticket is visible to them, and never a Ticket-less Session", async () => {
+    await listConversations({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
 
-    const call = mocks.ticketFindMany.mock.calls[0]?.[0];
+    const call = mocks.sessionFindMany.mock.calls[0]?.[0];
     expect(call.where.AND[0]).toEqual({
-      OR: [
-        { assignedHumanAgentId: null, status: "ESCALATED" },
-        { assignedHumanAgentId: "agent-1" },
-        { resolvedBy: "agent-1" },
-      ],
+      ticket: {
+        AND: [
+          {
+            OR: [
+              { assignedHumanAgentId: null, status: "ESCALATED" },
+              { assignedHumanAgentId: "agent-1" },
+              { resolvedBy: "agent-1" },
+            ],
+          },
+          { deletedAt: null },
+        ],
+      },
     });
   });
 
-  it("combines the status, category, priority, and assignee filters", async () => {
-    await listTickets(
+  it("narrows an Admin's result to ticketed Sessions once a Ticket-scoped filter is applied", async () => {
+    await listConversations(
       { id: "admin-1", role: "ADMIN" },
       {
         assigneeId: "agent-2",
@@ -128,21 +155,25 @@ describe("listTickets", () => {
       },
     );
 
-    const call = mocks.ticketFindMany.mock.calls[0]?.[0];
-    expect(call.where.AND).toEqual(
-      expect.arrayContaining([
-        { status: { in: ["ESCALATED", "HUMAN_HANDLING"] } },
-        { category: { in: ["BILLING"] } },
-        { priority: { in: ["HIGH"] } },
-        { assignedHumanAgentId: "agent-2" },
-      ]),
-    );
+    const call = mocks.sessionFindMany.mock.calls[0]?.[0];
+    expect(call.where.AND[0]).toEqual({
+      ticket: {
+        AND: [
+          {},
+          { deletedAt: null },
+          { status: { in: ["ESCALATED", "HUMAN_HANDLING"] } },
+          { category: { in: ["BILLING"] } },
+          { priority: { in: ["HIGH"] } },
+          { assignedHumanAgentId: "agent-2" },
+        ],
+      },
+    });
   });
 
   it("searches by customer name and email", async () => {
-    await listTickets({ id: "admin-1", role: "ADMIN" }, { limit: 20, search: "olivia" });
+    await listConversations({ id: "admin-1", role: "ADMIN" }, { limit: 20, search: "olivia" });
 
-    const call = mocks.ticketFindMany.mock.calls[0]?.[0];
+    const call = mocks.sessionFindMany.mock.calls[0]?.[0];
     expect(call.where.AND).toEqual(
       expect.arrayContaining([
         {
@@ -159,23 +190,47 @@ describe("listTickets", () => {
   });
 
   it("rejects an unknown cursor", async () => {
-    mocks.ticketFindUnique.mockResolvedValue(null);
+    mocks.sessionFindUnique.mockResolvedValue(null);
 
     await expect(
-      listTickets({ id: "admin-1", role: "ADMIN" }, { cursor: "missing", limit: 20 }),
+      listConversations({ id: "admin-1", role: "ADMIN" }, { cursor: "missing", limit: 20 }),
     ).rejects.toBeInstanceOf(InvalidTicketsCursorError);
   });
 
-  it("returns a nextCursor only when more Tickets remain", async () => {
-    mocks.ticketFindMany.mockResolvedValue([
-      { createdAt: new Date(), id: "t-1" },
-      { createdAt: new Date(), id: "t-2" },
+  it("returns a nextCursor only when more Sessions remain", async () => {
+    mocks.sessionFindMany.mockResolvedValue([
+      conversationRow({ id: "s-1" }),
+      conversationRow({ id: "s-2" }),
     ]);
 
-    const result = await listTickets({ id: "admin-1", role: "ADMIN" }, { limit: 1 });
+    const result = await listConversations({ id: "admin-1", role: "ADMIN" }, { limit: 1 });
 
-    expect(result.nextCursor).toBe("t-1");
-    expect(result.tickets).toHaveLength(1);
+    expect(result.nextCursor).toBe("s-1");
+    expect(result.conversations).toHaveLength(1);
+  });
+
+  it("returns a mixed result with the Ticket projected only for a ticketed Session", async () => {
+    mocks.sessionFindMany.mockResolvedValue([
+      conversationRow({
+        id: "s-1",
+        ticket: {
+          assignedHumanAgent: null,
+          category: "BILLING",
+          id: "t-1",
+          priority: "NORMAL",
+          resolvedAt: null,
+          status: "AI_HANDLING",
+          title: "Refund question",
+          updatedAt: new Date(),
+        },
+      }),
+      conversationRow({ id: "s-2" }),
+    ]);
+
+    const result = await listConversations({ id: "admin-1", role: "ADMIN" }, { limit: 20 });
+
+    expect(result.conversations[0]?.ticket).toMatchObject({ id: "t-1", unreadCount: 0 });
+    expect(result.conversations[1]?.ticket).toBeNull();
   });
 });
 
@@ -295,21 +350,35 @@ describe("unread counts", () => {
   beforeEach(resetMocks);
 
   it("scopes the unread query to the requesting user, so one user's read state cannot leak into another's count", async () => {
-    mocks.ticketFindMany.mockResolvedValue([{ createdAt: new Date(), id: "t-1" }]);
+    mocks.sessionFindMany.mockResolvedValue([
+      conversationRow({
+        id: "s-1",
+        ticket: {
+          assignedHumanAgent: null,
+          category: "GENERAL",
+          id: "t-1",
+          priority: "NORMAL",
+          resolvedAt: null,
+          status: "ESCALATED",
+          title: "Help",
+          updatedAt: new Date(),
+        },
+      }),
+    ]);
 
-    await listTickets({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
-    await listTickets({ id: "agent-2", role: "HUMAN_AGENT" }, { limit: 20 });
+    await listConversations({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
+    await listConversations({ id: "agent-2", role: "HUMAN_AGENT" }, { limit: 20 });
 
     const userIdsQueried = mocks.queryRaw.mock.calls.map((call) => call.slice(1)[0]);
     expect(userIdsQueried).toEqual(["agent-1", "agent-2"]);
   });
 
-  it("reports zero unread without querying when no Tickets are visible", async () => {
-    mocks.ticketFindMany.mockResolvedValue([]);
+  it("reports zero unread without querying when no Sessions are visible", async () => {
+    mocks.sessionFindMany.mockResolvedValue([]);
 
-    const result = await listTickets({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
+    const result = await listConversations({ id: "agent-1", role: "HUMAN_AGENT" }, { limit: 20 });
 
-    expect(result.tickets).toEqual([]);
+    expect(result.conversations).toEqual([]);
     expect(mocks.queryRaw).not.toHaveBeenCalled();
   });
 });

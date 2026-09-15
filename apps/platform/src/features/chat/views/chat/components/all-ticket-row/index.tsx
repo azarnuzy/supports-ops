@@ -6,7 +6,12 @@ import { formatEnumLabel, getInitials } from "../../../../../../lib/utils";
 import { formatShortDate } from "../../chat.utils";
 import type { AllTicketRowProps } from "./index.types";
 
-export default function AllTicketRow({ active, onSelect, ticket }: AllTicketRowProps) {
+/** One row of All Conversations: a Session, with its Ticket rendered when
+ * one exists. A Session without a Ticket carries no status, priority,
+ * category, or assignee — it gets an informational "No ticket" label
+ * instead, never a fake Ticket status. */
+export default function AllTicketRow({ active, conversation, onSelect }: AllTicketRowProps) {
+  const { ticket } = conversation;
   return (
     <button
       type="button"
@@ -18,19 +23,19 @@ export default function AllTicketRow({ active, onSelect, ticket }: AllTicketRowP
     >
       <Avatar className="mt-0.5 size-8">
         <AvatarFallback className="text-[11px] ring-1 ring-border">
-          {getInitials(ticket.customerIdentity.name)}
+          {getInitials(conversation.customerIdentity.name)}
         </AvatarFallback>
       </Avatar>
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
           <span className="truncate text-[13px] font-medium leading-5">
-            {ticket.customerIdentity.name}
+            {conversation.customerIdentity.name}
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
             <span className="text-[11px] leading-5 text-muted-foreground tabular-nums">
-              {formatShortDate(ticket.updatedAt)}
+              {formatShortDate(ticket?.updatedAt ?? conversation.createdAt)}
             </span>
-            {ticket.unreadCount > 0 ? (
+            {ticket && ticket.unreadCount > 0 ? (
               <Badge
                 aria-label={`${ticket.unreadCount} unread`}
                 className="min-w-4 justify-center px-1.5"
@@ -42,19 +47,27 @@ export default function AllTicketRow({ active, onSelect, ticket }: AllTicketRowP
           </span>
         </span>
         <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">
-          {ticket.title}
+          {ticket?.title ?? (conversation.lastMessage?.content || "No messages")}
         </span>
         <span className="mt-1.5 flex flex-wrap items-center gap-1 gap-y-1">
-          <StatusBadge status={ticket.status} />
-          <PriorityBadge priority={ticket.priority} />
-          <Badge className="px-1.5" variant="outline">
-            {formatEnumLabel(ticket.category)}
-          </Badge>
-          {ticket.assignedHumanAgent ? (
-            <span className="ml-auto truncate text-[11px] text-muted-foreground">
-              {ticket.assignedHumanAgent.name}
-            </span>
-          ) : null}
+          {ticket ? (
+            <>
+              <StatusBadge status={ticket.status} />
+              <PriorityBadge priority={ticket.priority} />
+              <Badge className="px-1.5" variant="outline">
+                {formatEnumLabel(ticket.category)}
+              </Badge>
+              {ticket.assignedHumanAgent ? (
+                <span className="ml-auto truncate text-[11px] text-muted-foreground">
+                  {ticket.assignedHumanAgent.name}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <Badge className="px-1.5" variant="outline">
+              No ticket
+            </Badge>
+          )}
         </span>
       </span>
     </button>
