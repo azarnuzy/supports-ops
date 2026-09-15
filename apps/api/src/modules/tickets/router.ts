@@ -8,7 +8,6 @@ import { subscribeToTicketQueueEvents, subscribeToWidgetEvents } from "../widget
 import {
   humanReplySchema,
   humanAttachmentReplySchema,
-  listSessionsWithoutTicketQuerySchema,
   listTicketsQuerySchema,
   markTicketReadSchema,
   reassignTicketSchema,
@@ -18,16 +17,15 @@ import {
   claimTicket,
   completeHandoff,
   deleteTicket,
-  getSessionWithoutTicketTranscript,
+  getConversationSessionDetail,
   getTicketDetail,
   HumanAgentNotFoundError,
   InvalidTicketsCursorError,
   InvalidHumanAttachmentError,
   listMyTickets,
-  listSessionsWithoutTicket,
+  listConversations,
   listAiHandlingTickets,
   listSharedHumanQueue,
-  listTickets,
   markTicketRead,
   reassignTicket,
   suggestReply,
@@ -51,7 +49,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
     try {
-      return c.json(await listTickets(user, c.req.valid("query")), 200);
+      return c.json(await listConversations(user, c.req.valid("query")), 200);
     } catch (error) {
       if (error instanceof InvalidTicketsCursorError)
         return c.json({ error: "invalid_cursor" }, 400);
@@ -73,25 +71,11 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     if (!user) return c.json({ error: "forbidden" }, 403);
     return c.json({ tickets: await listAiHandlingTickets(user.workspaceId) }, 200);
   })
-  .get("/without-ticket", zValidator("query", listSessionsWithoutTicketQuerySchema), async (c) => {
+  .get("/conversations/:sessionId", async (c) => {
     const user = requireAdmin(c);
     if (!user) return c.json({ error: "forbidden" }, 403);
     try {
-      return c.json(await listSessionsWithoutTicket(c.req.valid("query")), 200);
-    } catch (error) {
-      if (error instanceof InvalidTicketsCursorError)
-        return c.json({ error: "invalid_cursor" }, 400);
-      throw error;
-    }
-  })
-  .get("/without-ticket/:sessionId", async (c) => {
-    const user = requireAdmin(c);
-    if (!user) return c.json({ error: "forbidden" }, 403);
-    try {
-      return c.json(
-        { session: await getSessionWithoutTicketTranscript(c.req.param("sessionId")) },
-        200,
-      );
+      return c.json({ session: await getConversationSessionDetail(c.req.param("sessionId")) }, 200);
     } catch (error) {
       if (error instanceof SessionNotFoundError) return c.json({ error: "session_not_found" }, 404);
       throw error;
