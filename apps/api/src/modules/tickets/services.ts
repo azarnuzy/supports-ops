@@ -190,7 +190,9 @@ export async function listConversations(user: InboxUser, filters: ListTicketsQue
   if (filters.cursor && !cursorSession) throw new InvalidTicketsCursorError();
 
   const hasTicketOnlyFilters = Boolean(
-    filters.status?.length || filters.category?.length || filters.priority?.length ||
+    filters.status?.length ||
+      filters.category?.length ||
+      filters.priority?.length ||
       filters.assigneeId,
   );
   const ticketGate: Prisma.SessionWhereInput =
@@ -249,7 +251,10 @@ export async function listConversations(user: InboxUser, filters: ListTicketsQue
   const visible = sessions.slice(0, filters.limit);
   const ticketedRows = visible.flatMap((row) => (row.ticket ? [row.ticket] : []));
   const unreadById = new Map(
-    (await attachUnreadCounts(user.id, ticketedRows)).map((ticket) => [ticket.id, ticket.unreadCount]),
+    (await attachUnreadCounts(user.id, ticketedRows)).map((ticket) => [
+      ticket.id,
+      ticket.unreadCount,
+    ]),
   );
 
   return {
