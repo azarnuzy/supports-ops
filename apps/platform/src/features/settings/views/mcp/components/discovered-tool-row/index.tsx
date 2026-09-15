@@ -15,6 +15,12 @@ const statusLabel = {
   UNAVAILABLE: "Unavailable",
 } as const;
 
+const riskLabel = {
+  MUTATING: "Mutating",
+  MUTATING_IRREVERSIBLE: "Mutating (irreversible)",
+  READ_ONLY: "Read-only",
+} as const;
+
 export default function DiscoveredToolRow({
   tool,
   onToggleEnabled,
@@ -33,8 +39,8 @@ export default function DiscoveredToolRow({
       <Badge variant={statusVariant[tool.discoveryStatus]}>
         {statusLabel[tool.discoveryStatus]}
       </Badge>
-      <Badge variant={tool.tool.risk === "MUTATING" ? "destructive" : "secondary"}>
-        {tool.tool.risk === "MUTATING" ? "Mutating" : "Read-only"}
+      <Badge variant={tool.tool.risk === "READ_ONLY" ? "secondary" : "destructive"}>
+        {riskLabel[tool.tool.risk]}
       </Badge>
       <div className="flex items-center gap-2">
         {needsReview || tool.discoveryStatus === "CHANGED" ? (

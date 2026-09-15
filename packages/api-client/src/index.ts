@@ -895,7 +895,7 @@ export async function testKnowledgeRetrieval(client: ApiClient, query: string) {
 }
 
 export type ToolOrigin = "BUILT_IN" | "HTTP" | "MCP";
-export type ToolRisk = "READ_ONLY" | "MUTATING";
+export type ToolRisk = "READ_ONLY" | "MUTATING" | "MUTATING_IRREVERSIBLE";
 export type ToolAvailability = "AVAILABLE" | "UNAVAILABLE";
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export type McpDiscoveryStatus = "CURRENT" | "CHANGED" | "UNAVAILABLE";

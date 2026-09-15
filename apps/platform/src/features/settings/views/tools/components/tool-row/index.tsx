@@ -12,6 +12,19 @@ import type { ToolRowProps } from "./index.types";
 
 const originLabel = { BUILT_IN: "System", HTTP: "Webhook", MCP: "MCP" } as const;
 
+const riskLabel = {
+  MUTATING: "Requires approval",
+  MUTATING_IRREVERSIBLE: "Requires confirmation",
+  READ_ONLY: "Read only",
+} as const;
+
+const riskHint = {
+  MUTATING: "Runs only when the customer asks for this action in their own message. ",
+  MUTATING_IRREVERSIBLE:
+    "Only runs after the agent has proposed this exact action and the customer confirmed it. ",
+  READ_ONLY: null,
+} as const;
+
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const units: ReadonlyArray<[Intl.RelativeTimeFormatUnit, number]> = [
   ["day", 86_400_000],
@@ -46,16 +59,14 @@ export default function ToolRow({
         <div className="flex flex-wrap items-center gap-2">
           <p className="truncate font-medium">{tool.name}</p>
           <Badge variant="outline">{originLabel[tool.origin]}</Badge>
-          <Badge variant={tool.risk === "MUTATING" ? "secondary" : "outline"}>
-            {tool.risk === "MUTATING" ? "Requires approval" : "Read only"}
+          <Badge variant={tool.risk === "READ_ONLY" ? "outline" : "secondary"}>
+            {riskLabel[tool.risk]}
           </Badge>
           {disconnected ? <Badge variant="destructive">Disconnected</Badge> : null}
         </div>
         <p className="mt-1 truncate text-sm text-muted-foreground">{tool.description}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {tool.risk === "MUTATING"
-            ? "Runs only when the customer asks for this action in their own message. "
-            : null}
+          {riskHint[tool.risk]}
           {tool.lastCall
             ? `Last used ${lastCallLabel(tool.lastCall.at)} · ${tool.lastCall.succeeded ? "succeeded" : "failed"}`
             : "Never used yet"}

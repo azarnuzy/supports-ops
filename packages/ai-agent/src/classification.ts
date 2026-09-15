@@ -107,8 +107,9 @@ export async function classifyMessage(params: {
    * first classification of a Session decides whether a Ticket is opened at
    * all, so it has no Ticket to be grouped under and traces on its own. */
   sessionId?: string;
+  userId?: string;
 }): Promise<ClassificationDecision> {
-  const attributes = params.sessionId ? sessionAttributes(params.sessionId) : {};
+  const attributes = params.sessionId ? sessionAttributes(params.sessionId, params.userId) : {};
   const instructions = describeCategories(params.categories);
   const text = describeMessage(params.content, params.history);
   return withSpan("ai_agent.classify", attributes, async (span) => {
@@ -118,6 +119,11 @@ export async function classifyMessage(params: {
     // is what makes classification show a Model, tokens, and cost in the
     // telemetry backend instead of an empty shell around a decision.
     span.setAttribute("anvia.generation.model_id", params.model.modelId);
+    span.setAttributes({
+      "gen_ai.request.model": params.model.modelId,
+      "langfuse.observation.model.name": params.model.modelId,
+      "langfuse.observation.type": "generation",
+    });
     if (captureMode === "full") {
       span.setAttribute(
         "anvia.generation.input",
@@ -140,6 +146,8 @@ export async function classifyMessage(params: {
         "anvia.usage.input_tokens": result.usage.inputTokens,
         "anvia.usage.output_tokens": result.usage.outputTokens,
         "anvia.usage.total_tokens": result.usage.totalTokens,
+        "gen_ai.usage.input_tokens": result.usage.inputTokens,
+        "gen_ai.usage.output_tokens": result.usage.outputTokens,
       });
       if (captureMode === "full") {
         span.setAttribute("anvia.generation.output", JSON.stringify(output));

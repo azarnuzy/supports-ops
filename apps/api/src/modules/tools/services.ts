@@ -379,7 +379,7 @@ function toDto(tool: {
   description: string;
   enabled: boolean;
   inputSchema: unknown;
-  risk: "READ_ONLY" | "MUTATING";
+  risk: "READ_ONLY" | "MUTATING" | "MUTATING_IRREVERSIBLE";
   createdAt: Date;
   updatedAt: Date;
   httpConfig: null | {

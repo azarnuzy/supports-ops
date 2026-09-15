@@ -21,14 +21,13 @@ export const captureMode = process.env.TELEMETRY_CAPTURE_MODE === "full" ? "full
 let observer: AgentObserver | undefined;
 
 /** Spread into `new Agent({...})` to export an agent's runs as spans. The
- * Ticket id passed as `sessionId` groups every run on one Ticket — reply,
- * Copilot draft, Escalation Summary — into a single session in the telemetry
- * backend, alongside the Human Agent's replies on the same Ticket. */
-export function agentObservability(sessionId?: string) {
+ * Session and Customer Identity group every run in the telemetry backend
+ * without exporting the Customer's email address or phone number. */
+export function agentObservability(sessionId?: string, userId?: string) {
   observer ??= createOtelObserver({ captureMode });
   return {
     observability: { observers: { otel: observer }, primaryTrace: "otel" },
-    ...(sessionId ? { trace: { sessionId } } : {}),
+    ...(sessionId ? { trace: { sessionId, userId } } : {}),
   } as const;
 }
 
@@ -41,9 +40,10 @@ export function createAgent<Output>(options: {
   tools?: AgentTools;
   maxTurns?: number;
   sessionId?: string;
+  userId?: string;
 }): Agent<Output> {
   return new Agent({
-    ...agentObservability(options.sessionId),
+    ...agentObservability(options.sessionId, options.userId),
     id: options.id,
     instructions: options.instructions,
     maxTurns: options.maxTurns,

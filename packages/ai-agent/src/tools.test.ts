@@ -22,25 +22,23 @@ describe("createAssignedTools", () => {
     expect(execute).toHaveBeenCalledWith({ input: { customerId: "cust-1" }, toolId: "tool-1" });
   });
 
-  it("denies the fourth call within a Customer Message (max three calls)", async () => {
+  it("denies the sixteenth call within a Customer Message (max fifteen calls)", async () => {
     const execute = vi.fn().mockResolvedValue("ok");
     const [tool] = createAssignedTools([descriptor], execute) ?? [];
 
-    await callTool(tool, {});
-    await callTool(tool, {});
-    await callTool(tool, {});
-    const fourth = await callTool(tool, {});
+    for (let i = 0; i < 15; i++) await callTool(tool, {});
+    const sixteenth = await callTool(tool, {});
 
-    expect(execute).toHaveBeenCalledTimes(3);
-    expect(fourth).toMatch(/budget exhausted/i);
+    expect(execute).toHaveBeenCalledTimes(15);
+    expect(sixteenth).toMatch(/budget exhausted/i);
   });
 
-  it("denies calls once the 15 second budget has elapsed", async () => {
+  it("denies calls once the 60 second budget has elapsed", async () => {
     vi.useFakeTimers();
     try {
       const execute = vi.fn().mockResolvedValue("ok");
       const [tool] = createAssignedTools([descriptor], execute) ?? [];
-      vi.advanceTimersByTime(15_001);
+      vi.advanceTimersByTime(60_001);
 
       const result = await callTool(tool, {});
 

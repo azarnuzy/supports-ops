@@ -1,7 +1,7 @@
 import { Button } from "@repo/ui/components/button";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { toast } from "@repo/ui/components/sonner";
-import type { McpTool } from "@repo/api-client";
+import type { McpTool, ToolRisk } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
 import { PlugIcon, PlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -156,7 +156,7 @@ export const McpPanel = () => {
     });
   }
 
-  function handleReviewSubmit(enabled: boolean, risk: "READ_ONLY" | "MUTATING") {
+  function handleReviewSubmit(enabled: boolean, risk: ToolRisk) {
     if (!reviewing) return;
     reviewTool.mutate(
       { enabled, risk, toolId: reviewing.toolId },

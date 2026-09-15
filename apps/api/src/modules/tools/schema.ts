@@ -17,7 +17,7 @@ const httpToolFields = {
   inputSchema: z.record(z.string(), z.unknown()),
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   name: z.string().trim().min(1).max(100),
-  risk: z.enum(["READ_ONLY", "MUTATING"]),
+  risk: z.enum(["READ_ONLY", "MUTATING", "MUTATING_IRREVERSIBLE"]),
   secretHeaders: secretHeadersSchema.optional().nullable(),
   url: z.url(),
 };

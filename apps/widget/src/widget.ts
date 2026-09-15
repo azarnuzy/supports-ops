@@ -31,7 +31,7 @@ type WidgetMessage = {
 
 const elementName = "supportops-widget";
 
-marked.setOptions({ breaks: true, gfm: false });
+marked.setOptions({ breaks: true, gfm: true });
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") {
     node.setAttribute("target", "_blank");
@@ -653,7 +653,9 @@ function renderWidget(config: WidgetConfig) {
     .typing span:nth-child(3) { animation-delay: .3s; margin-right: 0; }
     @keyframes typing-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
     .message a { color: inherit; }
-    .message :is(p, pre) { margin: 0; }
+    .message :is(p, pre, ul, ol) { margin: 0; }
+    .message :is(ul, ol) { padding-left: 18px; }
+    .message li + li { margin-top: 2px; }
     .header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, ${escapeCss(config.primaryColor)}, color-mix(in srgb, ${escapeCss(config.primaryColor)} 78%, #7c3aed)); color: white; }
     .header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .header-avatar { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; overflow: hidden; border-radius: 11px; background: rgb(255 255 255 / 18%); }
@@ -668,9 +670,9 @@ function renderWidget(config: WidgetConfig) {
     .identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .identity-reset { flex-shrink: 0; width: 24px; height: 24px; color: #64748b; }
     .content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 16px; overflow-y: auto; }
-    .message { display: flex; width: fit-content; max-width: 90%; flex-direction: column; gap: 2px; margin: 0 0 8px; padding: 10px 12px; border-radius: 12px 12px 12px 3px; background: #f1f5f9; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+    .message { display: flex; width: fit-content; max-width: 90%; flex-direction: column; gap: 2px; margin: 0 0 8px; padding: 10px 12px; border-radius: 12px 12px 12px 3px; background: #f1f5f9; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
     .message:has(.attachment-image, .attachment-file) { gap: 6px; }
-    .message-customer { margin-left: auto; border-radius: 12px 12px 3px; background: ${escapeCss(config.primaryColor)}; color: white; }
+    .message-customer { margin-left: auto; border-radius: 12px 12px 3px; background: ${escapeCss(config.primaryColor)}; color: white; white-space: pre-wrap; }
     .message-failed { opacity: .55; outline: 1px dashed #b91c1c; outline-offset: -1px; }
     .welcome { flex: 0 0 auto; text-align: center; }
     .welcome-icon { display: grid; place-items: center; width: 68px; height: 68px; margin: 0 auto 16px; border-radius: 999px; background: color-mix(in srgb, ${escapeCss(config.primaryColor)} 12%, white); color: ${escapeCss(config.primaryColor)}; }

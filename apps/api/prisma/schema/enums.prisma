@@ -17,6 +17,7 @@ enum ToolOrigin {
 enum ToolRisk {
   READ_ONLY
   MUTATING
+  MUTATING_IRREVERSIBLE
 }
 
 enum HttpMethod {

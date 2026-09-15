@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Message } from "@anvia/core";
 import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import {
   createReplyModel,
@@ -21,11 +22,13 @@ export type AiAgentTurnRuntime = {
   escalate(reason: EscalationReason): Promise<void>;
   finish(): Promise<void>;
   isActive(): boolean;
-  loadTicket(): Promise<{ instructions?: string; sessionId: string } | null>;
+  loadMemory(): Promise<Message[]>;
+  loadTicket(): Promise<{ instructions?: string; sessionId: string; userId: string } | null>;
   publishDelta(delta: string, provisionalId: string): Promise<void> | void;
   reply(decision: "CLARIFY" | "REPLY", content: string, provisionalId: string): Promise<void>;
   resolve(): Promise<void>;
   retrieve(): Promise<{ attachments: Source[] }>;
+  saveMemory(messages: Message[]): Promise<void>;
   start(): Promise<void>;
   tools(): Promise<{ descriptors: AssignedToolDescriptor[]; execute: AssignedToolExecutor }>;
 };
@@ -37,26 +40,24 @@ export async function runAiAgentTurn(params: {
   ticketId: string;
   workspaceId: string;
 }) {
-  // Anvia Lens lists traces by this name; a static "ai_agent.run" forced
-  // opening every trace to find the right session. The Customer's message
-  // makes the list itself searchable/skimmable.
-  const traceName = `ai_agent.run: ${params.customerMessage.trim().slice(0, 60)}`;
+  const ticket = await params.runtime.loadTicket();
+  if (!ticket) return;
+
   return withSpan(
-    traceName,
+    "ai_agent.turn",
     {
+      ...sessionAttributes(ticket.sessionId, ticket.userId),
+      "anvia.generation.model_id": params.modelConfig?.modelId ?? "unconfigured",
+      "anvia.trace.name": "ai_agent.turn",
+      "anvia.trace.tags": ["ai-agent", "customer-support"],
+      "langfuse.trace.name": "ai_agent.turn",
+      "langfuse.trace.tags": ["ai-agent", "customer-support"],
+      "langfuse.trace.metadata.ticket_id": params.ticketId,
+      "langfuse.trace.metadata.workspace_id": params.workspaceId,
       "supportops.ticket_id": params.ticketId,
       "supportops.workspace_id": params.workspaceId,
     },
     async (run) => {
-      const ticket = await params.runtime.loadTicket();
-      if (!ticket) {
-        run.setAttribute("ai_agent.decision", "SKIPPED");
-        return;
-      }
-      // The Session, not the Ticket, is the conversation: it starts before the
-      // Ticket exists and outlives every run on it, so it is what groups this
-      // run with the Customer's earlier messages and the Human Agent's replies.
-      run.setAttributes(sessionAttributes(ticket.sessionId));
       if (!params.modelConfig) {
         await params.runtime.escalate("AI_GENERATION_FAILED");
         return;
@@ -75,6 +76,7 @@ export async function runAiAgentTurn(params: {
           },
         );
         const clarificationCount = await params.runtime.countClarifications();
+        const messages = await params.runtime.loadMemory();
         const assignedTools = await params.runtime.tools();
         run.setAttribute("ai_agent.assigned_tools", assignedTools.descriptors.length);
 
@@ -89,14 +91,17 @@ export async function runAiAgentTurn(params: {
               clarificationCount,
               customerMessage: params.customerMessage,
               instructions: ticket.instructions,
+              messages,
               model,
               onDelta: (delta) => {
                 if (params.runtime.isActive()) {
                   return params.runtime.publishDelta(delta, provisionalId);
                 }
               },
+              onMessages: params.runtime.saveMemory,
               sessionId: ticket.sessionId,
               tools,
+              userId: ticket.userId,
             });
             break;
           } catch (error) {

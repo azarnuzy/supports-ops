@@ -45,7 +45,7 @@ export async function executeHttpTool(
       origin: "HTTP",
     },
   });
-  if (!tool?.httpConfig || (tool.risk === "MUTATING" && !input.explicitCustomerRequest)) {
+  if (!tool?.httpConfig || (tool.risk !== "READ_ONLY" && !input.explicitCustomerRequest)) {
     throw new HttpToolFailure("DENIED");
   }
   try {

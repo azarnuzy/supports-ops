@@ -3,6 +3,7 @@ import type { AssignedTool } from "./orchestration";
 
 const mocks = vi.hoisted(() => ({
   aiActivityCreate: vi.fn(),
+  classifyExplicitMutationRequest: vi.fn(),
   embed: vi.fn(),
   executeBuiltInTool: vi.fn(),
   executeHttpTool: vi.fn(),
@@ -17,12 +18,18 @@ vi.mock("../../config", () => ({ embeddingConfig: { apiKey: "key" } }));
 vi.mock("@repo/knowledge", () => ({
   createOpenAiEmbeddingClient: () => ({ embed: mocks.embed }),
 }));
+vi.mock("@repo/ai-agent", () => ({
+  classifyExplicitMutationRequest: mocks.classifyExplicitMutationRequest,
+}));
 vi.mock("./execution", () => ({ executeHttpTool: mocks.executeHttpTool }));
 vi.mock("../mcp/services", () => ({ executeMcpTool: mocks.executeMcpTool }));
 vi.mock("./services", () => ({
   executeBuiltInTool: mocks.executeBuiltInTool,
   resolveTools: mocks.resolveTools,
 }));
+
+const fakeModel = { id: "fake-model" } as never;
+const noPriorAiMessage = () => Promise.resolve(null);
 
 const { createAssignedToolExecutor, describeAssignedTools } = await import("./orchestration");
 
@@ -59,6 +66,7 @@ const mutatingTool = makeTool({
 
 beforeEach(() => {
   mocks.aiActivityCreate.mockReset();
+  mocks.classifyExplicitMutationRequest.mockReset();
   mocks.embed.mockReset().mockResolvedValue([[0.1, 0.2]]);
   mocks.executeBuiltInTool.mockReset();
   mocks.executeHttpTool.mockReset();
@@ -83,9 +91,13 @@ describe("describeAssignedTools", () => {
 });
 
 describe("createAssignedToolExecutor", () => {
-  it("denies a MUTATING Tool call without surfacing a crash to the caller's caller", async () => {
+  it("denies a MUTATING Tool call the classifier says the current message did not request", async () => {
+    mocks.classifyExplicitMutationRequest.mockResolvedValue(false);
     const executor = createAssignedToolExecutor({
       aiAgentId: "agent-1",
+      customerMessage: "What shoes do you have?",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
       ticketId: "t1",
       tools: [mutatingTool],
       workspaceId: "w1",
@@ -96,11 +108,95 @@ describe("createAssignedToolExecutor", () => {
     expect(mocks.aiActivityCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({ eventType: "TOOL_FAILED" }),
     });
+    expect(mocks.classifyExplicitMutationRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ requireConfirmation: false }),
+    );
+  });
+
+  it("dispatches a MUTATING Tool call the classifier says the current message did request", async () => {
+    mocks.classifyExplicitMutationRequest.mockResolvedValue(true);
+    mocks.executeHttpTool.mockResolvedValue("ok");
+    const executor = createAssignedToolExecutor({
+      aiAgentId: "agent-1",
+      customerMessage: "Please add one pair to my cart.",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
+      ticketId: "t1",
+      tools: [mutatingTool],
+      workspaceId: "w1",
+    });
+
+    await expect(executor({ input: {}, toolId: mutatingTool.id })).resolves.toBe("ok");
+    expect(mocks.executeHttpTool).toHaveBeenCalledWith(
+      expect.objectContaining({ explicitCustomerRequest: true }),
+    );
+  });
+
+  it("passes the prior proposal when a MUTATING Tool is confirmed with yes", async () => {
+    mocks.classifyExplicitMutationRequest.mockResolvedValue(true);
+    mocks.executeHttpTool.mockResolvedValue("ok");
+    const getPriorAiMessage = vi
+      .fn()
+      .mockResolvedValue("May I update the checkout with this shipping information?");
+    const executor = createAssignedToolExecutor({
+      aiAgentId: "agent-1",
+      customerMessage: "yes please",
+      getPriorAiMessage,
+      model: fakeModel,
+      ticketId: "t1",
+      tools: [mutatingTool],
+      workspaceId: "w1",
+    });
+
+    await expect(executor({ input: {}, toolId: mutatingTool.id })).resolves.toBe("ok");
+    expect(getPriorAiMessage).toHaveBeenCalledOnce();
+    expect(mocks.classifyExplicitMutationRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customerMessage: "yes please",
+        priorAiMessage: "May I update the checkout with this shipping information?",
+        requireConfirmation: false,
+      }),
+    );
+  });
+
+  it("denies a MUTATING_IRREVERSIBLE Tool call until the Agent's own proposal is confirmed", async () => {
+    const irreversibleTool = makeTool({
+      id: "tool-irreversible-1",
+      name: "createCheckout",
+      origin: "HTTP",
+      risk: "MUTATING_IRREVERSIBLE",
+    });
+    mocks.classifyExplicitMutationRequest.mockResolvedValue(false);
+    const getPriorAiMessage = vi.fn().mockResolvedValue("I'll charge $29.99, confirm?");
+    const executor = createAssignedToolExecutor({
+      aiAgentId: "agent-1",
+      customerMessage: "Yes, go ahead.",
+      getPriorAiMessage,
+      model: fakeModel,
+      ticketId: "t1",
+      tools: [irreversibleTool],
+      workspaceId: "w1",
+    });
+
+    await expect(executor({ input: {}, toolId: irreversibleTool.id })).rejects.toThrow(
+      /irreversible/i,
+    );
+    expect(getPriorAiMessage).toHaveBeenCalled();
+    expect(mocks.classifyExplicitMutationRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        priorAiMessage: "I'll charge $29.99, confirm?",
+        requireConfirmation: true,
+      }),
+    );
+    expect(mocks.executeHttpTool).not.toHaveBeenCalled();
   });
 
   it("rejects a Tool ID that is not in the resolved assigned set (unassigned denial)", async () => {
     const executor = createAssignedToolExecutor({
       aiAgentId: "agent-1",
+      customerMessage: "Please add one pair to my cart.",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
       ticketId: "t1",
       tools: [httpTool],
       workspaceId: "w1",
@@ -116,6 +212,9 @@ describe("createAssignedToolExecutor", () => {
     mocks.executeHttpTool.mockResolvedValue(injection);
     const executor = createAssignedToolExecutor({
       aiAgentId: "agent-1",
+      customerMessage: "Please add one pair to my cart.",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
       ticketId: "t1",
       tools: [httpTool],
       workspaceId: "w1",
@@ -138,6 +237,9 @@ describe("createAssignedToolExecutor", () => {
     mocks.executeBuiltInTool.mockResolvedValue([{ chunkId: "chunk-1" }]);
     const executor = createAssignedToolExecutor({
       aiAgentId: "agent-1",
+      customerMessage: "Please add one pair to my cart.",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
       ticketId: "t1",
       tools: [builtInTool],
       workspaceId: "w1",
@@ -161,6 +263,9 @@ describe("createAssignedToolExecutor", () => {
     });
     const executor = createAssignedToolExecutor({
       aiAgentId: "agent-1",
+      customerMessage: "Please add one pair to my cart.",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
       ticketId: "t1",
       tools: [builtInTool],
       workspaceId: "w1",
@@ -181,6 +286,9 @@ describe("createAssignedToolExecutor", () => {
     mocks.executeMcpTool.mockResolvedValue({ status: "PAID" });
     const executor = createAssignedToolExecutor({
       aiAgentId: "agent-1",
+      customerMessage: "Please add one pair to my cart.",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
       ticketId: "t1",
       tools: [mcpTool],
       workspaceId: "w1",
