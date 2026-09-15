@@ -201,6 +201,7 @@ describe("listKnowledgeSources", () => {
     const result = await listKnowledgeSources();
 
     expect(mocks.knowledgeSourceFindMany).toHaveBeenCalledWith({
+      include: { _count: { select: { chunks: true } } },
       orderBy: { createdAt: "desc" },
       where: { deletedAt: null },
     });

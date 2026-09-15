@@ -20,6 +20,7 @@ export type KnowledgeSourceDto = {
   createdAt: Date;
   updatedAt: Date;
   publishedAt: Date | null;
+  chunkCount: number;
 };
 
 export type KnowledgeSourcesResponse = {
