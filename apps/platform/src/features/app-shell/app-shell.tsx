@@ -169,11 +169,7 @@ export function PlatformAppShell({
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild tooltip="SupportOps">
                 <Link to="/">
-                  <img
-                    src="/support-ops-logo.png"
-                    alt=""
-                    className="size-7 shrink-0 rounded-md"
-                  />
+                  <img src="/support-ops-logo.png" alt="" className="size-7 shrink-0 rounded-md" />
                   <span className="text-[13px] font-semibold group-data-[collapsible=icon]:hidden">
                     SupportOps
                   </span>
