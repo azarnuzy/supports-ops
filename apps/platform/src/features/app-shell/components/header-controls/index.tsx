@@ -1,4 +1,4 @@
-import { ThemePresetSelector, ThemeSelector } from "@repo/ui/components/theme-selector";
+import { ThemeSelector } from "@repo/ui/components/theme-selector";
 
 export function HeaderControls() {
   return (
@@ -11,7 +11,6 @@ export function HeaderControls() {
           system: "System",
         }}
       />
-      <ThemePresetSelector className="hidden sm:block" />
     </div>
   );
 }
