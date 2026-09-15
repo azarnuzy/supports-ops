@@ -58,9 +58,10 @@ import { formatEnumLabel, getInitials } from "../../../../lib/utils";
 import { meQueryOptions, workspaceUsersQueryOptions } from "../../../auth";
 import { describeActivity } from "../../../tickets/activity-description";
 import {
+  conversationSessionQueryOptions,
   liveAiTicketsQueryOptions,
   myTicketsQueryOptions,
-  useAllTicketsQuery,
+  useConversationsQuery,
   sharedHumanQueueQueryOptions,
   ticketDetailQueryOptions,
   useClaimTicketMutation,
@@ -123,7 +124,15 @@ function FilterGroup({
   );
 }
 
-const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?: string }) => {
+const ChatView = ({
+  scope = "mine",
+  sessionId,
+  ticketId,
+}: {
+  scope?: TicketScope;
+  sessionId?: string;
+  ticketId?: string;
+}) => {
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions);
   const isAdmin = me.data?.role === "ADMIN";
@@ -134,6 +143,10 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const ticket = useQuery({
     ...ticketDetailQueryOptions(ticketId ?? ""),
     enabled: Boolean(ticketId),
+  });
+  const conversationSession = useQuery({
+    ...conversationSessionQueryOptions(sessionId ?? ""),
+    enabled: Boolean(sessionId) && !ticketId,
   });
   const attachmentCapability: AttachmentCapability =
     ticket.data?.ticket.channel.type === "WHATSAPP"
@@ -162,7 +175,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   const categoryFilter = routeSearch.category as TicketCategory | undefined;
   const currentLocation = ticketId
     ? { params: { ticketId }, to: scopeRoutes[scope].ticket }
-    : { to: scopeRoutes[scope].list };
+    : sessionId && scope === "all"
+      ? { params: { sessionId }, to: scopeRoutes.all.session }
+      : { to: scopeRoutes[scope].list };
   const setSearch = (value: string) =>
     void navigate({
       ...currentLocation,
@@ -197,14 +212,14 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
         [key]: value || undefined,
       }),
     });
-  const allTickets = useAllTicketsQuery({
+  const conversations = useConversationsQuery({
     category: scope === "all" ? categoryFilter : undefined,
     enabled: scope === "all",
     priority: scope === "all" ? priorityFilter : undefined,
     search: scope === "all" ? search || undefined : undefined,
     status: scope === "all" ? statusFilter : undefined,
   });
-  const allTicketRows = allTickets.data?.pages.flatMap((page) => page.tickets) ?? [];
+  const conversationRows = conversations.data?.pages.flatMap((page) => page.conversations) ?? [];
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
@@ -235,6 +250,7 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
   );
 
   const detail = ticket.data?.ticket;
+  const conversation = conversationSession.data?.session;
   const canReply =
     Boolean(detail) &&
     Boolean(me.data) &&
@@ -269,9 +285,9 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
     ) ?? [];
 
   useEffect(() => {
-    if (!detail) return;
+    if (!detail && !conversation) return;
     transcriptEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [detail]);
+  }, [conversation, detail]);
 
   return (
     <PlatformAppShell fullBleed>
@@ -426,48 +442,54 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {scope === "all" ? (
               <>
-                {allTickets.isPending ? (
+                {conversations.isPending ? (
                   <div className="grid gap-1.5 p-1">
                     <Skeleton className="h-[4.25rem] w-full" />
                     <Skeleton className="h-[4.25rem] w-full" />
                     <Skeleton className="h-[4.25rem] w-full" />
                   </div>
                 ) : null}
-                {allTickets.isError ? (
+                {conversations.isError ? (
                   <p className="p-4 text-center text-xs text-destructive">
-                    Unable to load Tickets.
+                    Unable to load Conversations.
                   </p>
                 ) : null}
-                {allTickets.data && allTicketRows.length === 0 ? (
+                {conversations.data && conversationRows.length === 0 ? (
                   <p className="p-4 text-center text-xs text-muted-foreground">
-                    No Tickets match this search and filter.
+                    No Conversations match this search and filter.
                   </p>
                 ) : null}
                 <div className="flex flex-col gap-0.5">
-                  {allTicketRows.map((row) => (
+                  {conversationRows.map((row) => (
                     <AllTicketRow
                       key={row.id}
-                      active={row.id === ticketId}
+                      active={row.ticket ? row.ticket.id === ticketId : row.id === sessionId}
+                      conversation={row}
                       onSelect={() =>
-                        void navigate({
-                          params: { ticketId: row.id },
-                          search: (prev) => prev,
-                          to: scopeRoutes.all.ticket,
-                        })
+                        void (row.ticket
+                          ? navigate({
+                              params: { ticketId: row.ticket.id },
+                              search: (prev) => prev,
+                              to: scopeRoutes.all.ticket,
+                            })
+                          : navigate({
+                              params: { sessionId: row.id },
+                              search: (prev) => prev,
+                              to: scopeRoutes.all.session,
+                            }))
                       }
-                      ticket={row}
                     />
                   ))}
                 </div>
-                {allTickets.hasNextPage ? (
+                {conversations.hasNextPage ? (
                   <Button
                     className="mt-2 w-full"
-                    disabled={allTickets.isFetchingNextPage}
-                    onClick={() => void allTickets.fetchNextPage()}
+                    disabled={conversations.isFetchingNextPage}
+                    onClick={() => void conversations.fetchNextPage()}
                     size="sm"
                     variant="outline"
                   >
-                    {allTickets.isFetchingNextPage ? "Loading…" : "Load more"}
+                    {conversations.isFetchingNextPage ? "Loading…" : "Load more"}
                   </Button>
                 ) : null}
               </>
@@ -517,7 +539,10 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
           </div>
         </aside>
         <section
-          className={cn("flex min-h-0 flex-col overflow-hidden", !ticketId && "hidden md:flex")}
+          className={cn(
+            "flex min-h-0 flex-col overflow-hidden",
+            !ticketId && !sessionId && "hidden md:flex",
+          )}
         >
           {reconnecting ? (
             <p className="border-b bg-muted p-2 text-center text-xs text-muted-foreground">
@@ -545,10 +570,14 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                 : "Failed to assign the Ticket."}
             </p>
           ) : null}
-          {!ticketId ? (
+          {!ticketId && !sessionId ? (
             <Empty className="m-auto border-0">
-              <EmptyTitle>Select a Ticket</EmptyTitle>
-              <EmptyDescription>Choose a Ticket from Mine to view its transcript.</EmptyDescription>
+              <EmptyTitle>{scope === "all" ? "Select a Conversation" : "Select a Ticket"}</EmptyTitle>
+              <EmptyDescription>
+                {scope === "all"
+                  ? "Choose a Conversation to view its transcript."
+                  : "Choose a Ticket from Mine to view its transcript."}
+              </EmptyDescription>
             </Empty>
           ) : null}
           {ticketId && ticket.isPending ? (
@@ -564,6 +593,69 @@ const ChatView = ({ scope = "mine", ticketId }: { scope?: TicketScope; ticketId?
                 It may not exist, or you may not have access to it.
               </EmptyDescription>
             </Empty>
+          ) : null}
+          {sessionId && !ticketId && conversationSession.isPending ? (
+            <div className="grid gap-3 p-6">
+              <Skeleton className="h-6 w-64" />
+              <Skeleton className="h-4 w-96" />
+            </div>
+          ) : null}
+          {sessionId && !ticketId && conversationSession.isError ? (
+            <Empty className="m-auto border-0">
+              <EmptyTitle>Unable to load this Conversation</EmptyTitle>
+              <EmptyDescription>
+                It may have become a Ticket, or you may not have access to it.
+              </EmptyDescription>
+            </Empty>
+          ) : null}
+          {conversation ? (
+            <>
+              <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <Link
+                    aria-label="Back to the conversation list"
+                    className="shrink-0 md:hidden"
+                    to={scopeRoutes.all.list}
+                  >
+                    <ArrowLeftIcon className="size-4" />
+                  </Link>
+                  <Avatar className="size-9">
+                    <AvatarFallback className="text-xs">
+                      {getInitials(conversation.customerIdentity.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm leading-5 font-semibold">
+                      {conversation.customerIdentity.name}
+                    </p>
+                    <p className="truncate text-xs leading-4 text-muted-foreground">
+                      {conversation.channel.name}
+                    </p>
+                  </div>
+                </div>
+                <Badge className="shrink-0 px-1.5" variant="outline">
+                  No ticket
+                </Badge>
+              </header>
+              <MessageScroller>
+                <MessageScrollerContent className="gap-4 bg-muted/40 px-4 py-4">
+                  {conversation.messages.map((message) => (
+                    <div key={message.id}>
+                      <TranscriptMessage
+                        message={message}
+                        onOpenImage={() => undefined}
+                        onRetry={() => undefined}
+                      />
+                    </div>
+                  ))}
+                  <div ref={transcriptEnd} />
+                </MessageScrollerContent>
+              </MessageScroller>
+              <p className="shrink-0 border-t bg-background p-2.5 text-center text-xs text-muted-foreground">
+                No Ticket was opened for this conversation, so there is nothing to reply to or
+                escalate here.
+              </p>
+            </>
           ) : null}
           {detail ? (
             <>
