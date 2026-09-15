@@ -8,10 +8,12 @@ import {
 } from "@repo/ui/components/dropdown-menu";
 import { Switch } from "@repo/ui/components/switch";
 import { MoreHorizontalIcon, ServerIcon } from "lucide-react";
+import ConnectionStateBadge from "../connection-state-badge";
 import type { ServerRowProps } from "./index.types";
 
 export default function ServerRow({
   server,
+  connectionState,
   activeToolCount,
   onOpenDetail,
   onToggleServerEnabled,
@@ -31,9 +33,7 @@ export default function ServerRow({
       {activeToolCount === undefined ? null : (
         <Badge variant="outline">{activeToolCount} active tools</Badge>
       )}
-      <Badge variant={server.enabled ? "outline" : "secondary"}>
-        {server.enabled ? "Enabled" : "Disabled"}
-      </Badge>
+      <ConnectionStateBadge state={connectionState} />
       <Switch
         aria-label={`Enable ${server.name}`}
         checked={server.enabled}

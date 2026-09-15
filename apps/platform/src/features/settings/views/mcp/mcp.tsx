@@ -1,11 +1,14 @@
 import { Button } from "@repo/ui/components/button";
+import { Input } from "@repo/ui/components/input";
 import { toast } from "@repo/ui/components/sonner";
 import type { McpTool, ToolRisk } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { PlugIcon, PlusIcon } from "lucide-react";
+import { PlugIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { PlatformAppShell } from "../../../app-shell";
 import ResourceListState from "../../components/resource-list-state";
 import ResourcePagination from "../../components/resource-pagination";
+import { SettingsHeader } from "../../components/settings-header";
 import { ReviewToolDialog, ServerDialog, ServerRow, ServerSheet } from "./components";
 import {
   mcpServersQueryOptions,
@@ -18,10 +21,11 @@ import {
   useUpdateServerMutation,
 } from "./mcp.hooks";
 import { emptyMcpServerForm, type McpServerFormState } from "./mcp.types";
+import { getConnectionState } from "./mcp.utils";
 
 const PAGE_SIZE = 8;
 
-export const McpPanel = () => {
+const McpServersView = () => {
   const servers = useQuery(mcpServersQueryOptions);
   const createServer = useCreateServerMutation();
   const updateServer = useUpdateServerMutation();
@@ -41,9 +45,21 @@ export const McpPanel = () => {
   >({});
   const [reviewing, setReviewing] = useState<McpTool | null>(null);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
 
-  const items = servers.data?.servers ?? [];
-  const detailServer = items.find((server) => server.id === detailId) ?? null;
+  const allServers = servers.data?.servers ?? [];
+  const query = search.trim().toLowerCase();
+  const items = allServers.filter(
+    (server) =>
+      !query ||
+      server.name.toLowerCase().includes(query) ||
+      server.url.toLowerCase().includes(query),
+  );
+  const detailServer = allServers.find((server) => server.id === detailId) ?? null;
+  const detailLastTest = detailId ? lastTestByServer[detailId] : undefined;
+  const detailConnectionState = detailServer
+    ? getConnectionState(detailServer.enabled, detailLastTest)
+    : "disconnected";
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageItems = items.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -61,7 +77,7 @@ export const McpPanel = () => {
   }
 
   function openEdit(id: string) {
-    const server = items.find((item) => item.id === id);
+    const server = allServers.find((item) => item.id === id);
     setForm({
       ...emptyMcpServerForm,
       name: server?.name ?? "",
@@ -202,59 +218,82 @@ export const McpPanel = () => {
   }
 
   return (
-    <div className="grid gap-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Connect a remote Streamable HTTP MCP server to import its tools. Nothing it exposes is
-          callable until you review and enable it.
-        </p>
-        <Button onClick={openCreate}>
-          <PlusIcon className="size-4" />
-          Add server
-        </Button>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <ResourceListState
-          isPending={servers.isPending}
-          skeletonCount={3}
-          isError={servers.isError}
-          errorLabel="Unable to load MCP servers."
-          onRetry={() => void servers.refetch()}
-          isEmpty={items.length === 0}
-          emptyIcon={<PlugIcon className="size-5 text-muted-foreground" />}
-          emptyTitle="No MCP servers found"
-          emptyDescription="This agent has no connected MCP servers yet."
-          emptyAction={
-            <Button size="sm" variant="outline" onClick={openCreate}>
+    <PlatformAppShell>
+      <section className="grid gap-6">
+        <SettingsHeader
+          title="MCP Servers"
+          description="Connect a remote Streamable HTTP MCP server to import its tools. Nothing it exposes is callable until you review and enable it."
+          action={
+            <Button onClick={openCreate}>
               <PlusIcon className="size-4" />
-              Add MCP Server
+              Add server
             </Button>
           }
         />
-        {!servers.isPending && !servers.isError && items.length > 0
-          ? pageItems.map((server) => (
-              <ServerRow
-                key={server.id}
-                server={server}
-                activeToolCount={
-                  toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length
-                }
-                onOpenDetail={() => setDetailId(server.id)}
-                onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
-                onDelete={() => handleDelete(server.id)}
-              />
-            ))
-          : null}
-        <ResourcePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
-      </div>
+
+        <div className="relative max-w-sm">
+          <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Search MCP servers"
+            className="pl-9"
+            placeholder="Search servers…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <ResourceListState
+            isPending={servers.isPending}
+            skeletonCount={3}
+            isError={servers.isError}
+            errorLabel="Unable to load MCP servers."
+            onRetry={() => void servers.refetch()}
+            isEmpty={items.length === 0}
+            emptyIcon={<PlugIcon className="size-5 text-muted-foreground" />}
+            emptyTitle={allServers.length === 0 ? "No MCP servers found" : "No matching servers"}
+            emptyDescription={
+              allServers.length === 0
+                ? "This agent has no connected MCP servers yet."
+                : "Try a different search term."
+            }
+            emptyAction={
+              allServers.length === 0 ? (
+                <Button size="sm" variant="outline" onClick={openCreate}>
+                  <PlusIcon className="size-4" />
+                  Add MCP Server
+                </Button>
+              ) : undefined
+            }
+          />
+          {!servers.isPending && !servers.isError && items.length > 0
+            ? pageItems.map((server) => (
+                <ServerRow
+                  key={server.id}
+                  server={server}
+                  connectionState={getConnectionState(server.enabled, lastTestByServer[server.id])}
+                  activeToolCount={
+                    toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length
+                  }
+                  onOpenDetail={() => setDetailId(server.id)}
+                  onToggleServerEnabled={(enabled) =>
+                    handleToggleServerEnabled(server.id, enabled)
+                  }
+                  onDelete={() => handleDelete(server.id)}
+                />
+              ))
+            : null}
+          <ResourcePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
+        </div>
+      </section>
 
       <ServerSheet
         open={detailId !== null}
         onOpenChange={(open) => !open && setDetailId(null)}
         server={detailServer}
+        connectionState={detailConnectionState}
         tools={detailId ? toolsByServer[detailId] : undefined}
-        lastTest={detailId ? lastTestByServer[detailId] : undefined}
+        lastTest={detailLastTest}
         isTesting={testConnection.isPending && testConnection.variables === detailId}
         isDiscovering={discoverTools.isPending && discoverTools.variables === detailId}
         onTest={() => detailId && handleTest(detailId)}
@@ -295,8 +334,8 @@ export const McpPanel = () => {
         onSubmit={handleReviewSubmit}
         isPending={reviewTool.isPending}
       />
-    </div>
+    </PlatformAppShell>
   );
 };
 
-export default McpPanel;
+export default McpServersView;

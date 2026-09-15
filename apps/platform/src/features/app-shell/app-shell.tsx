@@ -35,6 +35,7 @@ import {
   LogOutIcon,
   MessageCircleIcon,
   MessageSquareCodeIcon,
+  PlugIcon,
   TagsIcon,
   TicketCheckIcon,
   UsersRoundIcon,
@@ -139,6 +140,7 @@ export function PlatformAppShell({
             items: [
               { icon: BotIcon, label: "AI Agent", to: "/agent" },
               { icon: WrenchIcon, label: "Tools", to: "/agent/tools" },
+              { icon: PlugIcon, label: "MCP Servers", to: "/agent/mcp-servers" },
               { icon: LibraryBigIcon, label: "Knowledge", to: "/knowledge" },
             ],
             label: "Configure",

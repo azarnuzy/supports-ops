@@ -8,7 +8,7 @@ export const Route = createFileRoute("/agent/tools")({
   head: () =>
     pageMetadata({
       title: "Tools",
-      description: "Webhooks, MCP servers, and system tools available to your AI Agent.",
+      description: "Webhooks and system tools available to your AI Agent.",
       path: "/agent/tools",
       noIndex: true,
     }),
