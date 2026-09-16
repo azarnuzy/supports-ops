@@ -1,6 +1,7 @@
-import { InboxIcon } from "lucide-react";
+import { ArrowRightIcon, InboxIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
+import { Link } from "@tanstack/react-router";
 import {
   CardAction,
   CardContent,
@@ -8,65 +9,84 @@ import {
   CardHeader,
   CardTitle,
 } from "@repo/ui/components/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@repo/ui/components/table";
 
+import { formatResponseTime } from "../../dashboard.utils";
 import DashboardCard from "../dashboard-card";
 import type { AgentLoadCardProps } from "./index.types";
 
-export default function AgentLoadCard({ loads }: AgentLoadCardProps) {
-  const sorted = [...loads].sort((a, b) => b.activeTicketCount - a.activeTicketCount);
-  const max = Math.max(0, ...loads.map((load) => load.activeTicketCount));
-  const total = loads.reduce((sum, load) => sum + load.activeTicketCount, 0);
+function initialsOf(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word.charAt(0).toUpperCase())
+    .join("");
+}
 
+export default function AgentLoadCard({ agentStats }: AgentLoadCardProps) {
   return (
-    <DashboardCard>
-      <CardHeader className="gap-1.5">
-        <CardTitle className="text-base leading-5">Active Tickets per Human Agent</CardTitle>
-        <CardDescription className="leading-5">Current human-handled workload.</CardDescription>
+    <DashboardCard className="gap-3 py-3.5">
+      <CardHeader className="px-3.5">
+        <CardTitle className="text-sm leading-4">Human Agent Workload</CardTitle>
+        <CardDescription className="text-xs leading-4">
+          Active Human Agents and their assigned Tickets.
+        </CardDescription>
         <CardAction>
-          <span className="text-xs tabular-nums text-muted-foreground">{total} Tickets</span>
+          <Link
+            to="/workspace/users"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            View all agents
+            <ArrowRightIcon className="size-3" />
+          </Link>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-1.5">
-        {sorted.length > 0 ? (
-          sorted.map((load, index) => {
-            const initials = load.humanAgentName
-              .split(/\s+/)
-              .slice(0, 2)
-              .map((word) => word.charAt(0).toUpperCase())
-              .join("");
-            return (
-              <div key={load.humanAgentId} className="-mx-2 flex items-center gap-3 px-2 py-2">
-                <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                  {index + 1}
-                </span>
-                <Avatar>
-                  <AvatarFallback className="text-xs font-semibold text-foreground">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium">{load.humanAgentName}</span>
-                    <span className="text-sm font-semibold tabular-nums">
-                      {load.activeTicketCount}
+      <CardContent className="px-3.5">
+        {agentStats.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Human Agent</TableHead>
+                <TableHead className="text-right">Open Tickets</TableHead>
+                <TableHead className="text-right">Resolved</TableHead>
+                <TableHead className="text-right">Avg. Response</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {agentStats.map((agent) => (
+                <TableRow key={agent.humanAgentId}>
+                  <TableCell>
+                    <span className="flex items-center gap-2.5">
+                      <Avatar className="size-7">
+                        <AvatarFallback className="text-[11px] font-semibold text-foreground">
+                          {initialsOf(agent.humanAgentName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="truncate font-medium">{agent.humanAgentName}</span>
                     </span>
-                  </div>
-                  <div aria-hidden className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-[width] duration-500"
-                      style={{
-                        width: `${max === 0 ? 0 : (load.activeTicketCount / max) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })
+                  </TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">
+                    {agent.openTicketCount}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{agent.resolvedCount}</TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {formatResponseTime(agent.avgFirstResponseSeconds)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         ) : (
-          <div className="flex items-center gap-2.5 rounded-lg border border-dashed px-3 py-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2.5 rounded-lg border border-dashed px-3 py-6 text-sm text-muted-foreground">
             <InboxIcon className="size-4 shrink-0" />
-            No active human-handled Tickets.
+            No Human Agent activity in this range.
           </div>
         )}
       </CardContent>

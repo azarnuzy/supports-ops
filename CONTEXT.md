@@ -245,11 +245,11 @@ Poll-refreshed data (`react-query` `refetchInterval`), not push-delivered. The p
 _Avoid_: Real-time, Streaming (both imply push delivery)
 
 **Conversation Traffic**:
-Count of Tickets created per hour, shown as a 7-day hourly heatmap. Counts Ticket creation, never Message volume.
+Count of Tickets created, shown on the dashboard as a daily area chart over the selected date range, with a per-hour heatmap beneath it. Counts Ticket creation, never Message volume.
 _Avoid_: Message volume, Chat volume
 
 **Resolutions** (dashboard widget):
-Count of Tickets resolved per hour, shown as a 7-day hourly heatmap. Not split by Resolution Reason.
+Count of Tickets resolved per hour, shown as an hourly heatmap under the selected date range. Not split by Resolution Reason.
 _Avoid_: Closures
 
 Ticket status on the dashboard is reported using the actual four `status` values (see Ticket, above) — `AI_HANDLING`, `ESCALATED`, `HUMAN_HANDLING`, `RESOLVED`. There is no "Pending" or "Unattended" status in this domain; "Unassigned" is not a separate status either — it's the Shared Human Queue (an `ESCALATED` Ticket with no assigned Human Agent).

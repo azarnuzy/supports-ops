@@ -1,58 +1,37 @@
-import { cn } from "@repo/ui/lib/utils";
+import { CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 
-import { StatusBadge, type TicketStatus } from "@repo/ui/components/ticket-badge";
-import {
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@repo/ui/components/card";
-
-import { formatShare } from "../../dashboard.utils";
 import DashboardCard from "../dashboard-card";
+import Donut, { type DonutSlice } from "../donut";
 import type { StatusSpreadCardProps } from "./index.types";
 
-const barClassByStatus: Record<TicketStatus, string> = {
-  AI_HANDLING: "bg-status-ai",
-  ESCALATED: "bg-status-escalated",
-  HUMAN_HANDLING: "bg-status-human",
-  RESOLVED: "bg-status-resolved",
-};
+/** Reference order: outcome first, then the handling states in lifecycle order. */
+const slicesByStatus: Array<{
+  key: "RESOLVED" | "AI_HANDLING" | "ESCALATED" | "HUMAN_HANDLING";
+  label: string;
+  color: string;
+}> = [
+  { key: "RESOLVED", label: "Resolved", color: "var(--status-resolved)" },
+  { key: "AI_HANDLING", label: "AI handling", color: "var(--status-ai)" },
+  { key: "ESCALATED", label: "Escalated", color: "var(--status-escalated)" },
+  { key: "HUMAN_HANDLING", label: "Human handling", color: "var(--status-human)" },
+];
 
 export default function StatusSpreadCard({ counts }: StatusSpreadCardProps) {
-  const total = counts.reduce((sum, entry) => sum + entry.count, 0);
+  const countByStatus = new Map(counts.map((entry) => [entry.status, entry.count]));
+  const slices: DonutSlice[] = slicesByStatus.map((entry) => ({
+    key: entry.key,
+    label: entry.label,
+    color: entry.color,
+    value: countByStatus.get(entry.key) ?? 0,
+  }));
 
   return (
-    <DashboardCard>
-      <CardHeader className="gap-1.5">
-        <CardTitle className="text-base leading-5">Ticket statuses</CardTitle>
-        <CardDescription className="leading-5">Current Ticket distribution.</CardDescription>
-        <CardAction>
-          <span className="text-xs tabular-nums text-muted-foreground">{total} Tickets</span>
-        </CardAction>
+    <DashboardCard className="gap-3 py-3.5">
+      <CardHeader className="px-3.5">
+        <CardTitle className="text-sm leading-4">Ticket Status</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-1.5">
-        {counts.map((entry) => (
-          <div key={entry.status} className="-mx-2 flex items-center gap-2.5 px-2 py-2">
-            <div className="w-32 shrink-0">
-              <StatusBadge status={entry.status} />
-            </div>
-            <div aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-[width] duration-500",
-                  barClassByStatus[entry.status],
-                )}
-                style={{ width: `${total === 0 ? 0 : (entry.count / total) * 100}%` }}
-              />
-            </div>
-            <span className="w-7 text-right text-sm font-semibold tabular-nums">{entry.count}</span>
-            <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
-              {formatShare(entry.count, total)}
-            </span>
-          </div>
-        ))}
+      <CardContent className="flex flex-1 items-center px-3.5">
+        <Donut slices={slices} />
       </CardContent>
     </DashboardCard>
   );

@@ -87,6 +87,41 @@ nomor 6 memakai Zod 4.4 yang sudah terpasang, dengan fallback ke bentuk lama bil
 sebuah schema tidak bisa dikonversi, sehingga tidak ada Tool yang kehilangan
 argumennya.
 
+| # | Perubahan | Alasan | Efek yang diharapkan | Status |
+| --- | --- | --- | --- | --- |
+| 10 | `replyPrompt` menambah dua aturan ESCALATE eksplisit: (a) saat `searchKnowledge` mengembalikan Knowledge Source yang saling bertentangan pada fakta yang dibutuhkan, jangan memilih salah satu nilai — ESCALATE dengan `CONFLICTING_KNOWLEDGE`; (b) saat Customer melaporkan beberapa completed/captured charge untuk order yang sama, ESCALATE untuk payment review walau Customer secara eksplisit meminta refund langsung ([#181](https://github.com/azarnuzy/supports-ops/issues/181)) | `common-return-window` gagal karena prompt tidak melarang model memilih salah satu window yang bertentangan (K03 vs L08); `escalation-two-completed-charges` gagal karena aturan "jangan menahan Tool call hanya karena ini write" pada prompt yang sama membiarkan model memproses refund langsung meski dua charge yang settled semestinya diverifikasi manusia dulu | Kedua Case dan Case `gEval` yang berbagi skenario sama — `staleness-conflicting-return-window`, `staleness-legacy-authority` — diharapkan lulus karena aturan konflik-Knowledge sekarang eksplisit, bukan tersirat lewat nama `escalationReason` saja | Selesai, belum terukur |
+
+Perubahan nomor 10 diverifikasi oleh unit test `packages/ai-agent` (43 lulus,
+termasuk Case baru di `reply.test.ts`) dan `tsc --noEmit`. **Belum
+diukur terhadap eval suite** — lingkungan pengembangan ini tidak punya
+`EVAL_WORKSPACE_ID` maupun kredensial model (`COMPLETION_GATEWAY_API_KEY` /
+`OPENROUTER_API_KEY`), jadi `pnpm eval:ai-agent geval` dan
+`pnpm eval:ai-agent decision` tidak bisa dijalankan di sini — kendala yang sama
+yang sudah dicatat untuk #182. Empat kegagalan `gEval` B1 yang tersisa di luar
+`common-return-window`/`escalation-two-completed-charges` tidak ditriase satu
+per satu di sini: dua (`answer-search-specific-sku`,
+`hybrid-live-price-policy-conflict`) sudah teridentifikasi sebagai regresi
+schema Tool, di luar cakupan #181 per definisinya sendiri ("bukan kegagalan
+pemilihan Tool"); tiga sisanya (dua CLARIFY yang seharusnya jawaban langsung,
+satu bertingkah seperti `tool-unknown-order`) belum punya trace atau alasan
+tertulis judge yang bisa dibaca di repo ini untuk ditriase tanpa menebak — item
+antrean berikutnya harus menjalankan suite sungguhan terhadap Workspace,
+membaca `judge`-nya lewat Lens/Langfuse, dan menutup #181 dengan angka
+before/after serta identitas Case yang sebenarnya sebelum status di baris
+antrean bisa naik dari "Selesai, belum terukur" ke "Selesai".
+
+**Perubahan nomor 10, terukur oleh #180.** `pnpm eval:ai-agent decision`
+terhadap kode nomor 10 saja (tanpa perubahan #180 di bawah) lulus 3 dari 3
+percobaan untuk `escalation-two-completed-charges`, tapi `common-return-window`
+gagal saat dijalankan sendiri (`REPLY`, bukan `ESCALATE`) — aturan konflik
+di nomor 10 bergantung pada `searchKnowledge` benar-benar mengembalikan nilai
+14-hari yang bertentangan, dan pencarian vektor untuk pertanyaan ini tidak
+selalu membawanya (lihat nomor 11).
+
+| # | Perubahan | Alasan | Efek yang diharapkan | Status |
+| --- | --- | --- | --- | --- |
+| 11 | `tool-unknown-order` diperbaiki: `replyPrompt` menyuruh model memanggil Tool dengan identifier Customer apa adanya walau formatnya tidak cocok skema, bukan meminta Customer memformat ulang lebih dulu. `executeBuiltInTool` (`apps/api/src/modules/tools/services.ts`) menambahkan `sourceTitle` per Chunk `searchKnowledge` agar model bisa mengenali Source legacy/superseded yang bertentangan dengan Source current pada fakta yang sama, tanpa bergantung pada kedua nilai persis ikut terambil ([#180](https://github.com/azarnuzy/supports-ops/issues/180)) | `tool-unknown-order` gagal bukan karena regresi schema ketat — model melihat skema `id` Shopify GID lalu bertanya ke Customer alih-alih mencoba Tool. `common-return-window` gagal karena celah recall retrieval (lihat catatan nomor 10 di atas), bukan celah keputusan — menyetel parameter `searchChunks` di luar cakupan #180 (ditunda ke #187) | `pnpm eval:ai-agent tool` 7/7 (sebelumnya 6/7). `pnpm eval:ai-agent decision` 14/14 (sebelumnya 12/14), diverifikasi ulang pada beberapa proses terpisah karena non-determinisme eval. Suite penuh tidak ada yang regresi dari B1; `gEval` membaik 16/23 → 18/23 | Selesai, terukur |
+
 ## Baseline B1 (diukur 2026-09-16, setelah sembilan perubahan di atas)
 
 Sembilan suite dijalankan ulang di Workspace eval yang sama, pada commit
@@ -150,13 +185,13 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | --- | --- | --- | --- |
 | [#176](https://github.com/azarnuzy/supports-ops/issues/176) | Ringkasan p50/p95 latensi dan token per suite | — | Selesai |
 | [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Selesai |
-| [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Menunggu |
-| [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Menunggu |
-| [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Menunggu |
-| [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Menunggu |
-| [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai, belum terukur |
+| [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Ditutup — premis issue keliru, tidak ada perubahan kode ([detail](research/ai-agent-cost-and-latency.md#72-fix-what-b0-says-is-broken-before-optimising-further--178-179-180-181)) |
+| [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Selesai, belum terukur — penyebab diputuskan (celah prompt-grounding, Knowledge sudah lengkap), lihat riset §6.10 |
+| [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Selesai |
+| [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Selesai, belum terukur |
+| [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai |
 | [#183](https://github.com/azarnuzy/supports-ops/issues/183) | Pilih nilai reasoning effort dan batas token output | #177 | Selesai |
-| [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Menunggu |
+| [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Diimplementasikan, belum terukur |
 | [#185](https://github.com/azarnuzy/supports-ops/issues/185) | Batasi durasi terburuk satu turn AI Agent | — | Selesai |
 | [#186](https://github.com/azarnuzy/supports-ops/issues/186) | Mulai retrieval paralel dengan panggilan model pertama | #177, #183 | Bersyarat |
 | [#187](https://github.com/azarnuzy/supports-ops/issues/187) | Setel parameter retrieval terhadap mutu retrieval terukur | #177, #182 | Menunggu |
@@ -171,16 +206,19 @@ tujuh perubahan yang sudah diterapkan belum punya satu pun angka hasil.
 bergantung pada angka B1. #185 perbaikan batas waktu, bukan optimisasi, jadi
 tidak butuh baseline untuk membenarkannya.
 
-**#182 — mekanismenya sudah ada, angkanya belum.** 10 dari 23 Case (kategori
-`common`/`edge`, lintas Knowledge Source 02/03/05) sekarang membawa label
+**#182 — mekanisme dan angkanya sudah ada.** 10 dari 23 Case (kategori
+`common`/`edge`, lintas Knowledge Source 02/03/05) membawa label
 expected-passage yang di-resolve ke Chunk saat runtime, dan suite baru
 `retrieval` melaporkan recall@k, precision@k, dan first-relevant rank per Case
 (`apps/api/src/evals/retrieval.ts`, `metrics.ts`, `run.ts`; diverifikasi oleh
-unit test `retrieval.test.ts` dan `tsc --noEmit`). Baseline recall@k/precision@k
-belum tercatat — lingkungan pengembangan ini tidak punya `EVAL_WORKSPACE_ID`
-maupun kredensial model untuk menjalankan suite sungguhan. #187 tetap menunggu
-sampai `pnpm eval:ai-agent retrieval` dijalankan terhadap Workspace langsung
-dan angkanya ditambahkan di sini serta di baseline riset.
+unit test `retrieval.test.ts` dan `tsc --noEmit`). Dijalankan 2026-09-16
+terhadap Workspace langsung (`pnpm eval:ai-agent retrieval`, k=8): recall@8
+rata-rata 0,90 (9/10 Case menemukan seluruh passage wajib), precision@8
+rata-rata 0,11 (1 chunk relevan dari 8 pada 9 Case), first-relevant rank
+rata-rata 2,9 untuk Case yang menemukan sesuatu. Satu Case, `retrieval-split-
+shipment`, gagal total karena Agent menjawab `CLARIFY` tanpa memanggil
+`searchKnowledge` sama sekali — itu kegagalan keputusan, bukan retrieval.
+Detail lengkap di riset §7.7. #187 kini punya sinyal untuk mulai.
 
 **#186 bisa ditutup tanpa dikerjakan.** Kalau B1 dan #183 sudah membawa TTFT ke
 target, round trip yang dihemat #186 bukan lagi kendala pengikat. Menutupnya
