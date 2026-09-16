@@ -31,6 +31,7 @@ type TurnTicket = {
   aiAgentId: string;
   channel: { type: "WEB" | "WHATSAPP" };
   customerIdentity: { id: string };
+  sessionId: string;
 };
 
 export function generateAiReply(ticketId: string, workspaceId: string, customerMessage: string) {
@@ -208,9 +209,9 @@ async function loadAgentMemory(ticketId: string, sessionId: string): Promise<Age
     where: { deletedAt: null, ticketId },
   });
   while (messages.at(-1)?.senderType === "CUSTOMER") messages.pop();
-  return messages.flatMap(({ content, senderType }) => {
-    if (senderType === "CUSTOMER") return [{ content, role: "user" as const }];
-    if (senderType === "AI_AGENT") return [{ content, role: "assistant" as const }];
+  return messages.flatMap(({ content, senderType }): AgentMessage[] => {
+    if (senderType === "CUSTOMER") return [{ content, role: "user" }];
+    if (senderType === "AI_AGENT") return [{ content, role: "assistant" }];
     return [];
   });
 }

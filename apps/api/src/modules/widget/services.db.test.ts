@@ -268,7 +268,7 @@ describe("a Customer message arrived on a Session", () => {
     });
     const ticket = await prisma.ticket.findFirstOrThrow({ where: { sessionId: session.id } });
 
-    await aiAgentTurn.resolveByAi(ticket.id, ticket.workspaceId);
+    await aiAgentTurn.resolveByAi(ticket.id, ticket.workspaceId, "Glad that's sorted.");
 
     const closed = await prisma.session.findUniqueOrThrow({ where: { id: session.id } });
     expect(closed.status).toBe("CLOSED");
@@ -276,7 +276,12 @@ describe("a Customer message arrived on a Session", () => {
       orderBy: { position: "desc" },
       where: { sessionId: session.id },
     });
-    expect(closing).toMatchObject({ position: 2, senderType: "SYSTEM", ticketId: ticket.id });
+    expect(closing).toMatchObject({
+      content: "Glad that's sorted.",
+      position: 2,
+      senderType: "SYSTEM",
+      ticketId: ticket.id,
+    });
     expect(
       await prisma.aiActivity.count({ where: { eventType: "RESOLVED", ticketId: ticket.id } }),
     ).toBe(1);
