@@ -27,6 +27,12 @@ import { resolveTools } from "../modules/tools/services";
  * not a reconstruction of it. See ADR-0010.
  */
 
+export type RetrievedChunk = {
+  chunkId: string;
+  content: string;
+  knowledgeSourceId: string | null;
+};
+
 export type EvalToolCall = {
   durationMs: number;
   failed: boolean;
@@ -50,6 +56,10 @@ export type EvalTurnOutput = {
    * retrieved them. Fed to `faithfulness` as the retrieval context, so the
    * metric judges the answer against what retrieval really returned. */
   retrieved: string[];
+  /** Same retrieval, keeping Chunk identity. Fed to the `retrieval` metrics,
+   * which need a Chunk's id and source to compare against an expected-passage
+   * label — text content alone cannot tell two similar chunks apart. */
+  retrievedChunks: RetrievedChunk[];
   /** Provider-reported usage lets the eval runner aggregate target tokens. */
   usage?: Usage;
   /** Correlates the evaluation result with the Agent trace in Lens/Langfuse. */
@@ -209,6 +219,7 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
   let decision: EvalTurnOutput["decision"] = "REPLY";
   let escalationReason: EscalationReason | null = null;
   const retrieved: string[] = [];
+  const retrievedChunks: RetrievedChunk[] = [];
   const toolCalls: EvalToolCall[] = [];
   let trace: EvalTrace | undefined;
   let usage: Usage | undefined;
@@ -297,7 +308,11 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
                 name,
                 result: preview(result),
               });
-              if (tool?.name === "searchKnowledge") retrieved.push(...knowledgePassages(result));
+              if (tool?.name === "searchKnowledge") {
+                const passages = knowledgePassages(result);
+                retrieved.push(...passages.map((passage) => passage.content));
+                retrievedChunks.push(...passages);
+              }
               return result;
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error);
@@ -339,6 +354,7 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
     escalationReason,
     output: text,
     retrieved,
+    retrievedChunks,
     toolCalls,
     ...(ttftMs === undefined ? {} : { ttftMs }),
     ...(ttfcMs === undefined ? {} : { ttfcMs }),
@@ -352,18 +368,27 @@ function preview(value: string): string {
 }
 
 /** `searchKnowledge` returns JSON-encoded chunk rows; faithfulness needs their
- * text. A shape we do not recognise is passed through whole rather than
- * silently dropped, so a changed Tool Result shows up as a failing case
- * instead of an empty retrieval context. */
-function knowledgePassages(result: string): string[] {
+ * text and the `retrieval` metrics need their Chunk/Knowledge Source identity.
+ * A shape we do not recognise is passed through whole rather than silently
+ * dropped, so a changed Tool Result shows up as a failing case instead of an
+ * empty retrieval context. */
+function knowledgePassages(result: string): RetrievedChunk[] {
   try {
     const parsed: unknown = JSON.parse(result);
-    if (!Array.isArray(parsed)) return [result];
+    if (!Array.isArray(parsed)) return [{ chunkId: result, content: result, knowledgeSourceId: null }];
     return parsed.map((row) => {
-      const content = (row as { content?: unknown } | null)?.content;
-      return typeof content === "string" ? content : JSON.stringify(row);
+      const { chunkId, content, knowledgeSourceId } = (row ?? {}) as {
+        chunkId?: unknown;
+        content?: unknown;
+        knowledgeSourceId?: unknown;
+      };
+      return {
+        chunkId: typeof chunkId === "string" ? chunkId : JSON.stringify(row),
+        content: typeof content === "string" ? content : JSON.stringify(row),
+        knowledgeSourceId: typeof knowledgeSourceId === "string" ? knowledgeSourceId : null,
+      };
     });
   } catch {
-    return [result];
+    return [{ chunkId: result, content: result, knowledgeSourceId: null }];
   }
 }

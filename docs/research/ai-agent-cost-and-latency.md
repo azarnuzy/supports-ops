@@ -264,6 +264,8 @@ Start the `searchKnowledge` embedding and query on the raw Customer message in p
 
 Top-k, reranking, chunk sizing. Blocked on gold chunk IDs and precision@k in the eval; without them this is tuning without a signal, and 3.1 explains why the numbers do not currently justify it.
 
+**#182 done, unmeasured.** 10 of 23 Cases now carry expected-passage labels — a Knowledge Source title plus a distinctive text fragment, resolved to live Chunk IDs at run time rather than stored as a position-based Chunk ID that silently repoints on re-chunking. A label that resolves to zero Chunks fails the Case as `invalid` instead of scoring zero. The `retrieval` suite reports recall@k, precision@k, and first-relevant rank per Case (`apps/api/src/evals/retrieval.ts`). Not yet run against the live Workspace — this environment has no `EVAL_WORKSPACE_ID` or model credentials — so #187 stays blocked until `pnpm eval:ai-agent retrieval` produces a real baseline.
+
 ## 8. Acceptance checks
 
 No change in section 7 ships without both:
