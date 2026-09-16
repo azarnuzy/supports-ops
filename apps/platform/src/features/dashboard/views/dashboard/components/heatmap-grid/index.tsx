@@ -9,7 +9,7 @@ import type { HeatmapGridProps } from "./index.types";
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const HEATMAP_GRID_STYLE = {
-  gridTemplateColumns: "5.5rem repeat(24, minmax(1.125rem, 1fr))",
+  gridTemplateColumns: "3.5rem repeat(24, minmax(0.65rem, 1fr))",
 };
 const ZERO_CELL_CLASS = "bg-muted/50 ring-1 ring-inset ring-border/60 dark:bg-muted/30";
 
@@ -62,16 +62,16 @@ export default function HeatmapGrid({ buckets, metricLabel, timeZone }: HeatmapG
         <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
           <ZapIcon className="size-3.5" />
           {summary.peak
-            ? `Peak · ${dayLabelOf(summary.peak.day).weekdayShort} ${String(summary.peak.hour).padStart(2, "0")}:00 · ${summary.peak.count} ${summary.peak.count === 1 ? "Ticket" : "Tickets"}`
+            ? `Peak: ${dayLabelOf(summary.peak.day).weekdayShort} ${String(summary.peak.hour).padStart(2, "0")}:00 · ${summary.peak.count} ${summary.peak.count === 1 ? "Ticket" : "Tickets"}`
             : "No activity yet"}
         </span>
         <span className="text-xs font-medium tabular-nums text-muted-foreground">
-          Weekly total · {summary.total} {summary.total === 1 ? "Ticket" : "Tickets"}
+          Weekly total: {summary.total} {summary.total === 1 ? "Ticket" : "Tickets"}
         </span>
       </div>
 
       <div className="overflow-x-auto pb-1">
-        <div className="grid min-w-[48rem] gap-y-1.5">
+        <div className="grid min-w-[26rem] gap-y-1.5">
           <div className="grid items-end gap-1" style={HEATMAP_GRID_STYLE}>
             <div className="pr-2 text-right text-xs font-medium text-muted-foreground">Hour</div>
             {HOURS.map((hour) => (
@@ -161,7 +161,7 @@ export default function HeatmapGrid({ buckets, metricLabel, timeZone }: HeatmapG
           )}
           <span>More</span>
         </div>
-        <p>Hourly · {timeZone} · Hover or focus for details</p>
+        <p>Hourly, {timeZone} — hover or focus for details</p>
       </div>
 
       {selected && selectedSlot ? (
@@ -182,7 +182,7 @@ export default function HeatmapGrid({ buckets, metricLabel, timeZone }: HeatmapG
               <XIcon className="size-4" />
             </button>
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <dl className="mt-3 grid grid-cols-2 gap-3">
             <SlotStat label={metricLabel} value={`${selectedSlot.count}`} />
             <SlotStat label="Share of day" value={selectedSlot.dayShare} />
             <SlotStat label="Share of week" value={selectedSlot.weekShare} />

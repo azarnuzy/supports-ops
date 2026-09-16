@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRightIcon, CheckCircle2Icon, HourglassIcon, RefreshCwIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  CheckCircle2Icon,
+  ClockIcon,
+  InboxIcon,
+  RefreshCwIcon,
+} from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@repo/ui/components/button";
 import {
@@ -16,113 +23,100 @@ import { cn } from "@repo/ui/lib/utils";
 
 import { PlatformAppShell } from "../../../app-shell";
 import { meQueryOptions } from "../../../auth";
-import { analyticsOverviewQueryOptions, analyticsTrafficQueryOptions } from "./dashboard.hooks";
+import {
+  analyticsOverviewQueryOptions,
+  analyticsTrafficQueryOptions,
+  recentConversationsQueryOptions,
+} from "./dashboard.hooks";
+import { formatRate, periodDelta, trailingRange } from "./dashboard.utils";
+import type { DashboardRange } from "./dashboard.utils";
 import {
   AgentLoadCard,
   ChannelCard,
+  DateRangePicker,
   LiveBadge,
-  RateCard,
+  RecentConversationsCard,
   StatusSpreadCard,
-  TotalCard,
   TrafficCard,
+  TrafficTrendCard,
+  TrendCard,
 } from "./components";
 
 function KpiCardSkeleton() {
   return (
-    <Card className="h-full gap-5 py-5">
-      <CardHeader className="grid gap-3">
-        <div className="flex items-center gap-2.5">
-          <Skeleton className="size-8 rounded-lg" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-        <Skeleton className="h-9 w-24" />
-      </CardHeader>
-      <CardContent className="grid gap-2.5">
-        <Skeleton className="h-1.5 w-full rounded-full" />
-        <Skeleton className="h-3 w-40" />
-      </CardContent>
-    </Card>
+    <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="flex items-center gap-2.5">
+        <Skeleton className="size-7 rounded-lg" />
+        <Skeleton className="h-4 w-24" />
+      </div>
+      <Skeleton className="mt-4 h-8 w-16" />
+      <Skeleton className="mt-2 h-4 w-32" />
+    </div>
   );
 }
 
 function PanelSkeleton() {
-  return (
-    <Card>
-      <CardHeader className="grid gap-2">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-4 w-56" />
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        <Skeleton className="h-9 w-full rounded-lg" />
-        <Skeleton className="h-9 w-full rounded-lg" />
-        <Skeleton className="h-9 w-full rounded-lg" />
-      </CardContent>
-    </Card>
-  );
+  return <Skeleton className="h-64 w-full rounded-xl" />;
 }
 
-const SKELETON_SLOT_KEYS = Array.from({ length: 24 }, (_, hour) => `slot-${hour}`);
-
-const SKELETON_ROW_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const SKELETON_GRID_STYLE = { gridTemplateColumns: "repeat(24, minmax(1rem, 1fr))" };
-
 function HeatmapSkeleton() {
-  return (
-    <Card>
-      <CardHeader className="grid gap-2">
-        <Skeleton className="h-5 w-44" />
-        <Skeleton className="h-4 w-64" />
-      </CardHeader>
-      <CardContent className="grid gap-1.5">
-        {SKELETON_ROW_KEYS.map((rowKey) => (
-          <div key={rowKey} className="grid gap-1" style={SKELETON_GRID_STYLE}>
-            {SKELETON_SLOT_KEYS.map((slotKey) => (
-              <Skeleton key={slotKey} className="aspect-square w-full rounded-md" />
-            ))}
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
+  return <Skeleton className="h-72 w-full rounded-xl" />;
 }
 
 const DashboardView = () => {
   const user = useQuery(meQueryOptions);
   const isAdmin = user.data?.role === "ADMIN";
-  const analytics = useQuery({ ...analyticsOverviewQueryOptions, enabled: isAdmin });
-  const traffic = useQuery({ ...analyticsTrafficQueryOptions, enabled: isAdmin });
+  const [range, setRange] = useState<DashboardRange>(() => trailingRange(7));
+  const analytics = useQuery({ ...analyticsOverviewQueryOptions(range), enabled: isAdmin });
+  const traffic = useQuery({ ...analyticsTrafficQueryOptions(range), enabled: isAdmin });
+  const recent = useQuery({ ...recentConversationsQueryOptions, enabled: isAdmin });
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
   if (!user.data) {
     return null;
   }
 
-  const lastUpdatedAt = Math.max(analytics.dataUpdatedAt ?? 0, traffic.dataUpdatedAt ?? 0);
+  const lastUpdatedAt = Math.max(
+    analytics.dataUpdatedAt ?? 0,
+    traffic.dataUpdatedAt ?? 0,
+    recent.dataUpdatedAt ?? 0,
+  );
   const isRefreshing = analytics.isFetching || traffic.isFetching;
+  const currentHour = new Date().getHours();
+  const greeting =
+    currentHour < 12 ? "Good morning" : currentHour < 18 ? "Good afternoon" : "Good evening";
+  const firstName = user.data.name.split(/\s+/)[0] || "there";
+  const overview = analytics.data?.analytics;
+  const createdSeries = (overview?.trends ?? []).map((trend) => trend.created);
+  const aiResolvedSeries = (overview?.trends ?? []).map((trend) => trend.aiResolved);
+  const escalatedSeries = (overview?.trends ?? []).map((trend) => trend.escalated);
+  const escalatedOpen =
+    overview?.statusCounts.find((entry) => entry.status === "ESCALATED")?.count ?? 0;
 
   function refreshAll() {
     analytics.refetch();
     traffic.refetch();
+    recent.refetch();
   }
 
   return (
-    <PlatformAppShell>
+    <PlatformAppShell fullWidth>
       <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent>
-        <section className="grid gap-10">
-          <div className="flex flex-wrap items-center justify-between gap-5">
-            <div className="max-w-2xl">
-              <p className="text-sm font-medium text-muted-foreground">Workspace overview</p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-balance">
-                Workspace dashboard
+        <section className="grid gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {greeting}, {firstName} 👋
               </h1>
-              <p className="mt-2.5 text-sm leading-6 text-muted-foreground">
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {isAdmin
-                  ? "See how the AI Agent and Human Agents are handling Tickets across this Workspace."
-                  : "Welcome back. Your queue, your Tickets, and the ones you previously resolved live in the Inbox."}
+                  ? "How your AI Agent and Human Agents are handling Tickets."
+                  : "Welcome back. Your queue and Tickets live in the Inbox."}
               </p>
             </div>
             {isAdmin ? (
               <div className="flex flex-wrap items-center justify-end gap-2.5">
+                <DateRangePicker range={range} onChange={setRange} />
                 <LiveBadge />
                 {lastUpdatedAt > 0 ? (
                   <span
@@ -155,88 +149,99 @@ const DashboardView = () => {
           </div>
           {isAdmin ? (
             analytics.isPending ? (
-              <div className="grid gap-5">
-                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <KpiCardSkeleton />
                   <KpiCardSkeleton />
                   <KpiCardSkeleton />
                   <KpiCardSkeleton />
                 </div>
-                <div className="grid gap-5 xl:grid-cols-3">
+                <div className="grid gap-4 xl:grid-cols-3">
                   <PanelSkeleton />
+                  <PanelSkeleton />
+                  <PanelSkeleton />
+                </div>
+                <div className="grid gap-4 lg:grid-cols-2">
                   <PanelSkeleton />
                   <PanelSkeleton />
                 </div>
               </div>
-            ) : analytics.data ? (
+            ) : overview ? (
               <>
-                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                  <TotalCard totalTickets={analytics.data.analytics.totalTickets} />
-                  <RateCard
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <TrendCard
+                    icon={InboxIcon}
+                    title="Total Tickets"
+                    accent="primary"
+                    deltaTone="up-is-good"
+                    info="Every Ticket created in this Workspace in the selected range, across all statuses and Channels."
+                    value={String(overview.totalTickets)}
+                    subtext="All statuses and Channels"
+                    series={createdSeries}
+                    delta={periodDelta(createdSeries)}
+                  />
+                  <TrendCard
                     icon={CheckCircle2Icon}
-                    title="AI resolved · confirmed"
-                    info="The Customer said the problem was solved. Counted apart from auto-resolutions so AI effectiveness is never overstated."
-                    hint="Customer confirmed the answer worked."
-                    figure={analytics.data.analytics.aiResolution.customerConfirmed}
-                    totalTickets={analytics.data.analytics.totalTickets}
+                    title="Resolved by AI"
+                    accent="resolved"
+                    deltaTone="up-is-good"
+                    info="The Customer confirmed the AI Agent's answer worked."
+                    value={formatRate(overview.aiResolution.customerConfirmed.rate)}
+                    subtext={`${overview.aiResolution.customerConfirmed.count} of ${overview.totalTickets} Tickets`}
+                    series={aiResolvedSeries}
+                    delta={periodDelta(aiResolvedSeries)}
                   />
-                  <RateCard
-                    icon={HourglassIcon}
-                    title="AI resolved · no reply"
-                    info="Auto-resolved after the Customer never replied to a Follow-Up. Counted apart from a confirmed fix."
-                    hint="Auto-resolved after no Follow-Up reply."
-                    figure={analytics.data.analytics.aiResolution.customerInactive}
-                    totalTickets={analytics.data.analytics.totalTickets}
-                  />
-                  <RateCard
+                  <TrendCard
                     icon={ArrowUpRightIcon}
-                    title="Escalated to humans"
+                    title="Escalated to Humans"
+                    accent="escalated"
+                    deltaTone="up-is-bad"
                     info="Tickets the AI Agent handed to a human because it could not safely continue, over the same denominator."
-                    hint="AI Agent escalated to a human."
-                    figure={analytics.data.analytics.humanEscalation}
-                    totalTickets={analytics.data.analytics.totalTickets}
+                    value={formatRate(overview.humanEscalation.rate)}
+                    subtext={`${overview.humanEscalation.count} of ${overview.totalTickets} Tickets`}
+                    series={escalatedSeries}
+                    delta={periodDelta(escalatedSeries)}
                   />
-                  <RateCard
-                    icon={HourglassIcon}
-                    title="Customer inactive · handled"
-                    info="Timer-closed after Customer silence while a Human Agent owned the Ticket. Never counted as an AI resolution."
-                    hint="Customer went quiet with a Human Agent."
-                    figure={analytics.data.analytics.humanIdleClosure.handled}
-                    totalTickets={analytics.data.analytics.totalTickets}
-                  />
-                  <RateCard
-                    icon={HourglassIcon}
-                    title="Customer inactive · queue"
-                    info="Timer-closed before anyone claimed the Ticket, kept separate to reveal understaffing."
-                    hint="Customer went quiet in the Shared Human Queue."
-                    figure={analytics.data.analytics.humanIdleClosure.sharedQueue}
-                    totalTickets={analytics.data.analytics.totalTickets}
+                  <TrendCard
+                    icon={ClockIcon}
+                    title="Awaiting Claim"
+                    accent="danger"
+                    deltaTone="up-is-bad"
+                    info="Escalated Tickets waiting in the Shared Human Queue for a Human Agent to claim them."
+                    value={String(escalatedOpen)}
+                    subtext="In the Shared Human Queue"
+                    series={escalatedSeries}
+                    delta={periodDelta(escalatedSeries)}
                   />
                 </div>
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <TrafficTrendCard trends={overview.trends} />
+                  <ChannelCard counts={overview.channelCounts} />
+                  <StatusSpreadCard counts={overview.statusCounts} />
+                </div>
 
-                <div className="grid gap-5 xl:grid-cols-3">
-                  <StatusSpreadCard counts={analytics.data.analytics.statusCounts} />
-                  <ChannelCard counts={analytics.data.analytics.channelCounts} />
-                  <AgentLoadCard loads={analytics.data.analytics.activeTicketsPerHumanAgent} />
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <AgentLoadCard agentStats={overview.agentStats} />
+                  <RecentConversationsCard conversations={recent.data?.conversations ?? []} />
                 </div>
 
                 {traffic.isPending ? (
-                  <div className="grid gap-5">
+                  <div className="grid gap-4">
                     <HeatmapSkeleton />
                     <HeatmapSkeleton />
                   </div>
                 ) : traffic.data ? (
-                  <div className="grid gap-5">
+                  <div className="grid gap-4">
                     <TrafficCard
-                      title="Conversation Traffic"
-                      description="Tickets created each hour during the past 7 days."
+                      title="Traffic by Hour"
+                      description="Tickets created each hour in the selected range."
                       metricLabel="Tickets created"
                       buckets={traffic.data.analytics.traffic}
                       timeZone={timeZone}
                     />
                     <TrafficCard
-                      title="Resolutions"
-                      description="Tickets resolved each hour during the past 7 days."
+                      title="Resolutions by Hour"
+                      description="Tickets resolved each hour in the selected range."
                       metricLabel="Tickets resolved"
                       buckets={traffic.data.analytics.resolutions}
                       timeZone={timeZone}
@@ -245,7 +250,7 @@ const DashboardView = () => {
                 ) : (
                   <Card>
                     <CardHeader>
-                      <CardTitle>Conversation Traffic unavailable</CardTitle>
+                      <CardTitle>Traffic unavailable</CardTitle>
                       <CardDescription>
                         {traffic.error instanceof Error
                           ? traffic.error.message
