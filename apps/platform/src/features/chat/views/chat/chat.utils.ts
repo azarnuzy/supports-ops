@@ -38,6 +38,19 @@ export function formatShortDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+/** Timeline day-separator label; adds the year only when it is not the current one. */
+export function formatActivityDay(date: string) {
+  const day = new Date(date);
+  const options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  if (day.getFullYear() !== new Date().getFullYear()) options.year = "numeric";
+  return day.toLocaleDateString(undefined, options);
+}
+
+/** Compact per-entry time for the Activity Timeline's time column. */
+export function formatActivityTime(date: string) {
+  return new Date(date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
 export function formatTimestamp(date: string) {
   return new Date(date).toLocaleString(undefined, {
     day: "numeric",

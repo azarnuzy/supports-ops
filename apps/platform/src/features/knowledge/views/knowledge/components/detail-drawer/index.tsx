@@ -12,7 +12,6 @@ import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { Field, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import { Separator } from "@repo/ui/components/separator";
 import {
   Sheet,
   SheetContent,
@@ -30,7 +29,11 @@ import {
   useRefreshKnowledgeSourceMutation,
   useUpdateKnowledgeSourceMutation,
 } from "../../knowledge.hooks";
-import type { KnowledgeSource, KnowledgeVisibility } from "../../knowledge.types";
+import type {
+  KnowledgeIngestStage,
+  KnowledgeSource,
+  KnowledgeVisibility,
+} from "../../knowledge.types";
 import {
   formatUpdatedAt,
   ingestStagesFor,
@@ -43,8 +46,14 @@ import {
 import VisibilitySelect from "../visibility-select";
 import type { KnowledgeDetailDrawerProps } from "./index.types";
 
-const refreshableTypes = new Set(["PDF", "URL"]);
-const editableTypes = new Set(["MANUAL_FAQ", "PDF", "URL", "INTERNAL_SOP"]);
+/** Static lookup tables, not Sets — the key space is a small fixed string union. */
+const REFRESHABLE_BY_TYPE: Record<string, true> = { PDF: true, URL: true };
+const EDITABLE_BY_TYPE: Record<string, true> = {
+  MANUAL_FAQ: true,
+  PDF: true,
+  URL: true,
+  INTERNAL_SOP: true,
+};
 
 export default function KnowledgeDetailDrawer({
   onOpenChange,
@@ -73,10 +82,14 @@ export default function KnowledgeDetailDrawer({
   if (!source) return null;
 
   const isProcessing = source.status === "PROCESSING";
-  const isEditable = editableTypes.has(source.sourceType) && !isProcessing;
-  const isRefreshable = refreshableTypes.has(source.sourceType) && !isProcessing;
+  const isRefreshable = REFRESHABLE_BY_TYPE[source.sourceType] === true && !isProcessing;
+  const isEditable = EDITABLE_BY_TYPE[source.sourceType] === true && !isProcessing;
   const canRetry = source.status === "FAILED";
-  const stages = source.sourceType === "HELP_CENTER" ? null : ingestStagesFor(source.sourceType);
+  const showStepper =
+    source.status === "PROCESSING" || source.status === "FAILED"
+      ? Boolean(ingestStagesFor(source.sourceType))
+      : false;
+  const stages = ingestStagesFor(source.sourceType);
 
   function startEditing() {
     if (!source) return;
@@ -143,129 +156,128 @@ export default function KnowledgeDetailDrawer({
   return (
     <>
       <Sheet open={source !== null} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-2xl" side="right">
-          <SheetHeader>
-            <SheetTitle className="pr-8 break-words">{source.title}</SheetTitle>
-            <SheetDescription>
-              {sourceTypeLabel(source.sourceType)} Knowledge Source
+        {/* Fixed header, scrolling body, pinned footer — actions never fall below the fold. */}
+        <SheetContent
+          className="w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+          side="right"
+        >
+          <SheetHeader className="shrink-0 gap-2 border-b p-5 pr-12">
+            <SheetTitle className="break-words">{source.title}</SheetTitle>
+            <SheetDescription className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline">{sourceTypeLabel(source.sourceType)}</Badge>
+              <Badge variant={statusVariant(source.status)}>
+                {source.status === "PROCESSING" && source.stage
+                  ? statusLabel(source.stage)
+                  : statusLabel(source.status)}
+              </Badge>
+              <Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>
             </SheetDescription>
           </SheetHeader>
 
-          <div className="grid gap-6 px-4 pb-6">
-            <dl className="grid gap-3 text-sm">
-              <Row
-                label="Status"
-                value={
-                  <Badge variant={statusVariant(source.status)}>
-                    {source.status === "PROCESSING" && source.stage
-                      ? statusLabel(source.stage)
-                      : statusLabel(source.status)}
-                  </Badge>
-                }
+          {isEditing ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
+              <Field>
+                <FieldLabel htmlFor="detail-title">Title</FieldLabel>
+                <Input
+                  id="detail-title"
+                  placeholder="e.g. Returns & Exchanges Policy"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </Field>
+              <VisibilitySelect
+                id="detail-visibility"
+                value={visibility}
+                onChange={setVisibility}
               />
-              <Row label="Type" value={sourceTypeLabel(source.sourceType)} />
-              <Row
-                label="Visibility"
-                value={<Badge variant="outline">{visibilityLabel(source.visibility)}</Badge>}
-              />
-              <Row label="Last updated" value={formatUpdatedAt(source.updatedAt)} />
-              <Row
-                label="Chunks"
-                value={source.chunkCount === 1 ? "1 chunk" : `${source.chunkCount} chunks`}
-              />
+              <Field className="flex min-h-0 flex-1 flex-col">
+                <FieldLabel htmlFor="detail-content">Content</FieldLabel>
+                {/* Fills the remaining height and scrolls inside — Save stays reachable. */}
+                <Textarea
+                  className="min-h-40 flex-1 resize-none overflow-y-auto font-mono text-xs"
+                  id="detail-content"
+                  placeholder="What the AI Agent may retrieve and quote from this source."
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                />
+              </Field>
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
+              {source.status === "FAILED" && source.publishedAt ? (
+                <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  Update failed—previous version remains active. The Customer-facing content
+                  published on {formatUpdatedAt(source.publishedAt)} is still retrievable by the AI
+                  Agent.
+                </p>
+              ) : null}
+
               {source.status === "FAILED" ? (
-                <Row
-                  label="Failure"
-                  value={
-                    <span className="text-destructive">
-                      {source.failedStage ? `Failed at ${statusLabel(source.failedStage)}: ` : ""}
-                      {source.failureReason ?? "Ingestion failed."}
-                    </span>
-                  }
-                />
-              ) : null}
-              <Row label="ID" value={<span className="font-mono text-xs">{source.id}</span>} />
-              {source.sourceUrl ? (
-                <Row
-                  label="Source URL"
-                  value={
-                    <a
-                      className="truncate underline underline-offset-2"
-                      href={source.sourceType === "PDF" ? undefined : source.sourceUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      {source.sourceUrl}
-                    </a>
-                  }
-                />
-              ) : null}
-              <Row label="Created" value={formatUpdatedAt(source.createdAt)} />
-              {source.publishedAt ? (
-                <Row label="Published" value={formatUpdatedAt(source.publishedAt)} />
-              ) : null}
-            </dl>
-
-            {source.status === "FAILED" && source.publishedAt ? (
-              <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                Update failed—previous version remains active. The Customer-facing content published
-                on {formatUpdatedAt(source.publishedAt)} is still retrievable by the AI Agent.
-              </p>
-            ) : null}
-
-            {stages ? (
-              <div>
-                <p className="mb-3 text-sm font-medium">Ingestion progress</p>
-                <IngestStepper source={source} stages={stages} />
-              </div>
-            ) : null}
-
-            <Separator />
-
-            <div className="grid gap-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Content</p>
-                {!isEditing && isEditable ? (
-                  <Button size="sm" variant="outline" onClick={startEditing}>
-                    Edit
-                  </Button>
-                ) : null}
-              </div>
-
-              {isEditing ? (
-                <div className="grid gap-4">
-                  <Field>
-                    <FieldLabel htmlFor="detail-title">Title</FieldLabel>
-                    <Input
-                      id="detail-title"
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                    />
-                  </Field>
-                  <VisibilitySelect
-                    id="detail-visibility"
-                    value={visibility}
-                    onChange={setVisibility}
-                  />
-                  <Field>
-                    <FieldLabel htmlFor="detail-content">Content</FieldLabel>
-                    <Textarea
-                      className="min-h-64 font-mono text-xs"
-                      id="detail-content"
-                      value={content}
-                      onChange={(event) => setContent(event.target.value)}
-                    />
-                  </Field>
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                  <p className="font-medium text-destructive">
+                    {source.failedStage
+                      ? `Failed at ${statusLabel(source.failedStage)}`
+                      : "Ingestion failed"}
+                  </p>
+                  <p className="mt-1 text-[13px] text-destructive/90">
+                    {source.failureReason ?? "Ingestion failed."}
+                  </p>
                 </div>
-              ) : (
-                <pre className="max-h-[28rem] overflow-y-auto rounded-md border bg-muted/30 p-4 text-xs whitespace-pre-wrap">
+              ) : null}
+
+              {showStepper && stages ? (
+                <div>
+                  <p className="mb-3 text-sm font-medium">Ingestion progress</p>
+                  <IngestStepper source={source} stages={stages} />
+                </div>
+              ) : null}
+
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Content</p>
+                  {isEditable ? (
+                    <Button size="sm" variant="outline" onClick={startEditing}>
+                      Edit
+                    </Button>
+                  ) : null}
+                </div>
+                <pre className="min-w-0 rounded-md border bg-muted/30 p-4 text-xs leading-5 break-words whitespace-pre-wrap">
                   {source.content?.trim() || "No extracted content yet."}
                 </pre>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t p-4">
+              {/* Provenance, kept quiet: the record details are secondary to the content. */}
+              <dl className="grid gap-x-6 gap-y-2.5 rounded-lg border bg-muted/30 p-4 text-xs sm:grid-cols-2">
+                <Row
+                  label="Chunks"
+                  value={source.chunkCount === 1 ? "1 chunk" : `${source.chunkCount} chunks`}
+                />
+                <Row label="Last updated" value={formatUpdatedAt(source.updatedAt)} />
+                {source.sourceUrl ? (
+                  <Row
+                    label="Source URL"
+                    value={
+                      <a
+                        className="break-words underline underline-offset-2"
+                        href={source.sourceType === "PDF" ? undefined : source.sourceUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {source.sourceUrl}
+                      </a>
+                    }
+                  />
+                ) : null}
+                <Row label="ID" value={<span className="font-mono">{source.id}</span>} />
+                <Row label="Created" value={formatUpdatedAt(source.createdAt)} />
+                {source.publishedAt ? (
+                  <Row label="Published" value={formatUpdatedAt(source.publishedAt)} />
+                ) : null}
+              </dl>
+            </div>
+          )}
+
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t p-4">
             <Button variant="outline" onClick={() => setConfirmingDelete(true)}>
               Delete
             </Button>
@@ -357,9 +369,9 @@ export default function KnowledgeDetailDrawer({
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[7rem_1fr] items-start gap-2">
+    <div className="grid min-w-0 grid-cols-[6.5rem_1fr] items-baseline gap-2">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate">{value}</dd>
+      <dd className="min-w-0 break-words">{value}</dd>
     </div>
   );
 }
@@ -369,7 +381,7 @@ function IngestStepper({
   stages,
 }: {
   source: KnowledgeSource;
-  stages: ReturnType<typeof ingestStagesFor>;
+  stages: KnowledgeIngestStage[];
 }) {
   return (
     <ol className="grid gap-2">

@@ -1,7 +1,13 @@
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/ui/components/collapsible";
 import { Empty, EmptyMedia, EmptyTitle } from "@repo/ui/components/empty";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import {
   CalendarIcon,
+  ChevronRightIcon,
   ClockIcon,
   FlagIcon,
   HistoryIcon,
@@ -13,8 +19,8 @@ import {
 import { whatsAppCustomerServiceWindowClosesAt } from "@repo/channels";
 import type { ReactNode } from "react";
 import { formatEnumLabel } from "../../../../../../lib/utils";
-import { formatTimestamp } from "../../chat.utils";
-import type { DetailsTab } from "../../chat.types";
+import { formatActivityDay, formatActivityTime, formatTimestamp } from "../../chat.utils";
+import type { DetailsTab, TimelineEntry } from "../../chat.types";
 import AttachmentCard from "../attachment-card";
 import DetailRow from "../detail-row";
 import { Markdown } from "@repo/ui/components/markdown";
@@ -143,23 +149,64 @@ export default function TicketInspector({
             <EmptyTitle>No activity yet</EmptyTitle>
           </Empty>
         ) : (
-          <ol className="grid gap-2.5 p-3">
-            {timeline.map((entry) => (
-              <li key={entry.id} className="flex items-baseline gap-2.5 text-[13px]">
-                <span className="w-20 shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                  {formatTimestamp(entry.createdAt)}
-                </span>
-                <span className="min-w-0">
-                  {entry.description.text}
-                  {entry.description.mono ? (
-                    <>
-                      {" "}
-                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-                        {entry.description.mono}
-                      </code>
-                    </>
-                  ) : null}
-                </span>
+          <ol className="grid gap-5 p-3">
+            {groupByDay(timeline).map((group) => (
+              <li className="grid gap-2" key={group.day}>
+                <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  {formatActivityDay(group.entries[0].createdAt)}
+                </p>
+                <ol className="grid gap-2.5">
+                  {group.entries.map((entry) => (
+                    <li
+                      className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-2.5 text-[13px]"
+                      key={entry.id}
+                    >
+                      <time
+                        className="pt-0.5 text-right text-[11px] text-muted-foreground tabular-nums"
+                        dateTime={entry.createdAt}
+                        title={formatTimestamp(entry.createdAt)}
+                      >
+                        {formatActivityTime(entry.createdAt)}
+                      </time>
+                      <div className="grid gap-1">
+                        <p className="min-w-0 leading-5">
+                          {entry.description.text}
+                          {entry.description.mono ? (
+                            <>
+                              {" "}
+                              <code className="inline-block max-w-full rounded bg-muted px-1 py-0.5 align-middle font-mono text-[11px] break-words">
+                                {breakableName(entry.description.mono)}
+                              </code>
+                            </>
+                          ) : null}
+                        </p>
+                        {entry.description.meta ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            {entry.description.meta}
+                          </p>
+                        ) : null}
+                        {entry.description.error ? (
+                          <p className="text-[11px] break-words text-destructive">
+                            {entry.description.error}
+                          </p>
+                        ) : null}
+                        {entry.description.args ? (
+                          <Collapsible className="group/activity-args">
+                            <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+                              <ChevronRightIcon className="size-3 transition-transform group-data-[state=open]/activity-args:rotate-90" />
+                              Arguments
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <pre className="mt-1 overflow-x-auto rounded bg-muted p-2 font-mono text-[11px] break-words whitespace-pre-wrap">
+                                {entry.description.args}
+                              </pre>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
               </li>
             ))}
           </ol>
@@ -169,6 +216,24 @@ export default function TicketInspector({
   );
 }
 
+/** Zero-width break opportunities after `_` runs and lower→upper boundaries, so
+ * long namespaced Tool names wrap at separators instead of being cut off. */
+function breakableName(name: string) {
+  return name.replace(/(_+)|(?<=[a-z0-9])(?=[A-Z])/g, (separator) => `${separator}\u200b`);
+}
+
 function SectionLabel({ children }: { children: ReactNode }) {
   return <p className="px-2 pt-3 pb-1 text-xs font-semibold text-foreground">{children}</p>;
+}
+
+/** Buckets the ordered timeline by calendar day for the Activity day labels. */
+function groupByDay(timeline: TimelineEntry[]) {
+  const groups: { day: string; entries: TimelineEntry[] }[] = [];
+  for (const entry of timeline) {
+    const day = new Date(entry.createdAt).toDateString();
+    const last = groups.at(-1);
+    if (last?.day === day) last.entries.push(entry);
+    else groups.push({ day, entries: [entry] });
+  }
+  return groups;
 }

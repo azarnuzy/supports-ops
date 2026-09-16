@@ -100,6 +100,7 @@ export default function ToolSheet({
   const [copied, setCopied] = useState(false);
   const [usage, setUsage] = useState<string | null>(null);
   const editable = !tool || tool.origin === "HTTP";
+  const hasUsage = Boolean(tool && onSaveUsage);
 
   function toggleJsonMode() {
     if (jsonDraft === null) {
@@ -142,58 +143,6 @@ export default function ToolSheet({
     }
   }
 
-  const meta = tool ? (
-    <aside className="grid content-start gap-5 border-b p-5 lg:border-r lg:border-b-0">
-      <div className="grid gap-1">
-        <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          Tool ID
-        </p>
-        <button
-          type="button"
-          className="flex items-center gap-2 text-left font-mono text-xs break-all text-muted-foreground hover:text-foreground"
-          onClick={() => void copyId()}
-        >
-          {tool.id}
-          {copied ? (
-            <CheckIcon className="size-3.5 shrink-0" />
-          ) : (
-            <CopyIcon className="size-3.5 shrink-0" />
-          )}
-        </button>
-      </div>
-      <div className="grid gap-1">
-        <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          Stats
-        </p>
-        {isLogPending ? (
-          <Skeleton className="h-4 w-32" />
-        ) : (
-          <p className="text-[13px] text-muted-foreground">
-            {log?.stats.total
-              ? `${log.stats.total} calls · ${log.stats.avgLatencyMs} ms average${log.stats.failed ? ` · ${log.stats.failed} failed` : ""}`
-              : "Never called yet"}
-          </p>
-        )}
-      </div>
-      <div className="grid gap-1">
-        <p className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          Status
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant={tool.assigned ? "default" : "outline"}>
-            {tool.assigned ? "On for this agent" : "Off"}
-          </Badge>
-          <Badge variant={tool.risk === "READ_ONLY" ? "outline" : "secondary"}>
-            {riskLabel[tool.risk]}
-          </Badge>
-          {tool.availability === "AVAILABLE" ? null : (
-            <Badge variant="destructive">Disconnected</Badge>
-          )}
-        </div>
-      </div>
-    </aside>
-  ) : null;
-
   /** The agent picks its own tools from what it reads here, so this is the one place an Admin
    * can steer that choice. It is per agent, which is why it lives beside the assignment
    * switch rather than in the Tool definition. */
@@ -213,7 +162,7 @@ export default function ToolSheet({
           disabled={!tool.assigned || isSavingUsage}
           maxLength={1000}
           rows={3}
-          className="bg-background"
+          className="max-h-48 bg-background"
           placeholder="Use when the customer asks about their subscription, plan, or renewal date."
           value={usage ?? tool.usageInstruction ?? ""}
           onChange={(event) => setUsage(event.target.value)}
@@ -259,7 +208,8 @@ export default function ToolSheet({
       <Textarea
         aria-label="Sample input"
         rows={3}
-        className="bg-background font-mono text-xs"
+        className="max-h-40 bg-background font-mono text-xs"
+        placeholder='{"customerId":"cus_102"}'
         value={sampleInput}
         onChange={(event) => setSampleInput(event.target.value)}
       />
@@ -297,13 +247,14 @@ export default function ToolSheet({
             The {log.stats.total} most recent calls · {log.stats.avgLatencyMs} ms average
             {log.stats.failed ? ` · ${log.stats.failed} failed` : ""}
           </p>
-          <div className="overflow-hidden rounded-lg border">
+          {/* Bounded list: many calls scroll inside, the summary stays in view. */}
+          <div className="max-h-96 overflow-y-auto rounded-lg border">
             {log.calls.map((call) => (
               <div
                 key={`${call.ticketId}-${call.at}`}
-                className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5 text-[13px] last:border-b-0"
+                className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b px-3 py-2.5 text-[13px] last:border-b-0"
               >
-                <span className="text-muted-foreground">
+                <span className="truncate text-muted-foreground">
                   {timeFormatter.format(new Date(call.at))}
                 </span>
                 <span className="font-mono text-xs text-muted-foreground">{call.latencyMs} ms</span>
@@ -318,242 +269,268 @@ export default function ToolSheet({
     </div>
   );
 
+  const tabsBlock = (
+    <Tabs defaultValue={editable ? "edit" : "logs"}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabsList>
+          {editable ? <TabsTrigger value="edit">Edit tool</TabsTrigger> : null}
+          {tool ? <TabsTrigger value="logs">Logs</TabsTrigger> : null}
+          {hasUsage ? <TabsTrigger value="guidance">Guidance</TabsTrigger> : null}
+        </TabsList>
+        {editable ? (
+          <Button type="button" size="sm" variant="outline" onClick={toggleJsonMode}>
+            <CodeIcon className="size-4" />
+            {jsonDraft === null ? "Edit as JSON" : "Back to form"}
+          </Button>
+        ) : null}
+      </div>
+
+      {editable ? (
+        <TabsContent value="edit" className="mt-4">
+          <div className="grid gap-5">
+            {jsonDraft !== null ? (
+              <Field>
+                <FieldLabel htmlFor="http-tool-json">Tool definition</FieldLabel>
+                <Textarea
+                  id="http-tool-json"
+                  rows={16}
+                  className="max-h-[28rem] font-mono text-xs"
+                  value={jsonDraft}
+                  onChange={(event) => applyJson(event.target.value)}
+                />
+                <FieldDescription className={jsonError ? "text-destructive" : undefined}>
+                  {jsonError ??
+                    "Edits apply to the form as you type. Secrets are edited in the form."}
+                </FieldDescription>
+              </Field>
+            ) : (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="http-tool-name">Name</FieldLabel>
+                  <Input
+                    id="http-tool-name"
+                    required
+                    maxLength={100}
+                    placeholder="e.g. getInvoiceStatus"
+                    value={form.name}
+                    onChange={(event) => onChange({ name: event.target.value })}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="http-tool-description">Description</FieldLabel>
+                  <Textarea
+                    id="http-tool-description"
+                    required
+                    maxLength={2000}
+                    className="max-h-64"
+                    placeholder="What the tool returns and when to call it, e.g. Look up a customer's invoice status by customer ID."
+                    value={form.description}
+                    onChange={(event) => onChange({ description: event.target.value })}
+                  />
+                  <FieldDescription>
+                    The agent reads this to decide when to call the tool.
+                  </FieldDescription>
+                </Field>
+                <div className="grid grid-cols-[auto_1fr] gap-3">
+                  <Field>
+                    <FieldLabel htmlFor="http-tool-method">Method</FieldLabel>
+                    <Select
+                      value={form.method}
+                      onValueChange={(value) => onChange({ method: value as HttpMethod })}
+                    >
+                      <SelectTrigger id="http-tool-method" className="w-28">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {methods.map((method) => (
+                          <SelectItem key={method} value={method}>
+                            {method}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="http-tool-url">URL</FieldLabel>
+                    <Input
+                      id="http-tool-url"
+                      required
+                      type="url"
+                      placeholder="https://api.example.com/v1"
+                      value={form.url}
+                      onChange={(event) => onChange({ url: event.target.value })}
+                    />
+                  </Field>
+                </div>
+                <Field>
+                  <FieldLabel htmlFor="http-tool-risk">Approval</FieldLabel>
+                  <Select
+                    value={form.risk}
+                    onValueChange={(value) => onChange({ risk: value as ToolRisk })}
+                  >
+                    <SelectTrigger id="http-tool-risk">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="READ_ONLY">Read only</SelectItem>
+                      <SelectItem value="MUTATING">Requires approval</SelectItem>
+                      <SelectItem value="MUTATING_IRREVERSIBLE">Requires confirmation</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    A read-only tool runs whenever the agent needs it. One that requires approval
+                    only runs when the customer asks for that action in their own message. One that
+                    requires confirmation (payment, checkout, or similar irreversible actions) also
+                    needs the agent to have already proposed that exact action and the customer to
+                    confirm it in a later message.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="http-tool-schema">Input JSON Schema</FieldLabel>
+                  <Textarea
+                    id="http-tool-schema"
+                    required
+                    rows={6}
+                    className="max-h-64 font-mono text-xs"
+                    placeholder='{"type":"object","properties":{"customerId":{"type":"string"}},"required":["customerId"]}'
+                    value={form.inputSchema}
+                    onChange={(event) => onChange({ inputSchema: event.target.value })}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="http-tool-bearer">Bearer token</FieldLabel>
+                  <Input
+                    id="http-tool-bearer"
+                    type="password"
+                    placeholder={
+                      hasBearerToken ? "Configured — leave blank to keep" : "Not configured"
+                    }
+                    value={form.bearerToken}
+                    onChange={(event) =>
+                      onChange({ bearerToken: event.target.value, clearBearerToken: false })
+                    }
+                  />
+                  {hasBearerToken ? (
+                    <FieldDescription>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                        onClick={() => onChange({ bearerToken: "", clearBearerToken: true })}
+                      >
+                        {form.clearBearerToken ? "Will clear on save" : "Clear stored token"}
+                      </button>
+                    </FieldDescription>
+                  ) : null}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="http-tool-headers">Secret headers (JSON object)</FieldLabel>
+                  <Textarea
+                    id="http-tool-headers"
+                    rows={3}
+                    className="max-h-40 font-mono text-xs"
+                    placeholder={
+                      hasSecretHeaders ? "Configured — leave blank to keep" : '{"X-Api-Key":"..."}'
+                    }
+                    value={form.secretHeaders}
+                    onChange={(event) =>
+                      onChange({
+                        secretHeaders: event.target.value,
+                        clearSecretHeaders: false,
+                      })
+                    }
+                  />
+                  {hasSecretHeaders ? (
+                    <FieldDescription>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                        onClick={() => onChange({ secretHeaders: "", clearSecretHeaders: true })}
+                      >
+                        {form.clearSecretHeaders ? "Will clear on save" : "Clear stored headers"}
+                      </button>
+                    </FieldDescription>
+                  ) : null}
+                </Field>
+              </>
+            )}
+
+            {testPanel}
+          </div>
+        </TabsContent>
+      ) : null}
+
+      {tool ? (
+        <TabsContent value="logs" className="mt-4">
+          {logsPanel}
+        </TabsContent>
+      ) : null}
+
+      {hasUsage ? (
+        <TabsContent value="guidance" className="mt-4">
+          {usagePanel}
+        </TabsContent>
+      ) : null}
+    </Tabs>
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-3xl">
-        <SheetHeader className="border-b p-5">
+      {/* Fixed header, scrolling body, footer pinned as its own region — the sheet never grows
+       * past the viewport and the actions stay on a solid white base to the very bottom. */}
+      <SheetContent side="right" className="w-full gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <SheetHeader className="shrink-0 gap-2 border-b p-5 pr-12">
           <SheetTitle>{tool ? tool.name : "Add webhook tool"}</SheetTitle>
-          <SheetDescription>
-            {tool ? (
-              <span className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{originLabel[tool.origin]}</Badge>
-                <span className="truncate">{tool.description}</span>
-              </span>
-            ) : (
-              "Describe to the agent how and when to use the tool. GET sends the input as query parameters; other methods send it as a JSON body."
-            )}
+          {tool ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline">{originLabel[tool.origin]}</Badge>
+              <Badge variant={tool.risk === "READ_ONLY" ? "outline" : "secondary"}>
+                {riskLabel[tool.risk]}
+              </Badge>
+              <Badge variant={tool.assigned ? "default" : "outline"}>
+                {tool.assigned ? "On for this agent" : "Off"}
+              </Badge>
+              {tool.availability === "AVAILABLE" ? null : (
+                <Badge variant="destructive">Disconnected</Badge>
+              )}
+            </div>
+          ) : null}
+          <SheetDescription className="whitespace-normal">
+            {tool
+              ? tool.description
+              : "Describe to the agent how and when to use the tool. GET sends the input as query parameters; other methods send it as a JSON body."}
           </SheetDescription>
+          {tool ? (
+            <button
+              type="button"
+              title={tool.id}
+              onClick={() => void copyId()}
+              className="flex w-fit max-w-full items-center gap-1.5 text-left font-mono text-xs text-muted-foreground/70 hover:text-foreground"
+            >
+              <span className="truncate">{tool.id}</span>
+              {copied ? (
+                <CheckIcon className="size-3.5 shrink-0" />
+              ) : (
+                <CopyIcon className="size-3.5 shrink-0" />
+              )}
+            </button>
+          ) : null}
         </SheetHeader>
 
-        <div className="grid lg:grid-cols-[16rem_1fr]">
-          {meta}
-          <div className="min-w-0 p-5">
-            <Tabs defaultValue={editable ? "edit" : "logs"}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <TabsList>
-                  {editable ? <TabsTrigger value="edit">Edit tool</TabsTrigger> : null}
-                  {tool ? <TabsTrigger value="logs">Logs</TabsTrigger> : null}
-                </TabsList>
-                {editable ? (
-                  <Button type="button" size="sm" variant="outline" onClick={toggleJsonMode}>
-                    <CodeIcon className="size-4" />
-                    {jsonDraft === null ? "Edit as JSON" : "Back to form"}
-                  </Button>
-                ) : null}
-              </div>
-
-              {editable ? (
-                <TabsContent value="edit" className="mt-4">
-                  <form className="grid gap-5" onSubmit={onSubmit}>
-                    {jsonDraft !== null ? (
-                      <Field>
-                        <FieldLabel htmlFor="http-tool-json">Tool definition</FieldLabel>
-                        <Textarea
-                          id="http-tool-json"
-                          rows={16}
-                          className="font-mono text-xs"
-                          value={jsonDraft}
-                          onChange={(event) => applyJson(event.target.value)}
-                        />
-                        <FieldDescription className={jsonError ? "text-destructive" : undefined}>
-                          {jsonError ??
-                            "Edits apply to the form as you type. Secrets are edited in the form."}
-                        </FieldDescription>
-                      </Field>
-                    ) : (
-                      <>
-                        <Field>
-                          <FieldLabel htmlFor="http-tool-name">Name</FieldLabel>
-                          <Input
-                            id="http-tool-name"
-                            required
-                            maxLength={100}
-                            value={form.name}
-                            onChange={(event) => onChange({ name: event.target.value })}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="http-tool-description">Description</FieldLabel>
-                          <Textarea
-                            id="http-tool-description"
-                            required
-                            maxLength={2000}
-                            value={form.description}
-                            onChange={(event) => onChange({ description: event.target.value })}
-                          />
-                          <FieldDescription>
-                            The agent reads this to decide when to call the tool.
-                          </FieldDescription>
-                        </Field>
-                        <div className="grid grid-cols-[auto_1fr] gap-3">
-                          <Field>
-                            <FieldLabel htmlFor="http-tool-method">Method</FieldLabel>
-                            <Select
-                              value={form.method}
-                              onValueChange={(value) => onChange({ method: value as HttpMethod })}
-                            >
-                              <SelectTrigger id="http-tool-method" className="w-28">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {methods.map((method) => (
-                                  <SelectItem key={method} value={method}>
-                                    {method}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="http-tool-url">URL</FieldLabel>
-                            <Input
-                              id="http-tool-url"
-                              required
-                              type="url"
-                              placeholder="https://api.example.com/v1"
-                              value={form.url}
-                              onChange={(event) => onChange({ url: event.target.value })}
-                            />
-                          </Field>
-                        </div>
-                        <Field>
-                          <FieldLabel htmlFor="http-tool-risk">Approval</FieldLabel>
-                          <Select
-                            value={form.risk}
-                            onValueChange={(value) => onChange({ risk: value as ToolRisk })}
-                          >
-                            <SelectTrigger id="http-tool-risk">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="READ_ONLY">Read only</SelectItem>
-                              <SelectItem value="MUTATING">Requires approval</SelectItem>
-                              <SelectItem value="MUTATING_IRREVERSIBLE">
-                                Requires confirmation
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FieldDescription>
-                            A read-only tool runs whenever the agent needs it. One that requires
-                            approval only runs when the customer asks for that action in their own
-                            message. One that requires confirmation (payment, checkout, or similar
-                            irreversible actions) also needs the agent to have already proposed that
-                            exact action and the customer to confirm it in a later message.
-                          </FieldDescription>
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="http-tool-schema">Input JSON Schema</FieldLabel>
-                          <Textarea
-                            id="http-tool-schema"
-                            required
-                            rows={6}
-                            className="font-mono text-xs"
-                            value={form.inputSchema}
-                            onChange={(event) => onChange({ inputSchema: event.target.value })}
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="http-tool-bearer">Bearer token</FieldLabel>
-                          <Input
-                            id="http-tool-bearer"
-                            type="password"
-                            placeholder={
-                              hasBearerToken ? "Configured — leave blank to keep" : "Not configured"
-                            }
-                            value={form.bearerToken}
-                            onChange={(event) =>
-                              onChange({ bearerToken: event.target.value, clearBearerToken: false })
-                            }
-                          />
-                          {hasBearerToken ? (
-                            <FieldDescription>
-                              <button
-                                type="button"
-                                className="text-destructive underline"
-                                onClick={() =>
-                                  onChange({ bearerToken: "", clearBearerToken: true })
-                                }
-                              >
-                                {form.clearBearerToken
-                                  ? "Will clear on save"
-                                  : "Clear stored token"}
-                              </button>
-                            </FieldDescription>
-                          ) : null}
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="http-tool-headers">
-                            Secret headers (JSON object)
-                          </FieldLabel>
-                          <Textarea
-                            id="http-tool-headers"
-                            rows={3}
-                            className="font-mono text-xs"
-                            placeholder={
-                              hasSecretHeaders
-                                ? "Configured — leave blank to keep"
-                                : '{"X-Api-Key":"..."}'
-                            }
-                            value={form.secretHeaders}
-                            onChange={(event) =>
-                              onChange({
-                                secretHeaders: event.target.value,
-                                clearSecretHeaders: false,
-                              })
-                            }
-                          />
-                          {hasSecretHeaders ? (
-                            <FieldDescription>
-                              <button
-                                type="button"
-                                className="text-destructive underline"
-                                onClick={() =>
-                                  onChange({ secretHeaders: "", clearSecretHeaders: true })
-                                }
-                              >
-                                {form.clearSecretHeaders
-                                  ? "Will clear on save"
-                                  : "Clear stored headers"}
-                              </button>
-                            </FieldDescription>
-                          ) : null}
-                        </Field>
-                      </>
-                    )}
-
-                    {testPanel}
-
-                    <div className="flex justify-end gap-2 border-t pt-5">
-                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isPending || Boolean(jsonError)}>
-                        {isPending ? "Saving…" : tool ? "Save changes" : "Add tool"}
-                      </Button>
-                    </div>
-                  </form>
-                </TabsContent>
-              ) : null}
-
-              {tool ? (
-                <TabsContent value="logs" className="mt-4">
-                  {logsPanel}
-                </TabsContent>
-              ) : null}
-            </Tabs>
-            {usagePanel ? <div className="mt-5">{usagePanel}</div> : null}
-          </div>
-        </div>
+        {editable ? (
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmit}>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">{tabsBlock}</div>
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t p-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending || Boolean(jsonError)}>
+                {isPending ? "Saving…" : tool ? "Save changes" : "Add tool"}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">{tabsBlock}</div>
+        )}
       </SheetContent>
     </Sheet>
   );
