@@ -79,6 +79,7 @@ eval suite** — efek yang tertulis di bawah masih prediksi, bukan hasil.
 | 5 | `clarificationCount` dipindah ke ekor prompt | Nilai yang disisipkan di tengah teks statis memotong blok statis dan membuang cache pada seluruh token sesudahnya | Prefix yang bisa di-cache naik dari ~610 ke ~1.150 token — seluruh system prompt | Selesai, terukur |
 | 6 | Schema Tool dikirim sekali, sebagai parameter schema asli | `inputSchema` dikirim sebagai schema terbuka sementara JSON Schema aslinya di-`stringify` ke dalam deskripsi Tool, jadi setiap request membawa schema checkout dua kali | Satu dari dua salinan manifest ~13,5k token hilang. Bukan seluruh manifest — provider tetap merender parameter schema-nya | Selesai, belum terukur |
 | 7 | Knob `LLM_MAIN_MAX_OUTPUT_TOKENS` dan `LLM_MAIN_REASONING_EFFORT` | 51,5% token output adalah reasoning, dan token output yang mendominasi waktu generasi | Belum ada — **keduanya default kosong, perilaku belum berubah**. Yang dikirim adalah knob-nya, bukan keputusannya | Selesai, nilai belum dipilih |
+| 8 | Baris ringkasan p50/p95 per suite | Baris `cost:` per Case (perubahan 1) tidak dijumlahkan — membandingkan dua baseline lewat 23 Case adalah tempat kesalahan hitung manual terjadi | Satu baris ringkasan dicetak setelah Case terakhir tiap suite: TTFT, time-to-content, dan durasi total sebagai p50/p95; total token input, rasio cached, token output dan reasoning; rata-rata tool call per Case. Case tanpa `usage` dari provider dikecualikan dari angka token, bukan dihitung nol | Selesai, terverifikasi (`pnpm eval:ai-agent negativecontrol`) |
 
 Tidak ada dependensi baru yang ditambahkan. Konversi JSON Schema pada perubahan
 nomor 6 memakai Zod 4.4 yang sudah terpasang, dengan fallback ke bentuk lama bila
@@ -92,7 +93,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 
 | Issue | Pekerjaan | Diblokir oleh | Status |
 | --- | --- | --- | --- |
-| [#176](https://github.com/azarnuzy/supports-ops/issues/176) | Ringkasan p50/p95 latensi dan token per suite | — | Siap dikerjakan |
+| [#176](https://github.com/azarnuzy/supports-ops/issues/176) | Ringkasan p50/p95 latensi dan token per suite | — | Selesai |
 | [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Menunggu |
 | [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Menunggu |
 | [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Menunggu |

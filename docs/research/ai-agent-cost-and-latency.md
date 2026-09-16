@@ -200,6 +200,14 @@ Verify: `cost:` lines show a lower `in` count than B0's ~11.7 k on a comparable 
 
 **Both default to unset, so behaviour is unchanged.** This ships the knob, not a decision: 51.5 % of output tokens are reasoning and output tokens dominate generation time, but which effort level holds the quality floor is an empirical question, and reasoning effort is part of the prompt-cache key. Choosing a value is step 7.3.
 
+### 6.8 Suite-level p50/p95 summary line
+
+- `apps/api/src/evals/run.ts:238,268` — the per-Case outputs collected while a suite runs are rolled up into one `summary [...]` line printed right after that suite's last `cost:` line.
+
+Why: section 5 named this as still missing — the reader adding up 23 per-Case `cost:` lines by hand is exactly where a baseline comparison goes wrong. The summary reports TTFT, time-to-content, and end-to-end duration as p50/p95 (not means, since a mean hides the tail this document cares about), total input tokens with the cached ratio, output and reasoning tokens, and tool calls per Case. A Case whose provider reported no `usage` is dropped from the token figures rather than counted as zero, so one untracked Case cannot understate the rest.
+
+Verify: `pnpm eval:ai-agent negativecontrol` prints `summary [northstar-negative-control] (1 cases, 1 with usage): ttft p50 6360ms / p95 6360ms | content p50 6360ms / p95 6360ms | total p50 6368ms / p95 6368ms | in 22849 (cached 46%) out 107 (reasoning 10) | tools 1.0/case` after its Case.
+
 ## 7. Next steps
 
 Tracked as GitHub issues #176–#187, all labelled `ready-for-agent`. Each section below names the issues that carry it.

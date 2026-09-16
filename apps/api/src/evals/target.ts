@@ -375,7 +375,8 @@ function preview(value: string): string {
 function knowledgePassages(result: string): RetrievedChunk[] {
   try {
     const parsed: unknown = JSON.parse(result);
-    if (!Array.isArray(parsed)) return [{ chunkId: result, content: result, knowledgeSourceId: null }];
+    if (!Array.isArray(parsed))
+      return [{ chunkId: result, content: result, knowledgeSourceId: null }];
     return parsed.map((row) => {
       const { chunkId, content, knowledgeSourceId } = (row ?? {}) as {
         chunkId?: unknown;

@@ -244,6 +244,8 @@ async function main() {
       });
       if (!suiteCases.length) continue;
 
+      const suiteOutputs: EvalTurnOutput[] = [];
+
       await runEvalCli({
         cases: suiteCases,
         // Serial: every case is a real turn against one scratch Ticket and a
@@ -267,10 +269,13 @@ async function main() {
         },
         target: async (input) => {
           const output = await runEvalTurn(input);
+          suiteOutputs.push(output);
           process.stdout.write(`${costLine(output)}\n`);
           return output;
         },
       });
+
+      process.stdout.write(`${summaryLine(suite.name, suiteOutputs)}\n`);
     }
   } finally {
     await teardownEvalTicket();
@@ -293,6 +298,50 @@ function costLine(output: EvalTurnOutput): string {
   return (
     `  cost: ttft ${ms(output.ttftMs)} / content ${ms(output.ttfcMs)} / total ${ms(output.durationMs)}` +
     ` | ${tokens} | tools ${output.toolCalls.length} | chunks ${output.retrieved.length}`
+  );
+}
+
+/** Nearest-rank percentile. `p` is 0-100. */
+function percentile(values: number[], p: number): number | undefined {
+  if (!values.length) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
+  return sorted[index];
+}
+
+/** One line after a suite's Cases, rolling up what the per-Case `cost:` lines
+ * otherwise require adding up by hand. p50/p95, not means, per the metrics
+ * this reply-latency work cares about — see
+ * `docs/research/ai-agent-cost-and-latency.md` §5 and §6.1. A Case whose
+ * provider reported no `usage` is excluded from the token figures rather than
+ * counted as zero, so one untracked Case cannot understate the others. */
+function summaryLine(suiteName: string, outputs: EvalTurnOutput[]): string {
+  const ms = (value: number | undefined) => (value === undefined ? "-" : `${Math.round(value)}ms`);
+  const percentiles = (values: number[]) =>
+    `p50 ${ms(percentile(values, 50))} / p95 ${ms(percentile(values, 95))}`;
+
+  const ttft = outputs.map((output) => output.ttftMs).filter((value) => value !== undefined);
+  const ttfc = outputs.map((output) => output.ttfcMs).filter((value) => value !== undefined);
+  const duration = outputs.map((output) => output.durationMs);
+
+  const usages = outputs.map((output) => output.usage).filter((usage) => usage !== undefined);
+  const inputTokens = usages.reduce((sum, usage) => sum + usage.inputTokens, 0);
+  const cachedInputTokens = usages.reduce((sum, usage) => sum + usage.cachedInputTokens, 0);
+  const outputTokens = usages.reduce((sum, usage) => sum + usage.outputTokens, 0);
+  const reasoningTokens = usages.reduce(
+    (sum, usage) => sum + (usage.details?.output_reasoning_tokens ?? 0),
+    0,
+  );
+  const cachedRatio =
+    inputTokens > 0 ? `${Math.round((cachedInputTokens / inputTokens) * 100)}%` : "-";
+  const totalToolCalls = outputs.reduce((sum, output) => sum + output.toolCalls.length, 0);
+  const toolCallsPerCase = outputs.length ? (totalToolCalls / outputs.length).toFixed(1) : "0";
+
+  return (
+    `summary [${suiteName}] (${outputs.length} cases, ${usages.length} with usage):` +
+    ` ttft ${percentiles(ttft)} | content ${percentiles(ttfc)} | total ${percentiles(duration)}` +
+    ` | in ${inputTokens} (cached ${cachedRatio}) out ${outputTokens} (reasoning ${reasoningTokens})` +
+    ` | tools ${toolCallsPerCase}/case`
   );
 }
 
