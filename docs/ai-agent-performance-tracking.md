@@ -89,7 +89,7 @@ argumennya.
 
 | # | Perubahan | Alasan | Efek yang diharapkan | Status |
 | --- | --- | --- | --- | --- |
-| 10 | `replyPrompt` menambah dua aturan ESCALATE eksplisit: (a) saat `searchKnowledge` mengembalikan Knowledge Source yang saling bertentangan pada fakta yang dibutuhkan, jangan memilih salah satu nilai — ESCALATE dengan `CONFLICTING_KNOWLEDGE`; (b) saat Customer melaporkan beberapa completed/captured charge untuk order yang sama, ESCALATE untuk payment review walau Customer secara eksplisit meminta refund langsung ([#181](https://github.com/azarnuzy/supports-ops/issues/181)) | `common-return-window` gagal karena prompt tidak melarang model memilih salah satu window yang bertentangan (K03 vs L08); `escalation-two-completed-charges` gagal karena aturan "jangan menahan Tool call hanya karena ini write" pada prompt yang sama membiarkan model memproses refund langsung meski dua charge yang settled semestinya diverifikasi manusia dulu | Kedua Case dan Case `gEval` yang berbagi skenario sama — `staleness-conflicting-return-window`, `staleness-legacy-authority` — diharapkan lulus karena aturan konflik-Knowledge sekarang eksplisit, bukan tersirat lewat nama `escalationReason` saja | Selesai, belum terukur |
+| 10 | `replyPrompt` menambah dua aturan ESCALATE eksplisit: (a) saat `searchKnowledge` mengembalikan Knowledge Source yang saling bertentangan pada fakta yang dibutuhkan, jangan memilih salah satu nilai — ESCALATE dengan `CONFLICTING_KNOWLEDGE`; (b) saat Customer melaporkan beberapa completed/captured charge untuk order yang sama, ESCALATE untuk payment review walau Customer secara eksplisit meminta refund langsung ([#181](https://github.com/azarnuzy/supports-ops/issues/181)) | `common-return-window` gagal karena prompt tidak melarang model memilih salah satu window yang bertentangan (K03 vs L08); `escalation-two-completed-charges` gagal karena aturan "jangan menahan Tool call hanya karena ini write" pada prompt yang sama membiarkan model memproses refund langsung meski dua charge yang settled semestinya diverifikasi manusia dulu | Kedua Case dan Case `gEval` yang berbagi skenario sama — `staleness-conflicting-return-window`, `staleness-legacy-authority` — diharapkan lulus karena aturan konflik-Knowledge sekarang eksplisit, bukan tersirat lewat nama `escalationReason` saja | Selesai |
 
 Perubahan nomor 10 diverifikasi oleh unit test `packages/ai-agent` (43 lulus,
 termasuk Case baru di `reply.test.ts`) dan `tsc --noEmit`. **Belum
@@ -110,6 +110,22 @@ membaca `judge`-nya lewat Lens/Langfuse, dan menutup #181 dengan angka
 before/after serta identitas Case yang sebenarnya sebelum status di baris
 antrean bisa naik dari "Selesai, belum terukur" ke "Selesai".
 
+**#181 ditutup dan terukur, 2026-09-16, commit `39da01c`.** Kendala kredensial
+di atas tidak lagi berlaku di sesi ini — `EVAL_WORKSPACE_ID` dan
+`OPENROUTER_API_KEY` tersedia. `pnpm eval:ai-agent` (sembilan suite) dijalankan
+penuh terhadap Workspace eval yang sama (`Dana Pratama's Workspace`). Hasil
+lengkap dan analisisnya ada di `research/ai-agent-cost-and-latency.md` §1c
+(baseline B2). Ringkasnya: `decision` naik dari 12/14 (B1) menjadi **14/14** —
+`common-return-window` dan `escalation-two-completed-charges` (dua Case yang
+jadi acceptance criteria #181) keduanya lulus. `gEval` bertahan di 18/23 (sudah
+terukur oleh #180 sebelumnya, dikonfirmasi ulang di run ini). Tidak ada suite
+lain yang regresi terhadap B1: `contains` 4/6 (tetap, regresi schema di luar
+cakupan), `faithfulness` 1/3 (tetap, dua Case yang sama gagal — termasuk
+`edge-no-first-scan` yang masih gagal walau #179 sudah mengubah prompt-nya;
+catatan ini murni observasi dari run yang sama, #179 sendiri tidak
+dikerjakan ulang di sini), `tool` 7/7 (tetap), `visibility`/`language`/`relevancy`
+100% (tetap), `negativeControl` gagal sesuai desain (tetap).
+
 **Perubahan nomor 10, terukur oleh #180.** `pnpm eval:ai-agent decision`
 terhadap kode nomor 10 saja (tanpa perubahan #180 di bawah) lulus 3 dari 3
 percobaan untuk `escalation-two-completed-charges`, tapi `common-return-window`
@@ -121,6 +137,7 @@ selalu membawanya (lihat nomor 11).
 | # | Perubahan | Alasan | Efek yang diharapkan | Status |
 | --- | --- | --- | --- | --- |
 | 11 | `tool-unknown-order` diperbaiki: `replyPrompt` menyuruh model memanggil Tool dengan identifier Customer apa adanya walau formatnya tidak cocok skema, bukan meminta Customer memformat ulang lebih dulu. `executeBuiltInTool` (`apps/api/src/modules/tools/services.ts`) menambahkan `sourceTitle` per Chunk `searchKnowledge` agar model bisa mengenali Source legacy/superseded yang bertentangan dengan Source current pada fakta yang sama, tanpa bergantung pada kedua nilai persis ikut terambil ([#180](https://github.com/azarnuzy/supports-ops/issues/180)) | `tool-unknown-order` gagal bukan karena regresi schema ketat — model melihat skema `id` Shopify GID lalu bertanya ke Customer alih-alih mencoba Tool. `common-return-window` gagal karena celah recall retrieval (lihat catatan nomor 10 di atas), bukan celah keputusan — menyetel parameter `searchChunks` di luar cakupan #180 (ditunda ke #187) | `pnpm eval:ai-agent tool` 7/7 (sebelumnya 6/7). `pnpm eval:ai-agent decision` 14/14 (sebelumnya 12/14), diverifikasi ulang pada beberapa proses terpisah karena non-determinisme eval. Suite penuh tidak ada yang regresi dari B1; `gEval` membaik 16/23 → 18/23 | Selesai, terukur |
+| 12 | Manifest Tool dipersempit menjadi dua loadout statis: `support` (semua Tool assigned kecuali mutasi cart/checkout) dan `purchase` (semua Tool). Pesan Customer dengan niat beli memilih `purchase`; begitu Session masuk alur beli, turn berikutnya tetap di `purchase` supaya konfirmasi ("ya") tidak kehilangan Tool yang diotorisasinya (`packages/ai-agent/src/tools.ts` — `selectToolLoadout`; dipakai di `turn.ts`) ([#184](https://github.com/azarnuzy/supports-ops/issues/184)) | Manifest 13 Tool Shopify ~13,5k token adalah biaya tetap tiap turn tanpa peduli pertanyaannya — pertanyaan "di mana pesanan saya" tetap membawa schema checkout dan cart penuh. Loadout statis (bukan dihitung per pesan) supaya prefix yang di-cache tetap stabil | Diukur langsung terhadap 14 Tool assigned Workspace eval: manifest penuh ~13.051 token estimasi, loadout `support` ~3.078 token — pengurangan ~76% (~9.973 token) untuk turn tanpa niat beli. 77 dari 78 pesan Customer di seluruh Case eval memilih `support` (satu false positive berdampak kecil, lihat baseline B2). `pnpm eval:ai-agent tool` 7/7, `pnpm eval:ai-agent decision` 14/14 — tidak ada yang regresi. Rasio cached tidak turun (Case tanpa Tool call: 99,8%, sama dengan B1) | Selesai |
 
 ## Baseline B1 (diukur 2026-09-16, setelah sembilan perubahan di atas)
 
@@ -176,6 +193,38 @@ persis dengan B0 per-Case. Kegagalan baru ada di `contains` (2 Case) dan
    itu kemungkinan besar tidak akan pernah terlihat di angka ini walau
    berhasil sesuai rencana.
 
+## Baseline B2 (diukur 2026-09-16, setelah #179/#180/#181/#184)
+
+Sembilan suite dijalankan ulang di Workspace eval yang sama, pada commit
+`39da01c`. Detail lengkap dan analisis ada di dokumen riset §1c.
+
+| Suite | Case | Lulus | Token/case | ms/case |
+| --- | --- | --- | --- | --- |
+| `contains` | 6 | 4 | 52.237 | 15.327 |
+| `faithfulness` | 3 | 1 | 23.873 | 28.364 |
+| `decision` | 14 | 14 | 18.547 | 8.215 |
+| `tool` | 7 | 7 | 65.241 | 15.246 |
+| `visibility` | 6 | 6 | 22.150 | 12.394 |
+| `negativeControl` | 1 | 0 | 23.713 | 5.976 |
+| `language` | 3 | 3 | 24.070 | 9.398 |
+| `relevancy` | 3 | 3 | 24.135 | 27.064 |
+| `gEval` | 23 | 18 | 33.220 | 18.073 |
+
+**Lantai mutu bertahan, dan dua kegagalan B1 sekarang lulus.** `decision`
+naik dari 12/14 (B1) ke **14/14** — `common-return-window` dan
+`escalation-two-completed-charges` (target #181) keduanya lulus. `tool` tetap
+7/7, `gEval` tetap 18/23 (dua-duanya sudah terukur oleh #180 sebelumnya,
+dikonfirmasi ulang). `contains` tetap 4/6 (regresi schema, di luar cakupan),
+`faithfulness` tetap 1/3 — `edge-no-first-scan` masih gagal walau #179 sudah
+mengubah promptnya (temuan baru dari run ini; #179 sendiri tidak dikerjakan
+ulang, hanya dicatat). `visibility`/`language`/`relevancy` tetap 100%,
+`negativeControl` tetap gagal sesuai desain.
+
+Manifest Tool (#184): diukur langsung dari kode, bukan dari rata-rata suite —
+lihat baris 12 di atas dan §1c untuk alasan angka per-suite tidak
+menunjukkan penurunan bersih (pertumbuhan prompt #181 dan panggilan Tool
+tambahan pada Case yang sekarang lulus terjadi di jendela commit yang sama).
+
 ## Antrean pekerjaan
 
 Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
@@ -186,12 +235,12 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#176](https://github.com/azarnuzy/supports-ops/issues/176) | Ringkasan p50/p95 latensi dan token per suite | — | Selesai |
 | [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Selesai |
 | [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Ditutup — premis issue keliru, tidak ada perubahan kode ([detail](research/ai-agent-cost-and-latency.md#72-fix-what-b0-says-is-broken-before-optimising-further--178-179-180-181)) |
-| [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Selesai, belum terukur — penyebab diputuskan (celah prompt-grounding, Knowledge sudah lengkap), lihat riset §6.10 |
+| [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Terukur, **masih gagal** — `edge-no-first-scan` gagal lagi pada baseline B2 dengan gejala yang sama (lihat riset §1c); prompt sudah diubah di 6.10 tapi belum menutup celahnya, perlu triase ulang di luar cakupan #181/#184 |
 | [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Selesai |
-| [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Selesai, belum terukur |
+| [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | **Selesai** — `common-return-window` dan `escalation-two-completed-charges` lulus di baseline B2, `gEval` 18/23, tidak ada suite regresi (lihat riset §1c) |
 | [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai |
 | [#183](https://github.com/azarnuzy/supports-ops/issues/183) | Pilih nilai reasoning effort dan batas token output | #177 | Selesai |
-| [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Diimplementasikan, belum terukur |
+| [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | **Selesai** — manifest `support` ~76% lebih kecil (terukur langsung dari kode), `tool`/`decision` tidak regresi, rasio cached bertahan (lihat riset §1c) |
 | [#185](https://github.com/azarnuzy/supports-ops/issues/185) | Batasi durasi terburuk satu turn AI Agent | — | Selesai |
 | [#186](https://github.com/azarnuzy/supports-ops/issues/186) | Mulai retrieval paralel dengan panggilan model pertama | #177, #183 | Bersyarat |
 | [#187](https://github.com/azarnuzy/supports-ops/issues/187) | Setel parameter retrieval terhadap mutu retrieval terukur | #177, #182 | Selesai |
