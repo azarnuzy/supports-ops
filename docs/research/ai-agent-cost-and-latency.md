@@ -208,6 +208,16 @@ Why: section 5 named this as still missing — the reader adding up 23 per-Case 
 
 Verify: `pnpm eval:ai-agent negativecontrol` prints `summary [northstar-negative-control] (1 cases, 1 with usage): ttft p50 6360ms / p95 6360ms | content p50 6360ms / p95 6360ms | total p50 6368ms / p95 6368ms | in 22849 (cached 46%) out 107 (reasoning 10) | tools 1.0/case` after its Case.
 
+### 6.9 Bound the retry tail — #185
+
+- `packages/ai-agent/src/turn.ts` — each `streamReply` attempt is wrapped in a 60 s wall-clock timeout (`TURN_TIMEOUT_MS`, the same magnitude as the Tool budget in `tools.ts`). A timed-out attempt never retries. A fast, empty failure (no delta reached the Customer) still gets one retry, also bounded by the same clock. Once any delta has reached the Customer, the turn does not retry at all, whether the failure is a timeout or a plain error — restarting a reply the Customer is mid-way through reading is worse than escalating once.
+- On timeout the turn escalates with the existing `AI_TIMEOUT` reason (already wired to a Customer-facing acknowledgement in `apps/api/src/modules/ai-agent/turn.ts`), not the generic `AI_GENERATION_FAILED` — a stated, deliberate outcome rather than a silent hang.
+- `packages/ai-agent/src/turn.test.ts` — covers a hung attempt escalating with `AI_TIMEOUT` without retrying, and a failure after a delta has streamed not retrying either.
+
+Why: `runAiAgentTurn` retried twice with no timeout at all outside the Tool budget, so a hung model call (no Tools involved) had no ceiling, and a retry after deltas had already streamed restarted a reply the Customer was reading. Stated worst-case wall clock for a single turn: 60 s if the first attempt hangs or the Customer has already seen output, up to 120 s only for the narrow case of a fast, silent failure followed by a full timeout on the retry — down from the previous unbounded-times-two.
+
+Verify: `pnpm --filter @repo/ai-agent test` (42 passing), `tsc --noEmit`, `biome check`.
+
 ## 7. Next steps
 
 Tracked as GitHub issues #176–#187, all labelled `ready-for-agent`. Each section below names the issues that carry it.
@@ -254,7 +264,7 @@ The manifest is still sent whole on every turn, including checkout mutation Tool
 
 ### 7.5 Bound the retry tail — #185
 
-`runAiAgentTurn` retries `streamReply` twice with no per-attempt timeout, and the Tool budget allows 60 s inside each — a worst case near two minutes, with the second attempt starting from scratch. Bound the per-attempt wall clock, or drop the retry on the streaming path where deltas have already reached the Customer. Not urgent at B0 latencies, but it is the tail that will show up first in production p99.
+Done — see 6.9.
 
 ### 7.6 Speculative retrieval prefetch — only if TTFT is still high — #186
 

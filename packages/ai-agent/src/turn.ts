@@ -15,6 +15,39 @@ import {
 
 export type EscalationReason = NonNullable<ReplyDecision["escalationReason"]>;
 
+// ponytail: reuses the Tool budget's own 60s magnitude (see tools.ts) rather than
+// inventing a second tuned number — one clock for the whole attempt, not just its
+// Tool calls, since a model call with no Tools has never had a ceiling at all.
+// A timed-out attempt never retries (see below), so this is also the stated
+// worst-case wall clock for a turn that produces no output at all. A turn that
+// fails fast with no output still gets one retry, also bounded by this clock,
+// so the absolute worst case — a fast failure followed by a full timeout, or
+// vice versa — is 2x this.
+const TURN_TIMEOUT_MS = 60_000;
+
+class AiAgentTurnTimeoutError extends Error {
+  constructor() {
+    super(`The AI Agent did not finish its turn within ${TURN_TIMEOUT_MS}ms.`);
+    this.name = "AiAgentTurnTimeoutError";
+  }
+}
+
+function withTurnTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new AiAgentTurnTimeoutError()), TURN_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 type Source = { content: string; id: string };
 
 export type AiAgentTurnRuntime = {
@@ -97,39 +130,62 @@ export async function runAiAgentTurn(params: {
         const tools = createAssignedTools(assignedTools.descriptors, assignedTools.execute);
         let decision: ReplyDecision | undefined;
         let lastError: unknown;
+        let deltaPublished = false;
+        let timedOut = false;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           try {
-            decision = await streamReply({
-              attachments,
-              clarificationCount,
-              ...(params.modelConfig.reasoningEffort
-                ? { controls: { reasoningEffort: params.modelConfig.reasoningEffort } }
-                : {}),
-              ...(params.modelConfig.maxOutputTokens
-                ? { maxOutputTokens: params.modelConfig.maxOutputTokens }
-                : {}),
-              customerMessage: params.customerMessage,
-              instructions: ticket.instructions,
-              messages,
-              model,
-              onDelta: (delta) => {
-                if (params.runtime.isActive()) {
-                  return params.runtime.publishDelta(delta, provisionalId);
-                }
-              },
-              onMessages: params.runtime.saveMemory,
-              onResult: params.onResult,
-              resolutionMessage: ticket.resolutionMessage,
-              sessionId: ticket.sessionId,
-              tools,
-              userId: ticket.userId,
-            });
+            decision = await withTurnTimeout(
+              streamReply({
+                attachments,
+                clarificationCount,
+                ...(params.modelConfig.reasoningEffort
+                  ? { controls: { reasoningEffort: params.modelConfig.reasoningEffort } }
+                  : {}),
+                ...(params.modelConfig.maxOutputTokens
+                  ? { maxOutputTokens: params.modelConfig.maxOutputTokens }
+                  : {}),
+                customerMessage: params.customerMessage,
+                instructions: ticket.instructions,
+                messages,
+                model,
+                onDelta: (delta) => {
+                  deltaPublished = true;
+                  if (!timedOut && params.runtime.isActive()) {
+                    return params.runtime.publishDelta(delta, provisionalId);
+                  }
+                },
+                onMessages: params.runtime.saveMemory,
+                onResult: params.onResult,
+                resolutionMessage: ticket.resolutionMessage,
+                sessionId: ticket.sessionId,
+                tools,
+                userId: ticket.userId,
+              }),
+            );
             break;
           } catch (error) {
             lastError = error;
+            // A retry restarts the reply from scratch. Once the Customer has
+            // already seen part of it stream in, restarting would replace a
+            // reply they are mid-way through reading — worse than escalating
+            // once. And an attempt that already burned the full time budget
+            // gains nothing from doubling that wait, so a timeout never
+            // retries either way; only a fast, empty failure does.
+            if (deltaPublished || error instanceof AiAgentTurnTimeoutError) break;
           }
         }
-        if (!decision) throw lastError ?? new ReplyGenerationFailedError();
+        if (!decision) {
+          if (lastError instanceof AiAgentTurnTimeoutError) {
+            timedOut = true;
+            run.setAttributes({
+              "ai_agent.decision": "ESCALATE",
+              "ai_agent.escalation_reason": "AI_TIMEOUT",
+            });
+            await params.runtime.escalate("AI_TIMEOUT");
+            return;
+          }
+          throw lastError ?? new ReplyGenerationFailedError();
+        }
         run.setAttributes({
           "ai_agent.decision": decision.decision,
           ...(decision.escalationReason
