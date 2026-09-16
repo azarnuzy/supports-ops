@@ -35,9 +35,11 @@ const ProfileView = () => {
     return null;
   }
 
+  const workspaceId = currentUser.workspaceId;
+
   async function copyWorkspaceId() {
     try {
-      await navigator.clipboard.writeText(currentUser.workspaceId);
+      await navigator.clipboard.writeText(workspaceId);
       toast.success("Workspace ID copied.");
     } catch {
       toast.error("Could not copy the Workspace ID.");
