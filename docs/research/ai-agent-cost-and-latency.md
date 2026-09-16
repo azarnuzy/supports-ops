@@ -49,6 +49,62 @@ Two facts follow immediately, and both contradict the intuitive reading of the `
 1. **Prompt caching is already active.** `Usage.cachedInputTokens` is populated by the gateway with no `cache_control` in this codebase — the provider caches the stable prefix automatically. Input tokens are therefore not billed at the headline rate; on GPT-5.6-class models cached input is 0.1× the uncached rate ([OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)). "26.6 k tokens per turn" is an accounting figure, not a cost figure.
 2. **Tokens per turn are roughly constant and roughly independent of the question.** A one-line clarification costs about as much input as a grounded multi-Tool answer. That is the signature of a fixed per-request payload, not of retrieval bloat.
 
+## 1a. Baseline B1 (measured 2026-09-16, after section 6 changes)
+
+Every suite below was run against the same eval Workspace on 2026-09-16 (`pnpm eval:ai-agent <suite>`), one process per suite, sequentially, at commit `a6ce736` — after every change in section 6 (6.1 through 6.9). B0 above is unchanged.
+
+| Suite | Cases | Pass | Target tokens | Tokens/case | Wall time | ms/case | TTFT p50/p95 | Time-to-content p50/p95 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `contains` | 6 | 4 | 340,001 | 56,667 | 66,194 ms | 11,032 | 6,026 / 25,383 ms | 6,026 / 25,383 ms |
+| `faithfulness` | 3 | 1 | 69,462 | 23,154 | 59,405 ms | 19,802 | 6,982 / 8,027 ms | 6,982 / 8,027 ms |
+| `decision` | 14 | 12 | 238,311 | 17,022 | 77,148 ms | 5,511 | 4,050 / 8,954 ms | 4,050 / 8,954 ms |
+| `tool` | 7 | 6 | 565,701 | 80,814 | 125,240 ms | 17,891 | 11,658 / 58,613 ms | 11,658 / 58,613 ms |
+| `visibility` | 4 | 4 | 82,058 | 20,515 | 29,600 ms | 7,400 | 6,294 / 11,329 ms | 6,294 / 11,330 ms |
+| `negativeControl` | 1 | 0 | 22,957 | 22,957 | 5,066 ms | 5,066 | 5,060 / 5,060 ms | 5,060 / 5,060 ms |
+| `language` | 3 | 3 | 69,697 | 23,232 | 20,891 ms | 6,964 | 7,123 / 7,325 ms | 7,123 / 7,325 ms |
+| `relevancy` | 3 | 3 | 69,964 | 23,321 | 70,445 ms | 23,482 | 5,568 / 6,416 ms | 5,568 / 6,416 ms |
+| `gEval` | 23 | 16 | 676,469 | 29,412 | 332,169 ms | 14,442 | 7,197 / 12,520 ms | 7,197 / 12,520 ms |
+
+TTFT and time-to-content are identical in every row above: for these Cases the first streamed delta already carries Customer-visible `content`, not JSON envelope alone. `total` (not shown, negligibly higher — 1–5 ms) is what's left after the stream closes.
+
+Judge cost, comparable to B0's: 9,738 evaluation tokens for `faithfulness`, 6,763 for `relevancy`, 20,388 for `gEval`.
+
+Failing Cases in B1:
+
+| Case | Suite | Result | vs. B0 |
+| --- | --- | --- | --- |
+| `negative-control` | `negativeControl` | fail (by design) | unchanged |
+| `edge-no-first-scan` | `faithfulness` | fail | unchanged |
+| `edge-original-shipping-refund` | `faithfulness` | fail, score 0.67 (threshold 0.7) | **new** — judge marked the reply for asserting shipping adjustments apply to damaged/defective items without that inference being in the retrieved text. No Tool call involved; not the schema-regression class below. Borderline (0.67 vs 0.7) and plausibly judge variance, but named per the acceptance criteria for triage. |
+| `tool-unknown-order` | `tool` | fail | unchanged — same behaviour as B0: asks the Customer for an order ID instead of calling `get_order` with the unknown one |
+| `common-return-window` | `decision` | fail | unchanged (this Case and the next now live in the `decision` suite rather than `gEval` — the case set was re-labelled by other work after B0 was measured; the Cases themselves still fail the same way) |
+| `escalation-two-completed-charges` | `decision` | fail | unchanged |
+| `tool-jordan-price` | `contains` | fail | **new — strict-schema regression class**, see below |
+| `tool-rolex-price` | `contains` | fail | **new — strict-schema regression class**, see below |
+| `answer-search-specific-sku` | `gEval` | fail, `escalationReason: BUSINESS_TOOL_FAILURE` | **new — strict-schema regression class**, see below |
+| `hybrid-live-price-policy-conflict` | `gEval` | fail | **new — strict-schema regression class**, see below |
+| `answer-disambiguate-similar-sneakers` | `gEval` | fail (CLARIFY judged as needing a direct answer) | new, not schema-related — no Tool call, no escalation |
+| `edge-vague-shopping-needs-answer` | `gEval` | fail (CLARIFY judged as needing a direct answer) | new, not schema-related |
+| `answer-unknown-order` | `gEval` | fail (CLARIFY, same shape as `tool-unknown-order`) | new, not schema-related |
+
+### The strict-schema regression class, confirmed
+
+Four Cases across two suites — `tool-jordan-price`, `tool-rolex-price` (`contains`), `answer-search-specific-sku`, `hybrid-live-price-policy-conflict` (`gEval`) — all fail the same way: a catalog/SKU price lookup that passed in B0 now comes back unable to confirm the product or price, three of them via `ESCALATE`. `answer-search-specific-sku` names the cause directly: `escalationReason: "BUSINESS_TOOL_FAILURE"`, which `replyPrompt` (`packages/ai-agent/src/prompts/reply.ts:22`) instructs the model to use specifically when a Tool call fails. This matches the regression class the issue called out: 6.6 (`packages/ai-agent/src/tools.ts:34`) converts each Tool's stored JSON Schema into its real Zod parameter schema with `z.fromJSONSchema`, turning a previously-open (`z.record(z.string(), z.unknown())`) argument schema into a strict one. A catalog-search argument shape the model used successfully in B0 is narrower or absent now, so the call is rejected before it reaches Shopify. This is a Tool-schema defect in the catalog/SKU search path, not a prompt or retrieval regression, and not something this issue's scope covers fixing — it needs its own follow-up (triage against `packages/ai-agent/src/tools.ts:68`'s `toInputSchema` and the specific MCP Tool's JSON Schema).
+
+The other three new `gEval` fails (`answer-disambiguate-similar-sneakers`, `edge-vague-shopping-needs-answer`, `answer-unknown-order`) made no Tool call and carry no escalation reason — the model chose `CLARIFY` where the judge expected a direct answer. Not the schema class; separate quality variance, same bucket as the pre-existing `tool-unknown-order`/`common-return-window` pattern of "asks for identifiers instead of trying the Tool with what it has."
+
+**Quality floor (section 8): held.** `visibility`, `language`, `relevancy` are still 100%; `negativeControl` still fails as designed (the hard gate proving the suite can tell). `decision` and `tool` pass rates are unchanged from B0 case-for-case. The new failures are additive, in `contains` and `gEval`, and one of the two causes (the schema regression) is now named and attributable to a specific commit for follow-up rather than an open question.
+
+### Question 1 — how much of the ~13.5k Tool manifest did the schema de-duplication actually remove?
+
+Using the same method as B0's sampled figure (input tokens on a Case that made no Tool call, so the number reflects the manifest + system prompt alone): `decision` produced several no-Tool-call Cases with `in 10,616`–`10,636` tokens, `cached 10,602` (99.7–99.9% cached) once the cache was warm. B0's equivalent figure was `11,677` total / `11,658` cached (99.8%) on the same kind of Case.
+
+That is a reduction of **~1,050 tokens, ~9%** of the per-turn input — not the ~6.7k (half of the ~13.5k manifest) that removing one full duplicated copy would suggest. Section 6.6 itself flagged why: `toInputSchema` falls back to the old description-embedded form for any schema `z.fromJSONSchema` cannot convert, "so no Tool loses its arguments." The measured ~9% saving means most of the checkout/commerce Tool schemas — the ones section 2 identified as the expensive ones (`create_checkout`, `update_checkout`, `complete_checkout`, `update_cart`, `create_cart`, ~9.7k tokens combined) — are still being carried in duplicate, either because their JSON Schema doesn't survive `z.fromJSONSchema`, or because the description text was never fully stripped even where conversion succeeded. This is worth a follow-up measurement (log `toInputSchema`'s `described` flag per Tool) before scoping 7.4's static loadouts, since a chunk of the manifest cost improvement work in 6.6 is not yet realized.
+
+### Question 2 — did parallelizing the four pre-model loads (6.3) move TTFT?
+
+This is the first TTFT reading that exists at all, so there is no B0 number to diff against — as expected. What B1 shows: on `decision`'s no-Tool-call Cases, TTFT ranges `2,150`–`4,050` ms; across all suites, per-suite TTFT p50 sits between `4,050` ms (`decision`) and `11,658` ms (`tool`, which averages 3.4 Tool calls per Case). The three parallelized DB reads that 6.3 removed are Prisma queries against a local Postgres instance — realistically single-digit-to-low-double-digit milliseconds each — against a TTFT floor of multiple seconds dominated by the model provider's own time-to-first-token. The change is very unlikely to be visible in these numbers even if it works exactly as intended: the DB round trips it removed are a rounding error next to model latency. TTFT here should be read as a baseline for future model-side latency work (7.3's reasoning-effort A/B, 7.6's speculative retrieval), not as evidence for or against 6.3.
+
 ## 2. Where the input tokens actually go
 
 Measured directly against the eval Workspace's assigned Tools (`describeAssignedTools` output, ~4 chars/token estimate):
@@ -224,23 +280,7 @@ Tracked as GitHub issues #176–#187, all labelled `ready-for-agent`. Each secti
 
 ### 7.1 Re-measure B0 → B1 (do this first) — #176, #177
 
-Nothing in section 6 has a measured result. Re-run every suite and record the new numbers beside the baseline in section 1:
-
-```
-pnpm eval:ai-agent faithfulness
-pnpm eval:ai-agent decision
-pnpm eval:ai-agent tool
-pnpm eval:ai-agent visibility
-pnpm eval:ai-agent negativecontrol
-pnpm eval:ai-agent language
-pnpm eval:ai-agent relevancy
-pnpm eval:ai-agent geval
-pnpm eval:ai-agent contains
-```
-
-Read from the new `cost:` lines: TTFT p50/p95, `ttfc` p50/p95, end-to-end p50/p95, input tokens, cached ratio, output and reasoning tokens. Two specific questions B1 answers: how much of the ~13.5 k manifest 6.6 actually removed, and whether 6.3 moved TTFT at all.
-
-Watch for one regression class in particular: 6.6 turns an open argument schema into a strict one. A Tool whose stored schema is narrower than what the model was previously allowed to send will now reject arguments it used to accept. `tool-unknown-order` was already failing in B0; if more `tool` Cases fail in B1, that is the first thing to check.
+**Done — see section 1a.** B1 is measured and recorded. Summary: the quality floor holds (no regression on `visibility`, `language`, `relevancy`, `negativeControl`, `decision`, `tool`); the predicted strict-argument-schema regression from 6.6 did materialize, in the catalog/SKU price-lookup path specifically (4 Cases, named in 1a), and needs its own follow-up issue; the manifest de-duplication saved ~9% of per-turn input, not the ~50% hoped for, because the fallback path in `toInputSchema` is still carrying most of the expensive commerce Tool schemas in duplicate; TTFT is now measured for the first time but the 6.3 parallelization is too small relative to model latency to show up in it.
 
 ### 7.2 Fix what B0 says is broken, before optimising further — #178, #179, #180, #181
 

@@ -87,6 +87,60 @@ nomor 6 memakai Zod 4.4 yang sudah terpasang, dengan fallback ke bentuk lama bil
 sebuah schema tidak bisa dikonversi, sehingga tidak ada Tool yang kehilangan
 argumennya.
 
+## Baseline B1 (diukur 2026-09-16, setelah sembilan perubahan di atas)
+
+Sembilan suite dijalankan ulang di Workspace eval yang sama, pada commit
+`a6ce736`. Detail lengkap dan tabel per-Case ada di dokumen riset §1a.
+
+| Suite | Case | Lulus | Token/case | ms/case |
+| --- | --- | --- | --- | --- |
+| `contains` | 6 | 4 | 56.667 | 11.032 |
+| `faithfulness` | 3 | 1 | 23.154 | 19.802 |
+| `decision` | 14 | 12 | 17.022 | 5.511 |
+| `tool` | 7 | 6 | 80.814 | 17.891 |
+| `visibility` | 4 | 4 | 20.515 | 7.400 |
+| `negativeControl` | 1 | 0 | 22.957 | 5.066 |
+| `language` | 3 | 3 | 23.232 | 6.964 |
+| `relevancy` | 3 | 3 | 23.321 | 23.482 |
+| `gEval` | 23 | 16 | 29.412 | 14.442 |
+
+TTFT sekarang punya angka untuk pertama kali (tidak ada di B0): p50 antara
+4.050 ms (`decision`) dan 11.658 ms (`tool`, rata-rata 3,4 panggilan Tool per
+Case).
+
+**Lantai mutu bertahan** — `visibility`, `language`, `relevancy` tetap 100%;
+`negativeControl` tetap gagal sesuai desain; `decision` dan `tool` sama
+persis dengan B0 per-Case. Kegagalan baru ada di `contains` (2 Case) dan
+`gEval` (3 Case tambahan), dan salah satu penyebabnya sudah teridentifikasi:
+
+- **Regresi schema ketat, terkonfirmasi.** `tool-jordan-price`,
+  `tool-rolex-price` (`contains`), `answer-search-specific-sku`, dan
+  `hybrid-live-price-policy-conflict` (`gEval`) — pencarian katalog/SKU yang
+  lulus di B0 sekarang gagal. `answer-search-specific-sku` menyebut
+  penyebabnya langsung lewat `escalationReason: BUSINESS_TOOL_FAILURE`.
+  Ini persis regresi yang diperingatkan sebelum pengukuran: perubahan nomor
+  6 mengetatkan argument schema Tool dari terbuka menjadi strict, dan bentuk
+  argumen yang dulu diterima untuk pencarian katalog sekarang ditolak.
+  Perlu issue perbaikan tersendiri — di luar cakupan #177.
+- 3 kegagalan `gEval` lain (dua CLARIFY yang seharusnya jawaban langsung,
+  satu bertingkah sama seperti `tool-unknown-order`) tidak terkait schema —
+  variasi mutu biasa.
+- `edge-original-shipping-refund` (`faithfulness`) gagal tipis (skor 0,67,
+  ambang 0,7), tanpa panggilan Tool — kemungkinan variasi judge.
+
+**Jawaban dua pertanyaan yang jadi alasan #177 dikerjakan lebih dulu:**
+
+1. Deduplikasi schema Tool (perubahan 6) menghemat **~9% dari token input
+   per turn** (dari ~11.677 ke ~10.616–10.636 token pada Case tanpa Tool
+   call), bukan ~50% yang diharapkan dari menghapus satu salinan penuh —
+   fallback di `toInputSchema` masih membawa sebagian besar schema Tool
+   commerce yang mahal secara duplikat.
+2. TTFT sekarang terukur untuk pertama kali, tapi tiga round trip database
+   yang diparalelkan di perubahan 3 (puluhan milidetik) terlalu kecil
+   dibanding lantai TTFT beberapa detik yang didominasi model — perubahan
+   itu kemungkinan besar tidak akan pernah terlihat di angka ini walau
+   berhasil sesuai rencana.
+
 ## Antrean pekerjaan
 
 Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
@@ -95,7 +149,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | Issue | Pekerjaan | Diblokir oleh | Status |
 | --- | --- | --- | --- |
 | [#176](https://github.com/azarnuzy/supports-ops/issues/176) | Ringkasan p50/p95 latensi dan token per suite | — | Selesai |
-| [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Menunggu |
+| [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Selesai |
 | [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Menunggu |
 | [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Menunggu |
 | [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Menunggu |
