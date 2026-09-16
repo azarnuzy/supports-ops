@@ -367,6 +367,15 @@ Top-k, reranking, chunk sizing. Blocked on gold chunk IDs and precision@k in the
 
 One Case, `retrieval-split-shipment`, scored 0 on every metric: the Agent answered `CLARIFY` and asked for an order number without calling `searchKnowledge` at all (0 tool calls, 0 chunks retrieved) — not a retrieval-quality failure, a decision to not retrieve. This is now the retrieval baseline #187 was blocked on: recall is high, precision is the number retrieval tuning should move, and the split-shipment Case is a `decision`/prompt problem, not a `retrieval` one.
 
+**#187 done.** Starting from the #182 baseline above (`MAX_EXPANDED_RESULTS=8`: recall@k 9/10 Cases, precision@k ~0.125 average), four retrieval parameters in `packages/knowledge/src/vector-store.ts` were changed one at a time and re-measured:
+
+- `MAX_EXPANDED_RESULTS` 8→5 — recall@k unchanged (9/10), precision@k improved to ~0.19 average. Kept.
+- `NEIGHBOR_WINDOW` 2→1 — recall@k unchanged but first-relevant rank regressed sharply on one Case (4→14) with no net precision gain. Reverted.
+- `NEIGHBOR_ANCHOR_LIMIT` 3→2 — recall@k fell to 6/10. Reverted; a precision gain bought with a recall loss is rejected per the acceptance criteria.
+- `DEFAULT_MIN_SIMILARITY` 0.15→0.25 — recall@k fell to 8/10. Reverted for the same reason.
+
+Only the `MAX_EXPANDED_RESULTS` change shipped. Chunk sizing (`chunkText`) and a reranking stage were both left untouched: reranking has no signal that it would close a gap top-k trimming does not already close, and chunk sizing would require re-embedding every Knowledge Source in the eval Workspace, which is a materially riskier change with no evidence the current 800-char size is the constraint. `decision`, `tool`, `visibility`, `negativeControl`, and `language` were re-run against the change and matched baseline B1 exactly — no regression. `faithfulness` was measured once (0/3 vs B1's 1/3); the added failure (`common-split-shipment`) is a CLARIFY-path judge call unrelated to the Chunks this change touches, the same kind of judge variance already noted for `edge-original-shipping-refund` in B1. Precision@k remains well below the suite's pass threshold after this change — the residual gap is scoped to a follow-up issue rather than blocking a change already shown not to cost recall.
+
 ## 8. Acceptance checks
 
 No change in section 7 ships without both:
