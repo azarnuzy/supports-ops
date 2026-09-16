@@ -27,7 +27,7 @@ import {
 } from "../widget/realtime";
 
 type TurnTicket = {
-  aiAgent: { instructions: string | null };
+  aiAgent: { instructions: string | null; resolutionMessage: string | null };
   aiAgentId: string;
   channel: { type: "WEB" | "WHATSAPP" };
   customerIdentity: { id: string };
@@ -45,7 +45,8 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         unscopedPrisma.aiActivity.count({
           where: { eventType: "CLARIFICATION_ASKED", ticketId },
         }),
-      escalate: (reason) => escalate(ticketId, workspaceId, reason, customerMessage),
+      escalate: (reason, content) =>
+        escalate(ticketId, workspaceId, reason, customerMessage, content),
       finish: async () => {
         setTicketGenerating(ticketId, false);
         const finalTicket = await unscopedPrisma.ticket.findUnique({
@@ -72,7 +73,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
       loadTicket: async () => {
         const loaded = await unscopedPrisma.ticket.findUnique({
           select: {
-            aiAgent: { select: { instructions: true } },
+            aiAgent: { select: { instructions: true, resolutionMessage: true } },
             aiAgentId: true,
             channel: { select: { type: true } },
             customerIdentity: { select: { id: true } },
@@ -85,6 +86,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         ticket = loaded;
         return {
           instructions: loaded.aiAgent.instructions ?? undefined,
+          resolutionMessage: loaded.aiAgent.resolutionMessage ?? undefined,
           sessionId: loaded.sessionId,
           userId: loaded.customerIdentity.id,
         };
@@ -114,7 +116,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         );
         await publishTicketQueueEvent(workspaceId);
       },
-      resolve: () => resolveByAi(ticketId, workspaceId),
+      resolve: (content) => resolveByAi(ticketId, workspaceId, content),
       retrieve: async () => {
         if (!ticket) throw new Error("AI Agent runtime is not ready.");
         const attachments = await unscopedPrisma.attachment.findMany({
@@ -257,8 +259,9 @@ export async function escalate(
   workspaceId: string,
   reason: EscalationReason,
   customerMessage: string,
+  content?: string,
 ) {
-  const acknowledgement = acknowledgementFor(customerMessage);
+  const acknowledgement = content?.trim() || acknowledgementFor(customerMessage, reason);
   const result = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
       data: { escalatedAt: new Date(), escalationReason: reason, status: "ESCALATED" },
@@ -301,7 +304,7 @@ export async function escalate(
   await publishTicketQueueEvent(workspaceId);
 }
 
-export async function resolveByAi(ticketId: string, workspaceId: string) {
+export async function resolveByAi(ticketId: string, workspaceId: string, content: string) {
   const closing = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
       data: {
@@ -314,13 +317,9 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
     });
     if (!transition.count) return null;
     const ticket = await tx.ticket.findUniqueOrThrow({
-      include: {
-        aiAgent: { select: { resolutionMessage: true } },
-        channel: { select: { type: true } },
-      },
+      include: { channel: { select: { type: true } } },
       where: { id: ticketId },
     });
-    const content = ticket.aiAgent.resolutionMessage ?? "This conversation has been resolved.";
     const closingMessage = await tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, ticket.sessionId)),
@@ -357,10 +356,51 @@ export async function resolveByAi(ticketId: string, workspaceId: string) {
 /** The Customer-visible message an escalation sends. Exported so the eval
  * suite can report the same text a Customer would actually see when the
  * Agent escalates, instead of an empty reply. */
-export function acknowledgementFor(customerMessage: string) {
-  return /\b(?:saya|aku|mau|tolong|dengan|bicara|hubungkan|masalah|langganan|tagihan)\b/i.test(
-    customerMessage,
-  )
-    ? "Percakapan Anda sudah diteruskan kepada tim kami. Human Agent akan membantu Anda secepatnya."
-    : "Your conversation has been passed to our team. A Human Agent will help you as soon as possible.";
+export function acknowledgementFor(customerMessage: string, reason: EscalationReason) {
+  const isIndonesian =
+    /\b(?:saya|aku|mau|tolong|dengan|bicara|hubungkan|masalah|pesanan|pengiriman|tagihan)\b/i.test(
+      customerMessage,
+    );
+  const explanations: Record<EscalationReason, [string, string]> = {
+    AI_FAILED_ATTEMPTS: [
+      "Saya belum mendapat informasi yang cukup untuk melanjutkan dengan aman.",
+      "I still do not have enough information to continue safely.",
+    ],
+    AI_GENERATION_FAILED: [
+      "Saya tidak dapat menyelesaikan permintaan ini secara otomatis karena kendala teknis.",
+      "I could not complete this request automatically because of a technical issue.",
+    ],
+    AI_TIMEOUT: [
+      "Saya tidak dapat menyelesaikan pemeriksaan ini dalam waktu yang tersedia.",
+      "I could not complete this check in the available time.",
+    ],
+    BUSINESS_TOOL_FAILURE: [
+      "Saya tidak dapat mengakses informasi terbaru yang diperlukan untuk memastikan jawabannya.",
+      "I could not access the current information needed to verify the answer.",
+    ],
+    CONFLICTING_KNOWLEDGE: [
+      "Informasi yang tersedia saling bertentangan, jadi saya tidak dapat memastikan jawaban yang akurat.",
+      "The available information conflicts, so I cannot confirm an accurate answer.",
+    ],
+    CUSTOMER_REQUESTED_HUMAN: [
+      "Sesuai permintaan Anda, percakapan ini perlu dilanjutkan oleh Human Agent.",
+      "As requested, this conversation needs to continue with a Human Agent.",
+    ],
+    INTERNAL_ACTION_REQUIRED: [
+      "Permintaan ini memerlukan pemeriksaan atau tindakan oleh Human Agent.",
+      "This request needs review or action by a Human Agent.",
+    ],
+    LOW_KNOWLEDGE_CONFIDENCE: [
+      "Saya tidak memiliki informasi terverifikasi yang cukup untuk memberikan jawaban yang dapat diandalkan.",
+      "I do not have enough verified information to give a reliable answer.",
+    ],
+    NO_RELEVANT_KNOWLEDGE: [
+      "Saya tidak menemukan informasi terverifikasi yang menjawab permintaan ini.",
+      "I could not find verified information that answers this request.",
+    ],
+  };
+  const explanation = explanations[reason][isIndonesian ? 0 : 1];
+  return isIndonesian
+    ? `${explanation} Percakapan Anda sudah diteruskan kepada Human Agent untuk ditinjau.`
+    : `${explanation} Your conversation has been passed to a Human Agent for review.`;
 }

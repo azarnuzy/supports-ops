@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Message } from "@anvia/core";
+import type { AgentResponse, Message } from "@anvia/core";
 import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import {
   createReplyModel,
@@ -19,14 +19,19 @@ type Source = { content: string; id: string };
 
 export type AiAgentTurnRuntime = {
   countClarifications(): Promise<number>;
-  escalate(reason: EscalationReason): Promise<void>;
+  escalate(reason: EscalationReason, content?: string): Promise<void>;
   finish(): Promise<void>;
   isActive(): boolean;
   loadMemory(): Promise<Message[]>;
-  loadTicket(): Promise<{ instructions?: string; sessionId: string; userId: string } | null>;
+  loadTicket(): Promise<{
+    instructions?: string;
+    resolutionMessage?: string;
+    sessionId: string;
+    userId: string;
+  } | null>;
   publishDelta(delta: string, provisionalId: string): Promise<void> | void;
   reply(decision: "CLARIFY" | "REPLY", content: string, provisionalId: string): Promise<void>;
-  resolve(): Promise<void>;
+  resolve(content: string): Promise<void>;
   retrieve(): Promise<{ attachments: Source[] }>;
   saveMemory(messages: Message[]): Promise<void>;
   start(): Promise<void>;
@@ -35,7 +40,14 @@ export type AiAgentTurnRuntime = {
 
 export async function runAiAgentTurn(params: {
   customerMessage: string;
-  modelConfig?: { apiKey: string; baseUrl?: string; modelId: string };
+  modelConfig?: {
+    apiKey: string;
+    baseUrl?: string;
+    maxOutputTokens?: number;
+    modelId: string;
+    reasoningEffort?: string;
+  };
+  onResult?(result: AgentResponse<ReplyDecision>): Promise<void> | void;
   runtime: AiAgentTurnRuntime;
   ticketId: string;
   workspaceId: string;
@@ -66,18 +78,19 @@ export async function runAiAgentTurn(params: {
       const provisionalId = randomUUID();
       await params.runtime.start();
       try {
-        const { attachments } = await withSpan(
-          "ai_agent.retrieve_knowledge",
-          {},
-          async (retrieval) => {
+        // Four independent loads, none of which consumes another's output.
+        // Awaited in sequence they were four serial round trips in front of the
+        // first model token, which is the part of the turn the Customer feels.
+        const [{ attachments }, clarificationCount, messages, assignedTools] = await Promise.all([
+          withSpan("ai_agent.retrieve_knowledge", {}, async (retrieval) => {
             const result = await params.runtime.retrieve();
             retrieval.setAttribute("ai_agent.attachments", result.attachments.length);
             return result;
-          },
-        );
-        const clarificationCount = await params.runtime.countClarifications();
-        const messages = await params.runtime.loadMemory();
-        const assignedTools = await params.runtime.tools();
+          }),
+          params.runtime.countClarifications(),
+          params.runtime.loadMemory(),
+          params.runtime.tools(),
+        ]);
         run.setAttribute("ai_agent.assigned_tools", assignedTools.descriptors.length);
 
         const model = createReplyModel(params.modelConfig);
@@ -89,6 +102,12 @@ export async function runAiAgentTurn(params: {
             decision = await streamReply({
               attachments,
               clarificationCount,
+              ...(params.modelConfig.reasoningEffort
+                ? { controls: { reasoningEffort: params.modelConfig.reasoningEffort } }
+                : {}),
+              ...(params.modelConfig.maxOutputTokens
+                ? { maxOutputTokens: params.modelConfig.maxOutputTokens }
+                : {}),
               customerMessage: params.customerMessage,
               instructions: ticket.instructions,
               messages,
@@ -99,6 +118,8 @@ export async function runAiAgentTurn(params: {
                 }
               },
               onMessages: params.runtime.saveMemory,
+              onResult: params.onResult,
+              resolutionMessage: ticket.resolutionMessage,
               sessionId: ticket.sessionId,
               tools,
               userId: ticket.userId,
@@ -125,9 +146,13 @@ export async function runAiAgentTurn(params: {
               ? "AI_FAILED_ATTEMPTS"
               : (decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE");
           run.setAttribute("ai_agent.escalation_reason", reason);
-          await params.runtime.escalate(reason);
+          await params.runtime.escalate(
+            reason,
+            decision.decision === "ESCALATE" ? (decision.content ?? undefined) : undefined,
+          );
         } else if (decision.decision === "RESOLVE") {
-          await params.runtime.resolve();
+          if (!decision.content) throw new ReplyGenerationFailedError();
+          await params.runtime.resolve(decision.content);
         } else {
           if (!decision.content) throw new ReplyGenerationFailedError();
           await params.runtime.reply(decision.decision, decision.content, provisionalId);

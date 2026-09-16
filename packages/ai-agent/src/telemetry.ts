@@ -38,12 +38,16 @@ export function createAgent<Output>(options: {
   model: CompletionModel;
   outputSchema: z.ZodType<Output>;
   tools?: AgentTools;
+  controls?: Record<string, string>;
+  maxTokens?: number;
   maxTurns?: number;
   sessionId?: string;
   userId?: string;
 }): Agent<Output> {
   return new Agent({
     ...agentObservability(options.sessionId, options.userId),
+    ...(options.controls ? { controls: options.controls as never } : {}),
+    ...(options.maxTokens ? { maxTokens: options.maxTokens } : {}),
     id: options.id,
     instructions: options.instructions,
     maxTurns: options.maxTurns,

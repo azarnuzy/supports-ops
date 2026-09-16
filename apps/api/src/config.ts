@@ -62,6 +62,8 @@ const apiEnvSchema = z
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
     LLM_MODEL_MAIN: z.string().trim().min(1).default(defaultMainModel),
+    LLM_MAIN_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().optional(),
+    LLM_MAIN_REASONING_EFFORT: optionalStringSchema,
     INTERNAL_WORKER_TOKEN: optionalStringSchema,
     LOG_LEVEL: logLevelSchema,
     OPENROUTER_API_KEY: optionalStringSchema,
@@ -148,10 +150,18 @@ export const classificationConfig = {
   modelId: env.LLM_MODEL_FAST,
 } as const;
 
+/** `maxOutputTokens` and `reasoningEffort` are the two knobs that move reply
+ * latency: output tokens dominate generation time, and on this model roughly
+ * half of them are reasoning. Both are unset by default, which leaves the
+ * provider's own defaults in place — see
+ * `docs/research/ai-agent-cost-and-latency.md` before changing either, and
+ * remember that reasoning effort is part of the prompt-cache key. */
 export const aiAgentConfig = {
   apiKey: env.COMPLETION_GATEWAY_API_KEY ?? env.OPENROUTER_API_KEY,
   baseUrl: env.COMPLETION_GATEWAY_BASE_URL,
+  maxOutputTokens: env.LLM_MAIN_MAX_OUTPUT_TOKENS,
   modelId: env.LLM_MODEL_MAIN,
+  reasoningEffort: env.LLM_MAIN_REASONING_EFFORT,
 } as const;
 
 /** The eval suite runs by hand against one configured Workspace (ADR-0010).

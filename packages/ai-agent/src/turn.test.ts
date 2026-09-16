@@ -40,7 +40,7 @@ describe("runAiAgentTurn", () => {
 
   it("always invokes the model, even when retrieval and tools are both empty", async () => {
     streamReplyMock.mockResolvedValue({
-      content: null,
+      content: "I could not verify this, so a Human Agent will review it.",
       decision: "ESCALATE",
       escalationReason: "NO_RELEVANT_KNOWLEDGE",
     });
@@ -55,9 +55,32 @@ describe("runAiAgentTurn", () => {
     });
 
     expect(streamReplyMock).toHaveBeenCalledOnce();
-    expect(runtime.escalate).toHaveBeenCalledWith("NO_RELEVANT_KNOWLEDGE");
+    expect(runtime.escalate).toHaveBeenCalledWith(
+      "NO_RELEVANT_KNOWLEDGE",
+      "I could not verify this, so a Human Agent will review it.",
+    );
     expect(runtime.reply).not.toHaveBeenCalled();
     expect(runtime.finish).toHaveBeenCalledOnce();
+  });
+
+  it("forwards the completed Agent result observer", async () => {
+    streamReplyMock.mockResolvedValue({
+      content: "Done.",
+      decision: "REPLY",
+      escalationReason: null,
+    });
+    const onResult = vi.fn();
+
+    await runAiAgentTurn({
+      customerMessage: "Help",
+      modelConfig: { apiKey: "test", modelId: "test" },
+      onResult,
+      runtime: baseRuntime(),
+      ticketId: "ticket-1",
+      workspaceId: "workspace-1",
+    });
+
+    expect(streamReplyMock).toHaveBeenCalledWith(expect.objectContaining({ onResult }));
   });
 
   it("reuses the Session's structured history, including Tool Results", async () => {
@@ -108,7 +131,7 @@ describe("runAiAgentTurn", () => {
 
   it("escalates with the model's own reason when it decides ESCALATE", async () => {
     streamReplyMock.mockResolvedValue({
-      content: null,
+      content: "As requested, a Human Agent will continue this conversation.",
       decision: "ESCALATE",
       escalationReason: "CUSTOMER_REQUESTED_HUMAN",
     });
@@ -122,7 +145,10 @@ describe("runAiAgentTurn", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(runtime.escalate).toHaveBeenCalledWith("CUSTOMER_REQUESTED_HUMAN");
+    expect(runtime.escalate).toHaveBeenCalledWith(
+      "CUSTOMER_REQUESTED_HUMAN",
+      "As requested, a Human Agent will continue this conversation.",
+    );
   });
 
   it("escalates with AI_FAILED_ATTEMPTS after two clarifications and another CLARIFY", async () => {
@@ -141,7 +167,7 @@ describe("runAiAgentTurn", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(runtime.escalate).toHaveBeenCalledWith("AI_FAILED_ATTEMPTS");
+    expect(runtime.escalate).toHaveBeenCalledWith("AI_FAILED_ATTEMPTS", undefined);
     expect(runtime.reply).not.toHaveBeenCalled();
   });
 
@@ -190,7 +216,7 @@ describe("runAiAgentTurn", () => {
 
   it("resolves when the model decides RESOLVE", async () => {
     streamReplyMock.mockResolvedValue({
-      content: null,
+      content: "Glad that's sorted — this conversation is now resolved.",
       decision: "RESOLVE",
       escalationReason: null,
     });
@@ -204,7 +230,9 @@ describe("runAiAgentTurn", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(runtime.resolve).toHaveBeenCalledOnce();
+    expect(runtime.resolve).toHaveBeenCalledWith(
+      "Glad that's sorted — this conversation is now resolved.",
+    );
     expect(runtime.reply).not.toHaveBeenCalled();
     expect(runtime.escalate).not.toHaveBeenCalled();
   });
