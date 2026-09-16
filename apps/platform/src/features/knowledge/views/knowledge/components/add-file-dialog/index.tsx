@@ -106,7 +106,9 @@ export default function AddFileDialog({
               Cancel
             </Button>
             <Button disabled={files.length === 0 || isPending} type="submit">
-              {isPending ? "Uploading..." : `Add ${files.length || ""} File${files.length === 1 ? "" : "s"}`}
+              {isPending
+                ? "Uploading..."
+                : `Add ${files.length || ""} File${files.length === 1 ? "" : "s"}`}
             </Button>
           </DialogFooter>
         </form>
