@@ -38,16 +38,17 @@ export default function ServerSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-2xl">
-        <SheetHeader className="border-b p-5">
+      {/* Fixed header, scrolling body — the sheet never grows past the viewport. */}
+      <SheetContent side="right" className="w-full gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <SheetHeader className="shrink-0 border-b p-5 pr-12">
           <div className="flex flex-wrap items-center gap-2">
             <SheetTitle>{server.name}</SheetTitle>
             <ConnectionStateBadge state={connectionState} />
           </div>
-          <SheetDescription className="truncate font-mono text-xs">{server.url}</SheetDescription>
+          <SheetDescription className="break-all font-mono text-xs">{server.url}</SheetDescription>
         </SheetHeader>
 
-        <div className="p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <Tabs defaultValue="overview">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>

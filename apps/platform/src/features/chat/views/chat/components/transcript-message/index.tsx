@@ -38,12 +38,11 @@ export default function TranscriptMessage({
   }
 
   const isHuman = message.senderType === "HUMAN_AGENT";
-  const isWorkspaceAuthored = isHuman || message.senderType === "AI_AGENT";
   const legacyAttachmentText =
     /^I need help with the attached file: .+$/.test(message.content) && message.attachments.length;
   return (
-    <Message align={isWorkspaceAuthored ? "end" : "start"}>
-      <MessageAvatar>
+    <Message>
+      <MessageAvatar className="mt-5">
         <Avatar className="size-7">
           <AvatarFallback className="text-[11px] ring-1 ring-border">
             {getInitials(senderName(message))}
@@ -51,7 +50,9 @@ export default function TranscriptMessage({
         </Avatar>
       </MessageAvatar>
       <MessageContent>
-        <MessageHeader className="text-[11px] font-medium">{senderName(message)}</MessageHeader>
+        <MessageHeader className="text-[11px] leading-4 font-medium">
+          {senderName(message)}
+        </MessageHeader>
         <Bubble variant={bubbleVariant(message.senderType)}>
           <BubbleContent className={message.attachments.length ? "w-fit max-w-full" : undefined}>
             {message.attachments.length ? (

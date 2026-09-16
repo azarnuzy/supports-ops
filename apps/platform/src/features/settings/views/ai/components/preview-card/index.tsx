@@ -1,14 +1,21 @@
 import { cn } from "@repo/ui/lib/utils";
-import { BotIcon, UserRoundIcon } from "lucide-react";
 import { useState } from "react";
+import {
+  BrowserFrame,
+  WidgetLauncher,
+  WidgetPanel,
+  WidgetStage,
+} from "../../../../components/preview-frame";
 import type { PreviewCardProps } from "./index.types";
 
 type PreviewState = "transfer" | "resolved";
 
 /** Renders only real configured text — no invented AI reply, since there is no live model call
- * behind this preview. It shows exactly what a Customer sees at each hand-off point. */
+ * behind this preview. It shows exactly what a Customer sees at each hand-off point, staged in
+ * the same widget panel as the Web Widget page so both previews read like the real chat. */
 export default function PreviewCard({ handoffMessage, resolutionMessage }: PreviewCardProps) {
   const [state, setState] = useState<PreviewState>("transfer");
+  const [panelOpen, setPanelOpen] = useState(true);
   const message =
     state === "transfer"
       ? handoffMessage.trim() ||
@@ -52,28 +59,50 @@ export default function PreviewCard({ handoffMessage, resolutionMessage }: Previ
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div className="grid gap-2 p-4">
-          <div className="ml-auto flex max-w-[85%] items-start gap-2">
-            <div className="rounded-[12px_12px_3px] bg-primary px-3 py-2 text-[13px] leading-relaxed text-primary-foreground">
-              {state === "transfer"
-                ? "Can I talk to a real person?"
-                : "Thanks, that answers my question."}
-            </div>
-            <div className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-muted">
-              <UserRoundIcon className="size-3.5 text-muted-foreground" />
-            </div>
-          </div>
-          <div className="flex max-w-[85%] items-start gap-2">
-            <div className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-primary/10">
-              <BotIcon className="size-3.5 text-primary" />
-            </div>
-            <div className="rounded-[12px_12px_12px_3px] bg-muted px-3 py-2 text-[13px] leading-relaxed">
-              {message}
-            </div>
-          </div>
-        </div>
-      </div>
+      <BrowserFrame domain="yourcompany.com">
+        <WidgetStage onDismiss={panelOpen ? () => setPanelOpen(false) : undefined}>
+          {panelOpen ? (
+            <WidgetPanel color="#2563eb" name="Support" onClose={() => setPanelOpen(false)}>
+              <div className="flex h-full flex-col">
+                <div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto p-4">
+                  <div
+                    className="ml-auto max-w-[85%] rounded-[12px_12px_3px] px-3 py-2 text-[13px] leading-relaxed text-white"
+                    style={{ backgroundColor: "#2563eb" }}
+                  >
+                    {state === "transfer"
+                      ? "Can I talk to a real person?"
+                      : "Thanks, that answers my question."}
+                  </div>
+                  <div className="max-w-[85%] rounded-[12px_12px_12px_3px] bg-[#f1f5f9] px-3 py-2 text-[13px] leading-relaxed">
+                    {message}
+                  </div>
+                </div>
+                <div className="border-t border-[#e2e8f0] p-3">
+                  <div className="flex items-center gap-2 rounded-full border border-[#cbd5e1] py-1.5 pr-1.5 pl-3.5">
+                    <span className="flex-1 truncate text-[13px] text-[#94a3b8]">
+                      Type your message…
+                    </span>
+                    <span
+                      className="grid size-7 shrink-0 place-items-center rounded-full text-white"
+                      style={{ backgroundColor: "#2563eb" }}
+                    >
+                      <svg
+                        aria-hidden="true"
+                        className="size-3.5"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="m3 11.5 18-8-8 18-2.5-7.5L3 11.5Z" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </WidgetPanel>
+          ) : null}
+          <WidgetLauncher color="#2563eb" onClick={() => setPanelOpen(true)} />
+        </WidgetStage>
+      </BrowserFrame>
 
       <p className="text-[13px] leading-relaxed text-muted-foreground">
         {state === "transfer"

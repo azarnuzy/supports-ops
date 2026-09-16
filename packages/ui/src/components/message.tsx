@@ -15,9 +15,7 @@ function Message({
   );
 }
 function MessageAvatar({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div data-slot="message-avatar" className={cn("mt-auto shrink-0", className)} {...props} />
-  );
+  return <div data-slot="message-avatar" className={cn("mt-0.5 shrink-0", className)} {...props} />;
 }
 function MessageContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
