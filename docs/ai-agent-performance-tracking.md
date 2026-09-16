@@ -87,6 +87,29 @@ nomor 6 memakai Zod 4.4 yang sudah terpasang, dengan fallback ke bentuk lama bil
 sebuah schema tidak bisa dikonversi, sehingga tidak ada Tool yang kehilangan
 argumennya.
 
+| # | Perubahan | Alasan | Efek yang diharapkan | Status |
+| --- | --- | --- | --- | --- |
+| 10 | `replyPrompt` menambah dua aturan ESCALATE eksplisit: (a) saat `searchKnowledge` mengembalikan Knowledge Source yang saling bertentangan pada fakta yang dibutuhkan, jangan memilih salah satu nilai — ESCALATE dengan `CONFLICTING_KNOWLEDGE`; (b) saat Customer melaporkan beberapa completed/captured charge untuk order yang sama, ESCALATE untuk payment review walau Customer secara eksplisit meminta refund langsung ([#181](https://github.com/azarnuzy/supports-ops/issues/181)) | `common-return-window` gagal karena prompt tidak melarang model memilih salah satu window yang bertentangan (K03 vs L08); `escalation-two-completed-charges` gagal karena aturan "jangan menahan Tool call hanya karena ini write" pada prompt yang sama membiarkan model memproses refund langsung meski dua charge yang settled semestinya diverifikasi manusia dulu | Kedua Case dan Case `gEval` yang berbagi skenario sama — `staleness-conflicting-return-window`, `staleness-legacy-authority` — diharapkan lulus karena aturan konflik-Knowledge sekarang eksplisit, bukan tersirat lewat nama `escalationReason` saja | Selesai, belum terukur |
+
+Perubahan nomor 10 diverifikasi oleh unit test `packages/ai-agent` (45 lulus,
+termasuk dua assertion baru di `reply.test.ts`) dan `tsc --noEmit`. **Belum
+diukur terhadap eval suite** — lingkungan pengembangan ini tidak punya
+`EVAL_WORKSPACE_ID` maupun kredensial model (`COMPLETION_GATEWAY_API_KEY` /
+`OPENROUTER_API_KEY`), jadi `pnpm eval:ai-agent geval` dan
+`pnpm eval:ai-agent decision` tidak bisa dijalankan di sini — kendala yang sama
+yang sudah dicatat untuk #182. Empat kegagalan `gEval` B1 yang tersisa di luar
+`common-return-window`/`escalation-two-completed-charges` tidak ditriase satu
+per satu di sini: dua (`answer-search-specific-sku`,
+`hybrid-live-price-policy-conflict`) sudah teridentifikasi sebagai regresi
+schema Tool, di luar cakupan #181 per definisinya sendiri ("bukan kegagalan
+pemilihan Tool"); tiga sisanya (dua CLARIFY yang seharusnya jawaban langsung,
+satu bertingkah seperti `tool-unknown-order`) belum punya trace atau alasan
+tertulis judge yang bisa dibaca di repo ini untuk ditriase tanpa menebak — item
+antrean berikutnya harus menjalankan suite sungguhan terhadap Workspace,
+membaca `judge`-nya lewat Lens/Langfuse, dan menutup #181 dengan angka
+before/after serta identitas Case yang sebenarnya sebelum status di baris
+antrean bisa naik dari "Selesai, belum terukur" ke "Selesai".
+
 ## Baseline B1 (diukur 2026-09-16, setelah sembilan perubahan di atas)
 
 Sembilan suite dijalankan ulang di Workspace eval yang sama, pada commit
@@ -153,7 +176,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Menunggu |
 | [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Menunggu |
 | [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Menunggu |
-| [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Menunggu |
+| [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Selesai, belum terukur |
 | [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai, belum terukur |
 | [#183](https://github.com/azarnuzy/supports-ops/issues/183) | Pilih nilai reasoning effort dan batas token output | #177 | Menunggu |
 | [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Menunggu |
