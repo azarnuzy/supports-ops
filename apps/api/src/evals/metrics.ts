@@ -1,5 +1,6 @@
 import { defineMetric, EvalOutcome, type EvalMetric } from "@anvia/core/evals";
 import type { AgentEvalCase } from "./cases";
+import { firstRelevantRank, precisionAtK, recallAtK, resolveExpectedPassages } from "./retrieval";
 import type { EvalTurnInput, EvalTurnOutput } from "./target";
 
 type Metric<Score> = EvalMetric<EvalTurnInput, EvalTurnOutput, Score, string, string>;
@@ -161,6 +162,94 @@ export function languageMatches(): Metric<string> {
           });
     },
     name: "language",
+    required: true,
+  });
+}
+
+/**
+ * Resolves a `retrieval` Case's expected-passage labels to current Chunk IDs
+ * and pairs them with what was actually retrieved. Shared by the three
+ * `retrieval` metrics below so each one issues the same DB lookup rather than
+ * three. Returns an `invalid` outcome directly when metadata is missing or a
+ * label no longer resolves to any Chunk — the latter is the acceptance
+ * criterion that a stale label must fail loudly, not score zero silently.
+ */
+async function loadRetrievalCase(testCase: {
+  metadata?: unknown;
+}): Promise<{ relevant: Awaited<ReturnType<typeof resolveExpectedPassages>> } | EvalOutcome<never>> {
+  const expectedPassages = metadataOf(testCase).expectedPassages;
+  if (!expectedPassages?.length) {
+    return EvalOutcome.invalid("case metadata is missing `expectedPassages`", {
+      kind: "configuration",
+    });
+  }
+  const relevant = await resolveExpectedPassages(expectedPassages);
+  const stale = relevant.filter((passage) => passage.chunkIds.length === 0);
+  if (stale.length) {
+    return EvalOutcome.invalid(
+      `expected passage no longer resolves to any Chunk: ${stale
+        .map((passage) => `"${passage.source}" / "${passage.fragment}"`)
+        .join(", ")}`,
+      { kind: "configuration" },
+    );
+  }
+  return { relevant };
+}
+
+/** Passes when every expected passage was recovered somewhere in retrieval. */
+export function retrievalRecall(): Metric<number> {
+  return defineMetric<EvalTurnInput, EvalTurnOutput, number, string>({
+    dataType: "NUMERIC",
+    async evaluate({ case: testCase, output }) {
+      const loaded = await loadRetrievalCase(testCase);
+      if ("outcome" in loaded) return loaded;
+      const retrievedIds = output.retrievedChunks.map((chunk) => chunk.chunkId);
+      const score = recallAtK(loaded.relevant, retrievedIds);
+      return score === 1
+        ? EvalOutcome.pass(score, { comment: "all expected passages retrieved" })
+        : EvalOutcome.fail(score, { comment: `recall@k ${score.toFixed(2)}` });
+    },
+    name: "retrieval-recall",
+    required: true,
+  });
+}
+
+/** Passes when the retrieved set is entirely relevant (recall's counterpart:
+ * a search that returns 20 chunks to net one relevant hit is not "working"). */
+export function retrievalPrecision(): Metric<number> {
+  return defineMetric<EvalTurnInput, EvalTurnOutput, number, string>({
+    dataType: "NUMERIC",
+    async evaluate({ case: testCase, output }) {
+      const loaded = await loadRetrievalCase(testCase);
+      if ("outcome" in loaded) return loaded;
+      const retrievedIds = output.retrievedChunks.map((chunk) => chunk.chunkId);
+      const score = precisionAtK(loaded.relevant, retrievedIds);
+      return score === 1
+        ? EvalOutcome.pass(score, { comment: "every retrieved chunk was relevant" })
+        : EvalOutcome.fail(score, { comment: `precision@k ${score.toFixed(2)}` });
+    },
+    name: "retrieval-precision",
+    required: true,
+  });
+}
+
+/** Passes when the first relevant Chunk is retrieval's own top result — the
+ * rank a reranker or top-k change (#187) is meant to move. */
+export function retrievalFirstRelevantRank(): Metric<number | null> {
+  return defineMetric<EvalTurnInput, EvalTurnOutput, number | null, string>({
+    dataType: "NUMERIC",
+    async evaluate({ case: testCase, output }) {
+      const loaded = await loadRetrievalCase(testCase);
+      if ("outcome" in loaded) return loaded;
+      const retrievedIds = output.retrievedChunks.map((chunk) => chunk.chunkId);
+      const rank = firstRelevantRank(loaded.relevant, retrievedIds);
+      return rank === 1
+        ? EvalOutcome.pass(rank, { comment: "first relevant chunk ranked first" })
+        : EvalOutcome.fail(rank, {
+            comment: rank === null ? "no relevant chunk retrieved" : `first relevant rank ${rank}`,
+          });
+    },
+    name: "retrieval-first-relevant-rank",
     required: true,
   });
 }
