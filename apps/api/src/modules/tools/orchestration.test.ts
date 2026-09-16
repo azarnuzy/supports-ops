@@ -106,7 +106,13 @@ describe("createAssignedToolExecutor", () => {
     await expect(executor({ input: {}, toolId: mutatingTool.id })).rejects.toThrow(/explicit/i);
     expect(mocks.executeHttpTool).not.toHaveBeenCalled();
     expect(mocks.aiActivityCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({ eventType: "TOOL_FAILED" }),
+      data: expect.objectContaining({
+        eventType: "TOOL_FAILED",
+        metadata: expect.objectContaining({
+          error: expect.stringMatching(/explicit/i),
+          inputJson: "{}",
+        }),
+      }),
     });
     expect(mocks.classifyExplicitMutationRequest).toHaveBeenCalledWith(
       expect.objectContaining({ requireConfirmation: false }),
@@ -127,6 +133,12 @@ describe("createAssignedToolExecutor", () => {
     });
 
     await expect(executor({ input: {}, toolId: mutatingTool.id })).resolves.toBe("ok");
+    expect(mocks.aiActivityCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: "TOOL_CALLED",
+        metadata: expect.objectContaining({ inputJson: "{}" }),
+      }),
+    });
     expect(mocks.executeHttpTool).toHaveBeenCalledWith(
       expect.objectContaining({ explicitCustomerRequest: true }),
     );

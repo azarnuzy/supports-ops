@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { classifyExplicitMutationRequest, type ReplyModel } from "@repo/ai-agent";
 import { createOpenAiEmbeddingClient } from "@repo/knowledge";
 import { embeddingConfig } from "../../config";
@@ -9,25 +10,59 @@ import { executeBuiltInTool, resolveTools } from "./services";
 
 export type AssignedTool = Awaited<ReturnType<typeof resolveTools>>[number];
 
+/** AI Activity metadata lives in a Prisma `Json` column: cap free-form fields
+ * so one oversized Tool input or failure message cannot bloat the row. */
+const MAX_METADATA_STRING = 2000;
+
+function clippedInputJson(input: unknown) {
+  if (input === null || input === undefined) return undefined;
+  try {
+    const json = JSON.stringify(input) ?? "";
+    return json.length <= MAX_METADATA_STRING ? json : `${json.slice(0, MAX_METADATA_STRING)}…`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** One Tool call's AI Activity row. `inputJson` carries the model's serialized
+ * arguments and `error` the executor's failure message, both clipped, so the
+ * Activity Timeline can show what a Tool was asked and why it failed. */
 async function recordToolActivity(params: {
+  error?: unknown;
+  input: unknown;
   latencyMs: number;
   outcome: "SUCCESS" | "FAILED";
   ticketId: string;
   tool: AssignedTool;
   workspaceId: string;
 }) {
+  const inputJson = clippedInputJson(params.input);
+  let failureMessage: string | undefined;
+  if (params.outcome === "FAILED") {
+    const message =
+      params.error instanceof Error ? params.error.message : String(params.error ?? "");
+    if (message) {
+      failureMessage =
+        message.length <= MAX_METADATA_STRING
+          ? message
+          : `${message.slice(0, MAX_METADATA_STRING)}…`;
+    }
+  }
+  const metadata: Prisma.InputJsonObject = {
+    latencyMs: params.latencyMs,
+    origin: params.tool.origin,
+    outcome: params.outcome,
+    risk: params.tool.risk,
+    tool: params.tool.name,
+    toolId: params.tool.id,
+    ...(inputJson === undefined ? null : { inputJson }),
+    ...(failureMessage === undefined ? null : { error: failureMessage }),
+  };
   await unscopedPrisma.aiActivity.create({
     data: {
       eventType: params.outcome === "SUCCESS" ? "TOOL_CALLED" : "TOOL_FAILED",
       id: randomUUID(),
-      metadata: {
-        latencyMs: params.latencyMs,
-        origin: params.tool.origin,
-        outcome: params.outcome,
-        risk: params.tool.risk,
-        tool: params.tool.name,
-        toolId: params.tool.id,
-      },
+      metadata,
       ticketId: params.ticketId,
       workspaceId: params.workspaceId,
     },
@@ -133,6 +168,7 @@ export async function executeReadOnlyAssignedTools(params: {
           tool,
         });
         await recordToolActivity({
+          input: params.input,
           latencyMs: Date.now() - startedAt,
           outcome: "SUCCESS",
           ticketId: params.ticketId,
@@ -142,6 +178,8 @@ export async function executeReadOnlyAssignedTools(params: {
         return [tool.name, result] as const;
       } catch (error) {
         await recordToolActivity({
+          error,
+          input: params.input,
           latencyMs: Date.now() - startedAt,
           outcome: "FAILED",
           ticketId: params.ticketId,
@@ -198,6 +236,7 @@ export function createAssignedToolExecutor(params: {
         tool,
       });
       await recordToolActivity({
+        input,
         latencyMs: Date.now() - startedAt,
         outcome: "SUCCESS",
         ticketId: params.ticketId,
@@ -207,6 +246,8 @@ export function createAssignedToolExecutor(params: {
       return result;
     } catch (error) {
       await recordToolActivity({
+        error,
+        input,
         latencyMs: Date.now() - startedAt,
         outcome: "FAILED",
         ticketId: params.ticketId,
