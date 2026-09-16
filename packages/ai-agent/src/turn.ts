@@ -9,6 +9,7 @@ import {
 } from "./reply";
 import {
   createAssignedTools,
+  selectToolLoadout,
   type AssignedToolDescriptor,
   type AssignedToolExecutor,
 } from "./tools";
@@ -124,10 +125,18 @@ export async function runAiAgentTurn(params: {
           params.runtime.loadMemory(),
           params.runtime.tools(),
         ]);
-        run.setAttribute("ai_agent.assigned_tools", assignedTools.descriptors.length);
+        const toolLoadout = selectToolLoadout(
+          assignedTools.descriptors,
+          params.customerMessage,
+          messages,
+        );
+        run.setAttributes({
+          "ai_agent.assigned_tools": toolLoadout.descriptors.length,
+          "ai_agent.tool_loadout": toolLoadout.loadout,
+        });
 
         const model = createReplyModel(params.modelConfig);
-        const tools = createAssignedTools(assignedTools.descriptors, assignedTools.execute);
+        const tools = createAssignedTools(toolLoadout.descriptors, assignedTools.execute);
         let decision: ReplyDecision | undefined;
         let lastError: unknown;
         let deltaPublished = false;
