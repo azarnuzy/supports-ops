@@ -80,6 +80,7 @@ eval suite** — efek yang tertulis di bawah masih prediksi, bukan hasil.
 | 6 | Schema Tool dikirim sekali, sebagai parameter schema asli | `inputSchema` dikirim sebagai schema terbuka sementara JSON Schema aslinya di-`stringify` ke dalam deskripsi Tool, jadi setiap request membawa schema checkout dua kali | Satu dari dua salinan manifest ~13,5k token hilang. Bukan seluruh manifest — provider tetap merender parameter schema-nya | Selesai, belum terukur |
 | 7 | Knob `LLM_MAIN_MAX_OUTPUT_TOKENS` dan `LLM_MAIN_REASONING_EFFORT` | 51,5% token output adalah reasoning, dan token output yang mendominasi waktu generasi | Belum ada — **keduanya default kosong, perilaku belum berubah**. Yang dikirim adalah knob-nya, bukan keputusannya | Selesai, nilai belum dipilih |
 | 8 | Baris ringkasan p50/p95 per suite | Baris `cost:` per Case (perubahan 1) tidak dijumlahkan — membandingkan dua baseline lewat 23 Case adalah tempat kesalahan hitung manual terjadi | Satu baris ringkasan dicetak setelah Case terakhir tiap suite: TTFT, time-to-content, dan durasi total sebagai p50/p95; total token input, rasio cached, token output dan reasoning; rata-rata tool call per Case. Case tanpa `usage` dari provider dikecualikan dari angka token, bukan dihitung nol | Selesai, terverifikasi (`pnpm eval:ai-agent negativecontrol`) |
+| 9 | Batas waktu 60 detik per attempt pada `runAiAgentTurn`, retry dihentikan begitu ada delta yang sudah sampai ke Customer atau begitu satu attempt timeout ([#185](https://github.com/azarnuzy/supports-ops/issues/185)) | Retry lama tidak punya batas waktu di luar Tool budget, sehingga model call yang macet (tanpa Tool) tidak pernah dibatasi, dan retry bisa mengulang reply yang sudah separuh terlihat Customer | Batas terburuk satu turn sekarang dinyatakan: 60 detik bila attempt pertama macet atau Customer sudah melihat output, hingga 120 detik hanya pada kasus gagal cepat-lalu-timeout. Timeout mengeskalasi dengan alasan `AI_TIMEOUT` yang sudah ada, bukan silent hang | Selesai |
 
 Tidak ada dependensi baru yang ditambahkan. Konversi JSON Schema pada perubahan
 nomor 6 memakai Zod 4.4 yang sudah terpasang, dengan fallback ke bentuk lama bila
@@ -102,7 +103,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai, belum terukur |
 | [#183](https://github.com/azarnuzy/supports-ops/issues/183) | Pilih nilai reasoning effort dan batas token output | #177 | Menunggu |
 | [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Menunggu |
-| [#185](https://github.com/azarnuzy/supports-ops/issues/185) | Batasi durasi terburuk satu turn AI Agent | — | Siap dikerjakan |
+| [#185](https://github.com/azarnuzy/supports-ops/issues/185) | Batasi durasi terburuk satu turn AI Agent | — | Selesai |
 | [#186](https://github.com/azarnuzy/supports-ops/issues/186) | Mulai retrieval paralel dengan panggilan model pertama | #177, #183 | Bersyarat |
 | [#187](https://github.com/azarnuzy/supports-ops/issues/187) | Setel parameter retrieval terhadap mutu retrieval terukur | #177, #182 | Menunggu |
 

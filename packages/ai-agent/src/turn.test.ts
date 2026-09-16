@@ -253,6 +253,50 @@ describe("runAiAgentTurn", () => {
     expect(runtime.escalate).toHaveBeenCalledWith("AI_GENERATION_FAILED");
   });
 
+  it("escalates with AI_TIMEOUT when an attempt never settles within the turn's time budget", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      streamReplyMock.mockImplementation(() => new Promise(() => {}));
+      const runtime = baseRuntime();
+
+      const turn = runAiAgentTurn({
+        customerMessage: "How do I reset my password?",
+        modelConfig: { apiKey: "test", modelId: "test" },
+        runtime,
+        ticketId: "ticket-1",
+        workspaceId: "workspace-1",
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      await vi.advanceTimersByTimeAsync(60_000);
+      await turn;
+
+      expect(runtime.escalate).toHaveBeenCalledWith("AI_TIMEOUT");
+      expect(runtime.reply).not.toHaveBeenCalled();
+      expect(streamReplyMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not retry once a delta has already reached the Customer", async () => {
+    streamReplyMock.mockImplementation(async (params) => {
+      await params.onDelta("Partial reply...");
+      throw new Error("connection dropped mid-stream");
+    });
+    const runtime = baseRuntime();
+
+    await runAiAgentTurn({
+      customerMessage: "How do I reset my password?",
+      modelConfig: { apiKey: "test", modelId: "test" },
+      runtime,
+      ticketId: "ticket-1",
+      workspaceId: "workspace-1",
+    });
+
+    expect(streamReplyMock).toHaveBeenCalledOnce();
+    expect(runtime.escalate).toHaveBeenCalledWith("AI_GENERATION_FAILED");
+  });
+
   it("escalates with AI_GENERATION_FAILED without ever invoking the model when no model is configured", async () => {
     const runtime = baseRuntime();
 
