@@ -334,7 +334,17 @@ Start the `searchKnowledge` embedding and query on the raw Customer message in p
 
 Top-k, reranking, chunk sizing. Blocked on gold chunk IDs and precision@k in the eval; without them this is tuning without a signal, and 3.1 explains why the numbers do not currently justify it.
 
-**#182 done, unmeasured.** 10 of 23 Cases now carry expected-passage labels — a Knowledge Source title plus a distinctive text fragment, resolved to live Chunk IDs at run time rather than stored as a position-based Chunk ID that silently repoints on re-chunking. A label that resolves to zero Chunks fails the Case as `invalid` instead of scoring zero. The `retrieval` suite reports recall@k, precision@k, and first-relevant rank per Case (`apps/api/src/evals/retrieval.ts`). Not yet run against the live Workspace — this environment has no `EVAL_WORKSPACE_ID` or model credentials — so #187 stays blocked until `pnpm eval:ai-agent retrieval` produces a real baseline.
+**#182 done and measured — 2026-09-16, commit `a6ce736`.** 10 of 23 Cases carry expected-passage labels — a Knowledge Source title plus a distinctive text fragment, resolved to live Chunk IDs at run time rather than stored as a position-based Chunk ID that silently repoints on re-chunking. A label that resolves to zero Chunks fails the Case as `invalid` instead of scoring zero. The `retrieval` suite reports recall@k, precision@k, and first-relevant rank per Case (`apps/api/src/evals/retrieval.ts`).
+
+`pnpm eval:ai-agent retrieval` against the live Workspace (`northstar-retrieval`, k=8):
+
+| Metric | Result |
+| --- | --- |
+| recall@8 (mean) | 0.90 (9/10 Cases retrieved every required passage) |
+| precision@8 (mean) | 0.11 (9/10 Cases scored 0.125 — one relevant chunk in 8; the true positive is real, the other 7 slots are noise) |
+| first-relevant rank (mean, hits only) | 2.9 (best case 1, worst case 6, n=9) |
+
+One Case, `retrieval-split-shipment`, scored 0 on every metric: the Agent answered `CLARIFY` and asked for an order number without calling `searchKnowledge` at all (0 tool calls, 0 chunks retrieved) — not a retrieval-quality failure, a decision to not retrieve. This is now the retrieval baseline #187 was blocked on: recall is high, precision is the number retrieval tuning should move, and the split-shipment Case is a `decision`/prompt problem, not a `retrieval` one.
 
 ## 8. Acceptance checks
 

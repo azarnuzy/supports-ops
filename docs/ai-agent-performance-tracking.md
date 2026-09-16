@@ -189,7 +189,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Selesai, belum terukur — penyebab diputuskan (celah prompt-grounding, Knowledge sudah lengkap), lihat riset §6.10 |
 | [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Selesai |
 | [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Selesai, belum terukur |
-| [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai, belum terukur |
+| [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai |
 | [#183](https://github.com/azarnuzy/supports-ops/issues/183) | Pilih nilai reasoning effort dan batas token output | #177 | Menunggu |
 | [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Diimplementasikan, belum terukur |
 | [#185](https://github.com/azarnuzy/supports-ops/issues/185) | Batasi durasi terburuk satu turn AI Agent | — | Selesai |
@@ -206,16 +206,19 @@ tujuh perubahan yang sudah diterapkan belum punya satu pun angka hasil.
 bergantung pada angka B1. #185 perbaikan batas waktu, bukan optimisasi, jadi
 tidak butuh baseline untuk membenarkannya.
 
-**#182 — mekanismenya sudah ada, angkanya belum.** 10 dari 23 Case (kategori
-`common`/`edge`, lintas Knowledge Source 02/03/05) sekarang membawa label
+**#182 — mekanisme dan angkanya sudah ada.** 10 dari 23 Case (kategori
+`common`/`edge`, lintas Knowledge Source 02/03/05) membawa label
 expected-passage yang di-resolve ke Chunk saat runtime, dan suite baru
 `retrieval` melaporkan recall@k, precision@k, dan first-relevant rank per Case
 (`apps/api/src/evals/retrieval.ts`, `metrics.ts`, `run.ts`; diverifikasi oleh
-unit test `retrieval.test.ts` dan `tsc --noEmit`). Baseline recall@k/precision@k
-belum tercatat — lingkungan pengembangan ini tidak punya `EVAL_WORKSPACE_ID`
-maupun kredensial model untuk menjalankan suite sungguhan. #187 tetap menunggu
-sampai `pnpm eval:ai-agent retrieval` dijalankan terhadap Workspace langsung
-dan angkanya ditambahkan di sini serta di baseline riset.
+unit test `retrieval.test.ts` dan `tsc --noEmit`). Dijalankan 2026-09-16
+terhadap Workspace langsung (`pnpm eval:ai-agent retrieval`, k=8): recall@8
+rata-rata 0,90 (9/10 Case menemukan seluruh passage wajib), precision@8
+rata-rata 0,11 (1 chunk relevan dari 8 pada 9 Case), first-relevant rank
+rata-rata 2,9 untuk Case yang menemukan sesuatu. Satu Case, `retrieval-split-
+shipment`, gagal total karena Agent menjawab `CLARIFY` tanpa memanggil
+`searchKnowledge` sama sekali — itu kegagalan keputusan, bukan retrieval.
+Detail lengkap di riset §7.7. #187 kini punya sinyal untuk mulai.
 
 **#186 bisa ditutup tanpa dikerjakan.** Kalau B1 dan #183 sudah membawa TTFT ke
 target, round trip yang dihemat #186 bukan lagi kendala pengikat. Menutupnya
