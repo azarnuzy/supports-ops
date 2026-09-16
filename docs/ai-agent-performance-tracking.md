@@ -98,7 +98,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Menunggu |
 | [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Menunggu |
 | [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Menunggu |
-| [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Siap dikerjakan |
+| [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai, belum terukur |
 | [#183](https://github.com/azarnuzy/supports-ops/issues/183) | Pilih nilai reasoning effort dan batas token output | #177 | Menunggu |
 | [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Menunggu |
 | [#185](https://github.com/azarnuzy/supports-ops/issues/185) | Batasi durasi terburuk satu turn AI Agent | — | Siap dikerjakan |
@@ -114,6 +114,17 @@ tujuh perubahan yang sudah diterapkan belum punya satu pun angka hasil.
 **#182 dan #185 bisa jalan paralel.** #182 pekerjaannya melabeli, tidak
 bergantung pada angka B1. #185 perbaikan batas waktu, bukan optimisasi, jadi
 tidak butuh baseline untuk membenarkannya.
+
+**#182 — mekanismenya sudah ada, angkanya belum.** 10 dari 23 Case (kategori
+`common`/`edge`, lintas Knowledge Source 02/03/05) sekarang membawa label
+expected-passage yang di-resolve ke Chunk saat runtime, dan suite baru
+`retrieval` melaporkan recall@k, precision@k, dan first-relevant rank per Case
+(`apps/api/src/evals/retrieval.ts`, `metrics.ts`, `run.ts`; diverifikasi oleh
+unit test `retrieval.test.ts` dan `tsc --noEmit`). Baseline recall@k/precision@k
+belum tercatat — lingkungan pengembangan ini tidak punya `EVAL_WORKSPACE_ID`
+maupun kredensial model untuk menjalankan suite sungguhan. #187 tetap menunggu
+sampai `pnpm eval:ai-agent retrieval` dijalankan terhadap Workspace langsung
+dan angkanya ditambahkan di sini serta di baseline riset.
 
 **#186 bisa ditutup tanpa dikerjakan.** Kalau B1 dan #183 sudah membawa TTFT ke
 target, round trip yang dihemat #186 bukan lagi kendala pengikat. Menutupnya
