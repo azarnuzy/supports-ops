@@ -126,6 +126,28 @@ catatan ini murni observasi dari run yang sama, #179 sendiri tidak
 dikerjakan ulang di sini), `tool` 7/7 (tetap), `visibility`/`language`/`relevancy`
 100% (tetap), `negativeControl` gagal sesuai desain (tetap).
 
+**#179 dicoba lagi, belum ditutup.** Iterasi cepat dengan
+`pnpm eval:ai-agent --id=edge-no-first-scan` (bukan full suite, biar cepat)
+menemukan bug sungguhan: model kadang menambahkan definisi istilah ("label
+created" = "shipment prepared, carrier belum scan") yang terdengar masuk
+akal tapi tidak ada di hasil `searchKnowledge` turn itu — pengetahuan umum
+model, bukan grounding. `packages/ai-agent/src/prompts/reply.ts` diperketat:
+definisi yang diingat model sebagai "umumnya benar" tetap dianggap
+pengetahuan model, bukan Tool Result turn ini, walau kebetulan akurat. Hasil:
+Case ini naik dari skor 0–0,33 (sebelum) ke 0,5–1 (sesudah, fluktuatif per
+run) — membaik, tapi belum konsisten lulus ambang 0,7. Sisa kegagalannya
+ternyata bukan lagi soal prompt: `replyPrompt` mewajibkan kalimat "diteruskan
+ke Human Agent" di setiap ESCALATE, tapi judge `faithfulness` menilai SEMUA
+kalimat harus didukung teks yang di-retrieve — kalimat prosedural wajib itu
+otomatis "tidak didukung" karena memang bukan fakta Knowledge. Ini soal
+bentuk metric (mirip yang diperbaiki 6.2 untuk turn CLARIFY tanpa retrieval),
+bukan lagi celah prompt, dan butuh perubahan di judge `faithfulness`/
+`retrievalContext`-nya (`apps/api/src/evals/run.ts`) yang dipakai semua Case
+faithfulness — di luar cakupan perbaikan cepat ini. Perubahan prompt disimpan
+(terbukti tidak meregresi `faithfulness` lain: `common-split-shipment` tetap
+lulus 0,75, `edge-original-shipping-refund` tetap di 0,67), tapi **#179 tetap
+open** karena acceptance criteria-nya (Case ini lulus) belum terpenuhi.
+
 **Perubahan nomor 10, terukur oleh #180.** `pnpm eval:ai-agent decision`
 terhadap kode nomor 10 saja (tanpa perubahan #180 di bawah) lulus 3 dari 3
 percobaan untuk `escalation-two-completed-charges`, tapi `common-return-window`
@@ -235,7 +257,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#176](https://github.com/azarnuzy/supports-ops/issues/176) | Ringkasan p50/p95 latensi dan token per suite | — | Selesai |
 | [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Selesai |
 | [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Ditutup — premis issue keliru, tidak ada perubahan kode ([detail](research/ai-agent-cost-and-latency.md#72-fix-what-b0-says-is-broken-before-optimising-further--178-179-180-181)) |
-| [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Terukur, **masih gagal** — `edge-no-first-scan` gagal lagi pada baseline B2 dengan gejala yang sama (lihat riset §1c); prompt sudah diubah di 6.10 tapi belum menutup celahnya, perlu triase ulang di luar cakupan #181/#184 |
+| [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | **Masih open** — akar masalah sudah dipersempit dua kali (6.10, lalu 6.12): bug prompt sungguhan sudah diperbaiki (Case membaik dari skor 0–0,33 ke 0,5–1), tapi sisa kegagalannya adalah bentuk metric `faithfulness` yang menilai kalimat ESCALATE wajib sebagai "tidak didukung Knowledge" — butuh perubahan judge, bukan prompt lagi (lihat riset §6.12) |
 | [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Selesai |
 | [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | **Selesai** — `common-return-window` dan `escalation-two-completed-charges` lulus di baseline B2, `gEval` 18/23, tidak ada suite regresi (lihat riset §1c) |
 | [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai |
