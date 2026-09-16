@@ -246,7 +246,9 @@ export async function executeBuiltInTool(input: {
   // exact values — the raw Chunk content alone rarely names its own Source.
   return chunkResults.map((result) => ({
     ...result,
-    sourceTitle: result.knowledgeSourceId ? (titleById.get(result.knowledgeSourceId) ?? null) : null,
+    sourceTitle: result.knowledgeSourceId
+      ? (titleById.get(result.knowledgeSourceId) ?? null)
+      : null,
   }));
 }
 

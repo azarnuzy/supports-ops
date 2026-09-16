@@ -55,7 +55,11 @@ function TrendSparkline({ series, stroke }: { series: number[]; stroke: string }
 
 function DeltaRow({ delta, tone }: { delta: number | null; tone: TrendCardProps["deltaTone"] }) {
   if (delta === null) {
-    return <span className="text-[11px] whitespace-nowrap text-muted-foreground">vs previous period</span>;
+    return (
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+        vs previous period
+      </span>
+    );
   }
   const magnitude = Math.round(Math.abs(delta));
   const up = delta > 0;
