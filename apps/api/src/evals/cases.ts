@@ -741,7 +741,8 @@ export const cases: AgentEvalCase[] = [
       category: "common",
       expectedPassages: [
         {
-          fragment: "A partial shipment does not automatically mean the remaining item was cancelled",
+          fragment:
+            "A partial shipment does not automatically mean the remaining item was cancelled",
           source: "02_Shipping_Delivery_and_Order_Tracking_Guide",
         },
       ],
@@ -767,12 +768,14 @@ export const cases: AgentEvalCase[] = [
   {
     id: "retrieval-refund-posting",
     input: { message: "Once my refund is approved, how long until the money is back?" },
-    expected: "A typical customer-facing expectation is 5-10 business days after refund processing.",
+    expected:
+      "A typical customer-facing expectation is 5-10 business days after refund processing.",
     metadata: {
       category: "common",
       expectedPassages: [
         {
-          fragment: "A typical customer-facing expectation is 5-10 business days after refund processing",
+          fragment:
+            "A typical customer-facing expectation is 5-10 business days after refund processing",
           source: "03_Returns_Exchanges_and_Refund_Policy",
         },
       ],
@@ -782,12 +785,14 @@ export const cases: AgentEvalCase[] = [
   {
     id: "retrieval-return-shipping-cost",
     input: { message: "If I just changed my mind, who pays for the return shipping?" },
-    expected: "Customer is normally responsible unless a promotion explicitly provides free returns.",
+    expected:
+      "Customer is normally responsible unless a promotion explicitly provides free returns.",
     metadata: {
       category: "common",
       expectedPassages: [
         {
-          fragment: "Customer is normally responsible unless a promotion explicitly provides free returns",
+          fragment:
+            "Customer is normally responsible unless a promotion explicitly provides free returns",
           source: "03_Returns_Exchanges_and_Refund_Policy",
         },
       ],
@@ -802,7 +807,8 @@ export const cases: AgentEvalCase[] = [
       category: "edge",
       expectedPassages: [
         {
-          fragment: "Original outbound shipping is generally non-refundable for change-of-mind returns",
+          fragment:
+            "Original outbound shipping is generally non-refundable for change-of-mind returns",
           source: "03_Returns_Exchanges_and_Refund_Policy",
         },
       ],
