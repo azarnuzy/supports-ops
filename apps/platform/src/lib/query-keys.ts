@@ -22,8 +22,10 @@ export const queryKeys = {
       search?: string;
       status?: string;
     }) => ["workspace", "conversations", filters] as const,
-    analytics: ["workspace", "analytics"] as const,
-    analyticsTraffic: ["workspace", "analytics-traffic"] as const,
+    analytics: (range: { from: string; to: string }) => ["workspace", "analytics", range] as const,
+    analyticsTraffic: (range: { from: string; to: string }) =>
+      ["workspace", "analytics-traffic", range] as const,
+    recentConversations: ["workspace", "recent-conversations"] as const,
     aiSettings: ["workspace", "ai-settings"] as const,
     ticket: (id: string) => ["workspace", "tickets", id] as const,
     conversationSession: (id: string) => ["workspace", "conversation-session", id] as const,

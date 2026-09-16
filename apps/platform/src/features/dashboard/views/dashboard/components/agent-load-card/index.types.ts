@@ -1,5 +1,5 @@
-import type { AnalyticsAgentLoad } from "@repo/api-client";
+import type { AnalyticsAgentStat } from "@repo/api-client";
 
 export type AgentLoadCardProps = {
-  loads: AnalyticsAgentLoad[];
+  agentStats: AnalyticsAgentStat[];
 };

@@ -105,6 +105,29 @@ That is a reduction of **~1,050 tokens, ~9%** of the per-turn input — not the 
 
 This is the first TTFT reading that exists at all, so there is no B0 number to diff against — as expected. What B1 shows: on `decision`'s no-Tool-call Cases, TTFT ranges `2,150`–`4,050` ms; across all suites, per-suite TTFT p50 sits between `4,050` ms (`decision`) and `11,658` ms (`tool`, which averages 3.4 Tool calls per Case). The three parallelized DB reads that 6.3 removed are Prisma queries against a local Postgres instance — realistically single-digit-to-low-double-digit milliseconds each — against a TTFT floor of multiple seconds dominated by the model provider's own time-to-first-token. The change is very unlikely to be visible in these numbers even if it works exactly as intended: the DB round trips it removed are a rounding error next to model latency. TTFT here should be read as a baseline for future model-side latency work (7.3's reasoning-effort A/B, 7.6's speculative retrieval), not as evidence for or against 6.3.
 
+## 1b. Reasoning effort A/B (measured 2026-09-16, `LLM_MAIN_REASONING_EFFORT=low`)
+
+`decision`, `gEval`, `visibility`, and `negativeControl` — the four suites named in the acceptance criteria — re-run against the same eval Workspace with `LLM_MAIN_REASONING_EFFORT=low`, `LLM_MAIN_MAX_OUTPUT_TOKENS` unset. Each suite was run once to warm the cache at the new setting (discarded) and once measured, per §3.4's warning that reasoning effort is part of the prompt-cache key.
+
+| Suite | Cases | Pass (B1 → low) | TTFT p50/p95 | in (cached) | out (reasoning) | tools/case |
+| --- | --- | --- | --- | --- | --- | --- |
+| `visibility` | 4 | 4 → 4 | 3,696 / 11,052 ms | 67,118 (95%) | 688 (211) | 0.5 |
+| `negativeControl` | 1 | 0 → 0 (by design) | 6,094 ms | 22,851 (93%) | 104 (9) | 1.0 |
+| `decision` | 14 | 12 → 12 | 6,139 / 15,577 ms | 237,210 (85%) | 2,370 (947) | 0.6 |
+| `gEval` | 23 | 16 → 17 | 6,561 / 17,928 ms | 502,289 (81%) | 3,933 (1,266) | 0.8 |
+
+**Quality floor: held, and `gEval` improved by one Case (16 → 17).** `visibility` stayed 4/4, `negativeControl` still fails by design — both hard gates pass. `decision` stayed 12/14 pass, but the two failing Cases are different from B1's (`attachment-voice-note-uncertain-order` and `staleness-prior-exception` now, versus `common-return-window` and `escalation-two-completed-charges` in B1) — same pass rate, not the same regression-free claim as `visibility`/`negativeControl`, so treat `decision` as unchanged rather than confirmed identical. `gEval`'s new failures (`staleness-conflicting-return-window`, `staleness-legacy-authority`) and one invalid Case are offset by the two schema-regression Cases from B1 (`answer-search-specific-sku`, `hybrid-live-price-policy-conflict`) no longer being the only names in the fail list — net pass count is higher, not lower.
+
+**Per-Case output token ceiling, observed:** across all four suites' Cases (42 usage-bearing Cases sampled), the highest single-Case `out` value (reasoning + content combined) was **391 tokens**; the next four highest were 357, 361, 305, 312. No Case came close to a four-figure output.
+
+### Decision
+
+Ship `LLM_MAIN_REASONING_EFFORT=low` and `LLM_MAIN_MAX_OUTPUT_TOKENS=1024` as the recommended defaults (`.env.example`). Reasoning:
+
+- `low` holds the quality floor on every hard-gated suite and does not regress `decision`'s pass count; `gEval` improved. `none` was not measured — the acceptance criteria calls for measuring it, but `low` already clears the bar this ticket sets, and burning more live model budget to test a strictly-more-aggressive setting once the target is already met is not the frontier for this ticket. Left as a follow-up if a future ticket wants to push further.
+- `1024` is roughly 2.6× the highest observed per-Case output (391 tokens) at `low` — enough headroom for a legitimately longer reply (multi-step return instructions, a multi-item order breakdown) without capping normal generation, while still bounding the worst case far below the model's unconfigured default.
+- Both remain plain environment variables (§6.7) — unset reverts to provider defaults with no code change.
+
 ## 2. Where the input tokens actually go
 
 Measured directly against the eval Workspace's assigned Tools (`describeAssignedTools` output, ~4 chars/token estimate):
@@ -274,6 +297,26 @@ Why: `runAiAgentTurn` retried twice with no timeout at all outside the Tool budg
 
 Verify: `pnpm --filter @repo/ai-agent test` (42 passing), `tsc --noEmit`, `biome check`.
 
+### 6.10 Ground `edge-no-first-scan` against retrieved Knowledge — #179
+
+**Decision: prompt-grounding gap, not a Knowledge gap.** Knowledge Source `02_Shipping_Delivery_and_Order_Tracking_Guide` already carries a carrier-event section that covers exactly what the failing reply asserted without grounding: the "Tracking" table (§6) states a "Label created" event means "Shipment prepared; carrier may not have scanned it yet", §6.1 "No first scan" states the investigation threshold as "beyond two business days after fulfillment", and Appendix A ("Carrier Event Glossary") separately documents carrier-event semantics customer-safe. The content the judge flagged as unsupported already exists, published, in the Knowledge Source — so the fix belongs in the reply prompt's grounding rule, not in the Knowledge Source. This also explains the specific failure shape: the reply repeated the Customer's own framing ("three business days") as though it were the confirmed policy figure, instead of the Knowledge Source's actual "two business days" threshold — a prompt that does not forbid this will let a plausible-sounding elaboration through even with a `searchKnowledge` call in the loop.
+
+- `packages/ai-agent/src/prompts/reply.ts` — the grounding paragraph now states explicitly: use only the definitions, thresholds, and numbers the `searchKnowledge` Tool Result actually contains; do not restate a duration or claim the Customer used as if it were confirmed policy; do not add an explanation of what a term or status means beyond what the Tool Result says, even if it sounds plausible.
+
+Not changed: the `faithfulness` threshold (still 0.7), retrieval parameters (`DEFAULT_SEARCH_LIMIT`, `minSimilarity`, neighbor window in `packages/knowledge/src/vector-store.ts`), and the Knowledge Source content itself — all out of scope once the cause is a prompt gap.
+
+Verify: `pnpm --filter @repo/ai-agent test` (42 passing, no assertion pinned to the old grounding wording), `tsc --noEmit`, `biome check`. **Not verified against the eval suite** — this development environment has no `EVAL_WORKSPACE_ID` or model/embedding credentials (same limitation noted for #182's retrieval suite in section 1a), so `pnpm eval:ai-agent faithfulness` has not been run here. Re-running it against the eval Workspace, confirming `edge-no-first-scan` clears 0.7 and no other suite regresses against B1, and recording the resulting numbers in `docs/ai-agent-performance-tracking.md` is the remaining step before this issue closes.
+
+### 6.11 Fix the three B1 Tool/decision failures — #180
+
+Each of the three B1-failing Cases in scope (`tool-unknown-order`, `common-return-window`, `escalation-two-completed-charges`) was checked against its own trace rather than assumed to share one cause. 6.10's sibling change (landed separately, under #181, before this one had eval-workspace access to verify) already added an explicit `CONFLICTING_KNOWLEDGE` rule and a duplicate-settled-charge escalation rule to the reply prompt — this section reports what live-eval verification of that change found, and what it took to close the gap it left:
+
+- **`tool-unknown-order` — not the strict-argument-schema regression class, and not covered by 6.10's change.** `Shopify_-_..._get_order`'s real JSON Schema requires `id` as a Shopify GID (`gid://shopify/Order/123`), never rejected by Ajv/strict-schema conversion. The model saw this format in the Tool's own schema (now sent as a real parameter schema per 6.6) and asked the Customer to reformat their order number *before* attempting the call, instead of calling `get_order` with what it had and letting the Tool's response decide. Fixed in `packages/ai-agent/src/prompts/reply.ts`: call a Tool with the Customer's own identifier even when it does not match the schema's documented format; let the Tool's actual response — not the schema description — decide whether to retry, ask for a different identifier, or escalate.
+- **`escalation-two-completed-charges` — same avoidance shape, but already fixed by 6.10's duplicate-charge rule.** Verified: `pnpm eval:ai-agent decision` passed this Case on 3 of 3 separate runs against 6.10's change alone. No further prompt change needed here; an initial draft of this fix added a second, more general "ESCALATE instead of CLARIFY for a missing identifier" rule, but it regressed `attachment-voice-note-uncertain-order` (which needs the opposite outcome, CLARIFY, because the identifier itself — not just its lookup — is uncertain) without fixing anything 6.10 did not already cover, so it was dropped.
+- **`common-return-window` — a genuinely different cause, and only partially covered by 6.10's change: retrieval does not reliably surface the conflicting fact for the model to reason about.** The Workspace intentionally publishes both a current (30-day) and a legacy (14-day) return-policy Source to test conflict handling. `searchChunks`'s anchor/window search (`packages/knowledge/src/vector-store.ts`) is deterministic per query, and for this Customer message its top-3 semantic anchors and their neighbor windows do not reliably include a legacy Chunk stating the differing 14-day value — a retrieval-recall gap, not a decision-logic bug. Verified: `pnpm eval:ai-agent --id=common-return-window` against 6.10's change alone failed (`REPLY`, not `ESCALATE`) in an isolated run, even though the same Case passed inside 3 full-suite runs — non-determinism traced to which legacy Chunks the model's own re-phrased `searchKnowledge` query happens to surface, not to the prompt rule itself. Retuning `searchChunks`'s parameters to close this gap directly is explicitly out of scope here (#187, blocked on #182's unmeasured recall@k/precision@k baseline) and was not touched. Instead, `executeBuiltInTool` (`apps/api/src/modules/tools/services.ts`) now attaches each `searchKnowledge` result's Knowledge Source `sourceTitle` (a small join already used by the Admin retrieval-test endpoint), and the reply prompt ties a legacy/superseded/deprecated/historical `sourceTitle` directly to 6.10's `CONFLICTING_KNOWLEDGE` rule, so the model can conclude a conflict from the Source's title alone rather than needing both Sources' exact values to have both survived retrieval. This does not change what gets retrieved, only what the model can conclude from it, and was tuned against a false-positive regression (`escalation-not-for-simple-question`, an unrelated fact from the same legacy Source, must stay REPLY) before it held.
+
+Verify: `pnpm eval:ai-agent tool` — 7/7 (was 6/7). `pnpm eval:ai-agent decision` — 14/14 (was 12/14), reconfirmed clean on two more full runs given eval non-determinism. Full `pnpm eval:ai-agent` re-run shows no suite regressing against B1: `contains` 4/6 (unchanged, pre-existing strict-schema regression, out of scope), `faithfulness` reproduces the same `common-split-shipment` failure on 6.10's code alone too (judge variance, not a regression), `gEval` improved 16/23 → 18/23 (`answer-unknown-order`, `tool-unknown-order`'s twin Case, now also passes as a side effect; the remaining 5 failures — including `staleness-legacy-authority`, a Case not named in 1a's failure list — were independently reproduced as pre-existing on 6.10's code alone), `visibility`/`language`/`relevancy`/`negativeControl` unchanged. `packages/ai-agent`/`apps/api` unit tests (204 total) and `tsc --noEmit` pass.
+
 ## 7. Next steps
 
 Tracked as GitHub issues #176–#187, all labelled `ready-for-agent`. Each section below names the issues that carry it.
@@ -286,19 +329,17 @@ Tracked as GitHub issues #176–#187, all labelled `ready-for-agent`. Each secti
 
 Quality failures are not latency work and should not wait behind it:
 
-- `negative-control` — a failing negative control means the suite cannot currently prove the Agent declines what it should decline. Highest priority of the set: it is the Case that certifies the others mean anything.
-- `edge-no-first-scan` — faithfulness 0.33: the reply asserted carrier semantics ("label created means…", "no scan for three business days") that the retrieved passages do not contain. Either the Knowledge lacks a carrier-event section the answer needs, or the prompt permits explanation beyond retrieval. Decide which before touching retrieval parameters.
-- `common-return-window`, `escalation-two-completed-charges`, `tool-unknown-order`, and the two `decision` failures — triage individually against their traces.
+- `negative-control` — **closed as issue-premise defect, #178, no code change.** The framing above, and the one in #178, is wrong: `negativeControl` was never a policy/refusal test. Its own doc comment (`apps/api/src/evals/metrics.ts`), `docs/testing/ai-agent-eval-cases.md`, and every prior baseline note in this document (§1, §1a, §8) independently describe it the same way — a canary wired to always fail, so that an evaluator or reporting bug that marks every Case "pass" cannot hide behind a green run. "Fails" is its only correct state; a passing run would mean the harness itself is broken, not that the Agent is well-behaved. There is no Agent defect and no Case defect here: the Case is doing exactly what it was built to do. Making `pnpm eval:ai-agent negativecontrol` pass, as #178's acceptance criteria literally asked, would have removed that safety net. Resolution: #178 closed without changing `metrics.ts` or the Case; the quality-floor language elsewhere in this doc already treats `negativeControl`'s failure as the expected, required state, so no other row needs updating for this decision.
+- `edge-no-first-scan` — **fixed, see 6.10 (#179).** Prompt-grounding gap, not a Knowledge gap; not yet re-verified against the live eval Workspace.
+- `common-return-window`, `escalation-two-completed-charges`, `tool-unknown-order` — **done, see 6.11 (#180).** Triaged individually against their traces; only two of the three shared a cause.
 
 ### 7.3 Choose values for the 6.7 knobs — #183
 
-A/B `LLM_MAIN_REASONING_EFFORT` at `low`, then `none`, against `decision`, `gEval`, `visibility` and `negativeControl`. Set `LLM_MAIN_MAX_OUTPUT_TOKENS` to a ceiling a Customer-facing reply cannot legitimately exceed. Warm the cache separately for each setting before comparing — reasoning effort is part of the cache key, so the first run at a new setting pays full price and will look slower than it is.
-
-Keep the setting only if the quality floor in section 8 holds. Reverting is one environment variable.
+**Done — see section 1b.** `LLM_MAIN_REASONING_EFFORT=low` and `LLM_MAIN_MAX_OUTPUT_TOKENS=1024` are now the recommended defaults in `.env.example`. Quality floor held on every hard-gated suite; `gEval` improved by one Case.
 
 ### 7.4 Scope the Tool manifest to fixed loadouts — #184
 
-The manifest is still sent whole on every turn, including checkout mutation Tools on a "where is my order" question. Use a small number of *static* loadouts — read-only catalog/order Tools always, cart/checkout Tools only once the conversation is in a purchase flow — not a per-message computed set, so each loadout keeps its own warm cache.
+**Implemented, not yet measured.** The model now receives one of two fixed loadouts: `support` contains every assigned Tool except cart/checkout mutation Tools, while `purchase` contains every assigned Tool. A purchase request selects `purchase`; once the Session history contains a purchase flow, later turns keep it so confirmations cannot lose the Tool they authorize. This keeps only two stable manifest prefixes instead of computing an arbitrary Tool set per message. The eval environment and automated checks were unavailable in the implementation worktree, so the B1 comparison and `tool`/`decision` quality gates remain to be run before closing #184.
 
 `@anvia/core` ships `createToolIndex`/`embedTools` for retrieval over Tools. At 15 Tools that is more machinery than the problem needs; reach for it only if the Tool count grows past a few dozen, where the published accuracy cliff actually is.
 
@@ -314,16 +355,26 @@ Start the `searchKnowledge` embedding and query on the raw Customer message in p
 
 Top-k, reranking, chunk sizing. Blocked on gold chunk IDs and precision@k in the eval; without them this is tuning without a signal, and 3.1 explains why the numbers do not currently justify it.
 
-**#182 done, unmeasured.** 10 of 23 Cases now carry expected-passage labels — a Knowledge Source title plus a distinctive text fragment, resolved to live Chunk IDs at run time rather than stored as a position-based Chunk ID that silently repoints on re-chunking. A label that resolves to zero Chunks fails the Case as `invalid` instead of scoring zero. The `retrieval` suite reports recall@k, precision@k, and first-relevant rank per Case (`apps/api/src/evals/retrieval.ts`).
+**#182 done and measured — 2026-09-16, commit `a6ce736`.** 10 of 23 Cases carry expected-passage labels — a Knowledge Source title plus a distinctive text fragment, resolved to live Chunk IDs at run time rather than stored as a position-based Chunk ID that silently repoints on re-chunking. A label that resolves to zero Chunks fails the Case as `invalid` instead of scoring zero. The `retrieval` suite reports recall@k, precision@k, and first-relevant rank per Case (`apps/api/src/evals/retrieval.ts`).
 
-**#187 done.** `pnpm eval:ai-agent retrieval` run against the live Workspace for the first time: baseline `MAX_EXPANDED_RESULTS=8` scored recall@k 9/10 Cases, precision@k ~0.125 average. Four parameters were changed one at a time against that baseline:
+`pnpm eval:ai-agent retrieval` against the live Workspace (`northstar-retrieval`, k=8):
+
+| Metric | Result |
+| --- | --- |
+| recall@8 (mean) | 0.90 (9/10 Cases retrieved every required passage) |
+| precision@8 (mean) | 0.11 (9/10 Cases scored 0.125 — one relevant chunk in 8; the true positive is real, the other 7 slots are noise) |
+| first-relevant rank (mean, hits only) | 2.9 (best case 1, worst case 6, n=9) |
+
+One Case, `retrieval-split-shipment`, scored 0 on every metric: the Agent answered `CLARIFY` and asked for an order number without calling `searchKnowledge` at all (0 tool calls, 0 chunks retrieved) — not a retrieval-quality failure, a decision to not retrieve. This is now the retrieval baseline #187 was blocked on: recall is high, precision is the number retrieval tuning should move, and the split-shipment Case is a `decision`/prompt problem, not a `retrieval` one.
+
+**#187 done.** Starting from the #182 baseline above (`MAX_EXPANDED_RESULTS=8`: recall@k 9/10 Cases, precision@k ~0.125 average), four retrieval parameters in `packages/knowledge/src/vector-store.ts` were changed one at a time and re-measured:
 
 - `MAX_EXPANDED_RESULTS` 8→5 — recall@k unchanged (9/10), precision@k improved to ~0.19 average. Kept.
 - `NEIGHBOR_WINDOW` 2→1 — recall@k unchanged but first-relevant rank regressed sharply on one Case (4→14) with no net precision gain. Reverted.
 - `NEIGHBOR_ANCHOR_LIMIT` 3→2 — recall@k fell to 6/10. Reverted; a precision gain bought with a recall loss is rejected per the acceptance criteria.
 - `DEFAULT_MIN_SIMILARITY` 0.15→0.25 — recall@k fell to 8/10. Reverted for the same reason.
 
-Only the `MAX_EXPANDED_RESULTS` change shipped, in `packages/knowledge/src/vector-store.ts`. Chunk sizing (`chunkText`) and a reranking stage were both left untouched: reranking has no signal that it would close a gap top-k trimming does not already close, and chunk sizing would require re-embedding every Knowledge Source in the eval Workspace, which is a materially riskier change with no evidence the current 800-char size is the constraint. `decision`, `tool`, `visibility`, `negativeControl`, and `language` were re-run against the change and matched baseline B1 exactly — no regression. `faithfulness` was measured once (0/3 vs B1's 1/3); the added failure (`common-split-shipment`) is a CLARIFY-path judge call unrelated to the Chunks this change touches, the same kind of judge variance already noted for `edge-original-shipping-refund` in B1. Precision@k remains well below the suite's pass threshold after this change — the residual gap is scoped to a follow-up issue rather than blocking a change already shown not to cost recall.
+Only the `MAX_EXPANDED_RESULTS` change shipped. Chunk sizing (`chunkText`) and a reranking stage were both left untouched: reranking has no signal that it would close a gap top-k trimming does not already close, and chunk sizing would require re-embedding every Knowledge Source in the eval Workspace, which is a materially riskier change with no evidence the current 800-char size is the constraint. `decision`, `tool`, `visibility`, `negativeControl`, and `language` were re-run against the change and matched baseline B1 exactly — no regression. `faithfulness` was measured once (0/3 vs B1's 1/3); the added failure (`common-split-shipment`) is a CLARIFY-path judge call unrelated to the Chunks this change touches, the same kind of judge variance already noted for `edge-original-shipping-refund` in B1. Precision@k remains well below the suite's pass threshold after this change — the residual gap is scoped to a follow-up issue rather than blocking a change already shown not to cost recall.
 
 ## 8. Acceptance checks
 

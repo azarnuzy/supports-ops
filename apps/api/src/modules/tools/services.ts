@@ -215,15 +215,43 @@ export async function executeBuiltInTool(input: {
   if (tool?.origin !== "BUILT_IN") throw new ToolNotAssignedError();
   if (!ticket) throw new TicketNotFoundError();
 
-  return input.toolName === "searchKnowledge"
-    ? searchChunks(prisma, { embedding: input.embedding, retrievalMode: "CUSTOMER", workspaceId })
-    : searchTicketChunks(prisma, {
-        channelType: ticket.channel.type,
-        customerIdentityId: ticket.customerIdentityId,
-        embedding: input.embedding,
-        excludeTicketId: input.ticketId,
-        workspaceId,
-      });
+  if (input.toolName !== "searchKnowledge") {
+    return searchTicketChunks(prisma, {
+      channelType: ticket.channel.type,
+      customerIdentityId: ticket.customerIdentityId,
+      embedding: input.embedding,
+      excludeTicketId: input.ticketId,
+      workspaceId,
+    });
+  }
+
+  const chunkResults = await searchChunks(prisma, {
+    embedding: input.embedding,
+    retrievalMode: "CUSTOMER",
+    workspaceId,
+  });
+  const sourceIds = Array.from(
+    new Set(chunkResults.map((result) => result.knowledgeSourceId).filter(isNotNull)),
+  );
+  const sources = sourceIds.length
+    ? await prisma.knowledgeSource.findMany({
+        select: { id: true, title: true },
+        where: { id: { in: sourceIds } },
+      })
+    : [];
+  const titleById = new Map(sources.map((source) => [source.id, source.title]));
+
+  // Titled so the model can recognize a legacy/superseded Source conflicting with
+  // a current one on the same topic, even when it never retrieves both Sources'
+  // exact values — the raw Chunk content alone rarely names its own Source.
+  return chunkResults.map((result) => ({
+    ...result,
+    sourceTitle: result.knowledgeSourceId ? (titleById.get(result.knowledgeSourceId) ?? null) : null,
+  }));
+}
+
+function isNotNull<Value>(value: Value | null): value is Value {
+  return value !== null;
 }
 
 function isAvailable(tool: {
