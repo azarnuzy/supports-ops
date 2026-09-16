@@ -141,6 +141,47 @@ describe("searchChunks", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.chunkId).toBe("ks1:0");
   });
+
+  it("keeps adjacent context when its anchor clears minSimilarity", async () => {
+    const db = createDb();
+    db.$queryRaw.mockResolvedValue([
+      {
+        anchorSimilarity: 0.9,
+        content: "Order lifecycle.",
+        id: "ks1:3",
+        knowledgeSourceId: "ks1",
+        position: 3,
+        similarity: 0.9,
+        visibility: "CUSTOMER_SAFE",
+      },
+      {
+        anchorSimilarity: 0.9,
+        content: "## 2. Processing Time",
+        id: "ks1:4",
+        knowledgeSourceId: "ks1",
+        position: 4,
+        similarity: 0.1,
+        visibility: "CUSTOMER_SAFE",
+      },
+      {
+        anchorSimilarity: 0.9,
+        content: "Standard processing target is 1-2 business days.",
+        id: "ks1:5",
+        knowledgeSourceId: "ks1",
+        position: 5,
+        similarity: 0.1,
+        visibility: "CUSTOMER_SAFE",
+      },
+    ]);
+
+    const results = await searchChunks(db, {
+      embedding: [0.1],
+      minSimilarity: 0.2,
+      workspaceId: "ws1",
+    });
+
+    expect(results.map((result) => result.chunkId)).toEqual(["ks1:3", "ks1:4", "ks1:5"]);
+  });
 });
 
 describe("replaceTicketChunks", () => {

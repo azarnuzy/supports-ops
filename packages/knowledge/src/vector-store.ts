@@ -80,6 +80,7 @@ export type ChunkSearchResult = {
 };
 
 type RawChunkRow = {
+  anchorSimilarity?: number | string;
   id: string;
   knowledgeSourceId: string | null;
   content: string;
@@ -90,39 +91,79 @@ type RawChunkRow = {
 
 const DEFAULT_SEARCH_LIMIT = 5;
 const DEFAULT_MIN_SIMILARITY = 0.15;
+const NEIGHBOR_ANCHOR_LIMIT = 3;
+const NEIGHBOR_WINDOW = 2;
+const MAX_EXPANDED_RESULTS = 8;
 
 /**
  * Searches published, non-deleted Knowledge chunks by cosine similarity,
  * scoped to one Workspace. Customer retrieval is restricted to Customer-Safe
  * content; the AI Copilot may additionally retrieve Internal-Only content.
- * Never reaches a Workspace it wasn't given, and never returns a Chunk below
- * `minSimilarity` — the mechanism the retrieval test screen and the AI
- * Agent's retrieval both call.
+ * Never reaches a Workspace it wasn't given. Semantic anchors must clear
+ * `minSimilarity`; the strongest anchors also bring nearby chunks so headings
+ * split from their section body remain useful to the AI Agent.
  */
 export async function searchChunks(
   db: SqlDb,
   params: SearchChunksParams,
 ): Promise<ChunkSearchResult[]> {
   const limit = params.limit ?? DEFAULT_SEARCH_LIMIT;
+  const anchorLimit = Math.min(limit, NEIGHBOR_ANCHOR_LIMIT);
   const minSimilarity = params.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
   const queryVector = toVectorLiteral(params.embedding);
   const retrievalMode = params.retrievalMode ?? "CUSTOMER";
 
   const rows = await db.$queryRaw<RawChunkRow[]>`
+    WITH semantic_matches AS (
+      SELECT *, 1 - ("embedding" <=> ${queryVector}::vector) AS "anchorSimilarity"
+      FROM "Chunk"
+      WHERE "workspaceId" = ${params.workspaceId}
+        AND "kind" = 'KNOWLEDGE'
+        AND "isPublished" = true
+        AND "deletedAt" IS NULL
+        AND "embedding" IS NOT NULL
+        AND (
+          ${retrievalMode} = 'COPILOT'
+          OR "visibility" = 'CUSTOMER_SAFE'::"KnowledgeVisibility"
+        )
+      ORDER BY "embedding" <=> ${queryVector}::vector ASC
+      LIMIT ${anchorLimit}
+    ), anchors AS (
+      SELECT *, row_number() OVER (ORDER BY "anchorSimilarity" DESC) AS "anchorRank"
+      FROM semantic_matches
+    ), expanded AS (
+      SELECT candidate.*, anchors."anchorSimilarity", anchors."anchorRank",
+             abs(candidate."position" - anchors."position") AS distance
+      FROM anchors
+      JOIN "Chunk" candidate ON
+        candidate."id" = anchors."id"
+        OR (
+          anchors."anchorRank" <= ${NEIGHBOR_ANCHOR_LIMIT}
+          AND candidate."knowledgeSourceId" = anchors."knowledgeSourceId"
+          AND candidate."position" BETWEEN
+            anchors."position" - ${NEIGHBOR_WINDOW}
+            AND anchors."position" + ${NEIGHBOR_WINDOW}
+          AND candidate."workspaceId" = ${params.workspaceId}
+          AND candidate."kind" = 'KNOWLEDGE'
+          AND candidate."isPublished" = true
+          AND candidate."deletedAt" IS NULL
+          AND candidate."embedding" IS NOT NULL
+          AND (
+            ${retrievalMode} = 'COPILOT'
+            OR candidate."visibility" = 'CUSTOMER_SAFE'::"KnowledgeVisibility"
+          )
+        )
+    ), deduplicated AS (
+      SELECT DISTINCT ON ("id") *
+      FROM expanded
+      ORDER BY "id", "anchorRank", distance
+    )
     SELECT "id", "knowledgeSourceId", "content", "position", "visibility",
-           1 - ("embedding" <=> ${queryVector}::vector) AS similarity
-    FROM "Chunk"
-    WHERE "workspaceId" = ${params.workspaceId}
-      AND "kind" = 'KNOWLEDGE'
-      AND "isPublished" = true
-      AND "deletedAt" IS NULL
-      AND "embedding" IS NOT NULL
-      AND (
-        ${retrievalMode} = 'COPILOT'
-        OR "visibility" = 'CUSTOMER_SAFE'::"KnowledgeVisibility"
-      )
-    ORDER BY "embedding" <=> ${queryVector}::vector ASC
-    LIMIT ${limit}
+           1 - ("embedding" <=> ${queryVector}::vector) AS similarity,
+           "anchorSimilarity"
+    FROM deduplicated
+    ORDER BY "anchorRank", distance, "position"
+    LIMIT ${MAX_EXPANDED_RESULTS}
   `;
 
   return rows
@@ -134,7 +175,10 @@ export async function searchChunks(
       similarity: Number(row.similarity),
       visibility: row.visibility,
     }))
-    .filter((result) => result.similarity >= minSimilarity);
+    .filter((result, index) => {
+      const row = rows[index];
+      return Number(row?.anchorSimilarity ?? result.similarity) >= minSimilarity;
+    });
 }
 
 export type ReplaceTicketChunksParams = {
