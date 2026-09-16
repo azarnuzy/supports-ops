@@ -22,6 +22,7 @@ export default function ResourceListState({
     return (
       <div className="grid gap-3 p-5">
         {Array.from({ length: skeletonCount }, (_, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder count, never reordered
           <Skeleton key={index} className="h-14 w-full rounded-lg" />
         ))}
       </div>

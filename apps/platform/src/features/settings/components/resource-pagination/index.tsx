@@ -3,7 +3,11 @@ import { Pagination, PaginationContent, PaginationItem } from "@repo/ui/componen
 import type { ResourcePaginationProps } from "./index.types";
 
 /** Prev/next pager for an in-memory (already-fetched) resource list. */
-export default function ResourcePagination({ page, pageCount, onPageChange }: ResourcePaginationProps) {
+export default function ResourcePagination({
+  page,
+  pageCount,
+  onPageChange,
+}: ResourcePaginationProps) {
   if (pageCount <= 1) return null;
 
   return (

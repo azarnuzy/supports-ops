@@ -260,9 +260,7 @@ function mergeDeep(
   const result = { ...base };
   for (const [key, value] of Object.entries(overrides)) {
     result[key] =
-      isPlainObject(value) && isPlainObject(result[key])
-        ? mergeDeep(result[key], value)
-        : value;
+      isPlainObject(value) && isPlainObject(result[key]) ? mergeDeep(result[key], value) : value;
   }
   return result;
 }

@@ -447,8 +447,8 @@ export default function ToolSheet({
                             A read-only tool runs whenever the agent needs it. One that requires
                             approval only runs when the customer asks for that action in their own
                             message. One that requires confirmation (payment, checkout, or similar
-                            irreversible actions) also needs the agent to have already proposed
-                            that exact action and the customer to confirm it in a later message.
+                            irreversible actions) also needs the agent to have already proposed that
+                            exact action and the customer to confirm it in a later message.
                           </FieldDescription>
                         </Field>
                         <Field>

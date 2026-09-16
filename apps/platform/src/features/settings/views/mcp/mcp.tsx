@@ -276,9 +276,7 @@ const McpServersView = () => {
                     toolsByServer[server.id]?.filter((tool) => tool.tool.enabled).length
                   }
                   onOpenDetail={() => setDetailId(server.id)}
-                  onToggleServerEnabled={(enabled) =>
-                    handleToggleServerEnabled(server.id, enabled)
-                  }
+                  onToggleServerEnabled={(enabled) => handleToggleServerEnabled(server.id, enabled)}
                   onDelete={() => handleDelete(server.id)}
                 />
               ))

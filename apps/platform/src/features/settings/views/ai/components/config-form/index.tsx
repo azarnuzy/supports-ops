@@ -140,7 +140,9 @@ export default function ConfigForm({ form }: ConfigFormProps) {
               value={values.autoResolveAfterSeconds}
               onChange={(event) => update("autoResolveAfterSeconds", Number(event.target.value))}
             />
-            <FieldDescription>Counted from the Follow-Up, not from the last Customer message.</FieldDescription>
+            <FieldDescription>
+              Counted from the Follow-Up, not from the last Customer message.
+            </FieldDescription>
           </Field>
 
           <Field className="rounded-lg border p-4">
@@ -173,8 +175,8 @@ export default function ConfigForm({ form }: ConfigFormProps) {
               onChange={(event) => update("idleCloseAfterSeconds", Number(event.target.value))}
             />
             <FieldDescription>
-              Close a claimed or unclaimed Ticket after this much Customer silence. Human replies
-              do not reset the timer.
+              Close a claimed or unclaimed Ticket after this much Customer silence. Human replies do
+              not reset the timer.
             </FieldDescription>
           </Field>
 
@@ -192,11 +194,17 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             </p>
             <p>
               Knowledge Sources and Tools are managed on their own pages —{" "}
-              <Link className="font-medium text-foreground underline underline-offset-2" to="/knowledge">
+              <Link
+                className="font-medium text-foreground underline underline-offset-2"
+                to="/knowledge"
+              >
                 Knowledge
               </Link>{" "}
               and{" "}
-              <Link className="font-medium text-foreground underline underline-offset-2" to="/agent/tools">
+              <Link
+                className="font-medium text-foreground underline underline-offset-2"
+                to="/agent/tools"
+              >
                 Tools
               </Link>
               . Escalation to a Human Agent uses the transfer message above.

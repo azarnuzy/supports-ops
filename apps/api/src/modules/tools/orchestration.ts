@@ -55,7 +55,9 @@ async function dispatchTool(params: {
   if (tool.risk !== "READ_ONLY") {
     const requireConfirmation = tool.risk === "MUTATING_IRREVERSIBLE";
     if (!params.model || params.customerMessage === undefined) {
-      throw new Error("Mutating Tool requires an explicit Customer request in the current message.");
+      throw new Error(
+        "Mutating Tool requires an explicit Customer request in the current message.",
+      );
     }
     const priorAiMessage = (await params.getPriorAiMessage?.()) ?? null;
     const explicit = await classifyExplicitMutationRequest({

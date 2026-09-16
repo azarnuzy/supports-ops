@@ -13,7 +13,8 @@ export default function PreviewCard({ handoffMessage, resolutionMessage }: Previ
     state === "transfer"
       ? handoffMessage.trim() ||
         "{humanAgentName} from our team is picking this up now — thanks for your patience."
-      : resolutionMessage.trim() || "I've marked this as resolved. Reply any time if it comes back.";
+      : resolutionMessage.trim() ||
+        "I've marked this as resolved. Reply any time if it comes back.";
 
   return (
     <div className="grid gap-3 lg:sticky lg:top-6">
