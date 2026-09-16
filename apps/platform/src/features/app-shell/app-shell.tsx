@@ -45,6 +45,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth";
 import { getInitials } from "../../lib/utils";
+import { cn } from "@repo/ui/lib/utils";
 import { HeaderControls } from "./components/header-controls";
 
 type NavItem = {
@@ -91,9 +92,11 @@ function NavMenuButton({ active, item }: { active: boolean; item: NavItem }) {
 export function PlatformAppShell({
   children,
   fullBleed = false,
+  fullWidth = false,
 }: {
   children: ReactNode;
   fullBleed?: boolean;
+  fullWidth?: boolean;
 }) {
   const location = useLocation();
   const user = useQuery(meQueryOptions);
@@ -273,7 +276,10 @@ export function PlatformAppShell({
           className={
             fullBleed
               ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden"
-              : "mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-8 lg:px-8"
+              : cn(
+                  "mx-auto flex w-full flex-1 flex-col gap-8 px-6 py-8 lg:px-8",
+                  fullWidth ? "max-w-none" : "max-w-6xl",
+                )
           }
         >
           {children}

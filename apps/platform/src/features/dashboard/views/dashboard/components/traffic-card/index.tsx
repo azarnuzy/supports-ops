@@ -1,15 +1,7 @@
-import {
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@repo/ui/components/card";
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/components/card";
 
 import HeatmapGrid from "../heatmap-grid";
 import DashboardCard from "../dashboard-card";
-
-import LiveBadge from "../live-badge";
 import type { TrafficCardProps } from "./index.types";
 
 export default function TrafficCard({
@@ -20,13 +12,10 @@ export default function TrafficCard({
   timeZone,
 }: TrafficCardProps) {
   return (
-    <DashboardCard>
+    <DashboardCard className="py-3.5">
       <CardHeader className="gap-1.5">
-        <CardTitle className="text-base leading-5">{title}</CardTitle>
-        <CardDescription className="leading-5">{description}</CardDescription>
-        <CardAction>
-          <LiveBadge />
-        </CardAction>
+        <CardTitle className="text-sm leading-4">{title}</CardTitle>
+        <CardDescription className="text-xs leading-4">{description}</CardDescription>
       </CardHeader>
       <CardContent>
         <HeatmapGrid buckets={buckets} metricLabel={metricLabel} timeZone={timeZone} />
