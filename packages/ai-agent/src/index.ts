@@ -10,7 +10,7 @@ export {
   classifyExplicitMutationRequest,
   MutationIntentClassificationFailedError,
 } from "./mutation-intent";
-export { createAssignedTools } from "./tools";
+export { createAssignedTools, selectToolLoadout } from "./tools";
 export { runAiAgentTurn, type AiAgentTurnRuntime, type EscalationReason } from "./turn";
 export {
   EscalationSummaryGenerationFailedError,
@@ -25,5 +25,10 @@ export type {
   TicketPriority,
 } from "./classification";
 export type { ReplyDecision, ReplyModel } from "./reply";
-export type { AgentTools, AssignedToolDescriptor, AssignedToolExecutor } from "./tools";
+export type {
+  AgentTools,
+  AssignedToolDescriptor,
+  AssignedToolExecutor,
+  ToolLoadout,
+} from "./tools";
 export type { Message as AgentMessage } from "@anvia/core";

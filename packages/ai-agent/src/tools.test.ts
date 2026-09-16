@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAssignedTools } from "./tools";
+import { createAssignedTools, selectToolLoadout } from "./tools";
 
 const descriptor = {
   description: "Looks up a subscription.",
@@ -88,5 +88,40 @@ describe("createAssignedTools", () => {
     // than re-parsing it, so createAssignedTools must never inspect, strip, or
     // otherwise "interpret" it — it only forwards whatever the executor returns.
     await expect(callTool(tool, {})).resolves.toBe(injection);
+  });
+});
+
+describe("selectToolLoadout", () => {
+  const tools = [
+    descriptor,
+    { ...descriptor, id: "catalog", name: "search_catalog" },
+    { ...descriptor, id: "cart", name: "create_cart" },
+    { ...descriptor, id: "checkout", name: "complete_checkout" },
+  ];
+
+  it("withholds cart and checkout mutations from a support turn", () => {
+    const result = selectToolLoadout(tools, "Where is my order?", []);
+
+    expect(result.loadout).toBe("support");
+    expect(result.descriptors.map((tool) => tool.name)).toEqual([
+      "getSubscriptionStatus",
+      "search_catalog",
+    ]);
+  });
+
+  it("uses the complete fixed loadout for a purchase request", () => {
+    const result = selectToolLoadout(tools, "Add one to my cart", []);
+
+    expect(result.loadout).toBe("purchase");
+    expect(result.descriptors).toEqual(tools);
+  });
+
+  it("keeps the purchase loadout after the Session enters a purchase flow", () => {
+    const result = selectToolLoadout(tools, "Yes, please", [
+      { content: "Would you like me to create a cart for that product?", role: "assistant" },
+    ]);
+
+    expect(result.loadout).toBe("purchase");
+    expect(result.descriptors).toEqual(tools);
   });
 });
