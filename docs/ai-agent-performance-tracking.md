@@ -159,7 +159,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#184](https://github.com/azarnuzy/supports-ops/issues/184) | Persempit manifest Tool menjadi loadout statis | #177 | Menunggu |
 | [#185](https://github.com/azarnuzy/supports-ops/issues/185) | Batasi durasi terburuk satu turn AI Agent | — | Selesai |
 | [#186](https://github.com/azarnuzy/supports-ops/issues/186) | Mulai retrieval paralel dengan panggilan model pertama | #177, #183 | Bersyarat |
-| [#187](https://github.com/azarnuzy/supports-ops/issues/187) | Setel parameter retrieval terhadap mutu retrieval terukur | #177, #182 | Menunggu |
+| [#187](https://github.com/azarnuzy/supports-ops/issues/187) | Setel parameter retrieval terhadap mutu retrieval terukur | #177, #182 | Selesai |
 
 ### Kenapa urutannya begitu
 
@@ -190,6 +190,43 @@ pekerjaan yang ditinggalkan.
 **#187 paling akhir.** Menyetel parameter retrieval tanpa recall@k dan
 precision@k adalah menyetel tanpa sinyal — itu sebabnya #182 harus selesai lebih
 dulu.
+
+## #187 — baseline retrieval terukur (2026-09-16)
+
+`pnpm eval:ai-agent retrieval` dijalankan terhadap Workspace eval sungguhan
+untuk pertama kali (10 Case berlabel dari #182). Tiga parameter diuji satu per
+satu terhadap recall@k dan precision@k, dengan `decision`/`tool`/`visibility`/
+`negativeControl`/`language` dijalankan ulang sebagai gerbang mutu:
+
+| Perubahan | recall@k pass | precision@k rata-rata | Keputusan |
+| --- | --- | --- | --- |
+| Baseline (`MAX_EXPANDED_RESULTS=8`) | 9/10 | ~0,125 | — |
+| `MAX_EXPANDED_RESULTS` 8→5 | 9/10 (tidak turun) | ~0,19 | **Dipakai** — precision naik tanpa mengorbankan recall |
+| `NEIGHBOR_WINDOW` 2→1 | 9/10 | turun di beberapa Case, rank memburuk (mis. 4→14) | Ditolak — tidak ada perbaikan bersih |
+| `NEIGHBOR_ANCHOR_LIMIT` 3→2 | 6/10 (turun) | — | Ditolak — melanggar aturan "recall tidak boleh turun" |
+| `DEFAULT_MIN_SIMILARITY` 0,15→0,25 | 8/10 (turun) | — | Ditolak — melanggar aturan "recall tidak boleh turun" |
+
+Satu-satunya perubahan yang lolos: `MAX_EXPANDED_RESULTS` di
+`packages/knowledge/src/vector-store.ts` diturunkan dari 8 ke 5. Ini
+langsung mengurangi jumlah Chunk yang dikembalikan per turn tanpa menyentuh
+`chunkText` (chunk sizing) atau menambah reranking — keduanya tidak diuji
+karena tidak ada sinyal yang memaksanya: reranking butuh mesin baru untuk gap
+precision yang skala perbaikannya sama dengan menurunkan `k`, dan chunk sizing
+butuh re-embed ulang seluruh Knowledge Source Workspace eval (perubahan
+berisiko lebih besar tanpa bukti bahwa ukuran chunk saat ini adalah
+penyebabnya).
+
+Gerbang mutu diperiksa ulang dengan `MAX_EXPANDED_RESULTS=5`: `decision`
+(12/14), `tool` (6/7), `visibility` (4/4), `negativeControl` (0/1, gagal
+sesuai desain), dan `language` (3/3) — identik dengan baseline B1, tidak ada
+regresi. `faithfulness` diukur sekali di tengah pengujian (0/3 vs 1/3 di B1);
+kegagalan tambahannya (`common-split-shipment`) berasal dari klaim CLARIFY
+yang tidak melibatkan Chunk yang berubah oleh perubahan ini — pola yang sama
+dengan variasi judge yang sudah dicatat di B1 untuk
+`edge-original-shipping-refund` (skor 0,67, ambang 0,7). Precision@k tetap
+jauh di bawah ambang lulus suite (rata-rata ~0,19) setelah perubahan ini;
+sisa gap adalah bahan untuk issue lanjutan, bukan alasan menahan perubahan
+yang sudah terbukti tidak merugikan recall.
 
 ## Aturan pembaruan
 

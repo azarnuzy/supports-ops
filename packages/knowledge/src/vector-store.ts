@@ -93,7 +93,7 @@ const DEFAULT_SEARCH_LIMIT = 5;
 const DEFAULT_MIN_SIMILARITY = 0.15;
 const NEIGHBOR_ANCHOR_LIMIT = 3;
 const NEIGHBOR_WINDOW = 2;
-const MAX_EXPANDED_RESULTS = 8;
+const MAX_EXPANDED_RESULTS = 5;
 
 /**
  * Searches published, non-deleted Knowledge chunks by cosine similarity,
