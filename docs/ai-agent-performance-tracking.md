@@ -91,8 +91,8 @@ argumennya.
 | --- | --- | --- | --- | --- |
 | 10 | `replyPrompt` menambah dua aturan ESCALATE eksplisit: (a) saat `searchKnowledge` mengembalikan Knowledge Source yang saling bertentangan pada fakta yang dibutuhkan, jangan memilih salah satu nilai — ESCALATE dengan `CONFLICTING_KNOWLEDGE`; (b) saat Customer melaporkan beberapa completed/captured charge untuk order yang sama, ESCALATE untuk payment review walau Customer secara eksplisit meminta refund langsung ([#181](https://github.com/azarnuzy/supports-ops/issues/181)) | `common-return-window` gagal karena prompt tidak melarang model memilih salah satu window yang bertentangan (K03 vs L08); `escalation-two-completed-charges` gagal karena aturan "jangan menahan Tool call hanya karena ini write" pada prompt yang sama membiarkan model memproses refund langsung meski dua charge yang settled semestinya diverifikasi manusia dulu | Kedua Case dan Case `gEval` yang berbagi skenario sama — `staleness-conflicting-return-window`, `staleness-legacy-authority` — diharapkan lulus karena aturan konflik-Knowledge sekarang eksplisit, bukan tersirat lewat nama `escalationReason` saja | Selesai, belum terukur |
 
-Perubahan nomor 10 diverifikasi oleh unit test `packages/ai-agent` (45 lulus,
-termasuk dua assertion baru di `reply.test.ts`) dan `tsc --noEmit`. **Belum
+Perubahan nomor 10 diverifikasi oleh unit test `packages/ai-agent` (43 lulus,
+termasuk Case baru di `reply.test.ts`) dan `tsc --noEmit`. **Belum
 diukur terhadap eval suite** — lingkungan pengembangan ini tidak punya
 `EVAL_WORKSPACE_ID` maupun kredensial model (`COMPLETION_GATEWAY_API_KEY` /
 `OPENROUTER_API_KEY`), jadi `pnpm eval:ai-agent geval` dan
