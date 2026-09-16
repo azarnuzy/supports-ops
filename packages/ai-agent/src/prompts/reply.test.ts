@@ -20,4 +20,11 @@ describe("replyPrompt", () => {
     expect(prompt).toContain("in the language of the Customer's latest message");
     expect(prompt).toContain("Glad that's sorted.");
   });
+
+  it("escalates instead of picking a side on conflicting Knowledge or duplicate settled charges", () => {
+    const prompt = replyPrompt({ attachments: "None.", clarificationCount: 0 });
+
+    expect(prompt).toContain("do not pick one value, average them, or present both as equally valid");
+    expect(prompt).toContain("ESCALATE for payment review even if the Customer explicitly asks you to fix it");
+  });
 });
