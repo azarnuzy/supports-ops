@@ -274,6 +274,16 @@ Why: `runAiAgentTurn` retried twice with no timeout at all outside the Tool budg
 
 Verify: `pnpm --filter @repo/ai-agent test` (42 passing), `tsc --noEmit`, `biome check`.
 
+### 6.10 Ground `edge-no-first-scan` against retrieved Knowledge — #179
+
+**Decision: prompt-grounding gap, not a Knowledge gap.** Knowledge Source `02_Shipping_Delivery_and_Order_Tracking_Guide` already carries a carrier-event section that covers exactly what the failing reply asserted without grounding: the "Tracking" table (§6) states a "Label created" event means "Shipment prepared; carrier may not have scanned it yet", §6.1 "No first scan" states the investigation threshold as "beyond two business days after fulfillment", and Appendix A ("Carrier Event Glossary") separately documents carrier-event semantics customer-safe. The content the judge flagged as unsupported already exists, published, in the Knowledge Source — so the fix belongs in the reply prompt's grounding rule, not in the Knowledge Source. This also explains the specific failure shape: the reply repeated the Customer's own framing ("three business days") as though it were the confirmed policy figure, instead of the Knowledge Source's actual "two business days" threshold — a prompt that does not forbid this will let a plausible-sounding elaboration through even with a `searchKnowledge` call in the loop.
+
+- `packages/ai-agent/src/prompts/reply.ts` — the grounding paragraph now states explicitly: use only the definitions, thresholds, and numbers the `searchKnowledge` Tool Result actually contains; do not restate a duration or claim the Customer used as if it were confirmed policy; do not add an explanation of what a term or status means beyond what the Tool Result says, even if it sounds plausible.
+
+Not changed: the `faithfulness` threshold (still 0.7), retrieval parameters (`DEFAULT_SEARCH_LIMIT`, `minSimilarity`, neighbor window in `packages/knowledge/src/vector-store.ts`), and the Knowledge Source content itself — all out of scope once the cause is a prompt gap.
+
+Verify: `pnpm --filter @repo/ai-agent test` (42 passing, no assertion pinned to the old grounding wording), `tsc --noEmit`, `biome check`. **Not verified against the eval suite** — this development environment has no `EVAL_WORKSPACE_ID` or model/embedding credentials (same limitation noted for #182's retrieval suite in section 1a), so `pnpm eval:ai-agent faithfulness` has not been run here. Re-running it against the eval Workspace, confirming `edge-no-first-scan` clears 0.7 and no other suite regresses against B1, and recording the resulting numbers in `docs/ai-agent-performance-tracking.md` is the remaining step before this issue closes.
+
 ## 7. Next steps
 
 Tracked as GitHub issues #176–#187, all labelled `ready-for-agent`. Each section below names the issues that carry it.
