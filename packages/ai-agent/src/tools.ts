@@ -1,4 +1,4 @@
-import { Agent, createTool } from "@anvia/core";
+import { Agent, createTool, type Message } from "@anvia/core";
 import { z } from "zod";
 
 export type AgentTools = ConstructorParameters<typeof Agent>[0]["tools"];
@@ -11,6 +11,31 @@ export type AssignedToolDescriptor = {
 };
 
 export type AssignedToolExecutor = (params: { input: unknown; toolId: string }) => Promise<string>;
+
+export type ToolLoadout = "purchase" | "support";
+
+const PURCHASE_TOOL = /^(?:cancel|complete|create|update)_(?:cart|checkout)$/i;
+const PURCHASE_INTENT =
+  /\b(?:add\s+(?:it|one|this|that|\d+|.+?)\s+to\s+(?:my\s+)?cart|buy|cart|check\s*out|checkout|complete\s+(?:my\s+)?order|get\s+(?:it|one|this|that)|i(?:'d| would)\s+like\s+(?:it|one|this|that|to\s+(?:buy|order))|place\s+(?:an?\s+|my\s+|the\s+)?order|purchase)\b/i;
+
+/**
+ * Keeps the model-facing Tool prefix to two fixed loadouts. Support includes
+ * read-only and unrelated Tools; purchase adds every assigned cart/checkout
+ * mutation Tool. Once Session history enters purchase, it stays there so a
+ * later confirmation such as "yes" cannot lose the Tool it authorizes.
+ */
+export function selectToolLoadout(
+  tools: readonly AssignedToolDescriptor[],
+  customerMessage: string,
+  messages: readonly Message[],
+): { descriptors: AssignedToolDescriptor[]; loadout: ToolLoadout } {
+  const purchase =
+    PURCHASE_INTENT.test(customerMessage) || PURCHASE_INTENT.test(JSON.stringify(messages));
+  return {
+    descriptors: purchase ? [...tools] : tools.filter((tool) => !PURCHASE_TOOL.test(tool.name)),
+    loadout: purchase ? "purchase" : "support",
+  };
+}
 
 // ponytail: fixed budget, not per-workspace/agent tunable; add a config knob if a
 // customer's tool mix genuinely needs a different ceiling than this.

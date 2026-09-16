@@ -298,7 +298,7 @@ Keep the setting only if the quality floor in section 8 holds. Reverting is one 
 
 ### 7.4 Scope the Tool manifest to fixed loadouts — #184
 
-The manifest is still sent whole on every turn, including checkout mutation Tools on a "where is my order" question. Use a small number of *static* loadouts — read-only catalog/order Tools always, cart/checkout Tools only once the conversation is in a purchase flow — not a per-message computed set, so each loadout keeps its own warm cache.
+**Implemented, not yet measured.** The model now receives one of two fixed loadouts: `support` contains every assigned Tool except cart/checkout mutation Tools, while `purchase` contains every assigned Tool. A purchase request selects `purchase`; once the Session history contains a purchase flow, later turns keep it so confirmations cannot lose the Tool they authorize. This keeps only two stable manifest prefixes instead of computing an arbitrary Tool set per message. The eval environment and automated checks were unavailable in the implementation worktree, so the B1 comparison and `tool`/`decision` quality gates remain to be run before closing #184.
 
 `@anvia/core` ships `createToolIndex`/`embedTools` for retrieval over Tools. At 15 Tools that is more machinery than the problem needs; reach for it only if the Tool count grows past a few dozen, where the published accuracy cliff actually is.
 
