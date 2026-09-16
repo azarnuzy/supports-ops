@@ -30,9 +30,12 @@ export function createAssignedTools(
 ): AgentTools {
   const deadline = Date.now() + TIME_BUDGET_MS;
   let calls = 0;
-  return tools.map((tool) =>
-    createTool({
-      description: `${tool.description}\n\nArguments JSON Schema: ${JSON.stringify(tool.inputSchema)}`,
+  return tools.map((tool) => {
+    const inputSchema = toInputSchema(tool.inputSchema);
+    return createTool({
+      description: inputSchema.described
+        ? tool.description
+        : `${tool.description}\n\nArguments JSON Schema: ${JSON.stringify(tool.inputSchema)}`,
       execute: async (input) => {
         if (calls >= CALL_BUDGET || Date.now() >= deadline) {
           return "Tool call budget exhausted for this Customer Message. Answer with what you already have, or ESCALATE.";
@@ -44,8 +47,29 @@ export function createAssignedTools(
           return `Tool call failed: ${error instanceof Error ? error.message : "unknown error"}.`;
         }
       },
-      inputSchema: z.record(z.string(), z.unknown()),
+      inputSchema: inputSchema.schema,
       name: tool.name,
-    }),
-  );
+    });
+  });
+}
+
+/**
+ * A Tool's arguments are stored as JSON Schema. Passing them to the provider as
+ * the Tool's own parameter schema is what makes the model see them — and it is
+ * paid for once. The previous shape sent `z.record(...)` as the schema and
+ * repeated the full JSON Schema inside the description, so every request
+ * carried the checkout schemas twice: ~13.5k tokens of Tool manifest for the
+ * Northstar Workspace, against ~1.2k for the whole system prompt.
+ *
+ * `z.fromJSONSchema` rejects drafts and keywords it cannot represent, so a Tool
+ * whose schema does not convert keeps the old description-carried form rather
+ * than losing its arguments.
+ */
+function toInputSchema(jsonSchema: unknown): { described: boolean; schema: z.ZodType } {
+  try {
+    const converted = z.fromJSONSchema(jsonSchema as never);
+    return { described: true, schema: converted as z.ZodType };
+  } catch {
+    return { described: false, schema: z.record(z.string(), z.unknown()) };
+  }
 }

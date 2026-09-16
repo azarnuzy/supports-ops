@@ -181,6 +181,9 @@ export async function resolveTools(aiAgentId: string) {
       httpConfig: { select: { toolId: true } },
       mcpTool: { include: { mcpServer: { select: { enabled: true } } } },
     },
+    // Stable order, because the rendered Tool manifest is the cached prompt
+    // prefix: reordering it costs the whole cache on the next turn.
+    orderBy: { id: "asc" },
     where: { assignments: { some: { aiAgentId } }, enabled: true },
   });
   const assignedTools = tools.filter(isAvailable).map(({ assignments, ...tool }) => ({
