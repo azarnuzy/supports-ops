@@ -110,6 +110,18 @@ membaca `judge`-nya lewat Lens/Langfuse, dan menutup #181 dengan angka
 before/after serta identitas Case yang sebenarnya sebelum status di baris
 antrean bisa naik dari "Selesai, belum terukur" ke "Selesai".
 
+**Perubahan nomor 10, terukur oleh #180.** `pnpm eval:ai-agent decision`
+terhadap kode nomor 10 saja (tanpa perubahan #180 di bawah) lulus 3 dari 3
+percobaan untuk `escalation-two-completed-charges`, tapi `common-return-window`
+gagal saat dijalankan sendiri (`REPLY`, bukan `ESCALATE`) — aturan konflik
+di nomor 10 bergantung pada `searchKnowledge` benar-benar mengembalikan nilai
+14-hari yang bertentangan, dan pencarian vektor untuk pertanyaan ini tidak
+selalu membawanya (lihat nomor 11).
+
+| # | Perubahan | Alasan | Efek yang diharapkan | Status |
+| --- | --- | --- | --- | --- |
+| 11 | `tool-unknown-order` diperbaiki: `replyPrompt` menyuruh model memanggil Tool dengan identifier Customer apa adanya walau formatnya tidak cocok skema, bukan meminta Customer memformat ulang lebih dulu. `executeBuiltInTool` (`apps/api/src/modules/tools/services.ts`) menambahkan `sourceTitle` per Chunk `searchKnowledge` agar model bisa mengenali Source legacy/superseded yang bertentangan dengan Source current pada fakta yang sama, tanpa bergantung pada kedua nilai persis ikut terambil ([#180](https://github.com/azarnuzy/supports-ops/issues/180)) | `tool-unknown-order` gagal bukan karena regresi schema ketat — model melihat skema `id` Shopify GID lalu bertanya ke Customer alih-alih mencoba Tool. `common-return-window` gagal karena celah recall retrieval (lihat catatan nomor 10 di atas), bukan celah keputusan — menyetel parameter `searchChunks` di luar cakupan #180 (ditunda ke #187) | `pnpm eval:ai-agent tool` 7/7 (sebelumnya 6/7). `pnpm eval:ai-agent decision` 14/14 (sebelumnya 12/14), diverifikasi ulang pada beberapa proses terpisah karena non-determinisme eval. Suite penuh tidak ada yang regresi dari B1; `gEval` membaik 16/23 → 18/23 | Selesai, terukur |
+
 ## Baseline B1 (diukur 2026-09-16, setelah sembilan perubahan di atas)
 
 Sembilan suite dijalankan ulang di Workspace eval yang sama, pada commit
@@ -175,7 +187,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Selesai |
 | [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Ditutup — premis issue keliru, tidak ada perubahan kode ([detail](research/ai-agent-cost-and-latency.md#72-fix-what-b0-says-is-broken-before-optimising-further--178-179-180-181)) |
 | [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Selesai, belum terukur — penyebab diputuskan (celah prompt-grounding, Knowledge sudah lengkap), lihat riset §6.10 |
-| [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Menunggu |
+| [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Selesai |
 | [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Selesai, belum terukur |
 | [#182](https://github.com/azarnuzy/supports-ops/issues/182) | Nilai mutu retrieval dengan label passage yang diharapkan | — | Selesai, belum terukur |
 | [#183](https://github.com/azarnuzy/supports-ops/issues/183) | Pilih nilai reasoning effort dan batas token output | #177 | Menunggu |
