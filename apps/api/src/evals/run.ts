@@ -19,6 +19,9 @@ import {
   normalizeText,
   negativeControl,
   neverLeaksInternal,
+  retrievalFirstRelevantRank,
+  retrievalPrecision,
+  retrievalRecall,
   toolUsage,
 } from "./metrics";
 import { runEvalTurn, teardownEvalTicket, type EvalTurnInput, type EvalTurnOutput } from "./target";
@@ -140,6 +143,12 @@ const suites: Array<{ key: string; metric: MetricName; metrics: AnyEvalMetric[];
     metric: "language",
     metrics: [languageMatches()],
     name: "northstar-language",
+  },
+  {
+    key: "retrieval",
+    metric: "retrieval",
+    metrics: [retrievalRecall(), retrievalPrecision(), retrievalFirstRelevantRank()],
+    name: "northstar-retrieval",
   },
   {
     key: "negativecontrol",
