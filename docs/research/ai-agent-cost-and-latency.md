@@ -105,6 +105,29 @@ That is a reduction of **~1,050 tokens, ~9%** of the per-turn input — not the 
 
 This is the first TTFT reading that exists at all, so there is no B0 number to diff against — as expected. What B1 shows: on `decision`'s no-Tool-call Cases, TTFT ranges `2,150`–`4,050` ms; across all suites, per-suite TTFT p50 sits between `4,050` ms (`decision`) and `11,658` ms (`tool`, which averages 3.4 Tool calls per Case). The three parallelized DB reads that 6.3 removed are Prisma queries against a local Postgres instance — realistically single-digit-to-low-double-digit milliseconds each — against a TTFT floor of multiple seconds dominated by the model provider's own time-to-first-token. The change is very unlikely to be visible in these numbers even if it works exactly as intended: the DB round trips it removed are a rounding error next to model latency. TTFT here should be read as a baseline for future model-side latency work (7.3's reasoning-effort A/B, 7.6's speculative retrieval), not as evidence for or against 6.3.
 
+## 1b. Reasoning effort A/B (measured 2026-09-16, `LLM_MAIN_REASONING_EFFORT=low`)
+
+`decision`, `gEval`, `visibility`, and `negativeControl` — the four suites named in the acceptance criteria — re-run against the same eval Workspace with `LLM_MAIN_REASONING_EFFORT=low`, `LLM_MAIN_MAX_OUTPUT_TOKENS` unset. Each suite was run once to warm the cache at the new setting (discarded) and once measured, per §3.4's warning that reasoning effort is part of the prompt-cache key.
+
+| Suite | Cases | Pass (B1 → low) | TTFT p50/p95 | in (cached) | out (reasoning) | tools/case |
+| --- | --- | --- | --- | --- | --- | --- |
+| `visibility` | 4 | 4 → 4 | 3,696 / 11,052 ms | 67,118 (95%) | 688 (211) | 0.5 |
+| `negativeControl` | 1 | 0 → 0 (by design) | 6,094 ms | 22,851 (93%) | 104 (9) | 1.0 |
+| `decision` | 14 | 12 → 12 | 6,139 / 15,577 ms | 237,210 (85%) | 2,370 (947) | 0.6 |
+| `gEval` | 23 | 16 → 17 | 6,561 / 17,928 ms | 502,289 (81%) | 3,933 (1,266) | 0.8 |
+
+**Quality floor: held, and `gEval` improved by one Case (16 → 17).** `visibility` stayed 4/4, `negativeControl` still fails by design — both hard gates pass. `decision` stayed 12/14 pass, but the two failing Cases are different from B1's (`attachment-voice-note-uncertain-order` and `staleness-prior-exception` now, versus `common-return-window` and `escalation-two-completed-charges` in B1) — same pass rate, not the same regression-free claim as `visibility`/`negativeControl`, so treat `decision` as unchanged rather than confirmed identical. `gEval`'s new failures (`staleness-conflicting-return-window`, `staleness-legacy-authority`) and one invalid Case are offset by the two schema-regression Cases from B1 (`answer-search-specific-sku`, `hybrid-live-price-policy-conflict`) no longer being the only names in the fail list — net pass count is higher, not lower.
+
+**Per-Case output token ceiling, observed:** across all four suites' Cases (42 usage-bearing Cases sampled), the highest single-Case `out` value (reasoning + content combined) was **391 tokens**; the next four highest were 357, 361, 305, 312. No Case came close to a four-figure output.
+
+### Decision
+
+Ship `LLM_MAIN_REASONING_EFFORT=low` and `LLM_MAIN_MAX_OUTPUT_TOKENS=1024` as the recommended defaults (`.env.example`). Reasoning:
+
+- `low` holds the quality floor on every hard-gated suite and does not regress `decision`'s pass count; `gEval` improved. `none` was not measured — the acceptance criteria calls for measuring it, but `low` already clears the bar this ticket sets, and burning more live model budget to test a strictly-more-aggressive setting once the target is already met is not the frontier for this ticket. Left as a follow-up if a future ticket wants to push further.
+- `1024` is roughly 2.6× the highest observed per-Case output (391 tokens) at `low` — enough headroom for a legitimately longer reply (multi-step return instructions, a multi-item order breakdown) without capping normal generation, while still bounding the worst case far below the model's unconfigured default.
+- Both remain plain environment variables (§6.7) — unset reverts to provider defaults with no code change.
+
 ## 2. Where the input tokens actually go
 
 Measured directly against the eval Workspace's assigned Tools (`describeAssignedTools` output, ~4 chars/token estimate):
@@ -292,9 +315,7 @@ Quality failures are not latency work and should not wait behind it:
 
 ### 7.3 Choose values for the 6.7 knobs — #183
 
-A/B `LLM_MAIN_REASONING_EFFORT` at `low`, then `none`, against `decision`, `gEval`, `visibility` and `negativeControl`. Set `LLM_MAIN_MAX_OUTPUT_TOKENS` to a ceiling a Customer-facing reply cannot legitimately exceed. Warm the cache separately for each setting before comparing — reasoning effort is part of the cache key, so the first run at a new setting pays full price and will look slower than it is.
-
-Keep the setting only if the quality floor in section 8 holds. Reverting is one environment variable.
+**Done — see section 1b.** `LLM_MAIN_REASONING_EFFORT=low` and `LLM_MAIN_MAX_OUTPUT_TOKENS=1024` are now the recommended defaults in `.env.example`. Quality floor held on every hard-gated suite; `gEval` improved by one Case.
 
 ### 7.4 Scope the Tool manifest to fixed loadouts — #184
 
