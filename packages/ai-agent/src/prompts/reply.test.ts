@@ -24,7 +24,11 @@ describe("replyPrompt", () => {
   it("escalates instead of picking a side on conflicting Knowledge or duplicate settled charges", () => {
     const prompt = replyPrompt({ attachments: "None.", clarificationCount: 0 });
 
-    expect(prompt).toContain("do not pick one value, average them, or present both as equally valid");
-    expect(prompt).toContain("ESCALATE for payment review even if the Customer explicitly asks you to fix it");
+    expect(prompt).toContain(
+      "do not pick one value, average them, or present both as equally valid",
+    );
+    expect(prompt).toContain(
+      "ESCALATE for payment review even if the Customer explicitly asks you to fix it",
+    );
   });
 });
