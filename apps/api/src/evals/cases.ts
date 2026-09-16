@@ -34,8 +34,15 @@ export type MetricName =
   | "language"
   | "negativeControl"
   | "relevancy"
+  | "retrieval"
   | "tool"
   | "visibility";
+
+/** A gold-passage label: the Knowledge Source it lives in (matched against the
+ * Source's own `title`) and a distinctive text fragment, resolved to actual
+ * Chunk IDs at run time. See `retrieval.ts` — never a raw Chunk ID here, those
+ * are position-based and repoint silently when a Source is re-chunked. */
+export type ExpectedPassage = { source: string; fragment: string };
 
 export type AgentEvalCase = EvalCase<EvalTurnInput, string> & {
   metadata: {
@@ -50,6 +57,8 @@ export type AgentEvalCase = EvalCase<EvalTurnInput, string> & {
     toolMustNotBeCalled?: boolean;
     /** `visibility` cases: Internal-Only phrases that must never reach a Customer. */
     canaries?: string[];
+    /** `retrieval` cases: the passages retrieval must fetch for the answer to be possible. */
+    expectedPassages?: ExpectedPassage[];
   };
 };
 
@@ -685,6 +694,161 @@ export const cases: AgentEvalCase[] = [
     expected:
       "Explain that the product still cannot be identified reliably after the clarification attempts and that the Ticket is being passed to a Human Agent. Do not ask a third clarification question, expose an internal reason code, or promise a response time.",
     metadata: { category: "escalation", metric: "gEval" },
+  },
+
+  // -------------------------------------------------------------- retrieval
+  // A focused subset (10 of 23 Cases), not a re-grading of every Case: each
+  // pairs an existing retrieval-heavy input with the Knowledge passage(s) that
+  // make its answer possible, spanning the three Knowledge Sources actually in
+  // play (02 Shipping, 03 Returns, 05 Sizing). See docs/research/ai-agent-cost-
+  // and-latency.md §7.7 — this is the signal #187's retrieval tuning is
+  // blocked on.
+  {
+    id: "retrieval-processing-time",
+    input: { message: "How long does it take before my order actually ships?" },
+    expected: "Standard processing target is 1-2 business days for in-stock items.",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        {
+          fragment: "Standard processing target is 1-2 business days for in-stock items",
+          source: "02_Shipping_Delivery_and_Order_Tracking_Guide",
+        },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-order-cutoff",
+    input: { message: "What is the daily order cutoff time for same-day processing?" },
+    expected: "Orders placed before 13:00 Singapore Time on business days.",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        {
+          fragment: "Orders placed before 13:00 Singapore Time on business days",
+          source: "02_Shipping_Delivery_and_Order_Tracking_Guide",
+        },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-split-shipment",
+    input: { message: "Only part of my order arrived. Was the rest cancelled?" },
+    expected: "A partial shipment does not automatically mean the remaining item was cancelled.",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        {
+          fragment: "A partial shipment does not automatically mean the remaining item was cancelled",
+          source: "02_Shipping_Delivery_and_Order_Tracking_Guide",
+        },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-no-first-scan",
+    input: { message: "My tracking has said 'label created' for three business days now." },
+    expected:
+      "If no movement persists beyond two business days after fulfillment, Support should verify handoff status.",
+    metadata: {
+      category: "edge",
+      expectedPassages: [
+        {
+          fragment: "If no movement persists beyond two business days after fulfillment",
+          source: "02_Shipping_Delivery_and_Order_Tracking_Guide",
+        },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-refund-posting",
+    input: { message: "Once my refund is approved, how long until the money is back?" },
+    expected: "A typical customer-facing expectation is 5-10 business days after refund processing.",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        {
+          fragment: "A typical customer-facing expectation is 5-10 business days after refund processing",
+          source: "03_Returns_Exchanges_and_Refund_Policy",
+        },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-return-shipping-cost",
+    input: { message: "If I just changed my mind, who pays for the return shipping?" },
+    expected: "Customer is normally responsible unless a promotion explicitly provides free returns.",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        {
+          fragment: "Customer is normally responsible unless a promotion explicitly provides free returns",
+          source: "03_Returns_Exchanges_and_Refund_Policy",
+        },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-original-shipping-refund",
+    input: { message: "When I return something, do I get the original shipping fee back too?" },
+    expected: "Original outbound shipping is generally non-refundable for change-of-mind returns.",
+    metadata: {
+      category: "edge",
+      expectedPassages: [
+        {
+          fragment: "Original outbound shipping is generally non-refundable for change-of-mind returns",
+          source: "03_Returns_Exchanges_and_Refund_Policy",
+        },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-eu42-foot-length",
+    input: {
+      message: "Reply with only the approximate foot length in cm for EU size 42, nothing else.",
+    },
+    expected: "26.7 cm",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        { fragment: "26.7", source: "05_Sizing_Fit_Materials_and_Product_Care_Guide" },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-size-s-chest",
+    input: { message: "What chest measurement does size S cover?" },
+    expected: "90-95 cm",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        { fragment: "90-95", source: "05_Sizing_Fit_Materials_and_Product_Care_Guide" },
+      ],
+      metric: "retrieval",
+    },
+  },
+  {
+    id: "retrieval-measure-feet",
+    input: { message: "How should I measure my feet before buying shoes?" },
+    expected: "Measure near the end of the day when feet are naturally slightly expanded.",
+    metadata: {
+      category: "common",
+      expectedPassages: [
+        {
+          fragment: "Measure near the end of the day when feet are naturally slightly expanded",
+          source: "05_Sizing_Fit_Materials_and_Product_Care_Guide",
+        },
+      ],
+      metric: "retrieval",
+    },
   },
 
   // ------------------------------------------------------- negative control
