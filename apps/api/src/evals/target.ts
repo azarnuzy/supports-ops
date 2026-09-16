@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Usage } from "@anvia/core";
 import {
   createReplyModel,
   runAiAgentTurn,
@@ -27,9 +28,16 @@ import { resolveTools } from "../modules/tools/services";
  */
 
 export type EvalToolCall = {
+  durationMs: number;
   failed: boolean;
   name: string;
   result: string;
+};
+
+type EvalTrace = {
+  observer: string;
+  observationId?: string;
+  traceId: string;
 };
 
 export type EvalTurnOutput = {
@@ -42,10 +50,27 @@ export type EvalTurnOutput = {
    * retrieved them. Fed to `faithfulness` as the retrieval context, so the
    * metric judges the answer against what retrieval really returned. */
   retrieved: string[];
+  /** Provider-reported usage lets the eval runner aggregate target tokens. */
+  usage?: Usage;
+  /** Correlates the evaluation result with the Agent trace in Lens/Langfuse. */
+  trace?: EvalTrace;
+  durationMs: number;
+  /** Time to the first streamed delta. The reply streams, so this — not
+   * `durationMs` — is the latency a Customer perceives. */
+  ttftMs?: number;
+  /** Time to the first character of Customer-visible `content`. The reply is a
+   * structured output, so the first deltas are JSON envelope, not text: this is
+   * the point the Widget can render something. */
+  ttfcMs?: number;
   toolCalls: EvalToolCall[];
 };
 
 export type EvalTurnInput = {
+  /** OCR/transcription output from Customer Attachments. The production AI
+   * Agent receives this extracted content, not the original file bytes. */
+  attachments?: Array<{ content: string; id: string }>;
+  /** Number of earlier clarification questions already asked in this Ticket. */
+  clarificationCount?: number;
   /** Prior turns, oldest first, when a case needs conversation history — a
    * Customer confirming a proposal, or a "thanks" that follows an answer. */
   history?: Array<{ content: string; role: "assistant" | "user" }>;
@@ -168,6 +193,7 @@ export async function teardownEvalTicket(): Promise<void> {
 /** Runs one Customer Message through the configured AI Agent and reports what
  * it did, without persisting the outcome to the Ticket. */
 export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput> {
+  const startedAt = performance.now();
   const ticket = await setupEvalTicket();
   const modelConfig =
     aiAgentConfig.apiKey && embeddingConfig.apiKey
@@ -182,9 +208,13 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
   let text = "";
   let decision: EvalTurnOutput["decision"] = "REPLY";
   let escalationReason: EscalationReason | null = null;
-  let resolutionMessage: string | null = null;
   const retrieved: string[] = [];
   const toolCalls: EvalToolCall[] = [];
+  let trace: EvalTrace | undefined;
+  let usage: Usage | undefined;
+  let ttftMs: number | undefined;
+  let ttfcMs: number | undefined;
+  let streamBuffer = "";
   const memory: AgentMessage[] = (input.history ?? []).map((turn) => ({
     content: turn.content,
     role: turn.role,
@@ -192,14 +222,14 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
 
   await withWorkspaceContext(ticket.workspaceId, async () => {
     const runtime: AiAgentTurnRuntime = {
-      countClarifications: async () => 0,
-      escalate: async (reason) => {
+      countClarifications: async () => input.clarificationCount ?? 0,
+      escalate: async (reason, content) => {
         decision = "ESCALATE";
         escalationReason = reason;
         // An escalation is not a silent turn: production sends the Customer an
         // acknowledgement. Reporting it keeps the graded text equal to what a
         // Customer would actually read.
-        text = acknowledgementFor(input.message);
+        text = content?.trim() || acknowledgementFor(input.message, reason);
       },
       finish: async () => {},
       isActive: () => true,
@@ -209,25 +239,31 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
           select: { aiAgent: { select: { instructions: true, resolutionMessage: true } } },
           where: { id: ticket.ticketId },
         });
-        resolutionMessage = loaded.aiAgent.resolutionMessage;
         return {
           instructions: loaded.aiAgent.instructions ?? undefined,
+          resolutionMessage: loaded.aiAgent.resolutionMessage ?? undefined,
           sessionId: ticket.sessionId,
           userId: ticket.customerIdentityId,
         };
       },
-      publishDelta: () => {},
+      publishDelta: (delta) => {
+        ttftMs ??= performance.now() - startedAt;
+        if (ttfcMs === undefined) {
+          streamBuffer += delta;
+          if (/"content"\s*:\s*"./.test(streamBuffer)) ttfcMs = performance.now() - startedAt;
+        }
+      },
       reply: async (replyDecision, content) => {
         decision = replyDecision;
         text = content;
       },
-      resolve: async () => {
+      resolve: async (content) => {
         decision = "RESOLVE";
-        text = resolutionMessage ?? "This conversation has been resolved.";
+        text = content;
       },
       // Ticket Attachments only; Knowledge is retrieved agentically via the
       // searchKnowledge Tool, exactly as it is in production.
-      retrieve: async () => ({ attachments: [] }),
+      retrieve: async () => ({ attachments: input.attachments ?? [] }),
       saveMemory: async () => {},
       start: async () => {},
       tools: async () => {
@@ -250,16 +286,27 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
         return {
           descriptors: describeAssignedTools(assigned),
           execute: async ({ input: toolInput, toolId }) => {
+            const toolStartedAt = performance.now();
             const tool = assigned.find((item) => item.id === toolId);
             const name = tool?.name ?? toolId;
             try {
               const result = await execute({ input: toolInput, toolId });
-              toolCalls.push({ failed: false, name, result });
+              toolCalls.push({
+                durationMs: performance.now() - toolStartedAt,
+                failed: false,
+                name,
+                result: preview(result),
+              });
               if (tool?.name === "searchKnowledge") retrieved.push(...knowledgePassages(result));
               return result;
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error);
-              toolCalls.push({ failed: true, name, result: message });
+              toolCalls.push({
+                durationMs: performance.now() - toolStartedAt,
+                failed: true,
+                name,
+                result: preview(message),
+              });
               throw error;
             }
           },
@@ -270,13 +317,38 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
     await runAiAgentTurn({
       customerMessage: input.message,
       modelConfig,
+      onResult: (result) => {
+        usage = result.usage;
+        if (result.trace?.traceId) {
+          trace = {
+            observer: result.trace.observer,
+            traceId: result.trace.traceId,
+            ...(result.trace.observationId ? { observationId: result.trace.observationId } : {}),
+          };
+        }
+      },
       runtime,
       ticketId: ticket.ticketId,
       workspaceId: ticket.workspaceId,
     });
   });
 
-  return { decision, escalationReason, output: text, retrieved, toolCalls };
+  return {
+    decision,
+    durationMs: performance.now() - startedAt,
+    escalationReason,
+    output: text,
+    retrieved,
+    toolCalls,
+    ...(ttftMs === undefined ? {} : { ttftMs }),
+    ...(ttfcMs === undefined ? {} : { ttfcMs }),
+    ...(trace ? { trace } : {}),
+    ...(usage ? { usage } : {}),
+  };
+}
+
+function preview(value: string): string {
+  return value.length <= 2_000 ? value : `${value.slice(0, 2_000)}\n[truncated]`;
 }
 
 /** `searchKnowledge` returns JSON-encoded chunk rows; faithfulness needs their

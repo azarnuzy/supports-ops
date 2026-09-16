@@ -11,7 +11,7 @@ import {
 import { createOtelEvalReporter } from "@anvia/otel";
 import { createReplyModel } from "@repo/ai-agent";
 import { shutdownTelemetry, startTelemetry } from "@repo/logger/telemetry";
-import { aiAgentConfig, evalConfig, telemetryConfig } from "../config";
+import { aiAgentConfig, embeddingConfig, evalConfig, telemetryConfig } from "../config";
 import { cases, type MetricName } from "./cases";
 import {
   decisionMatches,
@@ -88,7 +88,17 @@ const suites: Array<{ key: string; metric: MetricName; metrics: AnyEvalMetric[];
     metrics: [
       faithfulness<EvalTurnInput, EvalTurnOutput, string>({
         ...judge,
-        retrievalContext: ({ output }) => output.retrieved,
+        // A turn that legitimately retrieves nothing — a CLARIFY that asks for
+        // an order number — used to report `invalid`, which reads as a broken
+        // metric rather than as correct behaviour. Stating the absence keeps
+        // the case gradable: a reply that asserts a company fact with no
+        // Knowledge behind it is exactly what should fail here.
+        retrievalContext: ({ output }) =>
+          output.retrieved.length
+            ? output.retrieved
+            : [
+                "No Knowledge was retrieved for this turn. Any company, product, policy, order, or billing fact stated in the answer is therefore unsupported.",
+              ],
       }),
     ],
     name: "northstar-faithfulness",
@@ -186,17 +196,28 @@ async function main() {
     // that is not a turn input straight through — unwrapping blindly turns a
     // case's `expected` string into undefined and Lens shows "No data
     // captured" for it.
-    transformInput: (value) =>
-      typeof value === "object" && value !== null && "message" in value
-        ? (value as EvalTurnInput).message
-        : value,
+    transformInput: (value) => {
+      if (typeof value !== "object" || value === null || !("message" in value)) return value;
+      const input = value as EvalTurnInput;
+      return input.attachments?.length || input.history?.length || input.clarificationCount
+        ? input
+        : input.message;
+    },
     transformOutput: (value) => {
       const output = value as EvalTurnOutput;
       return {
         reply: output.output,
         decision: output.decision,
         ...(output.escalationReason ? { escalationReason: output.escalationReason } : {}),
-        toolCalls: output.toolCalls.map((call) => `${call.name}${call.failed ? " (failed)" : ""}`),
+        durationMs: Math.round(output.durationMs),
+        ...(output.ttftMs === undefined ? {} : { ttftMs: Math.round(output.ttftMs) }),
+        ...(output.ttfcMs === undefined ? {} : { ttfcMs: Math.round(output.ttfcMs) }),
+        usage: output.usage,
+        toolCalls: output.toolCalls.map((call) => ({
+          durationMs: Math.round(call.durationMs),
+          name: call.name,
+          status: call.failed ? "failed" : "succeeded",
+        })),
         retrievedChunks: output.retrieved.length,
       };
     },
@@ -221,15 +242,49 @@ async function main() {
         // agent memory between cases.
         concurrency: 1,
         metrics: suite.metrics as never,
+        maxValueLength: 4_000,
         name: suite.name,
         reporters: [reporter],
-        target: (input) => runEvalTurn(input),
+        run: {
+          datasetName: "northstar-ai-agent",
+          metadata: {
+            category: categoryFilter ?? "all",
+            embeddingModel: embeddingConfig.modelId,
+            judgeModel: evalConfig.judgeModelId,
+            metric: suite.metric,
+            targetModel: aiAgentConfig.modelId,
+            workspaceId: evalConfig.workspaceId ?? "unknown",
+          },
+        },
+        target: async (input) => {
+          const output = await runEvalTurn(input);
+          process.stdout.write(`${costLine(output)}\n`);
+          return output;
+        },
       });
     }
   } finally {
     await teardownEvalTicket();
     await shutdownTelemetry();
   }
+}
+
+/** The Case payload the reporter prints is dominated by `retrieved` and is
+ * truncated before `usage` and `toolCalls`, so the numbers a cost or latency
+ * question needs are exactly the ones that get cut. One compact line per Case,
+ * printed as the turn finishes, is what makes a run readable without re-running
+ * it. See `docs/research/ai-agent-cost-and-latency.md`. */
+function costLine(output: EvalTurnOutput): string {
+  const ms = (value: number | undefined) => (value === undefined ? "-" : `${Math.round(value)}ms`);
+  const usage = output.usage;
+  const tokens = usage
+    ? `in ${usage.inputTokens} (cached ${usage.cachedInputTokens}) out ${usage.outputTokens}` +
+      ` (reasoning ${usage.details?.output_reasoning_tokens ?? 0})`
+    : "usage unavailable";
+  return (
+    `  cost: ttft ${ms(output.ttftMs)} / content ${ms(output.ttfcMs)} / total ${ms(output.durationMs)}` +
+    ` | ${tokens} | tools ${output.toolCalls.length} | chunks ${output.retrieved.length}`
+  );
 }
 
 main().catch((error) => {

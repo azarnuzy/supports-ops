@@ -1,0 +1,10 @@
+NORTHSTAR OUTFITTERS
+
+INVOICE
+
+Order: NS-10482
+Item: Nike Air Jordan 1 Red And Black
+SKU: MEN-NIK-NIK-088
+Total paid: $149.99
+
+Demo fixture only. Not a real invoice.
