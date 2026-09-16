@@ -33,7 +33,7 @@ createRoot(rootElement).render(
     <ThemeProvider storageKey="platform:theme">
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
-        <Toaster richColors />
+        <Toaster closeButton richColors />
       </QueryClientProvider>
     </ThemeProvider>
   </StrictMode>,

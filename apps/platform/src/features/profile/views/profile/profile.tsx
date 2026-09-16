@@ -10,6 +10,8 @@ import {
 } from "@repo/ui/components/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
+import { toast } from "@repo/ui/components/sonner";
+import { CopyIcon } from "lucide-react";
 import { PlatformAppShell } from "../../../app-shell";
 import { getInitials } from "../../../../lib/utils";
 import { useProfileForm } from "./profile.hooks";
@@ -31,6 +33,15 @@ const ProfileView = () => {
 
   if (!currentUser) {
     return null;
+  }
+
+  async function copyWorkspaceId() {
+    try {
+      await navigator.clipboard.writeText(currentUser.workspaceId);
+      toast.success("Workspace ID copied.");
+    } catch {
+      toast.error("Could not copy the Workspace ID.");
+    }
   }
 
   return (
@@ -113,6 +124,21 @@ const ProfileView = () => {
                 <p className="text-lg font-semibold">{name || currentUser.name}</p>
                 <p className="text-sm text-muted-foreground">{currentUser.email}</p>
               </div>
+            </CardContent>
+            <CardContent className="grid gap-2 border-t pt-5">
+              <p className="text-sm font-medium">Workspace ID</p>
+              <p className="text-xs text-muted-foreground">
+                Use this value as EVAL_WORKSPACE_ID when running evaluations.
+              </p>
+              <Button
+                className="h-auto w-full justify-between font-mono text-xs break-all"
+                type="button"
+                variant="outline"
+                onClick={() => void copyWorkspaceId()}
+              >
+                {currentUser.workspaceId}
+                <CopyIcon className="size-3.5 shrink-0" />
+              </Button>
             </CardContent>
           </Card>
         </div>
