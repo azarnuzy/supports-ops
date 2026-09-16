@@ -150,7 +150,7 @@ Dua belas issue, semuanya berlabel `ready-for-agent`, dengan relasi
 | --- | --- | --- | --- |
 | [#176](https://github.com/azarnuzy/supports-ops/issues/176) | Ringkasan p50/p95 latensi dan token per suite | — | Selesai |
 | [#177](https://github.com/azarnuzy/supports-ops/issues/177) | Catat baseline B1 setelah tujuh perubahan di atas | #176 | Selesai |
-| [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Menunggu |
+| [#178](https://github.com/azarnuzy/supports-ops/issues/178) | Luluskan Case negative control | #177 | Ditutup — premis issue keliru, tidak ada perubahan kode ([detail](research/ai-agent-cost-and-latency.md#72-fix-what-b0-says-is-broken-before-optimising-further--178-179-180-181)) |
 | [#179](https://github.com/azarnuzy/supports-ops/issues/179) | Grounding Case no-first-scan terhadap Knowledge yang diambil | #177 | Menunggu |
 | [#180](https://github.com/azarnuzy/supports-ops/issues/180) | Perbaiki kegagalan pemilihan Tool dan keputusan | #177 | Menunggu |
 | [#181](https://github.com/azarnuzy/supports-ops/issues/181) | Perbaiki kegagalan mutu jawaban | #177 | Menunggu |
