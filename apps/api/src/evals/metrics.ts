@@ -176,7 +176,9 @@ export function languageMatches(): Metric<string> {
  */
 async function loadRetrievalCase(testCase: {
   metadata?: unknown;
-}): Promise<{ relevant: Awaited<ReturnType<typeof resolveExpectedPassages>> } | EvalOutcome<never>> {
+}): Promise<
+  { relevant: Awaited<ReturnType<typeof resolveExpectedPassages>> } | EvalOutcome<never>
+> {
   const expectedPassages = metadataOf(testCase).expectedPassages;
   if (!expectedPassages?.length) {
     return EvalOutcome.invalid("case metadata is missing `expectedPassages`", {

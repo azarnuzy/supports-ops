@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { firstRelevantRank, precisionAtK, recallAtK, type ResolvedExpectedPassage } from "./retrieval";
+import {
+  firstRelevantRank,
+  precisionAtK,
+  recallAtK,
+  type ResolvedExpectedPassage,
+} from "./retrieval";
 
 const resolved: ResolvedExpectedPassage[] = [
   { chunkIds: ["gold-1", "gold-1-neighbor"], fragment: "1-2 business days", source: "02" },
