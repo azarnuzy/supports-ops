@@ -100,7 +100,6 @@ export default function ToolSheet({
   const [copied, setCopied] = useState(false);
   const [usage, setUsage] = useState<string | null>(null);
   const editable = !tool || tool.origin === "HTTP";
-  const hasUsage = Boolean(tool && onSaveUsage);
 
   function toggleJsonMode() {
     if (jsonDraft === null) {
@@ -463,7 +462,6 @@ export default function ToolSheet({
           {logsPanel}
         </TabsContent>
       ) : null}
-
     </Tabs>
   );
 
