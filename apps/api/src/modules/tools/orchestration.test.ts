@@ -266,7 +266,32 @@ describe("createAssignedToolExecutor", () => {
     );
   });
 
-  it("rejects a BUILT_IN Tool call with no query, without embedding an empty string", async () => {
+  it("falls back to the Customer's message when a BUILT_IN Tool call omits the query", async () => {
+    const builtInTool = makeTool({
+      id: "builtin:searchKnowledge",
+      name: "searchKnowledge",
+      origin: "BUILT_IN",
+      risk: "READ_ONLY",
+    });
+    mocks.embed.mockResolvedValue([[0.4, 0.5]]);
+    mocks.executeBuiltInTool.mockResolvedValue([{ chunkId: "chunk-1" }]);
+    const executor = createAssignedToolExecutor({
+      aiAgentId: "agent-1",
+      customerMessage: "Please add one pair to my cart.",
+      getPriorAiMessage: noPriorAiMessage,
+      model: fakeModel,
+      ticketId: "t1",
+      tools: [builtInTool],
+      workspaceId: "w1",
+    });
+
+    await expect(executor({ input: {}, toolId: builtInTool.id })).resolves.toBe(
+      '[{"chunkId":"chunk-1"}]',
+    );
+    expect(mocks.embed).toHaveBeenCalledWith(["Please add one pair to my cart."]);
+  });
+
+  it("rejects a BUILT_IN Tool call with no query and no Customer message to fall back to", async () => {
     const builtInTool = makeTool({
       id: "builtin:searchKnowledge",
       name: "searchKnowledge",
@@ -275,7 +300,7 @@ describe("createAssignedToolExecutor", () => {
     });
     const executor = createAssignedToolExecutor({
       aiAgentId: "agent-1",
-      customerMessage: "Please add one pair to my cart.",
+      customerMessage: "",
       getPriorAiMessage: noPriorAiMessage,
       model: fakeModel,
       ticketId: "t1",

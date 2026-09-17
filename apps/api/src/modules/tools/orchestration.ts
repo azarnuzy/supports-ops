@@ -112,8 +112,14 @@ async function dispatchTool(params: {
     }
   }
   if (tool.origin === "BUILT_IN") {
-    const query = (params.input as { query?: unknown } | null)?.query;
-    if (typeof query !== "string" || !query.trim()) {
+    const rawQuery = (params.input as { query?: unknown } | null)?.query;
+    // Not every model reliably fills a required Tool argument (observed with
+    // some OpenRouter-routed models skipping `query` on this Tool while
+    // filling other Tools' arguments correctly in the same turn) — falling
+    // back to the Customer's own message keeps the Tool useful regardless.
+    const query =
+      typeof rawQuery === "string" && rawQuery.trim() ? rawQuery : params.customerMessage;
+    if (!query?.trim()) {
       throw new Error("This Tool requires a non-empty query.");
     }
     if (!embeddingConfig.apiKey) throw new Error("Embedding client is not configured.");
