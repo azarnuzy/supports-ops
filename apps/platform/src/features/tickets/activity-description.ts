@@ -2,14 +2,16 @@ import type { TicketActivity } from "@repo/api-client";
 import { formatEnumLabel } from "../../lib/utils";
 
 export type ActivityDescription = {
-  /** Tool arguments, pretty-printed — rendered as an expandable mono block. */
-  args?: string;
   /** Why a Tool call failed — rendered in the destructive color. */
   error?: string;
+  /** Tool input, pretty-printed — rendered as an expandable mono block. */
+  input?: string;
   /** Muted secondary line, e.g. "MCP · Read only · 230 ms". */
   meta?: string;
   /** Inline mono identifier — Tool name, category · priority. */
   mono?: string;
+  /** Tool output, pretty-printed — rendered as an expandable mono block. */
+  output?: string;
   text: string;
 };
 
@@ -18,6 +20,7 @@ type ToolCallMetadata = {
   inputJson?: unknown;
   latencyMs?: unknown;
   origin?: unknown;
+  outputJson?: unknown;
   risk?: unknown;
   tool?: unknown;
 };
@@ -46,12 +49,12 @@ function toolMeta(metadata: ToolCallMetadata) {
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
-function toolArgs(inputJson: unknown) {
-  if (typeof inputJson !== "string" || inputJson.length === 0) return undefined;
+function toolPayload(value: unknown) {
+  if (typeof value !== "string" || value.length === 0) return undefined;
   try {
-    return JSON.stringify(JSON.parse(inputJson), null, 2);
+    return JSON.stringify(JSON.parse(value), null, 2);
   } catch {
-    return inputJson;
+    return value;
   }
 }
 
@@ -75,13 +78,14 @@ export function describeActivity(activity: TicketActivity): ActivityDescription 
       const tool = metadata as ToolCallMetadata;
       const failed = activity.eventType === "TOOL_FAILED";
       return {
-        args: toolArgs(tool.inputJson),
         error:
           failed && typeof tool.error === "string" && tool.error.length > 0
             ? tool.error
             : undefined,
+        input: toolPayload(tool.inputJson),
         meta: toolMeta(tool),
         mono: String(tool.tool ?? ""),
+        output: toolPayload(tool.outputJson),
         text: failed ? "Tool failed" : "Tool called",
       };
     }
