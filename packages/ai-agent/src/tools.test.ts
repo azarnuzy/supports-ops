@@ -22,6 +22,28 @@ describe("createAssignedTools", () => {
     expect(execute).toHaveBeenCalledWith({ input: { customerId: "cust-1" }, toolId: "tool-1" });
   });
 
+  it("rejects a top-level argument the schema does not declare, without executing", async () => {
+    const execute = vi.fn().mockResolvedValue("ok");
+    const [tool] =
+      createAssignedTools(
+        [
+          {
+            ...descriptor,
+            inputSchema: {
+              properties: { catalog: { properties: { query: { type: "string" } }, type: "object" } },
+              type: "object",
+            },
+          },
+        ],
+        execute,
+      ) ?? [];
+
+    await expect(callTool(tool, { catalog: {}, query: "MEN-NIK-NIK-088" })).resolves.toMatch(
+      /unknown argument\(s\) query/,
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("denies the sixteenth call within a Customer Message (max fifteen calls)", async () => {
     const execute = vi.fn().mockResolvedValue("ok");
     const [tool] = createAssignedTools([descriptor], execute) ?? [];

@@ -1,4 +1,5 @@
 import type { EvalCase } from "@anvia/core/evals";
+import type { ExpectedPassage } from "./retrieval";
 import type { EvalTurnInput } from "./target";
 
 /**
@@ -38,12 +39,6 @@ export type MetricName =
   | "tool"
   | "visibility";
 
-/** A gold-passage label: the Knowledge Source it lives in (matched against the
- * Source's own `title`) and a distinctive text fragment, resolved to actual
- * Chunk IDs at run time. See `retrieval.ts` — never a raw Chunk ID here, those
- * are position-based and repoint silently when a Source is re-chunked. */
-export type ExpectedPassage = { source: string; fragment: string };
-
 export type AgentEvalCase = EvalCase<EvalTurnInput, string> & {
   metadata: {
     category: CaseCategory;
@@ -57,7 +52,8 @@ export type AgentEvalCase = EvalCase<EvalTurnInput, string> & {
     toolMustNotBeCalled?: boolean;
     /** `visibility` cases: Internal-Only phrases that must never reach a Customer. */
     canaries?: string[];
-    /** `retrieval` cases: the passages retrieval must fetch for the answer to be possible. */
+    /** `retrieval` cases: graded passage labels (see `ExpectedPassage` in `retrieval.ts`) —
+     * grade 2 must be fetched for the answer to be possible; grade 1 is also relevant. */
     expectedPassages?: ExpectedPassage[];
   };
 };
@@ -301,8 +297,11 @@ export const cases: AgentEvalCase[] = [
       message:
         "I want the Sports Sneakers Off White Red. I saw two similar listings—which one should I choose?",
     },
+    // The live Northstar catalog has no "Sports Sneakers Off White" listing
+    // (searched by name, SKU MEN-OFF-SPO-091/092, and with availability off),
+    // so the correct answer is not to invent the two listings.
     expected:
-      "Explain that the live catalog has two near-identical listings: Sports Sneakers Off White & Red at $119.99 with SKU MEN-OFF-SPO-091, and Sports Sneakers Off White Red at $109.99 with SKU MEN-OFF-SPO-092. Ask one focused question about which SKU or price the Customer means; do not silently choose one.",
+      "Say that no Sports Sneakers Off White Red listing was found in the live catalog, without inventing product names, SKUs, or prices, and ask one focused question for the product links or SKUs of the two listings. Do not recommend a different product in its place.",
     metadata: { category: "edge", metric: "gEval" },
   },
   {
@@ -761,6 +760,12 @@ export const cases: AgentEvalCase[] = [
           fragment: "If no movement persists beyond two business days after fulfillment",
           source: "02_Shipping_Delivery_and_Order_Tracking_Guide",
         },
+        // The Tracking table's "Label created" row also answers it.
+        {
+          fragment: "Allow normal first-scan window",
+          grade: 1,
+          source: "02_Shipping_Delivery_and_Order_Tracking_Guide",
+        },
       ],
       metric: "retrieval",
     },
@@ -824,7 +829,7 @@ export const cases: AgentEvalCase[] = [
     metadata: {
       category: "common",
       expectedPassages: [
-        { fragment: "26.7", source: "05_Sizing_Fit_Materials_and_Product_Care_Guide" },
+        { fragment: "42 | 26.7", source: "05_Sizing_Fit_Materials_and_Product_Care_Guide" },
       ],
       metric: "retrieval",
     },
@@ -836,7 +841,7 @@ export const cases: AgentEvalCase[] = [
     metadata: {
       category: "common",
       expectedPassages: [
-        { fragment: "90-95", source: "05_Sizing_Fit_Materials_and_Product_Care_Guide" },
+        { fragment: "S | 90-95", source: "05_Sizing_Fit_Materials_and_Product_Care_Guide" },
       ],
       metric: "retrieval",
     },

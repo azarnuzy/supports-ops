@@ -156,13 +156,18 @@ export async function searchChunks(
     ), deduplicated AS (
       SELECT DISTINCT ON ("id") *
       FROM expanded
-      ORDER BY "id", "anchorRank", distance
+      -- distance first: a Chunk that is both an anchor and a stronger anchor's
+      -- neighbor must keep distance 0, or it sorts behind the neighbors below.
+      ORDER BY "id", distance, "anchorRank"
     )
     SELECT "id", "knowledgeSourceId", "content", "position", "visibility",
            1 - ("embedding" <=> ${queryVector}::vector) AS similarity,
            "anchorSimilarity"
     FROM deduplicated
-    ORDER BY "anchorRank", distance, "position"
+    -- Every anchor (distance 0) before any neighbor: ranking by anchor first let
+    -- the top anchor's ±NEIGHBOR_WINDOW neighbors fill MAX_EXPANDED_RESULTS and
+    -- silently drop anchors 2 and 3.
+    ORDER BY distance, "anchorRank", "position"
     LIMIT ${MAX_EXPANDED_RESULTS}
   `;
 

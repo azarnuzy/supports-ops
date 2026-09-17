@@ -66,6 +66,10 @@ export function createAssignedTools(
           return "Tool call budget exhausted for this Customer Message. Answer with what you already have, or ESCALATE.";
         }
         calls += 1;
+        const unknown = unknownTopLevelArguments(tool.inputSchema, input);
+        if (unknown.length) {
+          return `Tool call failed: unknown argument(s) ${unknown.join(", ")} at the top level. Nest them where the Tool's parameter schema declares them and call again.`;
+        }
         try {
           return await execute({ input, toolId: tool.id });
         } catch (error) {
@@ -76,6 +80,20 @@ export function createAssignedTools(
       name: tool.name,
     });
   });
+}
+
+/**
+ * Top-level argument names the Tool's JSON Schema does not declare. The converted
+ * Zod schema accepts unknown keys, so a model that flattens a nested argument —
+ * Shopify's `search_catalog` expects `catalog.query`, not `query` — used to reach
+ * the server, which silently ignored it and returned an empty catalog. Reported
+ * back as a failed call, the model retries with the declared shape.
+ */
+function unknownTopLevelArguments(jsonSchema: unknown, input: unknown): string[] {
+  const schema = jsonSchema as { properties?: Record<string, unknown>; additionalProperties?: unknown };
+  if (!schema?.properties || schema.additionalProperties !== undefined) return [];
+  if (typeof input !== "object" || input === null) return [];
+  return Object.keys(input).filter((key) => !(key in schema.properties!));
 }
 
 /**
