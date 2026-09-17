@@ -275,7 +275,6 @@ export default function ToolSheet({
         <TabsList>
           {editable ? <TabsTrigger value="edit">Edit tool</TabsTrigger> : null}
           {tool ? <TabsTrigger value="logs">Logs</TabsTrigger> : null}
-          {hasUsage ? <TabsTrigger value="guidance">Guidance</TabsTrigger> : null}
         </TabsList>
         {editable ? (
           <Button type="button" size="sm" variant="outline" onClick={toggleJsonMode}>
@@ -465,12 +464,14 @@ export default function ToolSheet({
         </TabsContent>
       ) : null}
 
-      {hasUsage ? (
-        <TabsContent value="guidance" className="mt-4">
-          {usagePanel}
-        </TabsContent>
-      ) : null}
     </Tabs>
+  );
+
+  const bodyContent = (
+    <div className="grid gap-4">
+      {usagePanel}
+      {tabsBlock}
+    </div>
   );
 
   return (
@@ -518,7 +519,7 @@ export default function ToolSheet({
 
         {editable ? (
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmit}>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5">{tabsBlock}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">{bodyContent}</div>
             <div className="flex shrink-0 items-center justify-end gap-2 border-t p-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
@@ -529,7 +530,7 @@ export default function ToolSheet({
             </div>
           </form>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">{tabsBlock}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">{bodyContent}</div>
         )}
       </SheetContent>
     </Sheet>

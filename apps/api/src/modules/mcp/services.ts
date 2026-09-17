@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import type { Prisma } from "@prisma/client";
 import { httpToolConfig, toolEncryptionConfig } from "../../config";
 import { prisma } from "../../utils/prisma";
@@ -131,9 +132,13 @@ export async function discoverMcpTools(id: string) {
         },
       });
     } else {
+      // ponytail: Postgres JSONB round-trips reorder object keys, so comparing
+      // existing.tool.inputSchema against the freshly fetched schema via
+      // JSON.stringify flagged a "change" (and reset enabled) on every re-discovery
+      // even when nothing upstream moved. isDeepStrictEqual is order-insensitive.
       const changed =
         existing.tool.description !== description ||
-        JSON.stringify(existing.tool.inputSchema) !== JSON.stringify(discovered.inputSchema);
+        !isDeepStrictEqual(existing.tool.inputSchema, discovered.inputSchema);
       await prisma.mcpTool.update({
         data: {
           discoveredAt: new Date(),

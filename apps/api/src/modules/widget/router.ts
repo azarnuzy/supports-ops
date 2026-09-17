@@ -232,6 +232,13 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
         event: "ticket.status",
       });
       if (unsubscribe) stream.onAbort(unsubscribe);
+      // ponytail: without a periodic write, a reverse proxy's idle-connection timeout
+      // silently drops this stream while a ticket sits waiting for an agent, and any
+      // message published in between is lost since nothing is listening to replay it.
+      const keepAlive = setInterval(() => {
+        void stream.writeSSE({ data: "", event: "ping" });
+      }, 20_000);
+      stream.onAbort(() => clearInterval(keepAlive));
       await new Promise<void>(() => undefined);
     });
   })

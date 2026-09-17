@@ -90,6 +90,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   const scrollMessages = () =>
     messages?.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
   let eventSource: EventSource | undefined;
+  let reconnectAttempt = 0;
+  let reconnectTimer: number | undefined;
   const streamedContent = new Map<string, string>();
   const identityKey = `supportops:web-identity:${widgetKey}`;
 
@@ -287,6 +289,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     }, 10_000);
     source.onopen = () => {
       window.clearTimeout(connectTimeout);
+      reconnectAttempt = 0;
       if (eventSource !== source || !input) return;
       input.disabled = false;
       input.placeholder = "Type your message…";
@@ -301,6 +304,21 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
         input.disabled = false;
         input.placeholder = "Type your message…";
       }
+      // ponytail: a dropped SSE connection (proxy idle timeout, network blip) used to
+      // stay dead until the customer's own next message re-triggered connect() — any
+      // agent reply sent in between was published to no one and only surfaced via that
+      // reconnect's DB replay. Retry with capped exponential backoff + jitter so a
+      // server outage doesn't turn every open tab into a tight retry loop.
+      // Can't distinguish a 401 (dead session) from a network blip here — EventSource's
+      // error event carries no status code — so this retries even on bad tokens; harmless
+      // since the server just answers 401 again each attempt.
+      const delay = Math.min(1000 * 2 ** reconnectAttempt, 30_000) + Math.random() * 1000;
+      reconnectAttempt += 1;
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = window.setTimeout(() => {
+        if (eventSource) return;
+        connect(accessToken);
+      }, delay);
     };
     source.addEventListener("message.created", (event) => {
       const message = JSON.parse((event as MessageEvent<string>).data) as {
@@ -559,6 +577,19 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       }
       if (!input.disabled) input.focus();
       updateSendState();
+    }
+  });
+
+  // Backgrounded tabs get their SSE connection killed by the browser/OS well before
+  // the reconnect backoff would naturally retry — reconnect right away on return
+  // instead of waiting out a stale delay.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || eventSource) return;
+    const storedToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
+    if (storedToken) {
+      window.clearTimeout(reconnectTimer);
+      reconnectAttempt = 0;
+      connect(storedToken);
     }
   });
 
