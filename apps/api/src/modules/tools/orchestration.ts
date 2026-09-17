@@ -13,30 +13,34 @@ export type AssignedTool = Awaited<ReturnType<typeof resolveTools>>[number];
 /** AI Activity metadata lives in a Prisma `Json` column: cap free-form fields
  * so one oversized Tool input or failure message cannot bloat the row. */
 const MAX_METADATA_STRING = 2000;
+// ponytail: keep large outputs inline up to existing Tool response limits; use
+// object storage if operators ever need complete responses beyond 64 KB.
+const MAX_TOOL_OUTPUT_STRING = 64_000;
 
-function clippedInputJson(input: unknown) {
-  if (input === null || input === undefined) return undefined;
+function clippedJson(value: unknown, maxLength = MAX_METADATA_STRING, rawString = false) {
+  if (value === null || value === undefined) return undefined;
   try {
-    const json = JSON.stringify(input) ?? "";
-    return json.length <= MAX_METADATA_STRING ? json : `${json.slice(0, MAX_METADATA_STRING)}…`;
+    const json = rawString && typeof value === "string" ? value : (JSON.stringify(value) ?? "");
+    return json.length <= maxLength ? json : `${json.slice(0, maxLength)}…`;
   } catch {
     return undefined;
   }
 }
 
-/** One Tool call's AI Activity row. `inputJson` carries the model's serialized
- * arguments and `error` the executor's failure message, both clipped, so the
- * Activity Timeline can show what a Tool was asked and why it failed. */
+/** One Tool call's AI Activity row. Inputs, outputs, and errors are clipped so
+ * the Activity Timeline is useful without letting one Tool bloat the row. */
 async function recordToolActivity(params: {
   error?: unknown;
   input: unknown;
   latencyMs: number;
   outcome: "SUCCESS" | "FAILED";
+  output?: unknown;
   ticketId: string;
   tool: AssignedTool;
   workspaceId: string;
 }) {
-  const inputJson = clippedInputJson(params.input);
+  const inputJson = clippedJson(params.input);
+  const outputJson = clippedJson(params.output, MAX_TOOL_OUTPUT_STRING, true);
   let failureMessage: string | undefined;
   if (params.outcome === "FAILED") {
     const message =
@@ -56,6 +60,7 @@ async function recordToolActivity(params: {
     tool: params.tool.name,
     toolId: params.tool.id,
     ...(inputJson === undefined ? null : { inputJson }),
+    ...(outputJson === undefined ? null : { outputJson }),
     ...(failureMessage === undefined ? null : { error: failureMessage }),
   };
   await unscopedPrisma.aiActivity.create({
@@ -177,6 +182,7 @@ export async function executeReadOnlyAssignedTools(params: {
           input: params.input,
           latencyMs: Date.now() - startedAt,
           outcome: "SUCCESS",
+          output: result,
           ticketId: params.ticketId,
           tool,
           workspaceId: params.workspaceId,
@@ -245,6 +251,7 @@ export function createAssignedToolExecutor(params: {
         input,
         latencyMs: Date.now() - startedAt,
         outcome: "SUCCESS",
+        output: result,
         ticketId: params.ticketId,
         tool,
         workspaceId: params.workspaceId,
