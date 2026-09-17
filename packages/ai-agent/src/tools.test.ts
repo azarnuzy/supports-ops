@@ -30,7 +30,9 @@ describe("createAssignedTools", () => {
           {
             ...descriptor,
             inputSchema: {
-              properties: { catalog: { properties: { query: { type: "string" } }, type: "object" } },
+              properties: {
+                catalog: { properties: { query: { type: "string" } }, type: "object" },
+              },
               type: "object",
             },
           },

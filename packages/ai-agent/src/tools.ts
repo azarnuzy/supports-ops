@@ -90,10 +90,14 @@ export function createAssignedTools(
  * back as a failed call, the model retries with the declared shape.
  */
 function unknownTopLevelArguments(jsonSchema: unknown, input: unknown): string[] {
-  const schema = jsonSchema as { properties?: Record<string, unknown>; additionalProperties?: unknown };
-  if (!schema?.properties || schema.additionalProperties !== undefined) return [];
+  const schema = jsonSchema as {
+    properties?: Record<string, unknown>;
+    additionalProperties?: unknown;
+  };
+  const properties = schema.properties;
+  if (!properties || schema.additionalProperties !== undefined) return [];
   if (typeof input !== "object" || input === null) return [];
-  return Object.keys(input).filter((key) => !(key in schema.properties!));
+  return Object.keys(input).filter((key) => !(key in properties));
 }
 
 /**
