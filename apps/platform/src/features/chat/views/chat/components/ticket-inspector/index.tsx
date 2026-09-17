@@ -38,7 +38,7 @@ export default function TicketInspector({
     <Tabs
       value={detailsTab}
       onValueChange={(value) => setDetailsTab(value as DetailsTab)}
-      className="min-h-0 flex-1 gap-0"
+      className="min-h-0 min-w-0 flex-1 gap-0 overflow-x-hidden overflow-y-auto"
     >
       <TabsList className="mx-3 mt-3 w-[calc(100%-1.5rem)]">
         <TabsTrigger value="details">Details</TabsTrigger>
@@ -149,13 +149,13 @@ export default function TicketInspector({
             <EmptyTitle>No activity yet</EmptyTitle>
           </Empty>
         ) : (
-          <ol className="grid gap-5 p-3">
+          <ol className="grid min-w-0 gap-5 p-3">
             {groupByDay(timeline).map((group) => (
-              <li className="grid gap-2" key={group.day}>
+              <li className="grid min-w-0 gap-2" key={group.day}>
                 <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   {formatActivityDay(group.entries[0].createdAt)}
                 </p>
-                <ol className="grid gap-2.5">
+                <ol className="grid min-w-0 gap-2.5">
                   {group.entries.map((entry) => (
                     <li
                       className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-2.5 text-[13px]"
@@ -168,7 +168,7 @@ export default function TicketInspector({
                       >
                         {formatActivityTime(entry.createdAt)}
                       </time>
-                      <div className="grid gap-1">
+                      <div className="grid min-w-0 gap-1">
                         <p className="min-w-0 leading-5">
                           {entry.description.text}
                           {entry.description.mono ? (
@@ -190,19 +190,26 @@ export default function TicketInspector({
                             {entry.description.error}
                           </p>
                         ) : null}
-                        {entry.description.args ? (
-                          <Collapsible className="group/activity-args">
-                            <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
-                              <ChevronRightIcon className="size-3 transition-transform group-data-[state=open]/activity-args:rotate-90" />
-                              Arguments
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                              <pre className="mt-1 overflow-x-auto rounded bg-muted p-2 font-mono text-[11px] break-words whitespace-pre-wrap">
-                                {entry.description.args}
-                              </pre>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        ) : null}
+                        {(
+                          [
+                            ["Input", entry.description.input],
+                            ["Output", entry.description.output],
+                          ] as const
+                        ).map(([label, value]) =>
+                          value ? (
+                            <Collapsible className="group/tool-payload min-w-0" key={label}>
+                              <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+                                <ChevronRightIcon className="size-3 transition-transform group-data-[state=open]/tool-payload:rotate-90" />
+                                {label}
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="min-w-0 max-w-full">
+                                <pre className="mt-1 max-h-64 w-full max-w-full overflow-auto overscroll-contain rounded bg-muted p-2 font-mono text-[11px] break-words whitespace-pre-wrap">
+                                  {value}
+                                </pre>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          ) : null,
+                        )}
                       </div>
                     </li>
                   ))}
