@@ -222,7 +222,9 @@ function getTelemetryHeaders(config: TelemetryConfig) {
     config.apiKeyHeader.toLowerCase() === "authorization" && !/\s/.test(config.apiKey)
       ? `Bearer ${config.apiKey}`
       : config.apiKey;
-  return { [config.apiKeyHeader]: credential };
+  // Without this, Langfuse routes OTLP data through its legacy delayed
+  // ingestion path instead of real-time.
+  return { [config.apiKeyHeader]: credential, "x-langfuse-ingestion-version": "4" };
 }
 
 function registerTelemetryShutdown() {
