@@ -136,7 +136,7 @@ describe("createAssignedToolExecutor", () => {
     expect(mocks.aiActivityCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         eventType: "TOOL_CALLED",
-        metadata: expect.objectContaining({ inputJson: "{}" }),
+        metadata: expect.objectContaining({ inputJson: "{}", outputJson: "ok" }),
       }),
     });
     expect(mocks.executeHttpTool).toHaveBeenCalledWith(
