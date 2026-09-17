@@ -43,6 +43,38 @@ describe("chunkText", () => {
     expect(result.map((chunk) => chunk.position)).toEqual([0, 1, 2]);
   });
 
+  it("keeps a heading with its own body and never packs two sections together", () => {
+    const result = chunkText(
+      "Table row.\n\n### 6.1 No first scan\n\nVerify handoff.\n\n## 7. Split\n\nBody.",
+      {
+        maxChars: 200,
+      },
+    );
+
+    expect(result.map((chunk) => chunk.content)).toEqual([
+      "Table row.",
+      "### 6.1 No first scan\n\nVerify handoff.",
+      "## 7. Split\n\nBody.",
+    ]);
+  });
+
+  it("repeats the heading on every chunk of a long section", () => {
+    const result = chunkText(`## Care\n\n${"a".repeat(30)}\n\n${"b".repeat(30)}`, { maxChars: 40 });
+
+    expect(result.map((chunk) => chunk.content)).toEqual([
+      `## Care\n\n${"a".repeat(30)}`,
+      `## Care\n\n${"b".repeat(30)}`,
+    ]);
+  });
+
+  it("drops page furniture repeated on every page", () => {
+    const page = (n: number) => `Body ${n}.\n\nDemo Documentation | Page ${n}`;
+
+    const result = chunkText([1, 2, 3].map(page).join("\n\n"), { maxChars: 500 });
+
+    expect(result.map((chunk) => chunk.content)).toEqual(["Body 1.\n\nBody 2.\n\nBody 3."]);
+  });
+
   it("assigns deterministic, contiguous positions", () => {
     const result = chunkText("One.\n\nTwo.\n\nThree.", { maxChars: 5 });
 

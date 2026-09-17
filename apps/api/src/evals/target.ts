@@ -7,6 +7,7 @@ import {
   type AiAgentTurnRuntime,
   type EscalationReason,
 } from "@repo/ai-agent";
+import { createOpenAiEmbeddingClient, searchChunks } from "@repo/knowledge";
 import { aiAgentConfig, embeddingConfig, evalConfig } from "../config";
 import { unscopedPrisma } from "../utils/prisma";
 import { withWorkspaceContext } from "../utils/workspace-context";
@@ -392,4 +393,44 @@ function knowledgePassages(result: string): RetrievedChunk[] {
   } catch {
     return [{ chunkId: result, content: result, knowledgeSourceId: null }];
   }
+}
+
+/**
+ * The retriever alone: embeds the Customer's own message and calls the same
+ * `searchChunks` that `searchKnowledge` runs, with no model in the loop. The
+ * Agent-level `retrieval` suite searches with whatever query the model wrote
+ * that turn, so its ranks move between runs on identical Knowledge; this one
+ * is deterministic, which is what a ranking metric (MRR, nDCG) needs to show a
+ * retrieval change rather than query-rewrite noise.
+ */
+export async function runRetrieverTurn(input: EvalTurnInput): Promise<EvalTurnOutput> {
+  const workspaceId = evalConfig.workspaceId;
+  if (!workspaceId || !embeddingConfig.apiKey) {
+    throw new Error(
+      "EVAL_WORKSPACE_ID and OPENROUTER_API_KEY are required for the retriever suite.",
+    );
+  }
+  const startedAt = performance.now();
+  const [embedding] = await createOpenAiEmbeddingClient({
+    ...embeddingConfig,
+    apiKey: embeddingConfig.apiKey,
+  }).embed([input.message]);
+  const chunks = await searchChunks(unscopedPrisma, {
+    embedding: embedding ?? [],
+    retrievalMode: "CUSTOMER",
+    workspaceId,
+  });
+  return {
+    decision: "REPLY",
+    durationMs: performance.now() - startedAt,
+    escalationReason: null,
+    output: "",
+    retrieved: chunks.map((chunk) => chunk.content),
+    retrievedChunks: chunks.map(({ chunkId, content, knowledgeSourceId }) => ({
+      chunkId,
+      content,
+      knowledgeSourceId,
+    })),
+    toolCalls: [],
+  };
 }

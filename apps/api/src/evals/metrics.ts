@@ -1,6 +1,15 @@
+import { Usage, type CompletionModel } from "@anvia/core";
 import { defineMetric, EvalOutcome, type EvalMetric } from "@anvia/core/evals";
+import { extract } from "@anvia/core/extractor";
+import { z } from "zod";
 import type { AgentEvalCase } from "./cases";
-import { firstRelevantRank, precisionAtK, recallAtK, resolveExpectedPassages } from "./retrieval";
+import {
+  ndcgAtK,
+  precisionAtK,
+  recallAtK,
+  reciprocalRank,
+  resolveExpectedPassages,
+} from "./retrieval";
 import type { EvalTurnInput, EvalTurnOutput } from "./target";
 
 type Metric<Score> = EvalMetric<EvalTurnInput, EvalTurnOutput, Score, string, string>;
@@ -198,61 +207,137 @@ async function loadRetrievalCase(testCase: {
   return { relevant };
 }
 
-/** Passes when every expected passage was recovered somewhere in retrieval. */
-export function retrievalRecall(): Metric<number> {
+/**
+ * The `retrieval` metrics follow standard IR evaluation (TREC/BEIR): Recall@k,
+ * Precision@k, MRR and nDCG@k over graded passage labels. Per-Case outcomes
+ * only flag Cases worth reading; the suite passes or fails on the *mean* of
+ * each score against `retrievalGates` in `run.ts`, the way those benchmarks
+ * report a retriever. Precision@k is informational and never gates: with one
+ * labelled passage and a fixed top-5 that also carries neighbor context, its
+ * ceiling is 0.2 by construction, so an "every chunk relevant" rule could
+ * never pass.
+ */
+function retrievalMetric(options: {
+  name: string;
+  /** Per-Case pass threshold, for triage only. */
+  threshold: number;
+  required: boolean;
+  score: (relevant: Parameters<typeof recallAtK>[0], retrievedIds: string[]) => number;
+}): Metric<number> {
   return defineMetric<EvalTurnInput, EvalTurnOutput, number, string>({
     dataType: "NUMERIC",
+    direction: "higher_is_better",
     async evaluate({ case: testCase, output }) {
       const loaded = await loadRetrievalCase(testCase);
       if ("outcome" in loaded) return loaded;
       const retrievedIds = output.retrievedChunks.map((chunk) => chunk.chunkId);
-      const score = recallAtK(loaded.relevant, retrievedIds);
-      return score === 1
-        ? EvalOutcome.pass(score, { comment: "all expected passages retrieved" })
-        : EvalOutcome.fail(score, { comment: `recall@k ${score.toFixed(2)}` });
+      const score = options.score(loaded.relevant, retrievedIds);
+      const comment = `${options.name} ${score.toFixed(2)} over ${retrievedIds.length} chunks`;
+      return score >= options.threshold
+        ? EvalOutcome.pass(score, { comment })
+        : EvalOutcome.fail(score, { comment });
     },
-    name: "retrieval-recall",
-    required: true,
+    name: options.name,
+    required: options.required,
+    threshold: options.threshold,
   });
 }
 
-/** Passes when the retrieved set is entirely relevant (recall's counterpart:
- * a search that returns 20 chunks to net one relevant hit is not "working"). */
-export function retrievalPrecision(): Metric<number> {
+/** Context recall: every required passage was retrieved somewhere this turn. */
+export const retrievalRecall = () =>
+  retrievalMetric({ name: "recall@k", required: true, score: recallAtK, threshold: 1 });
+
+/** Reciprocal rank; the suite mean is MRR. A Case passes with a relevant Chunk in the top 3. */
+export const retrievalReciprocalRank = () =>
+  retrievalMetric({ name: "mrr", required: false, score: reciprocalRank, threshold: 1 / 3 });
+
+export const retrievalNdcg = (k: number) =>
+  retrievalMetric({
+    name: `ndcg@${k}`,
+    required: false,
+    score: (relevant, ids) => ndcgAtK(relevant, ids, k),
+    threshold: 0.5,
+  });
+
+export const retrievalPrecision = () =>
+  retrievalMetric({ name: "precision@k", required: false, score: precisionAtK, threshold: 0 });
+
+/**
+ * Faithfulness judged against the retrieved passages themselves. The library
+ * `faithfulness` first condenses the whole retrieval context into a short list
+ * of "truths" and then checks claims against that list; a table row such as
+ * "Label created | Shipment prepared; carrier may not have scanned it yet" is
+ * routinely dropped in that summary, so a reply quoting it scored 0. Checking
+ * each claim against the raw passages removes that lossy hop.
+ */
+export function groundedFaithfulness(options: {
+  model: CompletionModel;
+  threshold: number;
+}): Metric<number> {
+  const claimsSchema = z.object({ claims: z.array(z.string()) });
+  const verdictsSchema = z.object({
+    verdicts: z.array(z.object({ reason: z.string(), supported: z.boolean() })),
+  });
+
   return defineMetric<EvalTurnInput, EvalTurnOutput, number, string>({
     dataType: "NUMERIC",
+    direction: "higher_is_better",
     async evaluate({ case: testCase, output }) {
-      const loaded = await loadRetrievalCase(testCase);
-      if ("outcome" in loaded) return loaded;
-      const retrievedIds = output.retrievedChunks.map((chunk) => chunk.chunkId);
-      const score = precisionAtK(loaded.relevant, retrievedIds);
-      return score === 1
-        ? EvalOutcome.pass(score, { comment: "every retrieved chunk was relevant" })
-        : EvalOutcome.fail(score, { comment: `precision@k ${score.toFixed(2)}` });
-    },
-    name: "retrieval-precision",
-    required: true,
-  });
-}
+      try {
+        const claimResult = await extract({
+          instructions:
+            "Extract every concise factual claim the answer makes about the company, its products, policies, orders, shipping, or billing. Omit requests for information from the Customer (such as asking for an order number), statements of what the assistant will do next, greetings, and opinions.",
+          model: options.model,
+          outputSchema: claimsSchema,
+          temperature: 0,
+          text: `Answer:\n${output.output}`,
+        });
+        const claims = claimResult.output.claims;
+        if (!claims.length) {
+          return EvalOutcome.pass(1, { comment: "no factual claims", usage: claimResult.usage });
+        }
 
-/** Passes when the first relevant Chunk is retrieval's own top result — the
- * rank a reranker or top-k change (#187) is meant to move. */
-export function retrievalFirstRelevantRank(): Metric<number | null> {
-  return defineMetric<EvalTurnInput, EvalTurnOutput, number | null, string>({
-    dataType: "NUMERIC",
-    async evaluate({ case: testCase, output }) {
-      const loaded = await loadRetrievalCase(testCase);
-      if ("outcome" in loaded) return loaded;
-      const retrievedIds = output.retrievedChunks.map((chunk) => chunk.chunkId);
-      const rank = firstRelevantRank(loaded.relevant, retrievedIds);
-      return rank === 1
-        ? EvalOutcome.pass(rank, { comment: "first relevant chunk ranked first" })
-        : EvalOutcome.fail(rank, {
-            comment: rank === null ? "no relevant chunk retrieved" : `first relevant rank ${rank}`,
-          });
+        const passages = output.retrieved.length
+          ? output.retrieved
+          : ["No Knowledge was retrieved for this turn."];
+        const verdictResult = await extract({
+          instructions:
+            "For each claim, decide whether the passages support it. A claim is supported when a passage states it or it is a faithful paraphrase of a passage (including a table row). A claim that only restates what the Customer said about their own situation is supported by the Customer message. Return one verdict per claim, in order.",
+          model: options.model,
+          outputSchema: verdictsSchema,
+          temperature: 0,
+          text: JSON.stringify({
+            claims,
+            customerMessage: (testCase.input as EvalTurnInput).message,
+            passages,
+          }),
+        });
+        const verdicts = verdictResult.output.verdicts;
+        const usage = Usage.add(claimResult.usage, verdictResult.usage);
+        if (verdicts.length !== claims.length) {
+          return EvalOutcome.invalid(
+            `judge returned ${verdicts.length} verdicts for ${claims.length} claims`,
+          );
+        }
+
+        const score = verdicts.filter((verdict) => verdict.supported).length / claims.length;
+        const unsupported = claims
+          .map((claim, index) => ({ claim, verdict: verdicts[index] }))
+          .filter(({ verdict }) => !verdict?.supported)
+          .map(({ claim, verdict }) => `"${claim}" (${verdict?.reason})`);
+        const comment = unsupported.length
+          ? `unsupported: ${unsupported.join("; ")}`
+          : "every claim is supported by the retrieved passages";
+        return score >= options.threshold
+          ? EvalOutcome.pass(score, { comment, usage })
+          : EvalOutcome.fail(score, { comment, usage });
+      } catch (error) {
+        return EvalOutcome.fromError(error);
+      }
     },
-    name: "retrieval-first-relevant-rank",
+    name: "faithfulness",
     required: true,
+    threshold: options.threshold,
   });
 }
 

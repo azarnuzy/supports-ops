@@ -3,7 +3,6 @@ import {
   answerRelevancy,
   contains,
   exactMatch,
-  faithfulness,
   gEval,
   runEvalCli,
   type AnyEvalMetric,
@@ -15,16 +14,24 @@ import { aiAgentConfig, embeddingConfig, evalConfig, telemetryConfig } from "../
 import { cases, type MetricName } from "./cases";
 import {
   decisionMatches,
+  groundedFaithfulness,
   languageMatches,
   normalizeText,
   negativeControl,
   neverLeaksInternal,
-  retrievalFirstRelevantRank,
+  retrievalNdcg,
   retrievalPrecision,
   retrievalRecall,
+  retrievalReciprocalRank,
   toolUsage,
 } from "./metrics";
-import { runEvalTurn, teardownEvalTicket, type EvalTurnInput, type EvalTurnOutput } from "./target";
+import {
+  runEvalTurn,
+  runRetrieverTurn,
+  teardownEvalTicket,
+  type EvalTurnInput,
+  type EvalTurnOutput,
+} from "./target";
 
 /**
  * Runs the AI Agent eval suite by hand — not in CI, per ADR-0010.
@@ -52,7 +59,17 @@ const judge = { model: judgeModel, threshold: 0.7 } as const;
 /** One suite per metric, in the flat shape the reference project uses: the
  * metric is fixed for the suite, and each Case carries whatever that metric
  * needs (`expected`, or the `metadata` the deterministic metrics read). */
-const suites: Array<{ key: string; metric: MetricName; metrics: AnyEvalMetric[]; name: string }> = [
+const suites: Array<{
+  key: string;
+  metric: MetricName;
+  metrics: AnyEvalMetric[];
+  name: string;
+  /** Defaults to a full Agent turn. */
+  target?: (input: EvalTurnInput) => Promise<EvalTurnOutput>;
+  /** Suite-level gates on a metric's mean score, the way IR benchmarks report
+   * a retriever. Any mean below its gate fails the run. */
+  gates?: Record<string, number>;
+}> = [
   {
     key: "contains",
     metric: "contains",
@@ -85,25 +102,9 @@ const suites: Array<{ key: string; metric: MetricName; metrics: AnyEvalMetric[];
   {
     key: "faithfulness",
     metric: "faithfulness",
-    // Judged against what retrieval actually returned this turn, not a
-    // hand-written passage — so a grounded-sounding answer built on the wrong
-    // chunk still fails.
-    metrics: [
-      faithfulness<EvalTurnInput, EvalTurnOutput, string>({
-        ...judge,
-        // A turn that legitimately retrieves nothing — a CLARIFY that asks for
-        // an order number — used to report `invalid`, which reads as a broken
-        // metric rather than as correct behaviour. Stating the absence keeps
-        // the case gradable: a reply that asserts a company fact with no
-        // Knowledge behind it is exactly what should fail here.
-        retrievalContext: ({ output }) =>
-          output.retrieved.length
-            ? output.retrieved
-            : [
-                "No Knowledge was retrieved for this turn. Any company, product, policy, order, or billing fact stated in the answer is therefore unsupported.",
-              ],
-      }),
-    ],
+    // Judged against what retrieval actually returned this turn, passage by
+    // passage — see groundedFaithfulness for why the library metric is not used.
+    metrics: [groundedFaithfulness(judge)],
     name: "northstar-faithfulness",
   },
   {
@@ -145,9 +146,22 @@ const suites: Array<{ key: string; metric: MetricName; metrics: AnyEvalMetric[];
     name: "northstar-language",
   },
   {
+    // The retriever alone, on the Customer's own message: deterministic, so
+    // the ranking metrics measure retrieval rather than query-rewrite noise.
+    gates: { mrr: 0.7, "ndcg@5": 0.7, "recall@k": 0.9 },
+    key: "retriever",
+    metric: "retrieval",
+    metrics: [retrievalRecall(), retrievalReciprocalRank(), retrievalNdcg(5), retrievalPrecision()],
+    name: "northstar-retriever",
+    target: runRetrieverTurn,
+  },
+  {
+    // The same labels through a real Agent turn. Only context recall is graded:
+    // the query is model-written and varies per run, so rank here is noise.
+    gates: { "recall@k": 0.9 },
     key: "retrieval",
     metric: "retrieval",
-    metrics: [retrievalRecall(), retrievalPrecision(), retrievalFirstRelevantRank()],
+    metrics: [retrievalRecall()],
     name: "northstar-retrieval",
   },
   {
@@ -246,7 +260,7 @@ async function main() {
 
       const suiteOutputs: EvalTurnOutput[] = [];
 
-      await runEvalCli({
+      const result = await runEvalCli({
         cases: suiteCases,
         // Serial: every case is a real turn against one scratch Ticket and a
         // live MCP server, so concurrency would interleave Tool calls and
@@ -268,6 +282,7 @@ async function main() {
           },
         },
         target: async (input) => {
+          if (suite.target) return suite.target(input);
           const output = await runEvalTurn(input);
           suiteOutputs.push(output);
           process.stdout.write(`${costLine(output)}\n`);
@@ -275,7 +290,8 @@ async function main() {
         },
       });
 
-      process.stdout.write(`${summaryLine(suite.name, suiteOutputs)}\n`);
+      if (suiteOutputs.length) process.stdout.write(`${summaryLine(suite.name, suiteOutputs)}\n`);
+      if (suite.gates) process.stdout.write(`${gateLine(suite.name, suite.gates, result)}\n`);
     }
   } finally {
     await teardownEvalTicket();
@@ -299,6 +315,32 @@ function costLine(output: EvalTurnOutput): string {
     `  cost: ttft ${ms(output.ttftMs)} / content ${ms(output.ttfcMs)} / total ${ms(output.durationMs)}` +
     ` | ${tokens} | tools ${output.toolCalls.length} | chunks ${output.retrieved.length}`
   );
+}
+
+/** Mean of each gated metric over the suite's gradable Cases, checked against
+ * its gate. Invalid outcomes (a stale label, a failed turn) are excluded from
+ * the mean and counted, so they surface instead of dragging the score. */
+function gateLine(
+  suiteName: string,
+  gates: Record<string, number>,
+  result: Awaited<ReturnType<typeof runEvalCli>>,
+): string {
+  const parts = Object.entries(gates).map(([name, gate]) => {
+    const outcomes = result.results.flatMap((caseResult) =>
+      caseResult.metrics
+        .filter((metric) => metric.metricName === name)
+        .map((metric) => metric.outcome),
+    );
+    const scores = outcomes
+      .filter((outcome) => outcome.outcome !== "invalid")
+      .map((outcome) => Number(outcome.score));
+    const invalid = outcomes.length - scores.length;
+    const mean = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
+    const passed = scores.length > 0 && invalid === 0 && mean >= gate;
+    if (!passed) process.exitCode = 1;
+    return `${name} ${mean.toFixed(2)} (gate ${gate}${invalid ? `, ${invalid} invalid` : ""}) ${passed ? "PASS" : "FAIL"}`;
+  });
+  return `gates [${suiteName}] (${result.results.length} cases): ${parts.join(" | ")}`;
 }
 
 /** Nearest-rank percentile. `p` is 0-100. */
