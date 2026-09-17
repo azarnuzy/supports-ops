@@ -612,7 +612,7 @@ const ChatView = ({
           ) : null}
           {conversation ? (
             <>
-              <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5">
+              <header className="flex shrink-0 flex-col items-stretch gap-3 border-b px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <Link
                     aria-label="Back to the conversation list"
@@ -661,7 +661,7 @@ const ChatView = ({
           ) : null}
           {detail ? (
             <>
-              <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2.5">
+              <header className="flex shrink-0 flex-col items-stretch gap-3 border-b px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <Link
                     aria-label="Back to Ticket list"
@@ -684,7 +684,7 @@ const ChatView = ({
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0 sm:justify-end">
                   <StatusBadge status={detail.status} />
                   <PriorityBadge priority={detail.priority} />
                   <Badge className="px-1.5" variant="outline">
@@ -713,7 +713,7 @@ const ChatView = ({
                       <Select onValueChange={setAssigneeId} value={assigneeId}>
                         <SelectTrigger
                           aria-label="Assign to a Human Agent"
-                          className="w-40"
+                          className="w-36 sm:w-40"
                           size="sm"
                         >
                           <SelectValue placeholder="Assign to…" />
