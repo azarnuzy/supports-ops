@@ -58,6 +58,39 @@ export type StartTelemetryOptions = {
  */
 const exportedTracerScopes = new Set(["@anvia/otel", "@repo/logger"]);
 
+/** `@anvia/otel` names its input/output attributes per span kind (e.g.
+ * `anvia.generation.input`, `anvia.run.output`), which Anvia Lens reads
+ * natively — but Langfuse's OTLP ingestion only populates an observation's
+ * Input/Output from a fixed set of attribute names. Highest-priority match
+ * per direction wins. */
+const LANGFUSE_INPUT_SOURCES = [
+  "anvia.generation.input",
+  "anvia.run.prompt",
+  "anvia.pipeline.input",
+  "anvia.pipeline.stage.input",
+  "anvia.tool.args",
+  "anvia.tool.call",
+];
+const LANGFUSE_OUTPUT_SOURCES = [
+  "anvia.generation.output",
+  "anvia.run.output",
+  "anvia.pipeline.output",
+  "anvia.pipeline.stage.output",
+  "anvia.tool.result",
+  "anvia.child_agent.output",
+];
+
+function addLangfuseIoAttributes(attributes: Record<string, unknown>) {
+  if (attributes["langfuse.observation.input"] === undefined) {
+    const key = LANGFUSE_INPUT_SOURCES.find((source) => attributes[source] !== undefined);
+    if (key) attributes["langfuse.observation.input"] = attributes[key];
+  }
+  if (attributes["langfuse.observation.output"] === undefined) {
+    const key = LANGFUSE_OUTPUT_SOURCES.find((source) => attributes[source] !== undefined);
+    if (key) attributes["langfuse.observation.output"] = attributes[key];
+  }
+}
+
 /** Passes a span to `inner` only when an allowed tracer created it. */
 class AgentScopeSpanProcessor implements SpanProcessor {
   constructor(private readonly inner: SpanProcessor) {}
@@ -73,6 +106,7 @@ class AgentScopeSpanProcessor implements SpanProcessor {
 
   onEnd(span: ReadableSpan) {
     if (exportedTracerScopes.has(span.instrumentationScope.name)) {
+      addLangfuseIoAttributes(span.attributes as Record<string, unknown>);
       this.inner.onEnd(span);
     }
   }
