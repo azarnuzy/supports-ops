@@ -188,6 +188,9 @@ export async function resolveTools(aiAgentId: string) {
   });
   const assignedTools = tools.filter(isAvailable).map(({ assignments, ...tool }) => ({
     ...tool,
+    // Built-in rows were seeded with an empty `{"type":"object"}` schema; the model
+    // only fills `query` when the schema declares it, so the code owns this schema.
+    ...(tool.origin === "BUILT_IN" ? { inputSchema: builtInInputSchema } : null),
     usageInstruction: assignments[0]?.usageInstruction ?? null,
   }));
   const assignedNames = new Set(assignedTools.map((tool) => tool.name));

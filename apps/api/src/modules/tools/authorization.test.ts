@@ -71,6 +71,26 @@ describe("Tool runtime authorization", () => {
     ]);
   });
 
+  it("declares `query` on an assigned built-in row seeded with an empty schema", async () => {
+    mocks.toolFindMany.mockResolvedValue([
+      {
+        assignments: [],
+        httpConfig: null,
+        inputSchema: { type: "object" },
+        mcpTool: null,
+        name: "searchKnowledge",
+        origin: "BUILT_IN",
+      },
+    ]);
+
+    const [tool] = await resolveTools("agent-1");
+    expect(tool?.inputSchema).toEqual({
+      properties: { query: { type: "string" } },
+      required: ["query"],
+      type: "object",
+    });
+  });
+
   it("denies a Ticket outside the scoped Workspace", async () => {
     mocks.ticketFindFirst.mockResolvedValue(null);
     await expect(
