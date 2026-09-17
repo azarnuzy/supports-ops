@@ -23,7 +23,7 @@ export default function TranscriptMessage({
   if (message.senderType === "SYSTEM") {
     return (
       <Marker>
-        <MarkerContent>
+        <MarkerContent className="min-w-0 max-w-full shrink whitespace-pre-wrap [overflow-wrap:anywhere]">
           {message.content}
           {message.deliveryStatus === "FAILED" ? (
             <span className="text-destructive">
@@ -63,7 +63,13 @@ export default function TranscriptMessage({
               />
             ) : null}
             {message.content && !legacyAttachmentText ? (
-              <div className={message.attachments.length ? "mt-2" : undefined}>
+              <div
+                className={cn(
+                  "min-w-0 [overflow-wrap:anywhere]",
+                  message.senderType === "CUSTOMER" && "whitespace-pre-wrap",
+                  message.attachments.length && "mt-2",
+                )}
+              >
                 {message.senderType === "CUSTOMER" ? (
                   message.content
                 ) : (
