@@ -13,11 +13,11 @@ export default function TrafficCard({
 }: TrafficCardProps) {
   return (
     <DashboardCard className="py-3.5">
-      <CardHeader className="gap-1.5">
+      <CardHeader className="gap-1.5 px-3 sm:px-6">
         <CardTitle className="text-sm leading-4">{title}</CardTitle>
         <CardDescription className="text-xs leading-4">{description}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-3 sm:px-6">
         <HeatmapGrid buckets={buckets} metricLabel={metricLabel} timeZone={timeZone} />
       </CardContent>
     </DashboardCard>

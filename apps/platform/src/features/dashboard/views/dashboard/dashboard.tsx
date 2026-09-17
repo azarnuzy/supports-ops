@@ -103,7 +103,7 @@ const DashboardView = () => {
     <PlatformAppShell fullWidth>
       <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent>
         <section className="grid gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4 sm:items-center">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
                 {greeting}, {firstName} 👋
@@ -115,7 +115,7 @@ const DashboardView = () => {
               </p>
             </div>
             {isAdmin ? (
-              <div className="flex flex-wrap items-center justify-end gap-2.5">
+              <div className="flex w-full flex-wrap items-center justify-start gap-2.5 sm:w-auto sm:justify-end">
                 <DateRangePicker range={range} onChange={setRange} />
                 <LiveBadge />
                 {lastUpdatedAt > 0 ? (
@@ -226,12 +226,12 @@ const DashboardView = () => {
                 </div>
 
                 {traffic.isPending ? (
-                  <div className="grid gap-4">
+                  <div className="grid gap-4 xl:grid-cols-2">
                     <HeatmapSkeleton />
                     <HeatmapSkeleton />
                   </div>
                 ) : traffic.data ? (
-                  <div className="grid gap-4">
+                  <div className="grid gap-4 xl:grid-cols-2">
                     <TrafficCard
                       title="Traffic by Hour"
                       description="Tickets created each hour in the selected range."

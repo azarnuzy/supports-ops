@@ -55,8 +55,8 @@ export default function AgentLoadCard({ agentStats }: AgentLoadCardProps) {
               <TableRow>
                 <TableHead>Human Agent</TableHead>
                 <TableHead className="text-right">Open Tickets</TableHead>
-                <TableHead className="text-right">Resolved</TableHead>
-                <TableHead className="text-right">Avg. Response</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Resolved</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Avg. Response</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -75,8 +75,10 @@ export default function AgentLoadCard({ agentStats }: AgentLoadCardProps) {
                   <TableCell className="text-right font-semibold tabular-nums">
                     {agent.openTicketCount}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{agent.resolvedCount}</TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                  <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                    {agent.resolvedCount}
+                  </TableCell>
+                  <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">
                     {formatResponseTime(agent.avgFirstResponseSeconds)}
                   </TableCell>
                 </TableRow>

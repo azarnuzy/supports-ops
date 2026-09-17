@@ -53,7 +53,7 @@ export default function TrafficTrendCard({ trends }: TrafficTrendCardProps) {
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-1 items-center px-3.5">
-        <ChartContainer config={config} className="h-44 w-full">
+        <ChartContainer config={config} className="h-44 min-w-0 w-full">
           <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="fillCreated" x1="0" y1="0" x2="0" y2="1">

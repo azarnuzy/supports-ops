@@ -49,10 +49,10 @@ export default function RecentConversationsCard({ conversations }: RecentConvers
             <TableHeader>
               <TableRow>
                 <TableHead>Customer</TableHead>
-                <TableHead>Channel</TableHead>
-                <TableHead className="min-w-40">Message</TableHead>
+                <TableHead className="hidden sm:table-cell">Channel</TableHead>
+                <TableHead className="hidden min-w-40 sm:table-cell">Message</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Time</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -63,13 +63,13 @@ export default function RecentConversationsCard({ conversations }: RecentConvers
                     <TableCell className="max-w-32 truncate font-medium">
                       {conversation.customerIdentity.name}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Badge variant="outline" className="gap-1 px-1.5 text-[11px] font-normal">
                         <Icon className="size-3 text-muted-foreground" />
                         {conversation.channel.name}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-44 truncate text-muted-foreground">
+                    <TableCell className="hidden max-w-44 truncate text-muted-foreground sm:table-cell">
                       {conversation.lastMessage?.content ?? "—"}
                     </TableCell>
                     <TableCell>
@@ -79,7 +79,7 @@ export default function RecentConversationsCard({ conversations }: RecentConvers
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                    <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">
                       {formatRelativeTime(
                         conversation.lastMessage?.createdAt ?? conversation.createdAt,
                       )}
