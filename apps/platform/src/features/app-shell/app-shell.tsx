@@ -176,9 +176,18 @@ export function PlatformAppShell({
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" asChild tooltip="SupportOps">
+              <SidebarMenuButton
+                size="lg"
+                asChild
+                tooltip="SupportOps"
+                className="bg-white text-zinc-950 hover:bg-white hover:text-zinc-950"
+              >
                 <Link to="/">
-                  <img src="/support-ops-logo.png" alt="" className="size-7 shrink-0 rounded-md" />
+                  <img
+                    src="/support-ops-logo.png"
+                    alt=""
+                    className="size-7 shrink-0 rounded-md p-1"
+                  />
                   <span className="text-[13px] font-semibold group-data-[collapsible=icon]:hidden">
                     SupportOps
                   </span>
@@ -224,43 +233,46 @@ export function PlatformAppShell({
             );
           })}
         </SidebarContent>
-        <SidebarSeparator />
+        <div className="px-2">
+          <SidebarSeparator className="mx-0" />
+        </div>
         <SidebarFooter>
-          <SidebarMenu>
+          <SidebarMenu className="rounded-lg border bg-background p-1 group-data-[collapsible=icon]:items-center">
             <SidebarMenuItem>
-              <SidebarMenuButton asChild size="lg" tooltip="Edit profile">
-                <Link to="/profile">
-                  <Avatar className="shrink-0 rounded-md">
-                    {user.data.image ? (
-                      <AvatarImage src={user.data.image} alt={`${user.data.name} avatar`} />
-                    ) : null}
-                    <AvatarFallback className="rounded-md">
-                      {getInitials(user.data.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                    <span className="truncate font-medium">{user.data.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {user.data.email}
+              <div className="flex items-center group-data-[collapsible=icon]:flex-col">
+                <SidebarMenuButton asChild size="lg" tooltip="Edit profile" className="flex-1">
+                  <Link to="/profile">
+                    <Avatar className="shrink-0 rounded-md">
+                      {user.data.image ? (
+                        <AvatarImage src={user.data.image} alt={`${user.data.name} avatar`} />
+                      ) : null}
+                      <AvatarFallback className="rounded-md">
+                        {getInitials(user.data.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                      <span className="truncate font-medium">{user.data.name}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {user.data.email}
+                      </span>
                     </span>
-                  </span>
-                </Link>
-              </SidebarMenuButton>
+                  </Link>
+                </SidebarMenuButton>
+                <Button
+                  aria-label={logoutMutation.isPending ? "Logging out" : "Logout"}
+                  className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                  size="icon"
+                  title={logoutMutation.isPending ? "Logging out..." : "Logout"}
+                  type="button"
+                  variant="ghost"
+                  disabled={logoutMutation.isPending}
+                  onClick={handleLogout}
+                >
+                  <LogOutIcon className="size-4" />
+                </Button>
+              </div>
             </SidebarMenuItem>
           </SidebarMenu>
-          <Button
-            className="h-8 w-full justify-start text-[13px] text-muted-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 hover:text-foreground"
-            size="sm"
-            type="button"
-            variant="ghost"
-            disabled={logoutMutation.isPending}
-            onClick={handleLogout}
-          >
-            <LogOutIcon className="size-4 shrink-0" />
-            <span className="group-data-[collapsible=icon]:hidden">
-              {logoutMutation.isPending ? "Logging out..." : "Logout"}
-            </span>
-          </Button>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
@@ -277,7 +289,7 @@ export function PlatformAppShell({
             fullBleed
               ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden"
               : cn(
-                  "mx-auto flex w-full flex-1 flex-col gap-8 px-6 py-8 lg:px-8",
+                  "mx-auto flex min-w-0 w-full flex-1 flex-col gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-8",
                   fullWidth ? "max-w-none" : "max-w-6xl",
                 )
           }

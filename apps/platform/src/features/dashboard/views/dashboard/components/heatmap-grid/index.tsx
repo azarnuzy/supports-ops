@@ -77,7 +77,11 @@ export default function HeatmapGrid({ buckets, metricLabel, timeZone }: HeatmapG
             {HOURS.map((hour) => (
               <div
                 key={hour}
-                className="text-center text-[10px] tabular-nums text-muted-foreground"
+                className={cn(
+                  "text-center text-[10px] tabular-nums text-muted-foreground",
+                  hour % 2 !== 0 && "invisible",
+                  hour % 4 === 2 && "invisible sm:visible",
+                )}
               >
                 {String(hour).padStart(2, "0")}:00
               </div>

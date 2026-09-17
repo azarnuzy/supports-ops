@@ -35,7 +35,7 @@ export default function Donut({ slices, unitLabel = "Tickets", className }: Donu
 
   return (
     <div className={cn("flex h-full min-w-0 flex-1 items-center gap-4", className)}>
-      <div className="relative aspect-square size-32 shrink-0">
+      <div className="relative aspect-square size-24 shrink-0 sm:size-32">
         <ChartContainer config={config} className="aspect-auto size-full">
           <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
             <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
@@ -70,7 +70,7 @@ export default function Donut({ slices, unitLabel = "Tickets", className }: Donu
             />
             <span className="min-w-0 flex-1 truncate text-xs">{slice.label}</span>
             <span className="shrink-0 text-xs font-semibold tabular-nums">{slice.value}</span>
-            <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+            <span className="hidden w-10 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground sm:block">
               {formatShare(slice.value, total)}
             </span>
           </li>
