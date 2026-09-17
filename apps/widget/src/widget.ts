@@ -227,7 +227,14 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       minute: "2-digit",
     });
     bubble.append(time);
-    messages?.append(bubble);
+    // A full replay (no Last-Event-ID cursor) can deliver an earlier message
+    // after a later one is already rendered, so insert by `position` instead
+    // of always appending at the end.
+    const next = [...(messages?.querySelectorAll<HTMLElement>("[data-position]") ?? [])].find(
+      (existing) => Number(existing.dataset.position) > message.position,
+    );
+    if (next) next.before(bubble);
+    else messages?.append(bubble);
     // `.message` uses `width: fit-content` to hug the widest line, but browsers
     // resolve that against the available width rather than the rendered content
     // once text wraps — leaving a bubble stretched wider than any actual line.
