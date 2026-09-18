@@ -150,6 +150,10 @@ _Avoid_: Log, History, Audit log
 One structured, recorded step the AI Agent took: knowledge retrieved, a Business Tool called and its outcome, a decision made, a classification assigned. Never the AI's private reasoning, which is not stored.
 _Avoid_: Trace, Event, Thought
 
+**AI Turn**:
+One Customer Message and everything the AI Agent does to answer it — Knowledge retrieval, Tool calls, retries, and the reply itself. The unit AI cost is measured in; a Session's AI cost is the sum of its AI Turns plus what it adds outside them, such as Attachments.
+_Avoid_: Request, Call, Round, Exchange
+
 **Agent Memory**:
 The turn-by-turn record the AI Agent reasons over. Belongs to a Session, not to a Ticket, so the opening exchange that happens before anything qualifies as support is still remembered — and so the message that does qualify is classified with everything said before it. Stored as the `Conversation` model; the word "Conversation" is not domain language here.
 _Avoid_: Conversation, History, Context window, Thread
