@@ -130,7 +130,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   };
 
   const appendAttachment = (container: HTMLElement, attachment: WidgetAttachment) => {
-    const image = attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/png";
+    const image = attachment.mimeType.startsWith("image/");
     const statusText =
       attachment.processingStatus === "FAILED"
         ? "Could not be read"

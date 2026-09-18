@@ -11,8 +11,14 @@ export default function AttachmentCard({
   showReadability = true,
 }: AttachmentCardProps) {
   const [previewUrl, setPreviewUrl] = useState<string>();
+  // A refused file (a sticker received before webp was accepted) has a row but
+  // no stored object, so its preview never resolves — say so instead of
+  // spinning on "Loading…" forever.
+  const [previewFailed, setPreviewFailed] = useState(false);
+  // Only these open in a browser tab; everything else — a spreadsheet, an
+  // archive, a video a Customer sent over WhatsApp — is still downloadable.
   const isPreviewableDocument =
-    attachment.mimeType === "application/pdf" || attachment.mimeType === "text/plain";
+    attachment.mimeType === "application/pdf" || attachment.mimeType.startsWith("text/");
 
   const isVoiceNote = attachment.mimeType.startsWith("audio/");
 
@@ -20,7 +26,7 @@ export default function AttachmentCard({
     if (!isImage(attachment) && !isVoiceNote) return;
     void getAttachmentPreviewUrl(attachment.id)
       .then(({ url }) => setPreviewUrl(url))
-      .catch(() => undefined);
+      .catch(() => setPreviewFailed(true));
   }, [attachment, isVoiceNote]);
 
   const readability =
@@ -61,11 +67,16 @@ export default function AttachmentCard({
         onClick={onOpenImage}
         type="button"
       >
-        {previewUrl ? (
-          <img alt="" className="size-full object-cover" src={previewUrl} />
+        {previewUrl && !previewFailed ? (
+          <img
+            alt=""
+            className="size-full object-cover"
+            onError={() => setPreviewFailed(true)}
+            src={previewUrl}
+          />
         ) : (
-          <span className="grid size-full place-items-center text-xs text-muted-foreground">
-            Loading…
+          <span className="grid size-full place-items-center px-1 text-center text-xs text-muted-foreground">
+            {previewFailed ? attachment.fileName : "Loading…"}
           </span>
         )}
         {showReadability ? (
@@ -101,7 +112,7 @@ export default function AttachmentCard({
           Preview
         </Button>
       ) : null}
-      {isPreviewableDocument ? (
+      {attachment.sizeBytes ? (
         <Button
           aria-label={`Download ${attachment.fileName}`}
           onClick={() => void openAttachment(attachment.id)}
