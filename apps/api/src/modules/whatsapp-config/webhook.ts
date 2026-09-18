@@ -190,19 +190,6 @@ async function receiveMedia(
     media.fileName ??
     `${media.type === "audio" ? "voice-note" : media.type}.${mimeType.split("/")[1]}`;
   const headers = { authorization: `Bearer ${accessToken}` };
-  // Stickers, videos and other types the Channel cannot read are refused here,
-  // before spending a Meta round trip on a file we would throw away anyway.
-  const refusedType = refuseWhatsAppAttachment(mimeType, 0);
-  if (refusedType) {
-    return {
-      failureReason: refusedType,
-      fileName,
-      mimeType,
-      processingStatus: "FAILED" as const,
-      sizeBytes: 0,
-      storageKey: "",
-    };
-  }
   const infoResponse = await fetch(
     `https://graph.facebook.com/v23.0/${encodeURIComponent(media.id)}`,
     { headers, signal: AbortSignal.timeout(15_000) },
