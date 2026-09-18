@@ -41,6 +41,22 @@ const whatsAppFileSizeLimits = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 100 * MB,
 } as const;
 
+/** Inbound types WhatsApp delivers but the Channel cannot send back: stickers
+ * (`image/webp`), GIFs, and video. They stay out of
+ * `whatsAppAttachmentCapability.mimeTypes`, which is the outbound allowlist —
+ * Meta's image Messages take only JPEG and PNG. */
+const whatsAppInboundOnlyFileSizeLimits = {
+  "image/gif": 5 * MB,
+  "image/webp": 5 * MB,
+  "video/3gpp": 16 * MB,
+  "video/mp4": 16 * MB,
+} as const;
+
+/** WhatsApp Documents carry any MIME type — spreadsheets, CSVs, archives — and
+ * an Agent needs the file even when the AI Agent cannot read it. So an unlisted
+ * type is received at Meta's Document ceiling instead of being refused. */
+const whatsAppDefaultFileSizeLimit = 100 * MB;
+
 export const whatsAppAttachmentCapability = {
   directions: ["inbound", "outbound"],
   mimeTypes: Object.keys(whatsAppFileSizeLimits),
@@ -51,9 +67,11 @@ export const whatsAppAttachmentCapability = {
 
 /** The Customer-facing reason a WhatsApp file is refused, or undefined when it fits the Channel. */
 export function refuseWhatsAppAttachment(mimeType: string, sizeBytes: number): string | undefined {
-  const limit = (whatsAppFileSizeLimits as Record<string, number>)[baseMimeType(mimeType)];
-  if (!limit)
-    return "Sorry, we can't read this type of file. Please send an image, a PDF, a document, or a voice note.";
+  const limits: Record<string, number> = {
+    ...whatsAppFileSizeLimits,
+    ...whatsAppInboundOnlyFileSizeLimits,
+  };
+  const limit = limits[baseMimeType(mimeType)] ?? whatsAppDefaultFileSizeLimit;
   if (sizeBytes > limit)
     return `Sorry, this file is larger than ${limit / MB} MB, so we couldn't receive it.`;
 }

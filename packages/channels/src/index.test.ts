@@ -241,7 +241,7 @@ describe("parseWhatsAppWebhook", () => {
         },
       },
     ]);
-    expect(refuseWhatsAppAttachment("image/webp", 1024)).toBeDefined();
+    expect(refuseWhatsAppAttachment("image/webp", 1024)).toBeUndefined();
   });
 
   it("discards webhook fields and message types the platform does not handle", () => {
@@ -371,9 +371,29 @@ describe("refuseWhatsAppAttachment", () => {
     expect(refuseWhatsAppAttachment("audio/ogg; codecs=opus", 200_000)).toBeUndefined();
   });
 
-  it("explains an unsupported type and a file over its type's limit", () => {
-    expect(refuseWhatsAppAttachment("video/mp4", 1_000)).toMatch(/can't read this type/);
+  it("refuses only a file over its type's limit", () => {
     expect(refuseWhatsAppAttachment("image/png", 6 * 1024 * 1024)).toMatch(/larger than 5 MB/);
     expect(refuseWhatsAppAttachment("application/pdf", 6 * 1024 * 1024)).toBeUndefined();
+  });
+
+  it("receives every type WhatsApp delivers, up to Meta's Document ceiling", () => {
+    for (const mimeType of [
+      "image/webp",
+      "image/gif",
+      "video/mp4",
+      "text/csv",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/zip",
+    ])
+      expect(refuseWhatsAppAttachment(mimeType, 1024)).toBeUndefined();
+    expect(refuseWhatsAppAttachment("image/webp", 6 * 1024 * 1024)).toMatch(/larger than 5 MB/);
+    expect(refuseWhatsAppAttachment("application/zip", 101 * 1024 * 1024)).toMatch(
+      /larger than 100 MB/,
+    );
+  });
+
+  it("keeps inbound-only types out of the outbound allowlist", () => {
+    expect(whatsAppAttachmentCapability.mimeTypes).not.toContain("image/webp");
+    expect(whatsAppAttachmentCapability.mimeTypes).not.toContain("video/mp4");
   });
 });

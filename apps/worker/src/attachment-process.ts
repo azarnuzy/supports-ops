@@ -78,8 +78,19 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
   }
 }
 
+/** What the OCR model reads. A WhatsApp Document can be anything — a
+ * spreadsheet, an archive, a video — and those are still stored and downloadable
+ * for a Human Agent; only automatic reading stops here, so the Customer is told
+ * once instead of paying for an OCR call that was never going to work. */
+const readableDocumentTypes = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
 export async function extractAttachment(storageKey: string, mimeType: string) {
-  if (mimeType === "text/plain") {
+  // Every text/* type — text/plain, text/csv — is its own transcript.
+  if (mimeType.startsWith("text/")) {
     const object = await createStorage(storageConfig).getObject(storageKey);
     if (!object.Body) throw new Error("Attachment file is missing.");
     return new TextDecoder().decode(await object.Body.transformToByteArray());
@@ -87,6 +98,8 @@ export async function extractAttachment(storageKey: string, mimeType: string) {
   if (!ingestionConfig.mistralApiKey)
     throw new Error("Configure MISTRAL_API_KEY to process attachments.");
   if (mimeType.startsWith("audio/")) return transcribe(storageKey, mimeType);
+  if (!mimeType.startsWith("image/") && !readableDocumentTypes.has(mimeType))
+    throw new Error("This file type cannot be read automatically.");
   const url = await createStorage(storageConfig).getSignedGetObjectUrl({ key: storageKey });
   const document = mimeType.startsWith("image/")
     ? { image_url: url, type: "image_url" }
