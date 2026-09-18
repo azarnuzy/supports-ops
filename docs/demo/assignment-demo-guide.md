@@ -20,9 +20,9 @@ do by hand are in **§0 — What you still add manually**; everything else alrea
 | # | What | Where | Source |
 | - | ---- | ----- | ------ |
 | 1 | Upload the 10 Knowledge Base documents as PDFs | `/knowledge`, Add → PDF | Content in `docs/demo/knowledge-base/*.md` — copy each into a doc editor, export as PDF, upload with the visibility named in the file (`customer-safe-*` → Customer-Safe, `internal-*` → Internal-Only) |
-| 2 | Paste the AI Agent instructions, Handoff Message, Resolution Message | `/settings/ai` | `docs/demo/agent-instructions.md` |
-| 3 | Paste each Tool's "When to use this tool" text | `/settings/tools` → Tool detail | `docs/demo/agent-instructions.md` |
-| 4 | Confirm the HTTP Tool and MCP Server exist and are enabled | `/settings/tools`, `/settings/mcp` | Created automatically by `pnpm seed:demo`; verify only |
+| 2 | Paste the AI Agent instructions, Handoff Message, Resolution Message | `/agent` | `docs/demo/agent-instructions.md` |
+| 3 | Paste each Tool's "When to use this tool" text | `/agent/tools` → Tool detail | `docs/demo/agent-instructions.md` |
+| 4 | Confirm the HTTP Tool and MCP Server exist and are enabled | `/agent/tools`, `/agent/mcp-servers` | Created automatically by `pnpm seed:demo`; verify only |
 
 Everything else (Workspace, Admin/Human Agent accounts, demo conversations, the HTTP Tool
 and MCP Server themselves) is seeded by `scripts/seed-demo.ts` — see
@@ -81,7 +81,7 @@ point at the `TOOL_CALLED` entry with origin `HTTP`.
 exposing `getInvoiceStatus`. `apps/api/src/modules/mcp` — MCP client: server registration,
 connection test, tool discovery, and review-before-enable workflow.
 
-**On camera (scenario W3a):** `/settings/mcp` — show the registered "Business System Demo"
+**On camera (scenario W3a):** `/agent/mcp-servers` — show the registered "Business System Demo"
 server, **Test Connection**, and the discovered `getInvoiceStatus` Tool already reviewed
 and enabled (§0.4). Then in the Widget, ask *"What's the status of my latest invoice?"* —
 the AI Agent picks the MCP Tool over the HTTP Tool because the guidance text says so.
@@ -118,11 +118,12 @@ uses.
 
 ### Evals
 
-**Artifact:** `packages/ai-agent/src/evals` — fixed in-memory corpus + eval runner, 8
-categories: `visibility-safety`, `grounding`, `escalation-required`, `escalation-forbidden`,
-`tool-calling`, `classification`, `resolution-detection`, `language`. Each category includes
-a negative control expected to fail. `docs/adr/0010-otlp-observability-and-manual-evals.md`
-records why evals are code-defined rather than a separate tool.
+**Artifact:** `apps/api/src/evals` — Eval Cases run against the live Workspace named by
+`EVAL_WORKSPACE_ID`, graded by per-metric suites: `contains`, `exactmatch`, `relevancy`,
+`faithfulness`, `geval`, `decision`, `tool`, `visibility`, `language`, `retriever`,
+`retrieval`, `negativecontrol`. `negativecontrol` is a canary expected to fail.
+`docs/adr/0010-otlp-observability-and-manual-evals.md` records why evals are code-defined
+rather than a separate tool; `docs/testing/ai-agent-eval-cases.md` lists the Cases.
 
 **On camera:**
 
@@ -130,11 +131,11 @@ records why evals are code-defined rather than a separate tool.
 pnpm eval:ai-agent
 ```
 
-Show the summary output, then re-run one category in isolation to demonstrate the negative
+Show the summary output, then re-run one suite in isolation to demonstrate the negative
 control failing on purpose:
 
 ```sh
-pnpm eval:ai-agent -- --category grounding
+pnpm eval:ai-agent negativecontrol
 ```
 
 ### Observability

@@ -6,7 +6,7 @@ richer versions instead for the assignment demo so the AI Agent's reasoning is e
 show off on camera (grounding, tool selection, escalation, resolution detection all have
 something concrete to point at).
 
-## Settings → AI → Instructions
+## AI Agent (`/agent`) → Instructions
 
 ```
 You are the support assistant for the SupportOps demo Workspace. Answer only from the
@@ -29,22 +29,22 @@ Only mark a ticket resolved when the Customer clearly confirms their issue is so
 "thanks" alone is not confirmation — ask directly if you're unsure.
 ```
 
-## Settings → AI → Handoff Message
+## AI Agent (`/agent`) → Handoff Message
 
 ```
 Hello, I'm {humanAgentName} from the support team. I've read what you shared with our AI
 assistant and I'll take it from here.
 ```
 
-## Settings → AI → AI Resolution Message
+## AI Agent (`/agent`) → AI Resolution Message
 
 ```
 Glad that's sorted! If anything else comes up, just start a new conversation — we're here.
 ```
 
-## Settings → Tools → "When to use this tool"
+## Tools (`/agent/tools`) → "When to use this tool"
 
-Fill this per Tool, on the Tool's detail view under **Settings → Tools**. This sentence is
+Fill this per Tool, on the Tool's detail view under **Configure → Tools** (`/agent/tools`). This sentence is
 appended to the Tool's description that the model reads — it's the only steering for Tool
 selection, so keep it specific about *when*, not *what the Tool does* (the Tool's own
 description already covers that).

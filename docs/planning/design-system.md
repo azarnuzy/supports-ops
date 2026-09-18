@@ -78,9 +78,9 @@ The cost is height arithmetic: the conversation column measures against the inse
 | `/tickets/:id` | Conversation + Activity Timeline |
 | `/knowledge` | Knowledge Sources |
 | `/knowledge/:id` | Source detail, visibility, status |
-| `/settings/widget` | Web Widget configuration and embed snippet |
-| `/settings/agents` | Human Agent accounts |
-| `/settings/ai` | Follow-Up and Auto-Resolution timing |
+| `/channels/web-widget` | Web Widget configuration and embed snippet |
+| `/workspace/users` | Human Agent accounts |
+| `/agent` | Follow-Up and Auto-Resolution timing |
 
 Inbox filters: status, category, priority, assignee. Search covers Customer name and email only — full-text conversation search is out of scope.
 

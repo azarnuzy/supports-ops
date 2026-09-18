@@ -68,7 +68,7 @@ Jika seed mencetak Knowledge Source `drafted (unpublished)`, API key belum terse
 ### Implementasi pada situs sendiri
 
 1. Login sebagai Admin di `http://localhost:3000`.
-2. Buka **Settings → Web Widget** (`/settings/widget`). Atur warna/pesan bila perlu dan tambahkan host situs target, tanpa protokol, misalnya `localhost:4000` atau `help.example.com`. Simpan.
+2. Buka **Channels → Web Widget** (`/channels/web-widget`). Atur warna/pesan bila perlu dan tambahkan host situs target, tanpa protokol, misalnya `localhost:4000` atau `help.example.com`. Simpan.
 3. Salin embed snippet yang diberikan. Untuk deployment, `src` harus mengarah ke bundle Widget yang sudah dibangun dan di-host, misalnya:
 
    ```html
@@ -92,7 +92,7 @@ Untuk menguji aturan keamanan origin, buka demo host dari origin yang belum diiz
 
 ### Menguji logo pada header Widget
 
-1. Di **Settings → Web Widget**, unggah logo (PNG/JPG/SVG, maks. 2MB).
+1. Di **Channels → Web Widget**, unggah logo (PNG/JPG/SVG, maks. 2MB).
 2. Muat ulang demo host (`http://localhost:3002/demo.html?widgetKey=<widget-key>`), buka launcher, dan konfirmasi logo tersebut muncul di header panel chat. Tombol launcher tetap memakai ikon generik.
 3. Hapus logo dari Settings, muat ulang demo host lagi, dan konfirmasi header kembali memakai ikon chat generik.
 
@@ -132,9 +132,9 @@ Jika email tidak muncul:
 
 `pnpm seed:demo` sudah menyiapkan HTTP Tool dan MCP Server demo di atas melalui application service yang sama dengan langkah manual berikut, sehingga langkah ini opsional — jalankan untuk melihat sendiri alur Admin, atau untuk memahami apa yang sudah diseed:
 
-1. Login sebagai Admin, buka **Settings → Tools** (`/settings/tools`). Tool HTTP `getSubscriptionStatus` (method GET, URL `http://localhost:8001/subscription-status`) sudah ada dari seed; buat manual dengan tombol "New HTTP Tool" bila ingin mengulang dari awal.
-2. Buka **Settings → MCP Servers** (`/settings/mcp`). Tambah server dengan URL `http://localhost:8001/mcp`, klik **Test Connection** (harus sukses selama Business System berjalan dan `ALLOW_LOCAL_HTTP_TOOLS=true`), lalu **Discover Tools**. Tool `getInvoiceStatus` muncul dengan status belum diaktifkan; review lalu aktifkan dengan risk `READ_ONLY`.
-3. Masih di **Settings → Tools**, nyalakan sakelar kedua Tool untuk AI Agent, buka detail masing-masing, lalu isi **When to use this tool** — kalimat itu ditambahkan ke deskripsi Tool yang dibaca model, dan itulah satu-satunya cara mengarahkan pemilihan Tool. Tidak ada aturan yang memaksa sebuah Tool dipanggil.
+1. Login sebagai Admin, buka **Configure → Tools** (`/agent/tools`). Tool HTTP `getSubscriptionStatus` (method GET, URL `http://localhost:8001/subscription-status`) sudah ada dari seed; buat manual dengan tombol "New HTTP Tool" bila ingin mengulang dari awal.
+2. Buka **Configure → MCP Servers** (`/agent/mcp-servers`). Tambah server dengan URL `http://localhost:8001/mcp`, klik **Test Connection** (harus sukses selama Business System berjalan dan `ALLOW_LOCAL_HTTP_TOOLS=true`), lalu **Discover Tools**. Tool `getInvoiceStatus` muncul dengan status belum diaktifkan; review lalu aktifkan dengan risk `READ_ONLY`.
+3. Masih di **Configure → Tools**, nyalakan sakelar kedua Tool untuk AI Agent, buka detail masing-masing, lalu isi **When to use this tool** — kalimat itu ditambahkan ke deskripsi Tool yang dibaca model, dan itulah satu-satunya cara mengarahkan pemilihan Tool. Tidak ada aturan yang memaksa sebuah Tool dipanggil.
 4. Tool yang baru ditemukan tapi belum diaktifkan/ditetapkan tidak pernah bisa dipanggil AI Agent, termasuk bila Customer menyebut namanya secara eksplisit — resolver runtime hanya mengembalikan Tool yang enabled, tersedia, dan ditetapkan (lihat W3b).
 
 ## 4. Skenario produk end-to-end
@@ -147,14 +147,14 @@ Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak
 | W2 | `How do I reset my password?` | AI menjawab dari Knowledge Customer-Safe, bahasa mengikuti Customer | Widget memperlihatkan balasan bertahap; Ticket diklasifikasi |
 | W3 | `Is my subscription active?` | AI Agent memilih sendiri Webhook Tool `getSubscriptionStatus` dari deskripsi dan guidance-nya, lalu menjawab dari data live Business System, bukan mengarang | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `HTTP` |
 | W3a | `What's the status of my latest invoice?` | Dari dua Tool yang aktif, AI Agent memilih MCP Tool `getInvoiceStatus` karena deskripsi dan guidance-nya yang cocok | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `MCP` |
-| W3b | Di `/settings/mcp`, discover ulang lalu jangan aktifkan sebuah Tool baru (atau nonaktifkan `getInvoiceStatus`), lalu ulangi W3a | AI Agent tidak pernah memanggil Tool yang belum diaktifkan/ditetapkan, termasuk bila Customer menyebut namanya; AI menjawab dari Knowledge saja atau eskalasi | Tidak ada `TOOL_CALLED` baru untuk Tool tersebut di AI Activity |
+| W3b | Di `/agent/mcp-servers`, discover ulang lalu jangan aktifkan sebuah Tool baru (atau nonaktifkan `getInvoiceStatus`), lalu ulangi W3a | AI Agent tidak pernah memanggil Tool yang belum diaktifkan/ditetapkan, termasuk bila Customer menyebut namanya; AI menjawab dari Knowledge saja atau eskalasi | Tidak ada `TOOL_CALLED` baru untuk Tool tersebut di AI Activity |
 | W3c | Hentikan Business System (`docker compose -f docker-compose.dev.yaml stop business-system` atau matikan proses dev-nya), lalu ulangi W3 | Panggilan Tool yang dipilih AI Agent gagal; Ticket `ESCALATED` dengan alasan `BUSINESS_TOOL_FAILURE` | AI Activity mencatat `TOOL_FAILED`; nyalakan lagi Business System setelah selesai |
 | W4 | Minta refund atau `I want to speak to a human` | Ticket `ESCALATED`, acknowledgement dikirim, AI berhenti membalas pesan berikutnya | Admin/Human Agent: `/chat/unassigned` |
 | W5 | Dari W4, login Human Agent → Unassigned → Claim | Hanya satu Claim sukses; Ticket `HUMAN_HANDLING`; Handoff dan Escalation Summary tersedia | `/chat` dan Widget menerima perkenalan Human Agent |
 | W6 | Dari W5, minta Suggested Reply, edit bila perlu, kirim reply, lalu Resolve | Draft tidak terkirim otomatis; Resolution oleh Human Agent mengirim closing message; Widget read-only | `/chat`; Widget menampilkan tombol Start a new conversation |
 | W7 | Pertanyaan W2, kemudian `Yes, that solved it` | AI melakukan Resolution sebagai `CUSTOMER_CONFIRMED` | Widget read-only; trace keputusan `RESOLVE` |
 | W8 | Pertanyaan W2, kemudian hanya `thanks` | Tidak boleh langsung Resolution; AI meminta klarifikasi bila perlu | Widget tetap menerima input |
-| W9 | Set Follow-Up dan Auto-Resolution ke beberapa detik di `/settings/ai`; kirim W2 lalu diam | Satu Follow-Up terkirim. Bila Auto-Resolution aktif dan Customer tetap diam, Ticket selesai sebagai `CUSTOMER_INACTIVE` | Log Worker, Widget, dan Ticket status |
+| W9 | Set Follow-Up dan Auto-Resolution ke beberapa detik di `/agent`; kirim W2 lalu diam | Satu Follow-Up terkirim. Bila Auto-Resolution aktif dan Customer tetap diam, Ticket selesai sebagai `CUSTOMER_INACTIVE` | Log Worker, Widget, dan Ticket status |
 | W10 | Saat Ticket masih `AI_HANDLING`, login Admin → `/chat/ai-live` → Take over | Streaming AI berhenti, Ticket diambil Admin, Customer menerima perkenalan manusia, timer dibatalkan | `/chat/ai-live` dan Widget |
 | W11 | Kirim `.txt` berisi konteks dan pertanyaan terkait | Status Attachment berubah processing → ready dan isinya menjadi konteks Ticket | Widget dan log Worker. PDF/JPEG/PNG memerlukan kredensial Attachment tambahan |
 | W12 | Selesaikan sebuah Ticket sebagai Customer tertentu, lalu buat Web Session baru dengan email yang sama dan tanyakan konteks kasus lama | Ticket Knowledge hanya dapat dipakai pada Customer Identity dan Channel sama | Trace retrieval dan jawaban; jangan gunakan sebagai sumber kebijakan baru |
@@ -165,23 +165,30 @@ Catatan keputusan: bila Admin melakukan Takeover, tetapkan kembali Ticket ke Hum
 
 ## 5. Test case AI yang wajib dijalankan
 
-Jalankan seluruh suite setelah stack dan key AI siap:
+Eval dijalankan terhadap Workspace live yang ditunjuk `EVAL_WORKSPACE_ID` (bukan corpus
+in-memory), memakai Knowledge Source, instructions, dan Tool Assignment Workspace tersebut.
+Butuh `COMPLETION_GATEWAY_API_KEY` (atau `OPENROUTER_API_KEY`).
 
 ```sh
 pnpm eval:ai-agent
 ```
 
-Delapan kategori yang dicakup: `visibility-safety`, `grounding`, `escalation-required`, `escalation-forbidden`, `tool-calling`, `classification`, `resolution-detection`, dan `language`. Setiap kategori punya negative control yang memang harus gagal; itu bukti evaluator tidak selalu melaporkan hijau.
+Suite dibagi per metric: `contains`, `exactmatch`, `relevancy`, `faithfulness`, `geval`,
+`decision`, `tool`, `visibility`, `language`, `retriever`, `retrieval`, dan
+`negativecontrol`. `negativecontrol` adalah canary yang memang selalu gagal — bila ia lulus,
+evaluator atau reporting yang rusak, bukan AI Agent yang sempurna.
 
-Untuk mengisolasi kegagalan, jalankan kategori atau case tertentu:
+Untuk mengisolasi kegagalan, jalankan satu suite, satu kategori Case, atau satu Case:
 
 ```sh
-pnpm eval:ai-agent -- --category grounding
-pnpm eval:ai-agent -- --category language
-pnpm eval:ai-agent -- --category grounding --case password-reset-answered-from-source
+pnpm eval:ai-agent faithfulness
+pnpm eval:ai-agent staleness
+pnpm eval:ai-agent --id=staleness-conflicting-return-window
 ```
 
-Eval memakai corpus in-memory yang tetap, bukan Knowledge pada Workspace demo. Jadi gunakan tabel W1–W14 untuk membuktikan integrasi produk, dan eval untuk mencegah regresi perilaku AI.
+Karena eval memakai Workspace live, tabel W1–W14 tetap dipakai untuk membuktikan integrasi
+produk, dan eval untuk mencegah regresi perilaku AI. Inventaris Case dan panduan triage:
+[docs/testing/ai-agent-eval-cases.md](ai-agent-eval-cases.md).
 
 ## 6. Telemetry di Langfuse
 
