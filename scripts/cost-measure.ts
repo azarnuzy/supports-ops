@@ -113,30 +113,54 @@ function lastUsage(text: string): Record<string, unknown> | undefined {
   return found;
 }
 
+type UsageInfo = {
+  prompt_tokens?: number;
+  input_tokens?: number;
+  completion_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number | null;
+  pages_processed?: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+    cache_write_tokens?: number | null;
+    cache_creation_tokens?: number | null;
+  };
+  input_tokens_details?: {
+    cached_tokens?: number;
+    cache_write_tokens?: number | null;
+    cache_creation_tokens?: number | null;
+  };
+  completion_tokens_details?: {
+    reasoning_tokens?: number;
+  };
+  output_tokens_details?: {
+    reasoning_tokens?: number;
+  };
+};
+
 function toCall(kind: CallKind, model: string, status: number, text: string): ProviderCall {
-  const body = lastUsage(text) ?? {};
-  const usage = (body.usage ?? body.usage_info ?? null) as Record<string, any> | null;
-  const promptDetails = usage?.prompt_tokens_details ?? usage?.input_tokens_details ?? {};
+  const body = (lastUsage(text) ?? {}) as {
+    usage?: UsageInfo;
+    usage_info?: UsageInfo;
+    pages?: unknown[];
+  };
+  const usage = body.usage ?? body.usage_info ?? null;
+  const promptDetails = usage?.prompt_tokens_details ?? usage?.input_tokens_details;
+  const completionDetails = usage?.completion_tokens_details ?? usage?.output_tokens_details;
   const cacheWrite =
-    promptDetails.cache_write_tokens ??
-    promptDetails.cache_creation_tokens ??
+    promptDetails?.cache_write_tokens ??
+    promptDetails?.cache_creation_tokens ??
     usage?.cache_creation_input_tokens ??
     null;
   return {
     cacheWriteTokens: typeof cacheWrite === "number" ? cacheWrite : null,
-    cachedInputTokens: promptDetails.cached_tokens ?? 0,
+    cachedInputTokens: promptDetails?.cached_tokens ?? 0,
     inputTokens: usage?.prompt_tokens ?? usage?.input_tokens ?? 0,
     kind,
     model: model || (kind === "ocr" ? "mistral-ocr-latest" : ""),
     outputTokens: usage?.completion_tokens ?? usage?.output_tokens ?? 0,
-    pages:
-      kind === "ocr"
-        ? (usage?.pages_processed ?? (body.pages as unknown[] | undefined)?.length ?? 0)
-        : 0,
-    reasoningTokens:
-      usage?.completion_tokens_details?.reasoning_tokens ??
-      usage?.output_tokens_details?.reasoning_tokens ??
-      0,
+    pages: kind === "ocr" ? (usage?.pages_processed ?? body.pages?.length ?? 0) : 0,
+    reasoningTokens: completionDetails?.reasoning_tokens ?? 0,
     status,
     usage,
   };
@@ -153,9 +177,7 @@ const { getAttachmentProcessQueue } = await import(
 );
 const { getTicketKnowledgeIndexQueue } = await import("../apps/api/src/modules/tickets/queue");
 const { cancelFollowUpTimers } = await import("../apps/api/src/modules/follow-up/queue");
-const { claimTicket, completeHandoff } = await import(
-  "../apps/api/src/modules/tickets/services"
-);
+const { claimTicket, completeHandoff } = await import("../apps/api/src/modules/tickets/services");
 const { storageConfig } = await import("../apps/api/src/config");
 const { createStorage } = await import("../packages/storage/src/index");
 const worker = await import("../apps/worker/src/index");
@@ -306,7 +328,7 @@ async function settled(sessionId: string, position: number) {
   const ticket = session.ticket;
   if (ticket && isTicketGenerating(ticket.id)) return false;
   if (!(await queuesIdle())) return false;
-  if (!ticket || ticket.status !== "AI_HANDLING") return true;
+  if (ticket?.status !== "AI_HANDLING") return true;
   const pendingAttachments = await prisma.attachment.count({
     where: { processingStatus: "PROCESSING", ticketId: ticket.id },
   });
@@ -319,9 +341,24 @@ async function settled(sessionId: string, position: number) {
   );
 }
 
-async function post(path: string, body: BodyInit, headers: Record<string, string> = {}) {
+type SessionResponse = {
+  id: string;
+  accessToken: string;
+};
+
+type MessageResponse = {
+  position?: number;
+  message?: { position?: number };
+  reply?: { position?: number };
+};
+
+async function post<T = Record<string, unknown>>(
+  path: string,
+  body: BodyInit,
+  headers: Record<string, string> = {},
+): Promise<T> {
   const response = await realFetch(`${api}${path}`, { body, headers, method: "POST" });
-  const json = (await response.json().catch(() => ({}))) as Record<string, any>;
+  const json = (await response.json().catch(() => ({}))) as T;
   if (!response.ok) throw new Error(`${path} → ${response.status} ${JSON.stringify(json)}`);
   return json;
 }
@@ -332,7 +369,7 @@ async function runSession(scriptId: string, run: number) {
   const humanAgent = await prisma.user.findFirstOrThrow({
     where: { role: "HUMAN_AGENT", workspaceId },
   });
-  const session = await post(
+  const session = await post<SessionResponse>(
     `/widget/pre-chat?key=${widget.widgetKey}`,
     JSON.stringify({
       email: `cost-${scriptId}-${run}-${randomUUID().slice(0, 8)}@example.com`,
@@ -341,8 +378,8 @@ async function runSession(scriptId: string, run: number) {
     }),
     { "Content-Type": "application/json", Origin: origin },
   );
-  const sessionId = session.id as string;
-  const token = session.accessToken as string;
+  const sessionId = session.id;
+  const token = session.accessToken;
   calls = [];
   let customerMessages = 0;
   let handedOff = false;
@@ -363,7 +400,7 @@ async function runSession(scriptId: string, run: number) {
       const message =
         "attach" in step
           ? await postAttachment(token, step.attach, step.say)
-          : await post(
+          : await post<MessageResponse>(
               `/widget/messages?token=${token}`,
               JSON.stringify({ content: step.say, idempotencyKey: randomUUID() }),
               { "Content-Type": "application/json" },
@@ -412,7 +449,7 @@ async function postAttachment(token: string, fileName: string, content: string) 
       type: fileName.endsWith(".pdf") ? "application/pdf" : "image/png",
     }),
   );
-  return post(`/widget/attachments?token=${token}`, form);
+  return post<MessageResponse>(`/widget/attachments?token=${token}`, form);
 }
 
 /** Leaves the eval Workspace exactly as it was: a measurement Session must
@@ -508,7 +545,9 @@ async function measureIngest() {
 async function deleteScratchWorkspace(id: string) {
   const sources = await prisma.knowledgeSource.findMany({ where: { workspaceId: id } });
   await Promise.all(
-    sources.map((source) => source.sourceUrl && storage.deleteObject(source.sourceUrl).catch(() => {})),
+    sources.map(
+      (source) => source.sourceUrl && storage.deleteObject(source.sourceUrl).catch(() => {}),
+    ),
   );
   await prisma.chunk.deleteMany({ where: { workspaceId: id } });
   await prisma.knowledgeSource.deleteMany({ where: { workspaceId: id } });
@@ -525,7 +564,9 @@ async function deleteLeftovers() {
   const workspaces = await prisma.workspace.findMany({ where: { slug: { startsWith: "cost-" } } });
   for (const workspace of workspaces) await deleteScratchWorkspace(workspace.id);
   if (sessions.length || workspaces.length) {
-    console.log(`Removed ${sessions.length} Session(s), ${workspaces.length} Workspace(s) left by an earlier run.`);
+    console.log(
+      `Removed ${sessions.length} Session(s), ${workspaces.length} Workspace(s) left by an earlier run.`,
+    );
   }
 }
 
@@ -545,15 +586,19 @@ type Totals = Record<(typeof fields)[number], number | null>;
 function totalsByKind(list: ProviderCall[]) {
   const byKind: Record<string, Totals> = {};
   for (const call of list) {
-    const totals = (byKind[call.kind] ??= {
-      cacheWriteTokens: null,
-      cachedInputTokens: 0,
-      calls: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      pages: 0,
-      reasoningTokens: 0,
-    });
+    let totals = byKind[call.kind];
+    if (!totals) {
+      totals = {
+        cacheWriteTokens: null,
+        cachedInputTokens: 0,
+        calls: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        pages: 0,
+        reasoningTokens: 0,
+      };
+      byKind[call.kind] = totals;
+    }
     totals.calls = (totals.calls ?? 0) + 1;
     for (const field of fields.slice(1)) {
       const value = call[field as keyof ProviderCall] as number | null;
@@ -601,11 +646,65 @@ const slug = (value = "") => value.replace(/[^a-z0-9.]+/gi, "-");
 const outDir = join(import.meta.dirname, "..", "docs", "research", "cost-runs");
 const suffix = `-${slug(models.main)}-${slug(models.fast)}.json`;
 
+type SessionToolCall = {
+  error: string | undefined;
+  ok: boolean;
+  origin: string;
+  tool: string;
+};
+
+type SessionOutcome =
+  | {
+      escalationReason: string | null;
+      status: string;
+    }
+  | {
+      status: "NO_TICKET";
+    };
+
+type SessionRunResult = {
+  calls: ProviderCall[];
+  toolCalls: SessionToolCall[];
+  customerMessages: number;
+  handedOff: boolean;
+  outcome: SessionOutcome;
+  replies: number;
+};
+type ScriptProfileEntry = {
+  description: string;
+  runs: SessionRunResult[];
+  median?: Record<string, Totals>;
+};
+
+type IngestProfile = {
+  calls: ProviderCall[];
+  chunks: number;
+  documents: number;
+  failed: number;
+  totals: Record<string, Totals>;
+};
+
+type CostProfile = {
+  gateway: {
+    completion: string;
+    embedding: string;
+  };
+  measuredAt: string;
+  completedAt?: string;
+  models: typeof models;
+  runsPerScript: number;
+  scripts: Record<string, ScriptProfileEntry>;
+  ingest?: IngestProfile;
+};
+
 /** Resumes the newest unfinished profile for the same models and run count,
  * so a run that dies midway never re-measures what it already measured. */
 async function unfinishedProfile() {
   await mkdir(outDir, { recursive: true });
-  const names = (await readdir(outDir)).filter((name) => name.endsWith(suffix)).sort().reverse();
+  const names = (await readdir(outDir))
+    .filter((name) => name.endsWith(suffix))
+    .sort()
+    .reverse();
   for (const name of names) {
     const existing = JSON.parse(await readFile(join(outDir, name), "utf8"));
     if (
@@ -613,7 +712,7 @@ async function unfinishedProfile() {
       existing.runsPerScript === runs &&
       JSON.stringify(existing.models) === JSON.stringify(models)
     ) {
-      return { file: join(outDir, name), profile: existing as Record<string, any> };
+      return { file: join(outDir, name), profile: existing as CostProfile };
     }
   }
   return undefined;
@@ -622,7 +721,7 @@ async function unfinishedProfile() {
 const resumed = await unfinishedProfile();
 const measuredAt = new Date().toISOString();
 const outFile = resumed?.file ?? join(outDir, `${measuredAt.slice(0, 10)}${suffix}`);
-const profile: Record<string, any> = resumed?.profile ?? {
+const profile: CostProfile = resumed?.profile ?? {
   gateway: {
     completion: process.env.COMPLETION_GATEWAY_BASE_URL || "https://openrouter.ai/api/v1",
     embedding: "https://openrouter.ai/api/v1",
@@ -642,16 +741,24 @@ try {
   await deleteLeftovers();
   for (const [id, script] of Object.entries(scripts)) {
     if (!wanted(id)) continue;
-    const entry = (profile.scripts[id] ??= { description: script.description, runs: [] });
+    let entry = profile.scripts[id];
+    if (!entry) {
+      entry = { description: script.description, runs: [] };
+      profile.scripts[id] = entry;
+    }
     for (let run = entry.runs.length + 1; run <= runs; run += 1) {
       console.log(`▶ ${id} run ${run}/${runs}`);
       const result = await runSession(id, run);
-      console.log(`  ${JSON.stringify(result.outcome)} ${JSON.stringify(totalsByKind(result.calls))}`);
+      console.log(
+        `  ${JSON.stringify(result.outcome)} ${JSON.stringify(totalsByKind(result.calls))}`,
+      );
       for (const tool of result.toolCalls) {
-        console.log(`  tool ${tool.ok ? "✓" : "✗"} ${tool.origin} ${tool.tool}${tool.error ? ` — ${tool.error}` : ""}`);
+        console.log(
+          `  tool ${tool.ok ? "✓" : "✗"} ${tool.origin} ${tool.tool}${tool.error ? ` — ${tool.error}` : ""}`,
+        );
       }
       entry.runs.push(result);
-      entry.median = medianByKind(entry.runs.map((r: { calls: ProviderCall[] }) => totalsByKind(r.calls)));
+      entry.median = medianByKind(entry.runs.map((r) => totalsByKind(r.calls)));
       await saveProfile();
     }
     if (entry.runs.length >= runs) console.log(`✓ ${id} (${entry.runs.length} runs)`);
