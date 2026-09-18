@@ -19,6 +19,7 @@
     "createsuperuser": "pnpm with-env tsx scripts/createsuperuser.ts",
     "seed:demo": "pnpm with-env tsx scripts/seed-demo.ts",
     "eval:ai-agent": "pnpm with-env tsx apps/api/src/evals/run.ts",
+    "cost:measure": "pnpm with-env tsx scripts/cost-measure.ts",
     "db:generate": "pnpm --filter @repo/api db:generate",
     "db:deploy": "pnpm --filter @repo/api db:deploy",
     "db:deploy:production": "pnpm --filter @repo/api db:deploy:production",
