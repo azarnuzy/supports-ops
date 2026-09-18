@@ -14,6 +14,7 @@ pnpm workspace with:
 - `packages/logger`: Pino logging and OpenTelemetry setup for server applications.
 - `packages/shared`: schemas shared across application boundaries.
 - `packages/storage`: S3-compatible object storage primitives.
+- `packages/test-db`: throwaway, migrated Postgres databases for `*.db.test.ts` suites.
 - `packages/tools`: Business Tool boundary.
 - `packages/ui`: shared shadcn components.
 
@@ -155,15 +156,34 @@ If `TELEMETRY_API_KEY_HEADER` is `authorization`, the exporter sends `Authorizat
 
 ## AI Agent Evals
 
-`packages/ai-agent/src/evals` runs Eval Cases against a fixed, in-memory corpus — never against a live Workspace — to judge whether a change to the AI Agent made things better or worse. Run by hand, not in CI (ADR-0010):
+`apps/api/src/evals` runs Eval Cases against the live Workspace named by `EVAL_WORKSPACE_ID` — its published Knowledge Sources, its AI Agent instructions, and its assigned Tools — to judge whether a change to the AI Agent made things better or worse. Run by hand, not in CI (ADR-0010):
 
 ```sh
-OPENROUTER_API_KEY=... pnpm eval:ai-agent
-pnpm eval:ai-agent -- --category grounding
-pnpm eval:ai-agent -- --category grounding --case password-reset-answered-from-source
+pnpm eval:ai-agent                                 # every suite
+pnpm eval:ai-agent faithfulness                    # one metric suite
+pnpm eval:ai-agent staleness                       # one Case category
+pnpm eval:ai-agent --id=staleness-conflicting-return-window
 ```
 
-Eight categories defend one requirement each: visibility safety, grounding, escalation that must happen, escalation that must not happen, tool calling, classification, resolution detection, and language. Every category includes a negative-control case that always fails, so a broken evaluator can't quietly mark everything as passing. Results print to the console and report through the OTel eval reporter alongside agent telemetry.
+Suites are per metric: `contains`, `exactmatch`, `relevancy`, `faithfulness`, `geval`, `decision`, `tool`, `visibility`, `language`, `retriever`, `retrieval`, and `negativecontrol`. Cases carry a category (`abstention`, `attachment`, `common`, `edge`, `escalation`, `guardrail`, `language`, `staleness`, `toolCall`, `visibility`) that can be used as a filter. `negativecontrol` is a canary wired to always fail, so a broken evaluator can't quietly mark everything as passing. Results print to the console and report through the OTel eval reporter alongside agent telemetry.
+
+Needs `EVAL_WORKSPACE_ID` plus `COMPLETION_GATEWAY_API_KEY` (or `OPENROUTER_API_KEY`). Case inventory and failure triage: [`docs/testing/ai-agent-eval-cases.md`](docs/testing/ai-agent-eval-cases.md).
+
+## Session Cost
+
+`pnpm cost:measure` (`scripts/cost-measure.ts`) drives scripted Sessions through the real Web Widget HTTP API against `EVAL_WORKSPACE_ID` — API server and attachment/Ticket Knowledge workers in-process — and taps `fetch` to record every provider call's reported usage, plus one Knowledge ingestion run in a throwaway Workspace. It writes a token profile (no prices) to `docs/research/cost-runs/` and resumes an unfinished profile on a re-run:
+
+```sh
+pnpm cost:measure                  # all scripts ×3 + ingest
+pnpm cost:measure faq-short ingest # a subset
+COST_RUNS=1 pnpm cost:measure      # fewer runs
+```
+
+Stop the dev worker first, or it consumes this run's jobs outside the tap. Cost model and the first measurement: [`docs/research/ai-agent-session-cost.md`](docs/research/ai-agent-session-cost.md).
+
+## Model and Gateway Configuration
+
+Completions go through OpenRouter by default. Point them at another OpenAI-compatible gateway with `COMPLETION_GATEWAY_BASE_URL` and `COMPLETION_GATEWAY_API_KEY`; leave both empty to keep using `OPENROUTER_API_KEY`. Models are chosen with `EMBEDDING_MODEL`, `LLM_MODEL_FAST`, and `LLM_MODEL_MAIN`; `LLM_MAIN_REASONING_EFFORT` and `LLM_MAIN_MAX_OUTPUT_TOKENS` tune the main model and may be left empty to use provider defaults. See `.env.example` and [`docs/setup/03-ai-credentials.md`](docs/setup/03-ai-credentials.md).
 
 ## Docker
 
