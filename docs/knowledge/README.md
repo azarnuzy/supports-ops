@@ -1,4 +1,12 @@
-# Knowledge pack NusaWorkspace
+# Knowledge packs
+
+Dua corpus tinggal di folder ini.
+
+**Northstar Outfitters (aktif).** Delapan PDF `01_…` sampai `08_…` adalah Knowledge Source Workspace eval (`EVAL_WORKSPACE_ID`) yang dipakai `pnpm eval:ai-agent`: lima Customer-Safe, dua Internal-Only (`06_INTERNAL_…`, `07_INTERNAL_…`), dan satu legacy (`08_LEGACY_…`) yang sengaja tetap Published sebagai conflict fixture. Peran tiap file, hierarki kewenangannya, dan Case yang memakainya ada di [docs/testing/ai-agent-eval-cases.md](../testing/ai-agent-eval-cases.md).
+
+**NusaWorkspace (legacy demo).** Sisa dokumen ini menjelaskan corpus markdown lama di `customer-safe/` dan `internal-only/`. Ia tidak dipakai eval; untuk demo end-to-end pakai [docs/demo/](../demo/) dan `pnpm seed:demo`.
+
+## Knowledge pack NusaWorkspace
 
 Corpus ini merepresentasikan **NusaWorkspace**, perusahaan SaaS B2B fiktif yang menyediakan workspace kolaborasi dan akses API. Seluruh kebijakan, harga, batas paket, kanal dukungan, serta prosedur internal dibuat konsisten agar dapat langsung dipakai untuk demo dan pengujian SupportOps.
 

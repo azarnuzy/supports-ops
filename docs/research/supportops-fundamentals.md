@@ -133,9 +133,9 @@ Best practice eksternal dipakai sebagai alat pembanding. Setiap sesi harus membe
 
 #### 16. Testing pada seam yang tepat dan AI evals
 
-- **Pelajari:** unit test untuk logic, database-backed integration test untuk invariant dan race, API contract test, browser E2E untuk user-visible behavior, serta eval khusus perilaku AI dengan corpus tetap.
+- **Pelajari:** unit test untuk logic, database-backed integration test untuk invariant dan race, API contract test, browser E2E untuk user-visible behavior, serta eval khusus perilaku AI terhadap Workspace eval yang live (`EVAL_WORKSPACE_ID`).
 - **Istilah best practice:** test seam, test isolation, contract test, integration test, end-to-end test, regression test, deterministic grader, model-as-judge, rubric, representative dataset, positive/negative control, held-out case.
-- **Jejak di repo:** [`packages/test-db`](../../packages/test-db), [`apps/api/src/modules/registration/services.db.test.ts`](../../apps/api/src/modules/registration/services.db.test.ts), [`apps/platform/playwright.config.ts`](../../apps/platform/playwright.config.ts), [`packages/ai-agent/src/evals`](../../packages/ai-agent/src/evals), [`docs/testing/e2e-runbook.md`](../testing/e2e-runbook.md).
+- **Jejak di repo:** [`packages/test-db`](../../packages/test-db), [`apps/api/src/modules/registration/services.db.test.ts`](../../apps/api/src/modules/registration/services.db.test.ts), [`apps/platform/playwright.config.ts`](../../apps/platform/playwright.config.ts), [`apps/api/src/evals`](../../apps/api/src/evals), [`docs/testing/e2e-runbook.md`](../testing/e2e-runbook.md).
 - **Sumber primer:** [Vitest testing in practice](https://vitest.dev/guide/learn/testing-in-practice), [Playwright best practices](https://playwright.dev/docs/best-practices), [OpenAI evaluation best practices](https://developers.openai.com/api/docs/guides/evaluation-best-practices), [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework).
 
 #### 17. Observability, audit trail, privacy, dan operasi produksi
