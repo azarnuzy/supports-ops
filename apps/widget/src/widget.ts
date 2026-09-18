@@ -1,5 +1,6 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import { orderedInsertIndex } from "./message-order";
 
 type WidgetConfig = {
   botName: string;
@@ -205,6 +206,13 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     container.append(element);
   };
   const appendMessage = (message: WidgetMessage) => {
+    // A positioned Message supersedes anything rendered without a position:
+    // the pre-Ticket ephemeral turns (they replay from the DB with their real
+    // position) and a streamed reply that has now been persisted. Clearing
+    // them here keeps every remaining bubble orderable.
+    messages?.querySelectorAll("[data-ephemeral], [data-provisional-id]").forEach((stale) => {
+      stale.remove();
+    });
     if (messages?.querySelector(`[data-position="${message.position}"]`)) return;
     const bubble = document.createElement("div");
     bubble.className = `message ${message.senderType === "CUSTOMER" ? "message-customer" : ""}`;
@@ -231,12 +239,18 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     bubble.append(time);
     // A full replay (no Last-Event-ID cursor) can deliver an earlier message
     // after a later one is already rendered, so insert by `position` instead
-    // of always appending at the end.
-    const next = [...(messages?.querySelectorAll<HTMLElement>("[data-position]") ?? [])].find(
-      (existing) => Number(existing.dataset.position) > message.position,
+    // of always appending at the end — and above the unpositioned bubbles
+    // (optimistic send, ephemeral turn, streaming reply, typing) that always
+    // belong last.
+    const rendered = [...(messages?.children ?? [])] as HTMLElement[];
+    const index = orderedInsertIndex(
+      rendered.map((existing) =>
+        existing.dataset.position === undefined ? undefined : Number(existing.dataset.position),
+      ),
+      message.position,
     );
-    if (next) next.before(bubble);
-    else messages?.append(bubble);
+    if (index === -1) messages?.append(bubble);
+    else rendered[index].before(bubble);
     // `.message` uses `width: fit-content` to hug the widest line, but browsers
     // resolve that against the available width rather than the rendered content
     // once text wraps — leaving a bubble stretched wider than any actual line.
@@ -329,10 +343,6 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
         senderType: string;
       };
       hideTyping();
-      messages?.querySelectorAll("[data-ephemeral]").forEach((message) => {
-        message.remove();
-      });
-      messages?.querySelector(`[data-provisional-id]`)?.remove();
       appendMessage(message);
     });
     source.addEventListener("message.delta", (event) => {
