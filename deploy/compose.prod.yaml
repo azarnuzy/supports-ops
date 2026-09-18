@@ -11,10 +11,23 @@ x-application-environment: &application-environment
   TELEMETRY_API_KEY_HEADER: "${TELEMETRY_API_KEY_HEADER:-authorization}"
   TELEMETRY_SERVICE_NAMESPACE: "${TELEMETRY_SERVICE_NAMESPACE:-supportops}"
 
+x-ai-environment: &ai-environment
+  # The Worker runs the AI Agent turn for WhatsApp through @repo/api, so it needs
+  # the same completion settings as the API. Left unset it silently falls back to
+  # the schema default model, which is why WhatsApp and Web answered differently.
+  OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in env.production}"
+  COMPLETION_GATEWAY_API_KEY: "${COMPLETION_GATEWAY_API_KEY:-}"
+  COMPLETION_GATEWAY_BASE_URL: "${COMPLETION_GATEWAY_BASE_URL:-https://openrouter.ai/api/v1}"
+  EMBEDDING_MODEL: "${EMBEDDING_MODEL:-openai/text-embedding-3-small}"
+  LLM_MODEL_FAST: "${LLM_MODEL_FAST:-deepseek/deepseek-v4-flash-0731}"
+  LLM_MODEL_MAIN: "${LLM_MODEL_MAIN:-openai/gpt-5.6-luna}"
+  LLM_MAIN_REASONING_EFFORT: "${LLM_MAIN_REASONING_EFFORT:-}"
+  LLM_MAIN_MAX_OUTPUT_TOKENS: "${LLM_MAIN_MAX_OUTPUT_TOKENS:-}"
+
 x-api-service: &api-service
   image: "ghcr.io/azarnuzy/supports-ops-api:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
   environment:
-    <<: *application-environment
+    <<: [*application-environment, *ai-environment]
     API_PORT: "8000"
     DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=public"
     BUSINESS_SYSTEM_URL: "http://business-system:8001"
@@ -22,10 +35,6 @@ x-api-service: &api-service
     BETTER_AUTH_URL: "https://api.support.azarnuzy.com"
     CLIENT_ORIGINS: "https://support.azarnuzy.com,https://widget.support.azarnuzy.com"
     INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
-    OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in env.production}"
-    EMBEDDING_MODEL: "${EMBEDDING_MODEL:-openai/text-embedding-3-small}"
-    LLM_MODEL_FAST: "${LLM_MODEL_FAST:-deepseek/deepseek-v4-flash-0731}"
-    LLM_MODEL_MAIN: "${LLM_MODEL_MAIN:-openai/gpt-5.6-luna}"
     REDIS_URL: "redis://redis:6379"
     SESSION_LINK_BASE_URL: "https://api.support.azarnuzy.com/widget/session"
     S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID in env.production}"
@@ -100,15 +109,12 @@ services:
     image: "ghcr.io/azarnuzy/supports-ops-worker:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
     restart: unless-stopped
     environment:
-      <<: *application-environment
+      <<: [*application-environment, *ai-environment]
       API_INTERNAL_URL: "http://api:8000"
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
       DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=public"
       INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
       MISTRAL_API_KEY: "${MISTRAL_API_KEY:-}"
-      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in env.production}"
-      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-openai/text-embedding-3-small}"
-      LLM_MODEL_FAST: "${LLM_MODEL_FAST:-deepseek/deepseek-v4-flash-0731}"
       REDIS_URL: "redis://redis:6379"
       EMAIL_FROM: "${EMAIL_FROM:?Set EMAIL_FROM in env.production}"
       RESEND_API_KEY: "${RESEND_API_KEY:?Set RESEND_API_KEY in env.production}"
