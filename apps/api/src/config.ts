@@ -62,7 +62,12 @@ const apiEnvSchema = z
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
     LLM_MODEL_MAIN: z.string().trim().min(1).default(defaultMainModel),
-    LLM_MAIN_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().optional(),
+    // An unset var and one set to "" must mean the same thing: Compose passes
+    // an empty string for an optional override, and z.coerce would read it as 0.
+    LLM_MAIN_MAX_OUTPUT_TOKENS: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.coerce.number().int().positive().optional(),
+    ),
     LLM_MAIN_REASONING_EFFORT: optionalStringSchema,
     INTERNAL_WORKER_TOKEN: optionalStringSchema,
     LOG_LEVEL: logLevelSchema,
