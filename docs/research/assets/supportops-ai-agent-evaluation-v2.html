@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent Evaluation</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#fff;color:#1e3a5f;overflow:auto;
+       font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+  #scaler{transform-origin:top left}
+  /* fixed 16:9 — nothing scrolls, nothing grows past the slide */
+  #page{width:1600px;height:900px;padding:22px 26px;display:flex;flex-direction:column;gap:13px}
+
+  /* ---- Icons8 m_outlined glyphs, PNG used as an alpha mask ---- */
+  .tile{border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ic{background-color:#fff;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+      -webkit-mask-position:center;mask-position:center;
+      -webkit-mask-size:contain;mask-size:contain}
+  .t-blue{background:#2f6fed}.t-green{background:#22c55e}.t-purple{background:#a855f7}
+  .t-indigo{background:#6366f1}.t-amber{background:#d97706}.t-teal{background:#0d9488}
+
+  header{display:flex;gap:15px;align-items:center;flex:none}
+  .logo{width:50px;height:50px;border-radius:12px;flex:none}
+  .brand{font-size:28px;font-weight:800;letter-spacing:-.4px;color:#123a6b;line-height:1}
+  .subtitle{font-size:15px;font-weight:700;color:#3f6ea8;margin-top:5px}
+  .tagline{margin-left:auto;text-align:right;font-size:14.5px;font-weight:800;color:#123a6b;
+           line-height:1.45}
+  .tagline span{display:block;font-size:11.5px;font-weight:700;color:#5b7290}
+
+  /* ---- the four stages ---- */
+  .pipe{display:flex;align-items:stretch;flex:none}
+  .stage{position:relative;flex:1;border:2px solid;border-radius:13px;padding:12px 14px;min-width:0}
+  .stage .top{display:flex;gap:9px;align-items:center;margin-bottom:8px}
+  .stage .top .tile{width:32px;height:32px}.stage .top .ic{width:19px;height:19px}
+  .num{position:absolute;top:-12px;left:12px;width:24px;height:24px;border-radius:50%;
+       color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;
+       justify-content:center}
+  .stage h3{margin:0;font-size:17px;font-weight:800;line-height:1.2}
+  .stage ul{margin:0;padding-left:17px;font-size:14px;line-height:1.95;font-weight:600}
+  .stage code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+              background:#fff;padding:1px 5px;border-radius:4px}
+
+  .s1{border-color:#e6cf7a;background:#fdf6dd}.s1 h3,.s1 li::marker{color:#8a6a12}
+  .s1 ul{color:#6f5a1e}.s1 code{color:#8a5a12;border:1px solid #ead9a0}.s1 .num{background:#d97706}
+  .s2{border-color:#c9a6ee;background:#f3e9fd}.s2 h3,.s2 li::marker{color:#6b21a8}
+  .s2 ul{color:#5b3a7e}.s2 .num{background:#a855f7}
+  .s3{border-color:#9dc7f5;background:#e7f1fe}.s3 h3,.s3 li::marker{color:#1e3a8a}
+  .s3 ul{color:#33558f}.s3 .num{background:#2f6fed}
+  .s4{border-color:#86d69b;background:#e4f7e9}.s4 h3,.s4 li::marker{color:#166534}
+  .s4 ul{color:#2f6242}.s4 code{color:#166534;border:1px solid #a9e3ba}.s4 .num{background:#22c55e}
+
+  .arr{flex:none;width:38px;align-self:center;height:14px;position:relative}
+  .arr::before{content:"";position:absolute;left:3px;top:6px;width:26px;height:2px;background:#8aa6cc}
+  .arr::after{content:"";position:absolute;right:2px;top:1px;
+              border:6px solid transparent;border-left-color:#8aa6cc}
+
+  .loop{flex:none;border:2px dashed #8aa6cc;border-top:none;border-radius:0 0 13px 13px;height:26px;
+        margin:0 80px;position:relative}
+  .loop span{position:absolute;left:50%;transform:translate(-50%,50%);bottom:0;background:#fff;
+             padding:0 11px;font-size:12.5px;font-weight:800;color:#4a6fa5}
+  .loop::after{content:"";position:absolute;left:-1px;top:-2px;
+               border:6.5px solid transparent;border-bottom-color:#8aa6cc}
+
+  /* ---- bands ---- */
+  .row{display:flex;gap:13px;flex:none}
+  .band{border:2px solid #9dc7f5;border-radius:13px;background:#f2f9ff;padding:11px 14px;
+        display:flex;flex-direction:column;min-width:0}
+  .band > h4{margin:0 0 9px;font-size:15px;font-weight:800;color:#123a6b;display:flex;gap:8px;
+             align-items:center}
+  .band > h4 .tile{width:26px;height:26px}.band > h4 .ic{width:16px;height:16px}
+
+  .cats{flex:1.5}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .cat{background:#fff;border:1.5px solid #9dc7f5;border-radius:999px;padding:5px 11px;
+       font-size:12.5px;font-weight:700;color:#33558f}
+  .cat b{color:#1e3a8a;font-weight:800;margin-right:4px}
+
+  .models{flex:1}
+  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .model{background:#fff;border:1.5px solid #9dc7f5;border-radius:9px;padding:6px 9px;
+         display:flex;gap:8px;align-items:center;min-width:0}
+  .model .tile{width:26px;height:26px}.model .ic{width:16px;height:16px}
+  .model b{display:block;font-size:12px;font-weight:800;color:#12365e}
+  .model code{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+              color:#1d4e89;margin-top:2px;white-space:nowrap}
+  .model.judge{border-color:#e6cf7a;background:#fffaec}
+  .model.judge b{color:#8a6a12}.model.judge code{color:#8a5a12}
+
+  .strat{flex:1;border-color:#86d69b;background:#eefbf1}
+  .strat > h4{color:#166534}
+  .strat ul{margin:0 0 10px;padding-left:17px;font-size:14px;line-height:1.95;font-weight:600;
+            color:#2f6242}
+  .strat li::marker{color:#22c55e}
+  .strat li b{color:#166534;font-weight:800}
+  .strat code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+              background:#fff;border:1px solid #a9e3ba;color:#166534;padding:1px 5px;border-radius:4px}
+  .prog{margin-top:auto;width:100%;border-collapse:collapse;background:#fff;
+        border:1.5px solid #a9e3ba;border-radius:8px;overflow:hidden;font-size:12.5px}
+  .prog th,.prog td{padding:4px 9px;text-align:left;white-space:nowrap;
+                    border-bottom:1px solid #dcf1e2}
+  .prog tr:last-child td{border-bottom:none}
+  .prog th{font-size:11.5px;font-weight:800;color:#166534;background:#e4f7e9}
+  .prog th span{font-weight:700;color:#5b8a6c}
+  .prog th:not(:first-child),.prog td:not(:first-child){text-align:right;width:74px}
+  .prog td{color:#2f6242;font-weight:700}
+  .prog td.up{color:#166534;font-weight:800}
+  .hl{margin-top:auto;background:#fff;border:1.5px solid #a9e3ba;border-radius:9px;padding:10px 12px}
+  .hl b{display:block;font-size:17px;font-weight:800;color:#166534;margin-bottom:3px}
+  .hl span{font-size:13px;font-weight:700;color:#2f6242;line-height:1.5}
+  .note{font-size:11.5px;font-weight:700;color:#4f7a60;margin-top:7px;line-height:1.45}
+
+  .result{flex:1.3}
+  .result .prog{margin-top:0;border-color:#bcd8f7;font-size:13.5px}
+  .result .prog th{color:#123a6b;background:#e7f1fe}
+  .result .prog th span{color:#5b7290}
+  .result .prog th,.result .prog td{border-bottom-color:#dbe8f8;padding:6px 10px}
+  .result .prog td{color:#33558f}
+  .result .prog td.up{color:#166534}
+  .result .prog th:nth-child(2),.result .prog td:nth-child(2){width:78px;color:#5b7290}
+  .note.blue{color:#4a6fa5;margin-top:auto;padding-top:8px}
+</style>
+</head>
+<body>
+<div id="scaler"><div id="page">
+
+  <header>
+    <img class="logo" src="support-ops-logo.png" alt="SupportOps logo">
+    <div>
+      <div class="brand">SupportOps</div>
+      <div class="subtitle">How we measure the AI Agent</div>
+    </div>
+    <div class="tagline">78 Eval Cases · 11 metrics
+      <span>Run by hand before a release — never a CI gate</span></div>
+  </header>
+
+  <div class="pipe">
+    <div class="stage s1">
+      <span class="num">1</span>
+      <div class="top"><div class="tile t-amber"><i class="ic" data-icon="test-tube"></i></div>
+        <h3>Test Set</h3></div>
+      <ul>
+        <li>78 Cases, 10 categories</li>
+        <li>Gold Chunks for retrieval</li>
+        <li>1 Case that must fail</li>
+      </ul>
+    </div>
+
+    <span class="arr"></span>
+
+    <div class="stage s2">
+      <span class="num">2</span>
+      <div class="top"><div class="tile t-purple"><i class="ic" data-icon="command-line"></i></div>
+        <h3>Run the real Agent</h3></div>
+      <ul>
+        <li>Production turn, unmodified</li>
+        <li>Live Workspace &amp; Knowledge</li>
+        <li>Irreversible Tools withheld</li>
+      </ul>
+    </div>
+
+    <span class="arr"></span>
+
+    <div class="stage s3">
+      <span class="num">3</span>
+      <div class="top"><div class="tile t-blue"><i class="ic" data-icon="scales"></i></div>
+        <h3>Score</h3></div>
+      <ul>
+        <li>Exact facts &amp; decisions</li>
+        <li>Tool choice &amp; no data leak</li>
+        <li>LLM judge for meaning</li>
+      </ul>
+    </div>
+
+    <span class="arr"></span>
+
+    <div class="stage s4">
+      <span class="num">4</span>
+      <div class="top"><div class="tile t-green"><i class="ic" data-icon="checked"></i></div>
+        <h3>Gate &amp; ship</h3></div>
+      <ul>
+        <li><code>recall@k ≥ 0.90</code></li>
+        <li>Latency, tokens, cost</li>
+        <li>Fail → the release waits</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="loop"><span>Feedback loop — prompt, retrieval, Tools, model</span></div>
+
+  <div class="row">
+    <div class="band cats">
+      <h4><span class="tile t-teal"><i class="ic" data-icon="layers"></i></span>What the 78 Cases cover</h4>
+      <div class="chips">
+        <span class="cat"><b>22</b> common — policy &amp; facts</span>
+        <span class="cat"><b>11</b> edge — corner cases</span>
+        <span class="cat"><b>9</b> toolCall — Shopify lookups</span>
+        <span class="cat"><b>9</b> escalation — hand to a human</span>
+        <span class="cat"><b>6</b> staleness — conflicting sources</span>
+        <span class="cat"><b>5</b> abstention — refuse to guess</span>
+        <span class="cat"><b>4</b> visibility — no internal leak</span>
+        <span class="cat"><b>4</b> guardrail — injection &amp; card data</span>
+        <span class="cat"><b>4</b> language — ID / EN</span>
+        <span class="cat"><b>4</b> attachment — PDF, image, voice</span>
+      </div>
+    </div>
+
+    <div class="band models">
+      <h4><span class="tile t-indigo"><i class="ic" data-icon="ai"></i></span>Models in the run</h4>
+      <div class="mgrid">
+        <div class="model"><div class="tile t-indigo"><i class="ic" data-icon="ai"></i></div>
+          <div><b>Main — under test</b><code>gpt-5.6-luna</code></div></div>
+        <div class="model"><div class="tile t-blue"><i class="ic" data-icon="flash"></i></div>
+          <div><b>Fast — classification</b><code>deepseek-v4-flash-0731</code></div></div>
+        <div class="model"><div class="tile t-purple"><i class="ic" data-icon="database"></i></div>
+          <div><b>Embedding — retrieval</b><code>text-embedding-3-small</code></div></div>
+        <div class="model judge"><div class="tile t-amber"><i class="ic" data-icon="scales"></i></div>
+          <div><b>Judge — grades only</b><code>gemini-3.8-flash · 0.7</code></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="flex:1;min-height:0">
+    <div class="band strat">
+      <h4><span class="tile t-green"><i class="ic" data-icon="refresh"></i></span>How we got the Agent to pass</h4>
+      <ul>
+        <li>Freeze a baseline first — <code>B0 → B3</code></li>
+        <li>One change, then re-run the suite</li>
+        <li>Fix the prompt, never the test</li>
+        <li>Quality floor may not drop</li>
+        <li>Tune retrieval on recall, not on hunches</li>
+        <li>Cheaper only if quality holds — Tool manifest <b>−76%</b></li>
+      </ul>
+      <div class="hl">
+        <b>B0 → B3</b>
+        <span>every graded suite now passes, and nothing that was already passing regressed</span>
+      </div>
+    </div>
+
+    <div class="band result">
+      <h4><span class="tile t-teal"><i class="ic" data-icon="statistics"></i></span>Result — every suite, B0 → B3</h4>
+      <table class="prog">
+        <tr><th>Suite</th><th>Cases</th><th>B0 <span>16 Sep</span></th><th>B3 <span>17 Sep</span></th></tr>
+        <tr><td>g-eval — answer quality</td><td>23</td><td>73.9%</td><td class="up">100%</td></tr>
+        <tr><td>decision — REPLY / CLARIFY / ESCALATE / RESOLVE</td><td>14</td><td>85.7%</td><td class="up">100%</td></tr>
+        <tr><td>tool usage — right Tool, no forbidden call</td><td>7</td><td>85.7%</td><td class="up">100%</td></tr>
+        <tr><td>faithfulness — grounded in retrieved Chunks</td><td>3</td><td>50.0%</td><td class="up">100%</td></tr>
+        <tr><td>retriever / retrieval — recall &amp; rank</td><td>10 + 10</td><td>—</td><td class="up">100%</td></tr>
+        <tr><td>contains · exact match — exact facts</td><td>6 + 2</td><td>100%</td><td class="up">100%</td></tr>
+        <tr><td>visibility — no Internal-Only leak</td><td>6</td><td>100%</td><td class="up">100%</td></tr>
+        <tr><td>language · relevancy</td><td>3 + 3</td><td>100%</td><td class="up">100%</td></tr>
+        <tr><td>negative control — must fail</td><td>1</td><td>0%</td><td>0%</td></tr>
+      </table>
+      <div class="note blue">Read in Anvia Lens: every Case is a score with its input, answer,
+        tokens and latency — the same OTLP pipeline as the Agent's own traces.</div>
+    </div>
+  </div>
+
+</div></div>
+
+<script>
+const ICONS={ai:"101164",database:"85607",flash:"110730",checked:"82766",layers:"113299",
+refresh:"85469","test-tube":"86724",scales:"86472","command-line":"121763",statistics:"86476"};
+
+for(const el of document.querySelectorAll('.ic')){
+  const u=`url("https://img.icons8.com/?id=${ICONS[el.dataset.icon]}&format=png&size=96")`;
+  el.style.webkitMaskImage=u; el.style.maskImage=u;
+}
+
+/* fill the viewport: scale to width, never leaving a gap on the right */
+const fit=()=>{
+  const s=window.innerWidth/1600;
+  document.getElementById('scaler').style.transform=`scale(${s})`;
+  document.body.style.height=(900*s)+'px';
+};
+fit(); addEventListener('resize',fit);
+</script>
+</body>
+</html>

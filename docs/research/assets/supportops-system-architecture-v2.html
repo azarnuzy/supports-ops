@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SupportOps Architecture</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:#1e3a5f;
+       font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+  #scaler{transform-origin:top left}
+  #canvas{position:relative;width:1920px;height:1212px}
+  .abs{position:absolute}
+
+  /* ---- Icons8 m_outlined glyphs, PNG used as an alpha mask ---- */
+  .tile{border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ic{background-color:#fff;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+      -webkit-mask-position:center;mask-position:center;
+      -webkit-mask-size:contain;mask-size:contain}
+  .t-green{background:#22c55e}.t-blue{background:#2f6fed}.t-indigo{background:#6366f1}
+  .t-purple{background:#a855f7}.t-orange{background:#f97316}.t-pink{background:#ec4899}
+
+  /* ---- header ---- */
+  .logo{width:62px;height:62px;flex:none;border-radius:14px}
+  .brand{font-size:34px;font-weight:800;letter-spacing:-.4px;color:#123a6b;line-height:1}
+  .subtitle{font-size:19px;font-weight:700;color:#3f6ea8;margin-top:6px}
+  .actor{width:120px;text-align:center}
+  .actor .tile{width:46px;height:46px;margin:0 auto;border-radius:11px}
+  .actor .ic{width:28px;height:28px}
+  .actor span{display:block;margin-top:5px;font-size:13px;font-weight:700;color:#123a6b}
+
+  /* ---- bands ---- */
+  .band{position:absolute;left:16px;width:1888px;border:2px dashed;border-radius:14px}
+  .b-blue{border-color:#7cc4f2;background:#f2f9ff}
+  .b-ext{border-color:#f7b267;background:#fff9f0}
+  .b-data{border-color:#c79af0;background:#faf4ff}
+  .b-obs{border-color:#f3a0c8;background:#fdf3f8}
+
+  .legend{position:absolute;left:40px;width:240px}
+  .lbl{display:inline-block;padding:4px 12px;border-radius:7px;font-size:16px;font-weight:800}
+  .l-blue{background:#c9e4f8;color:#14548f}
+  .l-ext{background:#fdecd6;color:#c2410c}
+  .l-data{background:#ecd9fb;color:#7c2fbe}
+  .l-obs{background:#fbd9ea;color:#c4267e}
+  .legend p{margin:7px 0 0;font-size:11.5px;color:#5b7290;line-height:1.4}
+
+  /* ---- generic card ---- */
+  .card{background:#fff;border:1.5px solid #9dc7f5;border-radius:10px;
+        padding:9px 11px;display:flex;gap:10px}
+  .card .tile{width:38px;height:38px}
+  .card .ic{width:22px;height:22px}
+  .c-title{font-size:14px;font-weight:800;color:#12365e;line-height:1.25}
+  .c-tag{font-size:11px;font-weight:700;color:#4a6fa5;margin-top:2px}
+  .c-note{font-size:10.5px;color:#5b7290;margin-top:6px;line-height:1.4}
+  ul.c-list{margin:4px 0 0;padding-left:14px;font-size:10.5px;color:#3c5f8c;line-height:1.55}
+  ul.c-list li::marker{color:#2f6fed}
+
+  .row{position:absolute;left:300px;width:1596px;display:flex;gap:12px;align-items:stretch}
+  .row > *{flex:1 1 0;min-width:0}
+
+  .inner{position:absolute;border:1.5px solid #bcdcf8;background:#e9f4fe;border-radius:12px}
+  /* yellow notes are placed under their parent card by JS */
+  .note{position:absolute;background:#fff7e0;border:1.5px solid #f3c969;border-radius:8px;
+        padding:6px 9px;font-size:11px;font-weight:700;color:#8a5a12;text-align:center;line-height:1.4}
+  .pill{position:absolute;background:#fff;border:1.5px solid #9dc7f5;border-radius:7px;
+        padding:4px 10px;font-size:11px;font-weight:700;color:#1d4e89}
+  .edge{position:absolute;background:#f2f9ff;padding:2px 6px;border-radius:5px;
+        font-size:10.5px;font-weight:700;color:#274b74;line-height:1.35;text-align:center}
+  .aside{position:absolute;background:#e3eefb;border-radius:8px;padding:7px 9px;
+         font-size:10.5px;font-weight:700;color:#4a6fa5;line-height:1.45;text-align:center}
+
+  /* ---- external / data / observability ---- */
+  .xcard{background:#fff2e2;border:1.5px solid #f6b877;border-radius:10px;padding:8px 9px}
+  .xcard .head{display:flex;gap:7px;align-items:flex-start}
+  .xcard .tile{width:26px;height:26px;border-radius:7px}
+  .xcard .ic{width:16px;height:16px}
+  .xcard .name{font-size:11px;font-weight:800;color:#8a4a10;line-height:1.25}
+  .xcard .by{font-size:10px;color:#a15c1c;margin-top:6px;line-height:1.35}
+  .xcard .by b{color:#7c3d0a}
+  .xcard .cfg{font-size:9.5px;color:#9a6631;margin-top:4px;line-height:1.35}
+
+  .dcard{background:#f4e7fd;border:1.5px solid #cba2ef;border-radius:10px;
+         padding:9px 11px;display:flex;gap:10px}
+  .dcard .tile{width:34px;height:34px}.dcard .ic{width:20px;height:20px}
+  .dcard .n{font-size:13.5px;font-weight:800;color:#5b21b6;line-height:1.2}
+  .dcard .u{font-size:10.5px;color:#7c4ec0;margin-top:3px}
+  .dcard .d{font-size:10.5px;color:#4a3b6b;margin-top:5px;line-height:1.5}
+
+  .ocard{background:#fce3f0;border:1.5px solid #f3a0c8;border-radius:10px;
+         padding:9px 11px;display:flex;gap:10px}
+  .ocard .tile{width:34px;height:34px}.ocard .ic{width:20px;height:20px}
+  .ocard .n{font-size:13px;font-weight:800;color:#a3175f;line-height:1.2}
+  .ocard .d{font-size:10.5px;color:#7d4064;margin-top:4px;line-height:1.5}
+
+  /* ---- footer ---- */
+  .foot{position:absolute;border:1.5px solid #9dc7f5;background:#f2f9ff;
+        border-radius:12px;padding:14px 18px}
+  .foot h4{margin:0;font-size:15px;font-weight:800;color:#123a6b}
+  .foot h4 small{font-weight:700;font-size:11.5px;color:#5b7290}
+  .fline{display:flex;gap:10px;align-items:center;margin-top:8px}
+  .chip{width:92px;flex:none;text-align:center;border-radius:6px;color:#fff;
+        font-size:10.5px;font-weight:800;padding:4px 0;letter-spacing:.3px}
+  .flow{font-size:11.5px;font-weight:700;color:#12365e}
+  ul.bul{margin:0;padding-left:16px;font-size:11.5px;color:#274b74;line-height:1.85}
+  ul.bul li::marker{color:#2f6fed}
+
+  .strip{position:absolute;left:16px;top:1148px;width:1888px;height:48px;
+         display:flex;align-items:center;gap:12px;
+         border:1.5px solid #9dc7f5;background:#f2f9ff;border-radius:12px;padding:0 18px}
+  .strip b{font-size:13px;font-weight:800;color:#123a6b;flex:none}
+  .strip span{font-size:11.5px;font-weight:700;color:#274b74}
+  svg.wires{position:absolute;inset:0;width:1920px;height:1212px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="scaler"><div id="canvas">
+
+  <!-- ================= header ================= -->
+  <div class="abs" style="left:30px;top:14px;display:flex;gap:14px;align-items:flex-start">
+    <img class="logo" src="support-ops-logo.png" alt="SupportOps logo">
+    <div>
+    <div class="brand">SupportOps</div>
+    <div class="subtitle">C4 Container / High-Level System Architecture</div>
+    </div>
+  </div>
+
+  <div class="abs actor" id="customer" style="left:765px;top:12px">
+    <div class="tile t-green"><i class="ic" data-icon="user"></i></div><span>Customer</span></div>
+  <div class="abs actor" id="humanAgent" style="left:1490px;top:12px">
+    <div class="tile t-green"><i class="ic" data-icon="user"></i></div><span>Human Agent</span></div>
+  <div class="abs actor" id="admin" style="left:1730px;top:12px">
+    <div class="tile t-green"><i class="ic" data-icon="user"></i></div><span>Admin</span></div>
+
+  <!-- ================= Experience Layer ================= -->
+  <div class="band b-blue" style="top:110px;height:112px"></div>
+  <div class="legend" style="top:122px">
+    <span class="lbl l-blue">Experience Layer</span>
+    <p>User interfaces and<br>external channels</p>
+  </div>
+
+  <div class="abs card" id="website" style="left:300px;top:122px;width:330px">
+    <div class="tile t-blue"><i class="ic" data-icon="globe"></i></div>
+    <div><div class="c-title">Workspace Website</div><div class="c-tag">[External]</div>
+      <div class="c-note">Customer-facing website</div></div></div>
+
+  <div class="abs card" id="widget" style="left:650px;top:122px;width:350px">
+    <div class="tile t-blue"><i class="ic" data-icon="code"></i></div>
+    <div><div class="c-title">Web Widget</div><div class="c-tag">[Internal]</div>
+      <div class="c-note">vanilla TypeScript + Vite · Shadow DOM<br>DOMPurify · marked</div></div></div>
+
+  <div class="abs card" id="meta" style="left:1020px;top:122px;width:380px">
+    <div class="tile t-green"><i class="ic" data-icon="whatsapp"></i></div>
+    <div><div class="c-title">Meta WhatsApp Cloud API</div><div class="c-tag">[External]</div>
+      <div class="c-note">Channel provider (WhatsApp)</div></div></div>
+
+  <div class="abs card" id="platform" style="left:1500px;top:122px;width:396px">
+    <div class="tile t-purple"><i class="ic" data-icon="monitor"></i></div>
+    <div><div class="c-title">Platform UI</div><div class="c-tag">[Internal]</div>
+      <div class="c-note">React + Vite · TanStack Router / Query<br>Tailwind CSS · Base UI · Recharts</div></div></div>
+
+  <!-- ================= Application / Core Layer ================= -->
+  <div class="band b-blue" style="top:236px;height:376px"></div>
+  <div class="legend" style="top:250px">
+    <span class="lbl l-blue">Application / Core Layer</span>
+    <p>Core services and business logic</p>
+  </div>
+  <div class="inner" style="left:292px;top:244px;width:1604px;height:312px"></div>
+
+  <div class="pill" style="left:306px;top:250px">Workspace isolation — all data Workspace-scoped</div>
+  <div class="edge" id="lblSession" style="width:150px">Session token +<br>allowed domain</div>
+  <div class="edge" id="lblWebhook" style="width:170px">verified webhook +<br>Phone Number ID</div>
+  <div class="edge" id="lblSession2" style="width:200px">authenticated Platform session</div>
+  <div class="edge" id="lblOutbound" style="width:74px">outbound</div>
+
+  <div class="abs card" id="api" style="left:470px;top:334px;width:250px">
+    <div class="tile t-blue"><i class="ic" data-icon="settings"></i></div>
+    <div><div class="c-title" style="font-size:15px">API Server</div>
+      <div class="c-note" style="margin-top:8px">Hono · Better Auth · Prisma + pg<br>Zod · BullMQ producer</div></div></div>
+
+  <div class="abs card" id="ticket" style="left:820px;top:334px;width:290px">
+    <div class="tile t-blue"><i class="ic" data-icon="layers"></i></div>
+    <div><div class="c-title" style="font-size:14.5px">Ticket / Session Domain</div>
+      <ul class="c-list">
+        <li>Ticket &amp; Session Services</li><li>Channel Adapters</li>
+        <li>Knowledge &amp; Retrieval</li><li>Tool Runtime / MCP Client (MCP SDK)</li>
+        <li>Analytics &amp; Lifecycle</li></ul></div></div>
+
+  <div class="abs card" id="runtime" style="left:1210px;top:334px;width:260px">
+    <div class="tile t-indigo"><i class="ic" data-icon="ai"></i></div>
+    <div><div class="c-title" style="font-size:14.5px">AI Agent Runtime</div>
+      <div class="c-note" style="margin-top:8px">Anvia · @anvia/core + @anvia/openai<br>Zod tool schemas</div></div></div>
+
+  <div class="abs card" id="worker" style="left:1580px;top:326px;width:308px">
+    <div class="tile t-blue"><i class="ic" data-icon="settings"></i></div>
+    <div style="min-width:0"><div class="c-title" style="font-size:14.5px">Worker</div>
+      <div class="c-note" style="margin-top:2px">BullMQ · ioredis · Prisma</div>
+      <div style="margin-top:7px;background:#e9f4fe;border-radius:8px;padding:6px 8px">
+        <div style="font-size:11px;font-weight:800;color:#12365e">Worker jobs:</div>
+        <ul class="c-list">
+          <li>Knowledge ingestion</li><li>Attachment processing</li>
+          <li>WhatsApp reasoning</li><li>Session Link email</li>
+          <li>Follow-Up</li><li>Auto-Resolution</li>
+          <li>Idle Closure</li><li>Ticket Knowledge indexing</li></ul>
+      </div></div></div>
+
+  <div class="edge" id="lblEligibility" style="width:88px">Ticket<br>eligibility</div>
+  <div class="edge" id="lblWeb" style="width:88px">Web<br>reasoning</div>
+  <div class="edge" id="lblWa" style="width:98px">WhatsApp<br>reasoning</div>
+
+  <div class="note" id="noteTicket" data-under="ticket">Ticket layer decides<br>whether AI Agent runs</div>
+  <div class="note" id="noteRuntime" data-under="runtime">AI Agent knows no<br>Channel transport</div>
+  <div class="aside" style="left:1580px;top:564px;width:308px">
+    No WebSocket — SSE · signature verification ·<br>Customer Service Window is a Channel rule</div>
+
+  <!-- ================= External AI &amp; Integration ================= -->
+  <div class="band b-ext" style="top:624px;height:132px"></div>
+  <div class="legend" style="top:636px;width:250px">
+    <span class="lbl l-ext" style="font-size:14.5px">External AI &amp; Integration Systems</span>
+    <p>Third-party AI services, tools, and business systems (no direct connectors shown)</p>
+  </div>
+
+  <div class="row" style="top:636px;height:108px">
+    <div class="xcard" style="flex-grow:1.15">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="cloud"></i></div>
+        <div class="name">Completion Model<br>Gateway</div></div>
+      <div class="by">Called by: <b>AI Agent Runtime</b></div>
+      <div class="cfg">@anvia/openai · OpenRouter /<br>OpenAI-compatible default</div></div>
+
+    <div class="xcard">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="database"></i></div>
+        <div class="name">Embedding<br>Gateway</div></div>
+      <div class="by">Called by: <b>Knowledge &amp; Retrieval</b></div>
+      <div class="cfg">@anvia/openai → pgvector</div></div>
+
+    <div class="xcard">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="api"></i></div>
+        <div class="name">MCP Server</div></div>
+      <div class="by">Called by: <b>Tool Runtime</b></div>
+      <div class="cfg">@modelcontextprotocol/sdk ·<br>Shopify MCP is the Northstar example</div></div>
+
+    <div class="xcard" style="flex-grow:1.1">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="plugin"></i></div>
+        <div class="name">Generic Workspace<br>HTTP APIs</div></div>
+      <div class="by">Called by: <b>Tool Runtime</b></div>
+      <div class="cfg">optional · Ajv schema validation</div></div>
+
+    <div class="xcard">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="document"></i></div>
+        <div class="name">Mistral OCR /<br>Transcription</div></div>
+      <div class="by">Called by: <b>Worker</b></div></div>
+
+    <div class="xcard">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="search"></i></div>
+        <div class="name">Tavily Crawl</div></div>
+      <div class="by">Called by: <b>Worker</b></div></div>
+
+    <div class="xcard">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="mail"></i></div>
+        <div class="name">Email Delivery<br>Provider</div></div>
+      <div class="by">Called by: <b>Worker</b></div>
+      <div class="cfg">SMTP · Mailpit in development</div></div>
+
+    <div class="xcard">
+      <div class="head"><div class="tile t-orange"><i class="ic" data-icon="bar-chart"></i></div>
+        <div class="name">Anvia Lens /<br>Langfuse Cloud</div></div>
+      <div class="by">Called by: <b>OpenTelemetry</b></div>
+      <div class="cfg">OTLP backend · Lens locally,<br>Langfuse Cloud in production</div></div>
+
+  </div>
+
+  <!-- ================= Data &amp; Async Layer ================= -->
+  <div class="band b-data" style="top:770px;height:110px"></div>
+  <div class="legend" style="top:782px">
+    <span class="lbl l-data">Data &amp; Async Layer</span>
+    <p>Persistent storage and files (no direct connectors shown)</p>
+  </div>
+
+  <div class="row" style="top:782px;height:86px">
+    <div class="dcard" style="flex-grow:1.35">
+      <div class="tile t-purple"><i class="ic" data-icon="database"></i></div>
+      <div><div class="n">PostgreSQL + pgvector</div>
+        <div class="u">Used by: <b>API · Worker · Domain</b> · Prisma ORM + @prisma/adapter-pg</div>
+        <div class="d">Workspace · Users · Customer Identity · Session · Ticket · Message<br>
+          AI Activity · Knowledge Source · Chunk/vector · Tool/MCP config</div></div></div>
+
+    <div class="dcard">
+      <div class="tile t-purple"><i class="ic" data-icon="database"></i></div>
+      <div><div class="n">Redis (one container)</div>
+        <div class="u">Used by: <b>API · Worker</b></div>
+        <div class="d">BullMQ · ioredis<br>delayed lifecycle jobs · SSE/pub-sub</div></div></div>
+
+    <div class="dcard">
+      <div class="tile t-purple"><i class="ic" data-icon="file"></i></div>
+      <div><div class="n">S3-compatible Object Storage</div>
+        <div class="u">Used by: <b>API · Worker</b></div>
+        <div class="d">AWS SDK v3 · presigned URLs<br>Attachment · PDF/source binary</div></div></div>
+  </div>
+
+  <!-- ================= Observability ================= -->
+  <div class="band b-obs" style="top:894px;height:98px"></div>
+  <div class="legend" style="top:904px">
+    <span class="lbl l-obs">Observability</span>
+    <p>Monitoring, tracing, and diagnostics (no direct connectors shown)</p>
+  </div>
+
+  <div class="row" style="top:904px;height:76px">
+    <div class="ocard">
+      <div class="tile t-pink"><i class="ic" data-icon="bar-chart"></i></div>
+      <div><div class="n">Pino structured logging</div>
+        <div class="d">application logs only<br>request &amp; job context</div></div></div>
+
+    <div class="ocard" style="flex-grow:1.15">
+      <div class="tile t-pink"><i class="ic" data-icon="link"></i></div>
+      <div><div class="n">OpenTelemetry · @anvia/otel</div>
+        <div class="d">AI Agent spans only — run, retrieval, tool calls, model generation<br>exports OTLP to Anvia Lens / Langfuse Cloud</div></div></div>
+
+    <div class="ocard" style="flex-grow:1.1">
+      <div class="tile t-pink"><i class="ic" data-icon="star"></i></div>
+      <div><div class="n">AI Activity</div>
+        <div class="d">product record in PostgreSQL<br>Model usage · Tool calls · Outcomes</div></div></div>
+
+    <div class="ocard">
+      <div class="tile t-pink"><i class="ic" data-icon="bar-chart"></i></div>
+      <div><div class="n">Telemetry scope</div>
+        <div class="d">AI Agent activity only — HTTP, DB and DNS<br>auto-instrumentation disabled · redacted <b>safe</b> capture</div></div></div>
+  </div>
+
+  <!-- ================= footer ================= -->
+  <div class="foot" style="left:16px;top:1006px;width:1000px;height:130px">
+    <h4>End-to-End Channel Flows <small>(only arrows shown above)</small></h4>
+    <div class="fline"><span class="chip" style="background:#2f6fed">WEB:</span>
+      <span class="flow">Customer → Website → Widget → API → Ticket/Session → AI Runtime → SSE</span></div>
+    <div class="fline"><span class="chip" style="background:#22c55e">WHATSAPP:</span>
+      <span class="flow">Customer → Meta → verified webhook → API persist/queue → Worker → AI Runtime → Meta outbound</span></div>
+    <div class="fline"><span class="chip" style="background:#7c3aed">HUMAN:</span>
+      <span class="flow">Human Agent/Admin → Platform UI → API → Workspace services</span></div>
+  </div>
+
+  <div class="foot" style="left:1028px;top:1006px;width:868px;height:130px">
+    <h4>Northstar Outfitters — example Workspace configuration</h4>
+    <div style="margin-top:8px;display:flex;gap:12px">
+      <div class="tile" style="width:38px;height:38px;background:#e9f4fe;border:1.5px solid #9dc7f5">
+        <i class="ic" data-icon="t-shirt" style="width:22px;height:22px;background-color:#2f6fed"></i></div>
+      <ul class="bul">
+        <li>Web Widget active</li>
+        <li>WhatsApp configured in production</li>
+        <li>Shopify MCP: 13 discovered · 13 assigned</li>
+        <li>8 Published Knowledge Sources: 5 Customer-Safe · 2 Internal-Only · 1 Legacy conflict fixture</li>
+      </ul></div>
+  </div>
+  <div class="aside" style="left:1660px;top:1016px;width:210px">
+    Example only — not generic<br>SupportOps components.</div>
+
+  <div class="strip">
+    <div class="tile t-blue" style="width:30px;height:30px"><i class="ic" data-icon="code"></i></div>
+    <b>Platform &amp; Tooling</b>
+    <span>TypeScript · pnpm workspaces monorepo · Vite · Biome · Vitest · Playwright ·
+          Docker Compose (PostgreSQL + pgvector, Redis, MinIO, Mailpit) · Prisma Migrate</span>
+  </div>
+
+  <svg class="wires" id="wires" viewBox="0 0 1920 1212">
+    <defs>
+      <marker id="a" markerWidth="8" markerHeight="7" refX="6.6" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#2f6fed"/></marker>
+    </defs>
+    <g id="wireGroup" fill="none" stroke="#2f6fed" stroke-width="1.6" stroke-linejoin="round"></g>
+  </svg>
+
+</div></div>
+
+<script>
+const ICONS={user:"82751",globe:"89777",code:"87268",whatsapp:"85088",monitor:"85457",
+settings:"82535",layers:"113299",ai:"101164",cloud:"85919",database:"85607",
+"shopping-bag":"85073",plugin:"120389",document:"82775",search:"82712",mail:"86840",
+"bar-chart":"86286",api:"121835",file:"82795",link:"85777",star:"96206","t-shirt":"87754"};
+
+for(const el of document.querySelectorAll('.ic')){
+  const u=`url("https://img.icons8.com/?id=${ICONS[el.dataset.icon]}&format=png&size=96")`;
+  el.style.webkitMaskImage=u; el.style.maskImage=u;
+}
+
+/* ---------------------------------------------------------------
+   Wires are measured from the live DOM, so every arrowhead lands
+   exactly on a card edge no matter how the content reflows.
+   --------------------------------------------------------------- */
+const canvas = document.getElementById('canvas');
+const g = document.getElementById('wireGroup');
+
+const box = id => {
+  const c = canvas.getBoundingClientRect(), b = document.getElementById(id).getBoundingClientRect();
+  const l = b.left - c.left, t = b.top - c.top;
+  return {l, t, r: l + b.width, b: t + b.height, cx: l + b.width / 2, cy: t + b.height / 2};
+};
+const wire = (d, head = true) => {
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  if (head) p.setAttribute('marker-end', 'url(#a)');
+  g.appendChild(p);
+};
+/* one trunk at busY, one stub down into each target: shared destinations share a line */
+const fanOut = (srcs, targets, busY) => {
+  const xs = [...srcs.map(s => s.cx), ...targets.map(t => t.cx)];
+  srcs.forEach(s => wire(`M${s.cx},${s.b} L${s.cx},${busY}`, false));
+  wire(`M${Math.min(...xs)},${busY} L${Math.max(...xs)},${busY}`, false);
+  targets.forEach(t => wire(`M${t.cx},${busY} L${t.cx},${t.t}`));
+};
+const place = (el, x, y) => { el.style.left = x + 'px'; el.style.top = y + 'px'; };
+
+function draw() {
+  g.innerHTML = '';
+
+  const website = box('website'), widget = box('widget'), meta = box('meta'),
+        platform = box('platform'), api = box('api'), ticket = box('ticket'),
+        runtime = box('runtime'), worker = box('worker'),
+        customer = box('customer'), ha = box('humanAgent'), admin = box('admin');
+
+  /* --- actors: Customer -> Website + Widget + WhatsApp; Human Agent + Admin -> Platform UI --- */
+  fanOut([customer], [website, widget, meta], 100);
+  fanOut([ha, admin], [platform], 100);
+
+  /* --- Widget + Meta + Platform UI all reach the API Server on one shared line --- */
+  const busY = api.t - 24, outY = api.t - 76;
+  fanOut([widget, meta, platform], [api], busY);
+
+  /* each inbound label hugs its own drop line, in the lane between the
+     outbound wire above it and the shared API Server bus below it */
+  const beside = (id, src, side, dy = 0) => {
+    const el = document.getElementById(id);
+    place(el, side < 0 ? src.cx - el.offsetWidth - 10 : src.cx + 10, outY + 10 + dy);
+  };
+  beside('lblSession', widget, -1);
+  beside('lblWebhook', meta, -1);
+  beside('lblSession2', platform, -1, 22);
+
+  /* --- Worker -> Meta outbound, on its own lane above the inbound bus --- */
+  const outX = meta.cx + 90;
+  wire(`M${worker.cx},${worker.t} L${worker.cx},${outY} L${outX},${outY} L${outX},${meta.b}`);
+  const ob = document.getElementById('lblOutbound');
+  place(ob, worker.cx + 12, (outY + worker.t) / 2 - ob.offsetHeight / 2);
+
+  /* --- request / response pairs between the core containers --- */
+  const y1 = api.t + 22, y2 = api.t + 46;
+  [[api, ticket, 'lblEligibility'], [ticket, runtime, 'lblWeb'], [runtime, worker, 'lblWa']]
+    .forEach(([a, b, lbl]) => {
+      wire(`M${a.r + 2},${y1} L${b.l - 2},${y1}`);
+      wire(`M${b.l - 2},${y2} L${a.r + 2},${y2}`);
+      const el = document.getElementById(lbl);
+      place(el, (a.r + b.l) / 2 - el.offsetWidth / 2, y1 - el.offsetHeight - 8);
+    });
+
+  /* --- yellow notes sit squarely under the card they annotate --- */
+  for (const n of document.querySelectorAll('.note[data-under]')) {
+    const p = box(n.dataset.under);
+    n.style.width = p.r - p.l + 'px';
+    place(n, p.l, p.b + 16);
+  }
+}
+
+const fit = () => {
+  const s = Math.min(1, window.innerWidth / 1920);
+  document.getElementById('scaler').style.transform = `scale(${s})`;
+  document.body.style.height = (1212 * s) + 'px';
+};
+fit(); draw();
+addEventListener('resize', () => { fit(); draw(); });
+</script>
+</body>
+</html>

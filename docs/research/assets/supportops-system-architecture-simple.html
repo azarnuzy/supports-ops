@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SupportOps Architecture Simple</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:#1e3a5f;
+       font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+  #scaler{transform-origin:top left}
+  #page{width:1600px;padding:22px 24px}
+
+  .tile{border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ic{background-color:#fff;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+      -webkit-mask-position:center;mask-position:center;
+      -webkit-mask-size:contain;mask-size:contain}
+  .t-green{background:#22c55e}.t-blue{background:#2f6fed}.t-indigo{background:#6366f1}
+  .t-purple{background:#a855f7}.t-orange{background:#f97316}.t-pink{background:#ec4899}
+  .t-slate{background:#64748b}
+
+  header{display:flex;gap:16px;align-items:center;margin-bottom:16px}
+  .logo{width:60px;height:60px;border-radius:14px;flex:none}
+  .brand{font-size:34px;font-weight:800;letter-spacing:-.4px;color:#123a6b;line-height:1}
+  .subtitle{font-size:18px;font-weight:700;color:#3f6ea8;margin-top:6px}
+  .actors{display:flex;gap:10px;margin-left:auto}
+  .actors .a{display:flex;gap:8px;align-items:center;border:1.5px solid #9dc7f5;
+             background:#f2f9ff;border-radius:10px;padding:8px 14px}
+  .actors .tile{width:30px;height:30px}.actors .ic{width:18px;height:18px}
+  .actors b{font-size:14px;color:#12365e}
+
+  .band{display:flex;gap:16px;align-items:stretch;border:2px dashed;border-radius:14px;
+        padding:12px 14px;margin-bottom:14px}
+  .b-blue{border-color:#7cc4f2;background:#f2f9ff}
+  .b-ext{border-color:#f7b267;background:#fff9f0}
+  .b-data{border-color:#c79af0;background:#faf4ff}
+  .b-ship{border-color:#7fd8c4;background:#f1fbf8}
+  .b-obs{border-color:#f3a0c8;background:#fdf3f8}
+
+  .legend{width:212px;flex:none}
+  .lbl{display:inline-block;padding:5px 12px;border-radius:7px;font-size:16px;font-weight:800}
+  .l-blue{background:#c9e4f8;color:#14548f}
+  .l-ext{background:#fdecd6;color:#c2410c}
+  .l-data{background:#ecd9fb;color:#7c2fbe}
+  .l-ship{background:#cdf0e6;color:#0f766e}
+  .l-obs{background:#fbd9ea;color:#c4267e}
+  .legend p{margin:8px 0 0;font-size:12px;color:#5b7290;line-height:1.45}
+
+  .row{display:flex;gap:12px;align-items:stretch;flex:1;min-width:0}
+  .card{flex:1 1 0;min-width:0;background:#fff;border:1.5px solid #9dc7f5;border-radius:10px;
+        padding:11px 13px;display:flex;gap:11px;align-items:flex-start}
+  .card .tile{width:38px;height:38px}.card .ic{width:22px;height:22px}
+  .card b{display:block;font-size:15px;font-weight:800;color:#12365e;line-height:1.25}
+  .card small{display:block;font-size:12px;color:#5b7290;margin-top:5px;line-height:1.45}
+  .x .card{background:#fff2e2;border-color:#f6b877}
+  .x .card b{color:#8a4a10}.x .card small{color:#a15c1c}
+  .d .card{background:#f4e7fd;border-color:#cba2ef}
+  .d .card b{color:#5b21b6}.d .card small{color:#7c4ec0}
+  .s .card{background:#e9faf5;border-color:#7fd8c4}
+  .s .card b{color:#0f766e}.s .card small{color:#3f7f74}
+  .o .card{background:#fce3f0;border-color:#f3a0c8}
+  .o .card b{color:#a3175f}.o .card small{color:#7d4064}
+
+  .arr{flex:none;align-self:center;width:26px;height:12px;position:relative}
+  .arr::before{content:"";position:absolute;left:0;top:5px;width:20px;height:2px;background:#2f6fed}
+  .arr::after{content:"";position:absolute;right:0;top:0;
+              border:6px solid transparent;border-left-color:#2f6fed}
+  .s .arr::before{background:#0f766e}.s .arr::after{border-left-color:#0f766e}
+
+  .flows{display:flex;gap:14px}
+  .foot{flex:1;border:1.5px solid #9dc7f5;background:#f2f9ff;border-radius:12px;padding:14px 18px}
+  .foot h4{margin:0 0 10px;font-size:16px;font-weight:800;color:#123a6b}
+  .fline{display:flex;gap:10px;align-items:center;margin-top:8px}
+  .chip{width:104px;flex:none;text-align:center;border-radius:6px;color:#fff;
+        font-size:12px;font-weight:800;padding:5px 0;letter-spacing:.3px}
+  .flow{font-size:13px;font-weight:700;color:#12365e}
+  ul.bul{margin:0;padding-left:18px;font-size:13px;color:#274b74;line-height:1.9}
+  ul.bul li::marker{color:#2f6fed}
+</style>
+</head>
+<body>
+<div id="scaler"><div id="page">
+
+  <header>
+    <img class="logo" src="support-ops-logo.png" alt="SupportOps logo">
+    <div>
+      <div class="brand">SupportOps</div>
+      <div class="subtitle">High-Level System Architecture &amp; Delivery</div>
+    </div>
+    <div class="actors">
+      <div class="a"><div class="tile t-green"><i class="ic" data-icon="user"></i></div><b>Customer</b></div>
+      <div class="a"><div class="tile t-green"><i class="ic" data-icon="users"></i></div><b>Human Agent</b></div>
+      <div class="a"><div class="tile t-green"><i class="ic" data-icon="user"></i></div><b>Admin</b></div>
+    </div>
+  </header>
+
+  <!-- Experience -->
+  <div class="band b-blue">
+    <div class="legend"><span class="lbl l-blue">Experience Layer</span>
+      <p>Customer channels and the internal platform UI</p></div>
+    <div class="row">
+      <div class="card"><div class="tile t-blue"><i class="ic" data-icon="code"></i></div>
+        <div><b>Web Widget</b><small>Embedded chat on the Workspace website</small></div></div>
+      <div class="card"><div class="tile t-green"><i class="ic" data-icon="whatsapp"></i></div>
+        <div><b>WhatsApp (Meta Cloud API)</b><small>Verified webhook + Phone Number ID</small></div></div>
+      <div class="card"><div class="tile t-purple"><i class="ic" data-icon="monitor"></i></div>
+        <div><b>Platform UI</b><small>React · Ticket inbox, knowledge, analytics</small></div></div>
+    </div>
+  </div>
+
+  <!-- Core -->
+  <div class="band b-blue">
+    <div class="legend"><span class="lbl l-blue">Application Core</span>
+      <p>All data Workspace-scoped · replies stream over SSE</p></div>
+    <div class="row">
+      <div class="card"><div class="tile t-blue"><i class="ic" data-icon="settings"></i></div>
+        <div><b>API Server</b><small>Hono · Better Auth · Prisma · queue producer</small></div></div>
+      <span class="arr"></span>
+      <div class="card"><div class="tile t-blue"><i class="ic" data-icon="layers"></i></div>
+        <div><b>Ticket / Session Domain</b><small>Channel adapters · knowledge &amp; retrieval · tool runtime<br>Decides whether the AI Agent runs</small></div></div>
+      <span class="arr"></span>
+      <div class="card"><div class="tile t-indigo"><i class="ic" data-icon="ai"></i></div>
+        <div><b>AI Agent Runtime</b><small>Anvia · grounded reply, tools, escalation<br>Knows no channel transport</small></div></div>
+      <span class="arr"></span>
+      <div class="card"><div class="tile t-blue"><i class="ic" data-icon="refresh"></i></div>
+        <div><b>Worker</b><small>BullMQ jobs: ingestion, attachments, WhatsApp reasoning,<br>follow-up · auto-resolution · idle closure</small></div></div>
+    </div>
+  </div>
+
+  <!-- External -->
+  <div class="band b-ext x">
+    <div class="legend"><span class="lbl l-ext">External Systems</span>
+      <p>Third-party AI services and business integrations</p></div>
+    <div class="row">
+      <div class="card"><div class="tile t-orange"><i class="ic" data-icon="cloud"></i></div>
+        <div><b>Completion Gateway</b><small>OpenRouter / OpenAI-compatible</small></div></div>
+      <div class="card"><div class="tile t-orange"><i class="ic" data-icon="database"></i></div>
+        <div><b>Embedding Gateway</b><small>Feeds pgvector retrieval</small></div></div>
+      <div class="card"><div class="tile t-orange"><i class="ic" data-icon="api"></i></div>
+        <div><b>MCP &amp; HTTP Tools</b><small>Live business facts per Workspace</small></div></div>
+      <div class="card"><div class="tile t-orange"><i class="ic" data-icon="document"></i></div>
+        <div><b>OCR · Crawl · Email</b><small>Mistral · Tavily · SMTP</small></div></div>
+    </div>
+  </div>
+
+  <!-- Data + Observability -->
+  <div class="band b-data d">
+    <div class="legend"><span class="lbl l-data">Data &amp; Observability</span>
+      <p>Persistence, queues, files and AI telemetry</p></div>
+    <div class="row">
+      <div class="card"><div class="tile t-purple"><i class="ic" data-icon="database"></i></div>
+        <div><b>PostgreSQL + pgvector</b><small>Workspace, ticket, message, knowledge vectors</small></div></div>
+      <div class="card"><div class="tile t-purple"><i class="ic" data-icon="layers"></i></div>
+        <div><b>Redis</b><small>BullMQ queues · delayed lifecycle jobs</small></div></div>
+      <div class="card"><div class="tile t-purple"><i class="ic" data-icon="file"></i></div>
+        <div><b>S3 Object Storage</b><small>Attachments and knowledge files</small></div></div>
+      <div class="card" style="background:#fce3f0;border-color:#f3a0c8">
+        <div class="tile t-pink"><i class="ic" data-icon="bar-chart"></i></div>
+        <div><b style="color:#a3175f">AI Activity + OTLP Traces</b>
+          <small style="color:#7d4064">Pino logs · AI Agent spans → Anvia Lens / Langfuse</small></div></div>
+    </div>
+  </div>
+
+  <!-- Delivery / Deployment -->
+  <div class="band b-ship s">
+    <div class="legend"><span class="lbl l-ship">Delivery &amp; Deployment</span>
+      <p>Push to <b>main</b> ships to production automatically</p></div>
+    <div class="row">
+      <div class="card"><div class="tile t-slate"><i class="ic" data-icon="github"></i></div>
+        <div><b>Git · GitHub</b><small>Monorepo · PR to <b>main</b></small></div></div>
+      <span class="arr"></span>
+      <div class="card"><div class="tile t-slate"><i class="ic" data-icon="checked"></i></div>
+        <div><b>GitHub Actions CI</b><small>lint · typecheck · test · build · migrate</small></div></div>
+      <span class="arr"></span>
+      <div class="card"><div class="tile t-slate"><i class="ic" data-icon="box"></i></div>
+        <div><b>Docker Build → GHCR</b><small>Only changed apps · tagged by commit SHA</small></div></div>
+      <span class="arr"></span>
+      <div class="card"><div class="tile t-slate"><i class="ic" data-icon="link"></i></div>
+        <div><b>SSH Deploy Job</b><small>Runs <b>deploy.sh</b> on the VPS · rollback by SHA</small></div></div>
+      <span class="arr"></span>
+      <div class="card"><div class="tile t-slate"><i class="ic" data-icon="server"></i></div>
+        <div><b>VPS · Docker Compose</b><small>API · Worker · Platform · Widget · Postgres · Redis<br>Caddy reverse proxy + automatic HTTPS</small></div></div>
+    </div>
+  </div>
+
+  <div class="flows">
+    <div class="foot">
+      <h4>End-to-End Channel Flows</h4>
+      <div class="fline"><span class="chip" style="background:#2f6fed">WEB</span>
+        <span class="flow">Customer → Widget → API → Ticket/Session → AI Runtime → SSE reply</span></div>
+      <div class="fline"><span class="chip" style="background:#22c55e">WHATSAPP</span>
+        <span class="flow">Customer → Meta webhook → API queue → Worker → AI Runtime → Meta outbound</span></div>
+      <div class="fline"><span class="chip" style="background:#7c3aed">HUMAN</span>
+        <span class="flow">Human Agent / Admin → Platform UI → API → Workspace services</span></div>
+    </div>
+    <div class="foot" style="flex:0 0 470px">
+      <h4>Northstar Outfitters — example Workspace</h4>
+      <ul class="bul">
+        <li>Web Widget active · WhatsApp live in production</li>
+        <li>Shopify-style MCP: 13 tools discovered and assigned</li>
+        <li>8 published Knowledge Sources (5 Customer-Safe)</li>
+      </ul>
+    </div>
+  </div>
+
+</div></div>
+<script>
+const ICONS={user:"82751",users:"85057",code:"87268",whatsapp:"85088",monitor:"85457",
+settings:"82535",layers:"113299",ai:"101164",cloud:"85919",database:"85607",
+api:"121835",document:"82775",file:"82795",link:"85777","bar-chart":"86286",
+refresh:"85469",checked:"82766",github:"106562",box:"82465",server:"85780"};
+for(const el of document.querySelectorAll('.ic')){
+  const u=`url("https://img.icons8.com/?id=${ICONS[el.dataset.icon]}&format=png&size=96")`;
+  el.style.webkitMaskImage=u; el.style.maskImage=u;
+}
+const fit=()=>{
+  const s=window.innerWidth/1600;
+  document.getElementById('scaler').style.transform=`scale(${s})`;
+  document.body.style.height=(document.getElementById('page').offsetHeight*s)+'px';
+};
+fit(); addEventListener('resize',fit);
+</script>
+</body>
+</html>

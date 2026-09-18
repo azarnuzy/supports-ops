@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent Cost Simulation</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#f5f9ff;color:#1e3a5f;
+       font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+  #scaler{transform-origin:top left}
+  /* one 16:9 slide */
+  #page{width:1600px;height:900px;padding:26px 30px;display:flex;flex-direction:column;gap:16px}
+
+  /* ---- Icons8 m_outlined glyphs, PNG used as an alpha mask ---- */
+  .tile{border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ic{background-color:#fff;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+      -webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain}
+  .t-blue{background:#2f6fed}.t-green{background:#22c55e}.t-amber{background:#d97706}
+  .t-teal{background:#0d9488}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  header{display:flex;gap:15px;align-items:center;flex:none}
+  .logo{width:52px;height:52px;border-radius:12px;flex:none}
+  .brand{font-size:29px;font-weight:800;letter-spacing:-.4px;color:#123a6b;line-height:1}
+  .subtitle{font-size:15.5px;font-weight:700;color:#3f6ea8;margin-top:5px}
+  .meta{margin-left:auto;text-align:right;font-size:13px;font-weight:800;color:#123a6b;line-height:1.5}
+  .meta span{display:block;font-size:11.5px;font-weight:700;color:#5b7290}
+
+  /* ---- scenario cards ---- */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;flex:none}
+  .card{background:#fff;border:2px solid #9dc7f5;border-radius:16px;padding:16px 18px;
+        display:flex;flex-direction:column;gap:10px}
+  .card.mid{border-color:#2f6fed;box-shadow:0 0 0 4px #dceeff}
+  .card.high{border-color:#f3c969}
+  .badge{align-self:flex-start;border-radius:999px;padding:4px 13px;font-size:12.5px;font-weight:800;
+         letter-spacing:.5px}
+  .b-low{background:#e4f7e9;color:#166534}.b-mid{background:#dceeff;color:#1e3a8a}
+  .b-high{background:#fdf0dc;color:#8a5a12}
+  .mix{font-size:13px;font-weight:700;color:#5b7290;line-height:1.45}
+  .amount{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:44px;font-weight:700;
+          color:#123a6b;letter-spacing:-1.5px;line-height:1}
+  .amount em{font-style:normal;font-size:15px;font-weight:700;color:#5b7290;margin-left:6px}
+  .sub{font-size:14px;font-weight:700;color:#3f6ea8}
+  .sub b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#123a6b}
+  .bar{display:flex;height:13px;border-radius:7px;overflow:hidden;background:#e7eef8}
+  .bar i{display:block;height:100%}
+  .legend{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:700;margin-top:auto}
+  .legend div{display:grid;grid-template-columns:11px 1fr auto;gap:9px;align-items:center;color:#3c5f8c}
+  .dot{width:11px;height:11px;border-radius:3px}
+  .legend .amt{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#123a6b}
+
+  /* ---- bottom row ---- */
+  .row{display:flex;gap:16px;flex:1;min-height:0}
+  .panel{background:#fff;border:2px solid #9dc7f5;border-radius:16px;padding:14px 18px;
+         display:flex;flex-direction:column;min-width:0}
+  .panel > h2{margin:0 0 10px;font-size:16px;font-weight:800;color:#123a6b;display:flex;gap:9px;
+              align-items:center}
+  .panel > h2 .tile{width:27px;height:27px}.panel > h2 .ic{width:16px;height:16px}
+  .panel > h2 small{margin-left:auto;font-size:12px;font-weight:700;color:#5b7290}
+
+  .chart{flex:1.5;min-width:0}
+  .rows{display:flex;flex-direction:column;gap:10px;flex:1;justify-content:space-evenly}
+  .srow{display:grid;grid-template-columns:132px 1fr 74px;gap:12px;align-items:center;font-size:14px;
+        font-weight:700;color:#3c5f8c}
+  .srow b{color:#12365e;font-weight:800}
+    .track{height:19px;background:#eef4fd;border-radius:8px;overflow:hidden}
+  .track i{display:block;height:100%;border-radius:8px;background:#2f6fed}
+  .track i.acc{background:#d97706}
+  .srow .v{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#123a6b;text-align:right}
+
+  .side{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{padding:7px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid #e3edf9}
+  th{font-size:11.5px;font-weight:800;color:#3f6ea8;background:#eef6ff;text-transform:uppercase;
+     letter-spacing:.4px}
+  th:first-child,td:first-child{text-align:left}
+  tr:last-child td{border-bottom:none}
+  td{color:#33558f;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  td:first-child{font-family:inherit;color:#12365e}
+  tr.hi td{background:#f2f9ff;color:#123a6b;font-weight:800}
+  td span{display:block;font-size:11.5px;font-weight:700;color:#5b7290;margin-top:2px}
+
+  .market{flex:1}
+  .mrows{display:flex;flex-direction:column;gap:9px;margin-bottom:10px}
+  .mrow{display:grid;grid-template-columns:100px 1fr 94px;gap:10px;align-items:center;
+        white-space:nowrap;
+        font-size:13.5px;font-weight:700;color:#3c5f8c}
+  .mrow b{color:#12365e;font-weight:800}
+  .mrow .track i{background:#94a3b8}
+  .mrow.us b,.mrow.us .v{color:#166534}
+  .mrow.us .track i{background:#22c55e}
+  .mrow .v{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#123a6b;text-align:right}
+  .market .foot b{color:#123a6b}
+  .foot{margin-top:auto;font-size:12px;font-weight:700;color:#5b7290;line-height:1.55}
+  .foot b{color:#123a6b}
+</style>
+</head>
+<body>
+<div id="scaler"><div id="page">
+
+  <header>
+    <img class="logo" src="support-ops-logo.png" alt="SupportOps logo">
+    <div>
+      <div class="brand">SupportOps</div>
+      <div class="subtitle">AI spending per month — low · medium · high</div>
+    </div>
+    <div class="meta">10,000 Sessions / month · Rp17,700 per USD
+      <span>Measured 17 Sep 2026 · <code>pnpm cost:measure</code> · median of 3 runs</span></div>
+  </header>
+
+  <div class="cards">
+    <div class="card low">
+      <span class="badge b-low">LOW</span>
+      <div class="mix">Mostly FAQ and small talk</div>
+      <div class="amount">$39<em>/ month</em></div>
+      <div class="sub">Rp698,284 · <b>Rp70</b> per Session</div>
+      <div class="bar">
+        <i style="width:94.7%;background:#2f6fed"></i><i style="width:1.6%;background:#6366f1"></i>
+        <i style="width:2.5%;background:#ec4899"></i><i style="width:1.2%;background:#64748b"></i>
+      </div>
+      <div class="legend">
+        <div><i class="dot" style="background:#2f6fed"></i><span>Main LLM</span><span class="amt">$37.36</span></div>
+        <div><i class="dot" style="background:#d97706"></i><span>OCR</span><span class="amt">$0.00</span></div>
+        <div><i class="dot" style="background:#ec4899"></i><span>AI Copilot</span><span class="amt">$1.00</span></div>
+        <div><i class="dot" style="background:#64748b"></i><span>Everything else</span><span class="amt">$1.08</span></div>
+      </div>
+    </div>
+
+    <div class="card mid">
+      <span class="badge b-mid">MEDIUM — the mix we plan against</span>
+      <div class="mix">FAQ + Shopify lookups + some purchases</div>
+      <div class="amount">$64<em>/ month</em></div>
+      <div class="sub">Rp1,130,442 · <b>Rp113</b> per Session</div>
+      <div class="bar">
+        <i style="width:90.5%;background:#2f6fed"></i><i style="width:6.3%;background:#d97706"></i>
+        <i style="width:1.6%;background:#ec4899"></i><i style="width:1.6%;background:#64748b"></i>
+      </div>
+      <div class="legend">
+        <div><i class="dot" style="background:#2f6fed"></i><span>Main LLM</span><span class="amt">$57.80</span></div>
+        <div><i class="dot" style="background:#d97706"></i><span>OCR</span><span class="amt">$4.00</span></div>
+        <div><i class="dot" style="background:#ec4899"></i><span>AI Copilot</span><span class="amt">$1.00</span></div>
+        <div><i class="dot" style="background:#64748b"></i><span>Everything else</span><span class="amt">$1.06</span></div>
+      </div>
+    </div>
+
+    <div class="card high">
+      <span class="badge b-high">HIGH</span>
+      <div class="mix">Commerce-heavy, long conversations</div>
+      <div class="amount">$89<em>/ month</em></div>
+      <div class="sub">Rp1,575,071 · <b>Rp158</b> per Session</div>
+      <div class="bar">
+        <i style="width:88.6%;background:#2f6fed"></i><i style="width:9.0%;background:#d97706"></i>
+        <i style="width:1.1%;background:#ec4899"></i><i style="width:1.3%;background:#64748b"></i>
+      </div>
+      <div class="legend">
+        <div><i class="dot" style="background:#2f6fed"></i><span>Main LLM</span><span class="amt">$78.86</span></div>
+        <div><i class="dot" style="background:#d97706"></i><span>OCR</span><span class="amt">$8.00</span></div>
+        <div><i class="dot" style="background:#ec4899"></i><span>AI Copilot</span><span class="amt">$1.00</span></div>
+        <div><i class="dot" style="background:#64748b"></i><span>Everything else</span><span class="amt">$1.12</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="panel chart">
+      <h2><span class="tile t-teal"><i class="ic" data-icon="chat"></i></span>Cost of one Session
+        <small>median of 3 measured runs</small></h2>
+      <div class="rows">
+        <div class="srow"><b>small talk</b><span class="track"><i style="width:0.8%"></i></span><span class="v">$0.0001</span></div>
+        <div class="srow"><b>one FAQ</b><span class="track"><i style="width:9.5%"></i></span><span class="v">$0.0014</span></div>
+        <div class="srow"><b>escalation</b><span class="track"><i style="width:18%"></i></span><span class="v">$0.0027</span></div>
+        <div class="srow"><b>order lookup</b><span class="track"><i style="width:61%"></i></span><span class="v">$0.0091</span></div>
+        <div class="srow"><b>five FAQs</b><span class="track"><i style="width:73%"></i></span><span class="v">$0.0108</span></div>
+        <div class="srow"><b>purchase</b><span class="track"><i style="width:76%"></i></span><span class="v">$0.0112</span></div>
+        <div class="srow"><b>attachment</b><span class="track"><i class="acc" style="width:80%"></i></span><span class="v">$0.0119</span></div>
+        <div class="srow"><b>15 turns</b><span class="track"><i style="width:100%"></i></span><span class="v">$0.0149</span></div>
+      </div>
+      <div class="foot">The main model is <b>~90%</b> of the bill · <b>77–96%</b> of its input is
+        cached, <b>10× cheaper</b> per token · OCR only shows up with attachments</div>
+    </div>
+
+    <div class="side">
+      <div class="panel" style="flex:none">
+        <h2><span class="tile t-green"><i class="ic" data-icon="bar-chart"></i></span>If volume grows</h2>
+        <table>
+          <tr><th>Sessions / month</th><th>Low</th><th>Medium</th><th>High</th></tr>
+          <tr><td>1,000</td><td>$4<span>Rp78rb</span></td><td>$7<span>Rp121rb</span></td><td>$9<span>Rp165rb</span></td></tr>
+          <tr class="hi"><td>10,000</td><td>$39<span>Rp698rb</span></td><td>$64<span>Rp1,13jt</span></td><td>$89<span>Rp1,58jt</span></td></tr>
+          <tr><td>100,000</td><td>$390<span>Rp6,9jt</span></td><td>$634<span>Rp11,2jt</span></td><td>$886<span>Rp15,7jt</span></td></tr>
+        </table>
+      </div>
+
+      <div class="panel market">
+        <h2><span class="tile t-amber"><i class="ic" data-icon="scales"></i></span>One conversation vs the market
+          <small>log scale</small></h2>
+        <div class="mrows">
+          <div class="mrow us"><b>SupportOps</b><span class="track"><i style="width:8%"></i></span><span class="v">Rp113</span></div>
+          <div class="mrow"><b>Intercom Fin</b><span class="track"><i style="width:81%"></i></span><span class="v">Rp17rb</span></div>
+          <div class="mrow"><b>Zendesk AI</b><span class="track"><i style="width:90%"></i></span><span class="v">Rp26–35rb</span></div>
+          <div class="mrow"><b>Human agent</b><span class="track"><i style="width:100%"></i></span><span class="v">Rp18–120rb</span></div>
+        </div>
+        <div class="foot"><b>~100–300× cheaper</b> — but ours is raw model cost, theirs is a retail
+          price. Add server, database and storage ($20–40 / month) and 10,000 Sessions still land
+          under <b>$100</b>.</div>
+      </div>
+    </div>
+  </div>
+
+</div></div>
+
+<script>
+const ICONS={chat:"85701","bar-chart":"86286",scales:"86472"};
+for(const el of document.querySelectorAll('.ic')){
+  const u=`url("https://img.icons8.com/?id=${ICONS[el.dataset.icon]}&format=png&size=96")`;
+  el.style.webkitMaskImage=u; el.style.maskImage=u;
+}
+/* fill the viewport width — no gap on the right */
+const fit=()=>{
+  const s=window.innerWidth/1600;
+  document.getElementById('scaler').style.transform=`scale(${s})`;
+  document.body.style.height=(900*s)+'px';
+};
+fit(); addEventListener('resize',fit);
+</script>
+</body>
+</html>
