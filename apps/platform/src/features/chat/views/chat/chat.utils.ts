@@ -13,8 +13,10 @@ export function bubbleVariant(senderType: TicketDetailMessage["senderType"]) {
   return "customer" as const;
 }
 
+/** Every image the browser can render, not just the two types a Customer may
+ * upload: WhatsApp also delivers stickers as `image/webp`. */
 export function isImage(attachment: TicketAttachment) {
-  return attachment.mimeType === "image/jpeg" || attachment.mimeType === "image/png";
+  return attachment.mimeType.startsWith("image/");
 }
 
 export function formatBytes(sizeBytes: number) {
