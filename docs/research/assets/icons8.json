@@ -1,0 +1,163 @@
+{
+  "pack": "m_outlined",
+  "size": 24,
+  "color": "FFFFFF",
+  "icons": {
+    "user": {
+      "id": "82751",
+      "commonName": "user"
+    },
+    "globe": {
+      "id": "89777",
+      "commonName": "globe"
+    },
+    "code": {
+      "id": "87268",
+      "commonName": "code"
+    },
+    "whatsapp": {
+      "id": "85088",
+      "commonName": "whatsapp"
+    },
+    "monitor": {
+      "id": "85457",
+      "commonName": "monitor"
+    },
+    "settings": {
+      "id": "82535",
+      "commonName": "settings"
+    },
+    "layers": {
+      "id": "113299",
+      "commonName": "layers"
+    },
+    "ai": {
+      "id": "101164",
+      "commonName": "artificial-intelligence"
+    },
+    "cloud": {
+      "id": "85919",
+      "commonName": "cloud"
+    },
+    "database": {
+      "id": "85607",
+      "commonName": "database"
+    },
+    "plugin": {
+      "id": "120389",
+      "commonName": "plugin"
+    },
+    "document": {
+      "id": "82775",
+      "commonName": "document"
+    },
+    "search": {
+      "id": "82712",
+      "commonName": "search"
+    },
+    "mail": {
+      "id": "86840",
+      "commonName": "mail"
+    },
+    "bar-chart": {
+      "id": "86286",
+      "commonName": "bar-chart"
+    },
+    "file": {
+      "id": "82795",
+      "commonName": "file"
+    },
+    "link": {
+      "id": "85777",
+      "commonName": "link"
+    },
+    "star": {
+      "id": "96206",
+      "commonName": "filled-star"
+    },
+    "t-shirt": {
+      "id": "87754",
+      "commonName": "t-shirt"
+    },
+    "api": {
+      "id": "121835",
+      "commonName": "api"
+    },
+    "users": {
+      "id": "85057",
+      "commonName": "conference-call"
+    },
+    "chat": {
+      "id": "85701",
+      "commonName": "chat"
+    },
+    "tree": {
+      "id": "83304",
+      "commonName": "tree-structure"
+    },
+    "tag": {
+      "id": "85062",
+      "commonName": "price-tag"
+    },
+    "ticket": {
+      "id": "93737",
+      "commonName": "ticket"
+    },
+    "book": {
+      "id": "85767",
+      "commonName": "book"
+    },
+    "attach": {
+      "id": "86460",
+      "commonName": "attach"
+    },
+    "cart": {
+      "id": "85080",
+      "commonName": "shopping-cart"
+    },
+    "error": {
+      "id": "82783",
+      "commonName": "error"
+    },
+    "flash": {
+      "id": "110730",
+      "commonName": "flash-on"
+    },
+    "clock": {
+      "id": "82767",
+      "commonName": "clock"
+    },
+    "checked": {
+      "id": "82766",
+      "commonName": "checked"
+    },
+    "pause": {
+      "id": "85932",
+      "commonName": "pause"
+    },
+    "inbox": {
+      "id": "94634",
+      "commonName": "inbox"
+    },
+    "refresh": {
+      "id": "85469",
+      "commonName": "refresh"
+    },
+    "merge": {
+      "id": "100120",
+      "commonName": "merge-horizontal"
+    },
+    "github": {
+      "id": "106562",
+      "commonName": "github"
+    },
+    "box": {
+      "id": "82465",
+      "commonName": "box"
+    },
+    "server": {
+      "id": "85780",
+      "commonName": "server"
+    }
+  }
+}
