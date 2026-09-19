@@ -27,6 +27,31 @@ async function publishMessageUpdated(message: { id: string; ticketId: string | n
   );
 }
 
+/** The platform and widget only clear "AI reading…" on this event; without it
+ * the indicator hangs until the page is reloaded even though the row is done. */
+async function publishAttachmentUpdated(attachment: {
+  failureReason: string | null;
+  id: string;
+  processingStatus: string;
+  ticketId: string | null;
+}) {
+  if (!attachment.ticketId) return;
+  publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
+    maxRetriesPerRequest: null,
+  });
+  await publisher.publish(
+    `supportops:ticket:${attachment.ticketId}`,
+    JSON.stringify({
+      data: {
+        attachmentId: attachment.id,
+        failureReason: attachment.failureReason ?? undefined,
+        processingStatus: attachment.processingStatus,
+      },
+      type: "attachment.updated",
+    }),
+  );
+}
+
 export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   const session = await prisma.session.findFirst({
     include: {
@@ -212,22 +237,24 @@ type TurnAttachment = {
 /** Extraction happens before the turn so the AI Agent never reasons over an
  * empty context; a failure is recorded rather than silently skipped. */
 async function read(attachment: TurnAttachment) {
+  let data: {
+    extractedText?: string;
+    failureReason: string | null;
+    processingStatus: "READY" | "FAILED";
+  };
   try {
     const extractedText = await extractAttachment(attachment.storageKey, attachment.mimeType);
     if (!extractedText.trim()) throw new Error("The attachment did not contain readable text.");
-    return prisma.attachment.update({
-      data: { extractedText, failureReason: null, processingStatus: "READY" },
-      where: { id: attachment.id },
-    });
+    data = { extractedText, failureReason: null, processingStatus: "READY" };
   } catch (error) {
-    return prisma.attachment.update({
-      data: {
-        failureReason: error instanceof Error ? error.message : "Attachment processing failed.",
-        processingStatus: "FAILED",
-      },
-      where: { id: attachment.id },
-    });
+    data = {
+      failureReason: error instanceof Error ? error.message : "Attachment processing failed.",
+      processingStatus: "FAILED",
+    };
   }
+  const updated = await prisma.attachment.update({ data, where: { id: attachment.id } });
+  await publishAttachmentUpdated(updated);
+  return updated;
 }
 
 /** A transcript stays labelled as Attachment content, so a mis-heard word is
