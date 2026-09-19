@@ -1,5 +1,4 @@
 import type { CompletionModel } from "@anvia/core";
-import { detectLanguage, languageName } from "./language";
 import { escalationSummaryPrompt } from "./prompts/escalation-summary";
 import { suggestedReplyPrompt } from "./prompts/suggested-reply";
 import { createAgent } from "./telemetry";
@@ -25,21 +24,6 @@ export class SuggestedReplyGenerationFailedError extends Error {
     super("The AI Copilot could not generate a Suggested Reply.", options);
     this.name = "SuggestedReplyGenerationFailedError";
   }
-}
-
-/**
- * The model is instructed to "write in the Customer's language" but does not
- * reliably follow that instruction on every call (issue #38: the same
- * English conversation sometimes drafted a reply in Spanish). Detecting the
- * conversation's dominant language deterministically and naming it in the
- * prompt removes the guesswork; when detection is inconclusive, the model
- * still gets its original, more general instruction to fall back on.
- */
-function languageInstruction(text: string): string {
-  const detected = detectLanguage(text);
-  return detected === "unknown"
-    ? "Write only a concise draft in the Customer's language."
-    : `Write only a concise draft in ${languageName(detected)}, the Customer's language.`;
 }
 
 /** A Copilot draft may learn from Internal-Only material, but it must never
@@ -70,9 +54,6 @@ export async function generateSuggestedReply(params: {
   const agent = createAgent({
     id: "suggested-reply",
     instructions: suggestedReplyPrompt({
-      languageInstruction: languageInstruction(
-        params.currentConversation || params.customerMessage,
-      ),
       customerSafeSources: params.customerSafeSources,
       internalOnlySources: params.internalOnlySources,
       businessData: params.businessData,
@@ -110,15 +91,9 @@ export function generateEscalationSummary(params: {
   const transcript = params.ticket.messages
     .map((message) => `${message.senderType}: ${message.content}`)
     .join("\n");
-  const firstCustomerMessage = params.ticket.messages.find(
-    (message) => message.senderType === "CUSTOMER",
-  )?.content;
-  const detectedLanguage = detectLanguage(firstCustomerMessage || transcript);
-  const summaryLanguagePhrase =
-    detectedLanguage === "unknown" ? "the Customer's language" : languageName(detectedLanguage);
   const agent = createAgent({
     id: "escalation-summary",
-    instructions: escalationSummaryPrompt({ summaryLanguagePhrase }),
+    instructions: escalationSummaryPrompt(),
     maxTurns: 1,
     model: params.model,
     outputSchema: escalationSummarySchema,

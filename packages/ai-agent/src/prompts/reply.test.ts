@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { replyPrompt } from "./reply";
 
 describe("replyPrompt", () => {
+  it("restricts Customer-facing replies to Indonesian or English", () => {
+    const prompt = replyPrompt({ attachments: "None.", clarificationCount: 0 });
+
+    expect(prompt).toContain("Indonesian or in English — never in any other language");
+    expect(prompt).toContain("does not identify a language");
+  });
+
   it("requires complete checkout updates and distinguishes recoverable outcomes from tool failures", () => {
     const prompt = replyPrompt({ attachments: "None.", clarificationCount: 0 });
 
@@ -17,7 +24,7 @@ describe("replyPrompt", () => {
     });
 
     expect(prompt).toContain("explains in Customer-safe terms why a Human Agent is needed");
-    expect(prompt).toContain("in the language of the Customer's latest message");
+    expect(prompt).toContain("in the Ticket's language as chosen above");
     expect(prompt).toContain("Glad that's sorted.");
   });
 
