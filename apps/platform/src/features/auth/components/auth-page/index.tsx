@@ -3,13 +3,14 @@ import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
 import { toast } from "@repo/ui/components/sonner";
 import { Link } from "@tanstack/react-router";
-import { CommandIcon, GlobeIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, GlobeIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useLoginMutation, useRegisterMutation } from "../../auth.hooks";
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const login = useLoginMutation();
   const register = useRegisterMutation();
   const isLogin = mode === "login";
@@ -24,17 +25,16 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     <main className="grid min-h-screen justify-center p-2 lg:grid-cols-2">
       <section className="auth-brand-panel relative order-2 hidden h-full overflow-hidden rounded-3xl bg-primary lg:flex">
         <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/20 to-black/55" />
-        <div className="absolute top-10 space-y-1 px-10 text-primary-foreground">
-          <CommandIcon className="size-10" />
+        <div className="absolute top-10 space-y-1 px-10 text-white">
           <h1 className="text-2xl font-medium">SupportOps</h1>
           <p className="text-sm">Support, resolved with confidence.</p>
         </div>
-        <div className="absolute bottom-10 grid w-full grid-cols-2 gap-6 px-10 text-sm text-primary-foreground">
+        <div className="absolute bottom-10 grid w-full grid-cols-2 gap-6 px-10 text-sm text-white">
           <div>
             <h2 className="font-medium">AI-first support</h2>
             <p className="mt-1 opacity-80">Grounded answers for every Customer.</p>
           </div>
-          <div className="border-l border-primary-foreground/30 pl-6">
+          <div className="border-l border-white/30 pl-6">
             <h2 className="font-medium">Human when needed</h2>
             <p className="mt-1 opacity-80">A Human Agent takes over safely.</p>
           </div>
@@ -87,15 +87,30 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete={isLogin ? "current-password" : "new-password"}
-                minLength={isLogin ? undefined : 8}
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  className="pr-10"
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  minLength={isLogin ? undefined : 8}
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? (
+                    <EyeOffIcon className="size-4" />
+                  ) : (
+                    <EyeIcon className="size-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <Button className="mt-2 w-full" type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? "Please wait..." : isLogin ? "Login" : "Create account"}
