@@ -18,7 +18,8 @@
       "!**/.turbo",
       "!**/.pnpm-store",
       "!**/.tanstack",
-      "!**/routeTree.gen.ts"
+      "!**/routeTree.gen.ts",
+      "!docs/research/assets"
     ]
   },
   "formatter": {

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent Architecture Simple</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:#1e3a5f;
+       font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+  #scaler{transform-origin:top left}
+  #page{width:1600px;padding:22px 24px}
+
+  .tile{border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ic{background-color:#fff;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+      -webkit-mask-position:center;mask-position:center;
+      -webkit-mask-size:contain;mask-size:contain}
+  .t-blue{background:#2f6fed}.t-green{background:#22c55e}.t-purple{background:#a855f7}
+  .t-indigo{background:#6366f1}.t-orange{background:#f97316}.t-pink{background:#ec4899}
+  .t-teal{background:#0d9488}.t-slate{background:#64748b}.t-red{background:#ef4444}
+
+  header{display:flex;gap:16px;align-items:center;margin-bottom:14px}
+  .logo{width:60px;height:60px;border-radius:14px;flex:none}
+  .brand{font-size:34px;font-weight:800;letter-spacing:-.4px;color:#123a6b;line-height:1}
+  .subtitle{font-size:18px;font-weight:700;color:#3f6ea8;margin-top:6px}
+  .actors{display:flex;gap:10px;margin-left:auto}
+  .actors .a{display:flex;gap:8px;align-items:center;border:1.5px solid #9dc7f5;
+             background:#f2f9ff;border-radius:10px;padding:8px 14px}
+  .actors .tile{width:30px;height:30px}.actors .ic{width:18px;height:18px}
+  .actors b{font-size:14px;color:#12365e}
+
+  .sysbox{border:3px solid #2f6fed;border-radius:14px;background:#eef6ff;padding:14px}
+  section{border-radius:11px;padding:10px 12px;margin-bottom:12px}
+  section > h3{margin:0 0 9px;display:inline-block;padding:4px 12px;border-radius:7px;
+               font-size:14px;font-weight:800}
+  .s-chan{background:#dceeff;border:1.5px solid #9dc7f5}
+  .s-chan > h3{background:#2f6fed;color:#fff}
+  .s-sess{background:#dff6f4;border:1.5px solid #7dd3d0}
+  .s-sess > h3{background:#0d9488;color:#fff}
+  .s-life{background:#eef2fb;border:1.5px solid #b9c9e8}
+  .s-life > h3{background:#475f8f;color:#fff}
+
+  .flow{display:flex;gap:10px;align-items:stretch}
+  .card{background:#fff;border:1.5px solid #9dc7f5;border-radius:9px;padding:9px 11px;
+        display:flex;gap:10px;align-items:flex-start;flex:1 1 0;min-width:0}
+  .card .tile{width:32px;height:32px}.card .ic{width:19px;height:19px}
+  .card b{font-size:13.5px;font-weight:800;color:#12365e;line-height:1.25;display:block}
+  .card small{display:block;font-size:11px;color:#5b7290;margin-top:4px;line-height:1.45}
+  .card code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;
+             background:#eef4fd;color:#1d4e89;padding:1px 4px;border-radius:4px}
+
+  .arr{flex:none;align-self:center;width:24px;height:11px;position:relative}
+  .arr::before{content:"";position:absolute;left:0;top:4px;width:18px;height:2px;background:#2f6fed}
+  .arr::after{content:"";position:absolute;right:0;top:0;
+              border:5.5px solid transparent;border-left-color:#2f6fed}
+  .vconn{height:16px;position:relative}
+  .vconn::before{content:"";position:absolute;left:50%;top:0;width:2px;height:10px;background:#2f6fed}
+  .vconn::after{content:"";position:absolute;left:calc(50% - 5px);top:8px;
+                border:5px solid transparent;border-top-color:#2f6fed}
+  .note{background:#fff7e0;border:1.5px solid #f3c969;border-radius:8px;padding:8px 10px;
+        font-size:11px;font-weight:700;color:#8a5a12;line-height:1.45;flex:1 1 0}
+
+  .cols{display:grid;grid-template-columns:1.15fr 1fr 1.05fr;gap:12px;align-items:start;
+        margin-bottom:12px}
+  .col{border-radius:11px;padding:10px 12px}
+  .col > h3{margin:0 0 9px;font-size:14px;font-weight:800}
+  .c-agent{background:#e4f7e9;border:1.5px solid #86d69b}.c-agent > h3{color:#166534}
+  .c-tool{background:#f2e9fd;border:1.5px solid #c9a6ee}.c-tool > h3{color:#6b21a8}
+  .c-model{background:#e2edfd;border:1.5px solid #9dc7f5}.c-model > h3{color:#1e3a8a}
+  .c-human{background:#fff8e6;border:1.5px solid #f3c969}.c-human > h3{color:#92650f}
+
+  .steps{display:flex;flex-direction:column;gap:8px;position:relative}
+  .steps::before{content:"";position:absolute;left:11px;top:18px;bottom:22px;width:2px;background:#86d69b}
+  .steps::after{content:"";position:absolute;left:6px;bottom:12px;
+                border:5.5px solid transparent;border-top-color:#86d69b}
+  .step{display:flex;gap:9px;align-items:stretch}
+  .num{flex:none;width:23px;height:23px;border-radius:50%;background:#166534;color:#fff;
+       font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;
+       align-self:center;position:relative;z-index:1}
+  .stack{display:flex;flex-direction:column;gap:8px}
+  .warn{background:#fee9e9;border:1.5px solid #f3a6a6;border-radius:8px;padding:8px 10px;
+        font-size:11px;font-weight:700;color:#9b1c1c;line-height:1.45;text-align:center;margin-top:8px}
+  .hint{font-size:11px;font-weight:700;color:#5b7290;text-align:center;margin-top:8px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+
+  .panels{display:flex;gap:12px}
+  .panel{flex:1;background:#fff;border:1.5px solid #9dc7f5;border-radius:10px;padding:10px 12px}
+  .panel h4{margin:0 0 6px;font-size:12.5px;font-weight:800;color:#123a6b}
+  .panel.red{border-color:#f3a6a6}.panel.red h4{color:#9b1c1c}
+  .panel code{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+              font-size:10px;background:#eef4fd;color:#1d4e89;padding:3px 6px;border-radius:4px;
+              margin:0 4px 4px 0}
+  .panel.red code{background:#fee9e9;color:#9b1c1c}
+  .panel p{margin:4px 0 0;font-size:11px;font-weight:700;color:#5b7290;line-height:1.55}
+  /* ── override deck: ritme vertikal dirapatkan agar pas 1600×900 ── */
+  #page{padding:10px 24px}
+  header{margin-bottom:8px}
+  .sysbox{padding:7px}
+  section{padding:6px 11px;margin-bottom:6px}
+  section > h3{margin:0 0 6px}
+  .card{padding:7px 10px}
+  .card small{margin-top:3px;line-height:1.3}
+  .vconn{height:8px}
+  .cols{margin-bottom:6px;gap:10px}
+  .col{padding:7px 11px}
+  .col > h3{margin:0 0 6px}
+  .steps{gap:5px}
+  .stack{gap:5px}
+  .grid2,.grid3{gap:5px}
+  .grid5{gap:8px}
+  .panels{gap:10px}
+  .panel{padding:7px 11px}
+  .panel p{line-height:1.42}
+  .warn,.note{padding:6px 9px;line-height:1.3}
+  .warn{margin-top:6px}
+  .hint{margin-top:6px}
+
+</style>
+</head>
+<body>
+<div id="scaler"><div id="page">
+
+  <header>
+    <img class="logo" src="support-ops-logo.png" alt="SupportOps logo">
+    <div>
+      <div class="brand">SupportOps</div>
+      <div class="subtitle">AI Agent Architecture — Runtime, Grounding and Model Flow</div>
+    </div>
+    <div class="actors">
+      <div class="a"><div class="tile t-green"><i class="ic" data-icon="user"></i></div><b>Customer</b></div>
+      <div class="a"><div class="tile t-green"><i class="ic" data-icon="users"></i></div><b>Human Agent</b></div>
+      <div class="a"><div class="tile t-green"><i class="ic" data-icon="user"></i></div><b>Admin</b></div>
+    </div>
+  </header>
+
+  <div class="sysbox">
+
+    <section class="s-chan">
+      <h3>Channels</h3>
+      <div class="flow">
+        <div class="card"><div class="tile t-blue"><i class="ic" data-icon="chat"></i></div>
+          <div><b>Web Widget</b><small>In-app chat on the Workspace website</small></div></div>
+        <div class="card"><div class="tile t-green"><i class="ic" data-icon="whatsapp"></i></div>
+          <div><b>WhatsApp</b><small>Text, media, documents, stickers</small></div></div>
+        <span class="arr"></span>
+        <div class="card"><div class="tile t-blue"><i class="ic" data-icon="tree"></i></div>
+          <div><b>Channel Adapter</b><small>Normalize, authenticate, route into the platform</small></div></div>
+      </div>
+    </section>
+
+    <div class="vconn"></div>
+
+    <section class="s-sess">
+      <h3>Session &amp; Ticket Layer</h3>
+      <div class="flow">
+        <div class="card"><div class="tile t-teal"><i class="ic" data-icon="database"></i></div>
+          <div><b>Session + Agent Memory</b><small>Session exists before the Ticket</small></div></div>
+        <span class="arr"></span>
+        <div class="card"><div class="tile t-teal"><i class="ic" data-icon="tag"></i></div>
+          <div><b>Support Classification</b><small>Title, category, priority</small></div></div>
+        <span class="arr"></span>
+        <div class="card"><div class="tile t-teal"><i class="ic" data-icon="ticket"></i></div>
+          <div><b>Ticket Eligibility Gate</b><small>Business rules decide when a Ticket is created</small></div></div>
+        <div class="note">After Escalation or Takeover the AI Agent stops replying to the Customer.</div>
+      </div>
+    </section>
+
+    <div class="vconn"></div>
+
+    <div class="cols">
+
+      <div class="col c-agent">
+        <h3>AI Agent Runtime</h3>
+        <div class="steps">
+          <div class="step"><span class="num">1</span>
+            <div class="card" style="border-color:#86d69b"><div class="tile t-green"><i class="ic" data-icon="layers"></i></div>
+              <div><b>Load Session memory &amp; Ticket</b><small>Ticket, memory and clarification count</small></div></div></div>
+          <div class="step"><span class="num">2</span>
+            <div class="card" style="border-color:#86d69b"><div class="tile t-green"><i class="ic" data-icon="merge"></i></div>
+              <div><b>Build assigned Tool set server-side</b><small>The loadout is never chosen by the model</small></div></div></div>
+          <div class="step"><span class="num">3</span>
+            <div class="card" style="border-color:#86d69b"><div class="tile t-green"><i class="ic" data-icon="refresh"></i></div>
+              <div><b>Bounded Tool loop</b><small>Tool-call budget · 60s turn timeout</small></div></div></div>
+          <div class="step"><span class="num">4</span>
+            <div class="card" style="border-color:#86d69b"><div class="tile t-green"><i class="ic" data-icon="document"></i></div>
+              <div><b>Answer only from grounded context</b><small>Knowledge, history and Tool results combined</small></div></div></div>
+          <div class="step"><span class="num">5</span>
+            <div class="card" style="border-color:#86d69b"><div class="tile t-green"><i class="ic" data-icon="tree"></i></div>
+              <div><b>Decide: REPLY · CLARIFY · ESCALATE · RESOLVE</b><small>Streamed over SSE · max 2 clarifications</small></div></div></div>
+          <div class="step"><span class="num">6</span>
+            <div class="card" style="border-color:#86d69b"><div class="tile t-green"><i class="ic" data-icon="database"></i></div>
+              <div><b>Persist Message + AI Activity</b><small>Message, Tool usage, status and delivery</small></div></div></div>
+        </div>
+      </div>
+
+      <div class="col c-tool">
+        <h3>Grounding &amp; Tools</h3>
+        <div class="stack">
+          <div class="card" style="border-color:#c9a6ee"><div class="tile t-purple"><i class="ic" data-icon="search"></i></div>
+            <div><b>Knowledge search</b><small>Customer-Safe sources · pgvector similarity</small></div></div>
+          <div class="card" style="border-color:#c9a6ee"><div class="tile t-purple"><i class="ic" data-icon="layers"></i></div>
+            <div><b>Ticket history &amp; attachments</b><small>Same Customer · OCR / transcription output</small></div></div>
+          <div class="card" style="border-color:#c9a6ee"><div class="tile t-purple"><i class="ic" data-icon="api"></i></div>
+            <div><b>MCP &amp; HTTP Tools</b><small>Live facts and approved business actions</small></div></div>
+          <div class="card" style="border-color:#c9a6ee"><div class="tile t-purple"><i class="ic" data-icon="settings"></i></div>
+            <div><b>Workspace-scoped assignment</b><small>Only assigned Tools are visible to the Agent</small></div></div>
+        </div>
+        <div class="warn">BUSINESS_TOOL_FAILURE → ESCALATE<br>Tool Result is treated as untrusted data</div>
+      </div>
+
+      <div>
+        <div class="col c-model">
+          <h3>Model Runtime</h3>
+          <div class="card" style="border-color:#9dc7f5"><div class="tile t-blue"><i class="ic" data-icon="cloud"></i></div>
+            <div><b>Completion Gateway</b><small>Configurable · OpenRouter / OpenAI-compatible</small></div></div>
+          <div class="grid3" style="margin-top:8px">
+            <div class="card"><div class="tile t-blue"><i class="ic" data-icon="flash"></i></div>
+              <div><b>Fast Model</b><small>Classification</small></div></div>
+            <div class="card"><div class="tile t-indigo"><i class="ic" data-icon="ai"></i></div>
+              <div><b>Main Model</b><small>Reply · reasoning · Tools</small></div></div>
+            <div class="card"><div class="tile t-purple"><i class="ic" data-icon="database"></i></div>
+              <div><b>Embedding Model</b><small>Retrieval vectors</small></div></div>
+          </div>
+          <div class="hint">Model ids configured through environment variables</div>
+        </div>
+
+        <div class="vconn"></div>
+
+        <div class="col c-human">
+          <h3>Human Support</h3>
+          <div class="grid2">
+            <div class="card" style="border-color:#f3c969"><div class="tile t-orange"><i class="ic" data-icon="inbox"></i></div>
+              <div><b>Shared queue &amp; claim</b><small>Escalated Tickets land here</small></div></div>
+            <div class="card" style="border-color:#f3c969"><div class="tile t-orange"><i class="ic" data-icon="file"></i></div>
+              <div><b>Escalation summary</b><small>Generated at claim time</small></div></div>
+            <div class="card" style="border-color:#f3c969"><div class="tile t-orange"><i class="ic" data-icon="star"></i></div>
+              <div><b>AI Copilot</b><small>Suggested reply on request</small></div></div>
+            <div class="card" style="border-color:#f3c969"><div class="tile t-orange"><i class="ic" data-icon="user"></i></div>
+              <div><b>Admin Takeover</b><small>AI stays silent afterwards</small></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section class="s-life">
+      <h3>Lifecycle Automation &amp; Observability</h3>
+      <div class="grid5">
+        <div class="card"><div class="tile t-blue"><i class="ic" data-icon="clock"></i></div>
+          <div><b>Follow-Up</b><small>Proactive reminder</small></div></div>
+        <div class="card"><div class="tile t-blue"><i class="ic" data-icon="checked"></i></div>
+          <div><b>Auto-Resolution</b><small>No reply after Follow-Up</small></div></div>
+        <div class="card"><div class="tile t-blue"><i class="ic" data-icon="pause"></i></div>
+          <div><b>Idle Closure</b><small>Inactive conversations</small></div></div>
+        <div class="card"><div class="tile t-pink"><i class="ic" data-icon="star"></i></div>
+          <div><b>AI Activity</b><small>Model usage, tools, outcomes</small></div></div>
+        <div class="card"><div class="tile t-pink"><i class="ic" data-icon="bar-chart"></i></div>
+          <div><b>OTLP Traces</b><small>AI Agent spans only</small></div></div>
+      </div>
+      <div class="hint">Delayed jobs run on BullMQ + Redis in the Worker, never in the request path.</div>
+    </section>
+
+    <div class="panels">
+      <div class="panel red">
+        <h4>Escalation Reasons</h4>
+        <code>LOW_KNOWLEDGE_CONFIDENCE</code><code>NO_RELEVANT_KNOWLEDGE</code><code>CUSTOMER_REQUESTED_HUMAN</code>
+        <code>AI_FAILED_ATTEMPTS</code><code>INTERNAL_ACTION_REQUIRED</code><code>BUSINESS_TOOL_FAILURE</code>
+        <code>CONFLICTING_KNOWLEDGE</code><code>AI_TIMEOUT</code>
+      </div>
+      <div class="panel">
+        <h4>Guardrails</h4>
+        <p>Internal-Only knowledge never reaches the Customer · every query is Workspace-scoped ·
+           mutating Tools require Customer authorization · conflicting Sources escalate instead of being merged ·
+           RESOLVE needs explicit Customer confirmation.</p>
+      </div>
+    </div>
+  </div>
+
+</div></div>
+<script>
+const ICONS={user:"82751",users:"85057",whatsapp:"85088",settings:"82535",layers:"113299",
+ai:"101164",database:"85607",api:"121835",document:"82775",search:"82712",cloud:"85919",
+"bar-chart":"86286",file:"82795",star:"96206",chat:"85701",tree:"83304",tag:"85062",
+ticket:"93737",flash:"110730",clock:"82767",checked:"82766",pause:"85932",inbox:"94634",
+refresh:"85469",merge:"100120"};
+for(const el of document.querySelectorAll('.ic')){
+  const u=`url("https://img.icons8.com/?id=${ICONS[el.dataset.icon]}&format=png&size=96")`;
+  el.style.webkitMaskImage=u; el.style.maskImage=u;
+}
+const fit=()=>{
+  const s=window.innerWidth/1600;
+  document.getElementById('scaler').style.transform=`scale(${s})`;
+  document.body.style.height=(document.getElementById('page').offsetHeight*s)+'px';
+};
+fit(); addEventListener('resize',fit);
+</script>
+</body>
+</html>
