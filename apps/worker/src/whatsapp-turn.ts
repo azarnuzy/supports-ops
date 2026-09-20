@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { classifyMessage, createClassificationModel } from "@repo/ai-agent";
 import { generateAiReply } from "@repo/api/ai-agent-turn";
+import { describeMessageContent } from "@repo/api/customer-message";
 import { decryptToolSecret } from "@repo/api/secrets";
 import { enqueueWhatsAppDelivery, type WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
 import { classifyWhatsAppError, renderWhatsAppMessage } from "@repo/channels";
@@ -100,7 +101,7 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
     return deliverPendingMessages(session.id);
   }
 
-  const customerMessage = incoming.map(describeCustomerMessage).join("\n");
+  const customerMessage = incoming.map(describeMessageContent).join("\n");
   let ticketId = session.ticket?.id;
   if (!ticketId) {
     if (!classificationConfig.apiKey) throw new Error("OPENROUTER_API_KEY is required.");
@@ -129,7 +130,7 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
         .filter((message) => message.position < incoming[0].position)
         .map((message) => ({
           content:
-            message.senderType === "CUSTOMER" ? describeCustomerMessage(message) : message.content,
+            message.senderType === "CUSTOMER" ? describeMessageContent(message) : message.content,
           role: message.senderType === "CUSTOMER" ? ("customer" as const) : ("agent" as const),
         })),
       model: createClassificationModel({
@@ -255,21 +256,6 @@ async function read(attachment: TurnAttachment) {
   const updated = await prisma.attachment.update({ data, where: { id: attachment.id } });
   await publishAttachmentUpdated(updated);
   return updated;
-}
-
-/** A transcript stays labelled as Attachment content, so a mis-heard word is
- * never mistaken for something the Customer typed. */
-function describeCustomerMessage(message: { attachments: TurnAttachment[]; content: string }) {
-  return [
-    message.content,
-    ...message.attachments.map((attachment) =>
-      attachment.processingStatus === "READY"
-        ? `[${attachment.mimeType.startsWith("audio/") ? "Automatic transcript of a voice note — may contain mistakes" : `Content of attached file ${attachment.fileName}`}]\n${attachment.extractedText}`
-        : `[Attached file ${attachment.fileName} could not be read. Tell the Customer.]`,
-    ),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
 }
 
 function customerFacingFailure(attachment: TurnAttachment) {

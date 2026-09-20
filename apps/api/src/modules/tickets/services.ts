@@ -15,6 +15,7 @@ import {
   searchChunks as findKnowledgeChunks,
 } from "@repo/knowledge";
 import { createBusinessTools } from "@repo/tools";
+import { describeMessageContent } from "../ai-agent/customer-message";
 import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
@@ -811,11 +812,32 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
   });
   if (!ticket) throw new TicketNotOwnedError();
 
-  const messages = await unscopedPrisma.message.findMany({
+  const stored = await unscopedPrisma.message.findMany({
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-    select: { content: true, senderType: true },
+    select: {
+      attachments: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          extractedText: true,
+          fileName: true,
+          mimeType: true,
+          processingStatus: true,
+        },
+        where: { deletedAt: null },
+      },
+      content: true,
+      senderType: true,
+    },
     where: { deletedAt: null, sessionId: ticket.sessionId },
   });
+  // An Attachment often is the Message — a voice note's words, an invoice's
+  // figures — while `content` is empty. Reading `content` alone made every
+  // Attachment-only turn look blank, so the draft answered whichever older
+  // Message still had typed text instead of what the Customer last asked.
+  const messages = stored.map((message) => ({
+    content: describeMessageContent(message),
+    senderType: message.senderType,
+  }));
 
   const customerMessage = [...messages]
     .reverse()

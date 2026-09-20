@@ -41,7 +41,10 @@ export default function TranscriptMessage({
   const legacyAttachmentText =
     /^I need help with the attached file: .+$/.test(message.content) && message.attachments.length;
   return (
-    <Message>
+    // The Human Agent is the reader's own side of the conversation, so the
+    // whole row moves right — avatar, name and timestamp included, not just
+    // the Bubble.
+    <Message align={isHuman ? "end" : "start"}>
       <MessageAvatar className="mt-5">
         <Avatar className="size-7">
           <AvatarFallback className="text-[11px] ring-1 ring-border">
