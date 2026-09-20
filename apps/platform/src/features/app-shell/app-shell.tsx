@@ -173,21 +173,12 @@ export function PlatformAppShell({
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader>
+        <SidebarHeader className="h-12 justify-center py-0">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                asChild
-                tooltip="SupportOps"
-                className="bg-white text-zinc-950 hover:bg-white hover:text-zinc-950"
-              >
+              <SidebarMenuButton asChild tooltip="SupportOps">
                 <Link to="/">
-                  <img
-                    src="/support-ops-logo.png"
-                    alt=""
-                    className="size-7 shrink-0 rounded-md p-1"
-                  />
+                  <img src="/support-ops-logo.png" alt="" className="size-6 shrink-0" />
                   <span className="text-[13px] font-semibold group-data-[collapsible=icon]:hidden">
                     SupportOps
                   </span>

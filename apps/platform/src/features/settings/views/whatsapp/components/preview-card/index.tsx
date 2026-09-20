@@ -60,7 +60,7 @@ export default function PreviewCard() {
       </div>
 
       <div className="mx-auto w-full max-w-[320px] overflow-hidden rounded-[24px] border bg-card shadow-sm">
-        <div className="flex items-center justify-between gap-3 bg-[#075e54] px-3 py-2.5 text-white">
+        <div className="flex items-center justify-between gap-3 bg-[#075e54] px-3 py-2.5 text-white dark:bg-[#1f2c34]">
           <div className="flex min-w-0 items-center gap-2.5">
             <ArrowLeftIcon className="size-4 shrink-0 text-white/80" />
             <div className="grid size-8 shrink-0 place-items-center rounded-full bg-white/20">
@@ -79,14 +79,16 @@ export default function PreviewCard() {
         </div>
 
         <div
-          className="h-[380px] bg-[#efeae2]"
+          className="relative h-[380px] bg-[#efeae2] dark:bg-[#0b141a]"
           style={{
             backgroundImage: `url(${CHAT_BACKGROUND})`,
             backgroundSize: "cover",
           }}
         >
-          <div className="flex h-full flex-col gap-1.5 overflow-y-auto p-3">
-            <div className="self-center rounded-md bg-white/90 px-2 py-0.5 text-[10px] font-medium tracking-wide text-[#54656f] uppercase">
+          {/* Mutes the beige doodle wallpaper into WhatsApp's dark chat background. */}
+          <div className="pointer-events-none absolute inset-0 hidden bg-[#0b141a]/90 dark:block" />
+          <div className="relative flex h-full flex-col gap-1.5 overflow-y-auto p-3">
+            <div className="self-center rounded-md bg-white/90 px-2 py-0.5 text-[10px] font-medium tracking-wide text-[#54656f] uppercase dark:bg-[#182229] dark:text-[#8696a0]">
               Today
             </div>
             {state === "conversation" ? (
@@ -103,14 +105,14 @@ export default function PreviewCard() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-[#f0f2f5] px-2 py-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white px-3 py-2">
+        <div className="flex items-center gap-2 bg-[#f0f2f5] px-2 py-2 dark:bg-[#1f2c34]">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white px-3 py-2 dark:bg-[#2a3942]">
             <SmileIcon className="size-4 shrink-0 text-[#8696a0]" />
             <span className="flex-1 truncate text-[13px] text-[#8696a0]">Message</span>
             <PlusIcon className="size-4 shrink-0 text-[#8696a0]" />
             <CameraIcon className="size-4 shrink-0 text-[#8696a0]" />
           </div>
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[#075e54] text-white">
+          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[#075e54] text-white dark:bg-[#00a884]">
             <MicIcon className="size-4" />
           </div>
         </div>
@@ -128,18 +130,18 @@ export default function PreviewCard() {
 
 function Incoming({ children }: { children: ReactNode }) {
   return (
-    <div className="max-w-[80%] self-start rounded-lg rounded-tl-none bg-white px-2.5 py-1.5 shadow-sm">
+    <div className="max-w-[80%] self-start rounded-lg rounded-tl-none bg-white px-2.5 py-1.5 text-[#111b21] shadow-sm dark:bg-[#202c33] dark:text-[#e9edef]">
       <p className="text-[13px] leading-snug">{children}</p>
-      <p className="mt-0.5 text-right text-[10px] text-[#667781]">09:41</p>
+      <p className="mt-0.5 text-right text-[10px] text-[#667781] dark:text-white/60">09:41</p>
     </div>
   );
 }
 
 function Outgoing({ children }: { children: ReactNode }) {
   return (
-    <div className="max-w-[80%] self-end rounded-lg rounded-tr-none bg-[#d9fdd3] px-2.5 py-1.5 shadow-sm">
+    <div className="max-w-[80%] self-end rounded-lg rounded-tr-none bg-[#d9fdd3] px-2.5 py-1.5 text-[#111b21] shadow-sm dark:bg-[#005c4b] dark:text-[#e9edef]">
       <p className="text-[13px] leading-snug">{children}</p>
-      <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-[#667781]">
+      <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-[#667781] dark:text-white/60">
         09:41
         <CheckCheckIcon className="size-3.5 text-[#53bdeb]" />
       </p>
