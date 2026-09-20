@@ -71,6 +71,12 @@ const apiEnvSchema = z
     LLM_MAIN_REASONING_EFFORT: optionalStringSchema,
     INTERNAL_WORKER_TOKEN: optionalStringSchema,
     LOG_LEVEL: logLevelSchema,
+    // Requests slower than this are logged with their duration. Compose passes
+    // an empty string for an unset override, which z.coerce would read as 0.
+    SLOW_REQUEST_MS: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.coerce.number().int().positive().default(500),
+    ),
     OPENROUTER_API_KEY: optionalStringSchema,
     COMPLETION_GATEWAY_API_KEY: optionalStringSchema,
     EVAL_JUDGE_MODEL: optionalStringSchema,
@@ -204,6 +210,7 @@ export const storageConfig = {
 export const loggerConfig = {
   environment: env.NODE_ENV,
   level: env.LOG_LEVEL,
+  slowRequestMs: env.SLOW_REQUEST_MS,
 } as const;
 
 export const telemetryConfig = {

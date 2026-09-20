@@ -141,7 +141,6 @@ const ticketDetailSelect = {
 const transcriptSelect = {
   attachments: {
     select: {
-      extractedText: true,
       fileName: true,
       failureReason: true,
       id: true,
@@ -159,6 +158,36 @@ const transcriptSelect = {
   senderType: true,
   senderUserId: true,
 } as const;
+
+/** One conversation's Messages, newest last.
+ *
+ * `extractedText` is read separately and only for voice notes, because that
+ * is the only Attachment kind whose text the UI renders — a transcript shown
+ * beneath the recording. For a document the extracted text is AI Agent input,
+ * never displayed, and selecting it for every Attachment made a single
+ * transcript carrying a PDF weigh megabytes on every refetch. */
+async function readTranscript(sessionId: string) {
+  const messages = await prisma.message.findMany({
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: transcriptSelect,
+    where: { deletedAt: null, sessionId },
+  });
+  const transcripts = new Map(
+    (
+      await prisma.attachment.findMany({
+        select: { extractedText: true, id: true },
+        where: { deletedAt: null, message: { sessionId }, mimeType: { startsWith: "audio/" } },
+      })
+    ).map((attachment) => [attachment.id, attachment.extractedText]),
+  );
+  return messages.map((message) => ({
+    ...message,
+    attachments: message.attachments.map((attachment) => ({
+      ...attachment,
+      extractedText: transcripts.get(attachment.id) ?? null,
+    })),
+  }));
+}
 
 /** An Admin sees the whole Workspace; a Human Agent sees the queue, their own
  * Tickets, and Tickets they previously resolved — never the whole Workspace. */
@@ -288,13 +317,7 @@ export async function getConversationSessionDetail(sessionId: string) {
     where: { id: sessionId, ticket: null },
   });
   if (!session) throw new SessionNotFoundError();
-
-  const messages = await prisma.message.findMany({
-    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-    select: transcriptSelect,
-    where: { deletedAt: null, sessionId },
-  });
-  return { ...session, messages };
+  return { ...session, messages: await readTranscript(sessionId) };
 }
 
 export async function getTicketDetail(ticketId: string, user: InboxUser) {
@@ -305,11 +328,7 @@ export async function getTicketDetail(ticketId: string, user: InboxUser) {
   if (!ticket) throw new TicketNotFoundError();
   // The transcript spans the whole Session, so Messages persisted before the
   // Ticket existed are part of the same conversation history.
-  const messages = await prisma.message.findMany({
-    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-    select: transcriptSelect,
-    where: { deletedAt: null, sessionId: ticket.session.id },
-  });
+  const messages = await readTranscript(ticket.session.id);
   const [withUnread] = await attachUnreadCounts(user.id, [{ ...ticket, messages }]);
   return withUnread;
 }

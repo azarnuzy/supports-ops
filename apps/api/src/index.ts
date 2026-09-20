@@ -1,12 +1,7 @@
 import { serve } from "@hono/node-server";
-import { apiConfig, loggerConfig } from "./config";
-import { createLogger } from "@repo/logger";
+import { apiConfig } from "./config";
+import { logger } from "./utils/logger";
 import { app } from "./app";
-
-const logger = createLogger({
-  ...loggerConfig,
-  service: "api",
-});
 
 serve(
   {

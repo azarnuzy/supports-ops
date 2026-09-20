@@ -68,6 +68,10 @@ model Session {
   messages              Message[]
 
   @@index([workspaceId])
+  // All Conversations pages by (createdAt, id) descending within a Workspace.
+  // Without this the keyset cursor sorts every Session in the Workspace on
+  // each page.
+  @@index([workspaceId, createdAt, id])
   @@index([channelId])
   @@index([customerIdentityId])
 }

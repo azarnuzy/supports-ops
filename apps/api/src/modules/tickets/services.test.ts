@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  attachmentFindMany: vi.fn(),
   executeRaw: vi.fn(),
   messageFindMany: vi.fn(),
   queryRaw: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("../../utils/prisma", async () => {
     prisma: {
       $executeRaw: mocks.executeRaw,
       $queryRaw: mocks.queryRaw,
+      attachment: { findMany: mocks.attachmentFindMany },
       message: { findMany: mocks.messageFindMany },
       session: {
         findMany: mocks.sessionFindMany,
@@ -88,6 +90,7 @@ const {
 } = await import("./services");
 
 function resetMocks() {
+  mocks.attachmentFindMany.mockReset().mockResolvedValue([]);
   mocks.executeRaw.mockReset().mockResolvedValue(1);
   mocks.queryRaw.mockReset().mockResolvedValue([]);
   mocks.sessionFindMany.mockReset().mockResolvedValue([]);
@@ -272,7 +275,7 @@ describe("getTicketDetail", () => {
       session: { createdAt: sessionCreatedAt, customerLastMessageAt: null, id: "session-1" },
     });
     mocks.messageFindMany.mockResolvedValue([
-      { content: "halo", position: -2, senderType: "CUSTOMER" },
+      { attachments: [], content: "halo", position: -2, senderType: "CUSTOMER" },
     ]);
 
     const result = await getTicketDetail("t-1", { id: "admin-1", role: "ADMIN" });
@@ -281,7 +284,7 @@ describe("getTicketDetail", () => {
     // Messages are part of the returned history.
     expect(result).toEqual({
       id: "t-1",
-      messages: [{ content: "halo", position: -2, senderType: "CUSTOMER" }],
+      messages: [{ attachments: [], content: "halo", position: -2, senderType: "CUSTOMER" }],
       unreadCount: 0,
       session: { createdAt: sessionCreatedAt, customerLastMessageAt: null, id: "session-1" },
     });
@@ -298,6 +301,44 @@ describe("getTicketDetail", () => {
     expect(call.select.messages).toBeUndefined();
     expect(call.select).not.toHaveProperty("messages");
   });
+  it("carries extracted text only for a voice note, never for a document", async () => {
+    mocks.ticketFindFirst.mockResolvedValue({
+      id: "t-1",
+      session: { createdAt: new Date(), customerLastMessageAt: null, id: "session-1" },
+    });
+    mocks.messageFindMany.mockResolvedValue([
+      {
+        attachments: [
+          { id: "voice-1", mimeType: "audio/ogg" },
+          { id: "doc-1", mimeType: "application/pdf" },
+        ],
+        content: "",
+        position: 1,
+        senderType: "CUSTOMER",
+      },
+    ]);
+    // Only the voice note is read back, so the PDF's extracted text — which the
+    // UI never renders — never reaches the response.
+    mocks.attachmentFindMany.mockResolvedValue([{ extractedText: "halo pak", id: "voice-1" }]);
+
+    const result = await getTicketDetail("t-1", { id: "admin-1", role: "ADMIN" });
+
+    expect(result.messages[0]?.attachments).toEqual([
+      { extractedText: "halo pak", id: "voice-1", mimeType: "audio/ogg" },
+      { extractedText: null, id: "doc-1", mimeType: "application/pdf" },
+    ]);
+    const transcriptCall = mocks.attachmentFindMany.mock.calls[0]?.[0];
+    expect(transcriptCall.where).toEqual({
+      deletedAt: null,
+      message: { sessionId: "session-1" },
+      mimeType: { startsWith: "audio/" },
+    });
+    // The bulk field is gone from the Message select entirely.
+    expect(mocks.messageFindMany.mock.calls[0]?.[0].select.attachments.select).not.toHaveProperty(
+      "extractedText",
+    );
+  });
+
   it("throws when the Ticket does not exist or is not visible", async () => {
     mocks.ticketFindFirst.mockResolvedValue(null);
 

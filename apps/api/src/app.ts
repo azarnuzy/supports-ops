@@ -1,6 +1,7 @@
-import { apiConfig } from "./config";
+import { apiConfig, loggerConfig } from "./config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { logger } from "./utils/logger";
 import { auth } from "./modules/auth/instance";
 import { loadAuthSession, loadWorkspaceContext } from "./modules/auth/middleware";
 import type { AuthVariables } from "./modules/auth/types";
@@ -22,6 +23,26 @@ import { whatsAppConfigRouter } from "./modules/whatsapp-config/router";
 import { whatsAppWebhookRouter } from "./modules/whatsapp-config/webhook";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
+  /** Registered before every route so it covers the Channel endpoints too.
+   * Only slow requests are logged, so a healthy API stays quiet; `SLOW_REQUEST_MS`
+   * tunes the threshold without a code change. An SSE endpoint is measured up to
+   * the point it starts streaming, not for the life of the stream. */
+  .use("*", async (c, next) => {
+    const start = performance.now();
+    await next();
+    const ms = Math.round(performance.now() - start);
+    if (ms >= loggerConfig.slowRequestMs)
+      logger.warn(
+        {
+          bytes: c.res.headers.get("content-length"),
+          method: c.req.method,
+          ms,
+          path: c.req.path,
+          status: c.res.status,
+        },
+        "slow request",
+      );
+  })
   .post("/internal/tickets/:ticketId/generate", async (c) => {
     if (
       !apiConfig.internalWorkerToken ||

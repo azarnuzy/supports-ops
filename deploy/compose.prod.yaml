@@ -3,6 +3,7 @@ name: supports-ops
 x-application-environment: &application-environment
   NODE_ENV: production
   LOG_LEVEL: "${LOG_LEVEL:-info}"
+  SLOW_REQUEST_MS: "${SLOW_REQUEST_MS:-}"
   ENABLE_TELEMETRY: "${ENABLE_TELEMETRY:-false}"
   TELEMETRY_EXPORTER: "${TELEMETRY_EXPORTER:-console}"
   TELEMETRY_CAPTURE_MODE: "${TELEMETRY_CAPTURE_MODE:-safe}"
