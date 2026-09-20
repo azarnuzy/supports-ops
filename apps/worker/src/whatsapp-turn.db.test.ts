@@ -372,6 +372,30 @@ describe("WhatsApp delivery", () => {
     expect(mocks.publish).toHaveBeenCalledOnce();
   });
 
+  it("never retries a timed out send, because Meta may already have delivered it", async () => {
+    const ids = await seed();
+    const ticketId = await createTicket(ids, "HUMAN_HANDLING");
+    const message = await addOutbound(ids, 3, "HUMAN_AGENT", ticketId);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      }),
+    );
+
+    // Unrecoverable, so the queue stops instead of sending the Customer a
+    // second copy of the same reply.
+    await expect(processWhatsAppDelivery(job(message.id))).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+
+    const stored = await prisma.message.findUniqueOrThrow({ where: { id: message.id } });
+    expect(stored.deliveryStatus).toBe("FAILED");
+    expect(stored.deliveryFailureReason).toMatch(/may already have received/);
+    // Published, so the Human Agent sees it stop rather than spin on "Sending…".
+    expect(mocks.publish).toHaveBeenCalledOnce();
+  });
+
   it("fails a permanent error at once, with its reason, and raises no Escalation", async () => {
     const ids = await seed();
     const ticketId = await createTicket(ids, "HUMAN_HANDLING");

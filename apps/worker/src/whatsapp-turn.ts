@@ -389,10 +389,30 @@ async function deliverMessage(messageId: string) {
       },
     );
   } catch (error) {
-    await prisma.message.update({
-      data: { deliveryAttempts: { increment: 1 } },
+    // A timeout is ambiguous: the request reached Meta and the outcome is
+    // unknown. Meta's /messages takes no idempotency key, so a retry is a
+    // second real message to the Customer — a timing out send delivered the
+    // same reply three times. Anything else failed before Meta saw it and is
+    // safe to retry. Record the ambiguous one as failed so the Human Agent
+    // sees it and chooses, rather than the queue choosing for them.
+    const ambiguous = error instanceof Error && error.name === "TimeoutError";
+    const updated = await prisma.message.update({
+      data: {
+        deliveryAttempts: { increment: 1 },
+        ...(ambiguous
+          ? {
+              deliveryFailureReason:
+                "WhatsApp did not respond in time. The Customer may already have received this message — check the conversation before retrying.",
+              deliveryStatus: "FAILED" as const,
+            }
+          : {}),
+      },
       where: { id: message.id },
     });
+    if (ambiguous) {
+      await publishMessageUpdated(updated);
+      throw new UnrecoverableError(updated.deliveryFailureReason ?? "WhatsApp delivery timed out.");
+    }
     throw error;
   }
 
