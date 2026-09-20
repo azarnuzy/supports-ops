@@ -32,6 +32,11 @@ model Message {
   senderUserId      String?
   content           String
   externalMessageId String
+  /** The Channel's own id for a Message we sent, recorded once delivery
+   * succeeds so the Channel's status callbacks can find it. Kept apart from
+   * `externalMessageId`, which is the caller's idempotency key and has to stay
+   * stable for the lifetime of the Message. */
+  providerMessageId String?
   deliveryStatus    MessageDeliveryStatus @default(SENT)
   deliveryAttempts  Int                   @default(0)
   deliveryFailureReason String?
@@ -44,6 +49,7 @@ model Message {
 
   @@unique([sessionId, position])
   @@unique([workspaceId, externalMessageId])
+  @@index([workspaceId, providerMessageId])
   @@index([ticketId, position])
   @@index([memorySessionId, position])
   @@index([runId])

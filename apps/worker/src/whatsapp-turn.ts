@@ -452,7 +452,11 @@ async function deliverMessage(messageId: string) {
       deliveryAttempts: { increment: 1 },
       deliveryFailureReason: null,
       deliveryStatus: "SENT",
-      ...(providerMessageId ? { externalMessageId: providerMessageId } : {}),
+      // Never written over `externalMessageId`: that is the Human Agent's
+      // idempotency key, and replacing it made the next send of the same
+      // draft look new — one reply the Agent clicked three times because the
+      // platform had not updated became three messages to the Customer.
+      ...(providerMessageId ? { providerMessageId } : {}),
     },
     where: { id: message.id },
   });

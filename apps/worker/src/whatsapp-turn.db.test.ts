@@ -322,7 +322,14 @@ describe("WhatsApp delivery", () => {
     await processWhatsAppDelivery(job(message.id));
 
     const stored = await prisma.message.findUniqueOrThrow({ where: { id: message.id } });
-    expect(stored).toMatchObject({ deliveryStatus: "SENT", externalMessageId: "wamid.out" });
+    // Meta's id lands beside the idempotency key, never on top of it: an
+    // overwritten key made the Human Agent's next send of the same draft look
+    // like a new Message and reach the Customer twice.
+    expect(stored).toMatchObject({
+      deliveryStatus: "SENT",
+      externalMessageId: message.externalMessageId,
+      providerMessageId: "wamid.out",
+    });
     expect(mocks.publish).toHaveBeenCalledWith(
       `supportops:ticket:${message.ticketId}`,
       expect.stringContaining('"type":"message.updated"'),

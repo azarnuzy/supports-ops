@@ -66,8 +66,12 @@ export const whatsAppWebhookRouter = new Hono()
     const sessions = new Map<string, { sessionId: string; workspaceId: string }>();
     for (const event of parseWhatsAppWebhook(payload)) {
       if (event.kind === "delivery") {
+        // A delivery callback names the id Meta gave the Message it carried,
+        // which is recorded as `providerMessageId`. The inbound branch below
+        // matches on `externalMessageId` instead, where an inbound Message's
+        // Meta id is its idempotency key.
         const message = await unscopedPrisma.message.findFirst({
-          where: { externalMessageId: event.messageId, workspaceId: config.workspaceId },
+          where: { providerMessageId: event.messageId, workspaceId: config.workspaceId },
         });
         if (!message) continue;
         const updated = await unscopedPrisma.message.update({
