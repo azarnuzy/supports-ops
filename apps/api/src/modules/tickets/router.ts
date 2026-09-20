@@ -3,6 +3,7 @@ import { SuggestedReplyGenerationFailedError } from "@repo/ai-agent";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
+import { keepStreamAlive } from "../../utils/sse";
 import type { AuthVariables } from "../auth/types";
 import { subscribeToTicketQueueEvents, subscribeToWidgetEvents } from "../widget/realtime";
 import {
@@ -89,6 +90,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
         await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
       });
       stream.onAbort(unsubscribe);
+      keepStreamAlive(stream);
       await new Promise<void>(() => undefined);
     });
   })
@@ -116,6 +118,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
         await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
       });
       stream.onAbort(unsubscribe);
+      keepStreamAlive(stream);
       await new Promise<void>(() => undefined);
     });
   })

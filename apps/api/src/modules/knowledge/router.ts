@@ -4,6 +4,7 @@ import { streamSSE } from "hono/streaming";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
 import { subscribeToKnowledgeSourceEvents } from "../widget/realtime";
+import { keepStreamAlive } from "../../utils/sse";
 import {
   createDocumentationUrlSchema,
   createManualFaqSchema,
@@ -99,6 +100,7 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
         },
       );
       stream.onAbort(unsubscribe);
+      keepStreamAlive(stream);
       await new Promise<void>(() => undefined);
     });
   })
