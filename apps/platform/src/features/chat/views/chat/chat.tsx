@@ -51,7 +51,7 @@ import {
   UserRoundIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PlatformAppShell } from "../../../app-shell";
 import { useTicketCategoriesQuery } from "../../../ticket-categories";
 import { formatEnumLabel, getInitials } from "../../../../lib/utils";
@@ -263,20 +263,28 @@ const ChatView = ({
   const availableHumanAgents =
     humanAgents.data?.users.filter((user) => user.role === "HUMAN_AGENT") ?? [];
 
-  const timeline = detail
-    ? [
-        {
-          createdAt: detail.session.createdAt,
-          description: { text: "Session created." },
-          id: "session",
-        },
-        ...detail.aiActivities.map((activity) => ({
-          createdAt: activity.createdAt,
-          description: describeActivity(activity),
-          id: activity.id,
-        })),
-      ]
-    : [];
+  // Memoised because `describeActivity` pretty-prints every Tool call's whole
+  // input and output — an MCP catalog response runs to megabytes. Rebuilding it
+  // on each render meant one keystroke in the reply box re-parsed and
+  // re-serialised the entire Activity Timeline on the main thread.
+  const timeline = useMemo(
+    () =>
+      detail
+        ? [
+            {
+              createdAt: detail.session.createdAt,
+              description: { text: "Session created." },
+              id: "session",
+            },
+            ...detail.aiActivities.map((activity) => ({
+              createdAt: activity.createdAt,
+              description: describeActivity(activity),
+              id: activity.id,
+            })),
+          ]
+        : [],
+    [detail],
+  );
   const images =
     detail?.messages.flatMap((message) =>
       message.attachments

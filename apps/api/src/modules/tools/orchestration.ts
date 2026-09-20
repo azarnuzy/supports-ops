@@ -153,7 +153,25 @@ async function dispatchTool(params: {
     params.aiAgentId,
     (params.input ?? {}) as Record<string, unknown>,
   );
-  return JSON.stringify(result);
+  return JSON.stringify(compactMcpResult(result));
+}
+
+/** An MCP result carries the same payload twice: `content[].text` holds it as a
+ * JSON string and `structuredContent` holds the parsed object. Both were kept,
+ * so every catalog response counted double — once in the model's prompt, and
+ * again in the Activity Timeline, where it made one Ticket's detail response
+ * take seconds to download. Keep `content` when it carries text; a server that
+ * returns only the structured form is left untouched. */
+function compactMcpResult(result: unknown) {
+  if (typeof result !== "object" || result === null) return result;
+  const record = result as { content?: unknown; structuredContent?: unknown };
+  if (!("structuredContent" in record)) return result;
+  const carriesText =
+    Array.isArray(record.content) &&
+    record.content.some((part) => typeof (part as { text?: unknown } | null)?.text === "string");
+  if (!carriesText) return result;
+  const { structuredContent: _duplicate, ...rest } = record;
+  return rest;
 }
 
 /** Executes every READ_ONLY assigned Tool with the same input (used by AI

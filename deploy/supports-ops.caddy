@@ -3,6 +3,13 @@ support.azarnuzy.com {
 }
 
 api.support.azarnuzy.com {
+	# JSON only: an SSE stream must not be buffered by the encoder, and the
+	# Ticket and Knowledge event endpoints serve text/event-stream.
+	encode {
+		zstd
+		gzip
+		match header Content-Type application/json*
+	}
 	reverse_proxy supports-ops-api:8000
 }
 
