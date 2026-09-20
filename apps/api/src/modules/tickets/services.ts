@@ -43,8 +43,11 @@ const ticketSelect = {
   escalatedAt: true,
   escalationSummary: true,
   escalationSummaryStatus: true,
+  // A list row renders one preview line, so only the newest Message is read.
+  // Loading every transcript here made each list response grow with the
+  // conversation and blocked the event loop serialising it.
   messages: {
-    orderBy: { position: "asc" },
+    orderBy: { position: "desc" },
     select: {
       content: true,
       createdAt: true,
@@ -53,6 +56,7 @@ const ticketSelect = {
       position: true,
       senderType: true,
     },
+    take: 1,
   },
 } as const;
 

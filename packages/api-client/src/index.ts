@@ -335,18 +335,18 @@ export async function markTicketRead(client: ApiClient, id: string, position: nu
 
 /** Streams realtime updates for one Ticket (new Messages, delivery and
  * status changes). The event name matches the payload's `type`, so
- * `addEventListener` handlers stay untyped and generic. */
+ * `addEventListener` handlers stay untyped and generic.
+ *
+ * `message.delta` is deliberately absent: `onEvent` discards the payload and
+ * only triggers a refetch, so subscribing to a per-token event turned one AI
+ * answer into hundreds of refetches. The finished reply still arrives as
+ * `message.created`. Token-by-token rendering belongs to the Web Widget,
+ * which consumes the delta payload directly. */
 export function subscribeToTicketEvents(baseUrl: string, ticketId: string, onEvent: () => void) {
   const events = new EventSource(`${baseUrl}/tickets/${ticketId}/events`, {
     withCredentials: true,
   });
-  for (const type of [
-    "message.created",
-    "message.updated",
-    "message.delta",
-    "ticket.status",
-    "attachment.updated",
-  ])
+  for (const type of ["message.created", "message.updated", "ticket.status", "attachment.updated"])
     events.addEventListener(type, onEvent);
   return events;
 }
