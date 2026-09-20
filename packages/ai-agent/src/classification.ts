@@ -52,14 +52,15 @@ const classificationOutputSchema = z.object({
  * `oneOf`, see docs/planning/spike-anvia.md finding 1). Narrowed into
  * `ClassificationDecision` by `classifyMessage` below.
  */
-const instructions = `You are the classification step of SupportOps' AI Agent. A Customer just sent a message in a Session that has no Ticket yet. Decide whether it is a genuine support request or just a greeting, thanks, test message, or other small talk with no real request.
+export const classificationInstructions = `You are the classification step of SupportOps' AI Agent. A Customer just sent a message in a Session that has no Ticket yet. Decide whether it is a genuine support request or just a greeting, thanks, test message, or other small talk with no real request.
 
 Rules:
 - When earlier turns are shown, classify the latest Customer message in the context of the whole conversation, and write the title from the problem the conversation is actually about rather than from the opening greeting.
 - isSupportRequest is true only for a message that describes a problem, question, or need related to the company's product, account, billing, or service — something a support team should act on.
 - isSupportRequest is false for greetings, thanks, small talk, or anything with no real request. This holds regardless of whether the Customer wrote in Indonesian, English, or another language.
-- When isSupportRequest is true: set title (a concise, specific summary under 120 characters, written in the same language as the Customer's message), category (exactly one of the keys listed under Categories below — copy the key verbatim, and use the fallback key when unsure), and priority (HIGH when the message signals urgency or a blocking problem, LOW for a minor or cosmetic issue, NORMAL otherwise). Leave greetingReply null.
-- When isSupportRequest is false: leave title, category, and priority null, and set greetingReply to a short, warm reply in the same language the Customer wrote in, acknowledging them and inviting them to describe what they need help with.
+- When isSupportRequest is true: set title (a concise, specific summary under 120 characters, written in the Customer's language as constrained below), category (exactly one of the keys listed under Categories below — copy the key verbatim, and use the fallback key when unsure), and priority (HIGH when the message signals urgency or a blocking problem, LOW for a minor or cosmetic issue, NORMAL otherwise). Leave greetingReply null.
+- When isSupportRequest is false: leave title, category, and priority null, and set greetingReply to a short, warm reply acknowledging the Customer and inviting them to describe what they need help with.
+- Write every text field in Indonesian or in English — never in any other language, whatever language the Customer writes in. Use Indonesian when the Customer's latest message is in Indonesian, Malay, or a regional language of Indonesia (for example Javanese or Sundanese), and English for every other language — including one that merely resembles Indonesian, such as Tagalog. A short, ambiguous, or slang message (for example "hi", "woyy", "cuy", "ey bro") does not identify a language: use English when the conversation has none yet. Never mirror a greeting or a slang word into the language it happens to resemble.
 - Never invent facts about the company. A greeting reply is purely conversational and does not answer support questions.`;
 
 const fallbackGreetingReply =
@@ -92,7 +93,7 @@ function describeCategories(categories: readonly TicketCategoryOption[]) {
     (category) =>
       `- ${category.key}${category.isFallback ? " (fallback)" : ""}: ${category.label} — ${category.description}`,
   );
-  return `${instructions}\n\nCategories:\n${lines.join("\n")}`;
+  return `${classificationInstructions}\n\nCategories:\n${lines.join("\n")}`;
 }
 
 export async function classifyMessage(params: {
