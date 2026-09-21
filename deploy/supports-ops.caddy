@@ -3,6 +3,9 @@ support.azarnuzy.com {
 }
 
 api.support.azarnuzy.com {
+	# Access log to stderr (docker logs): per-request duration and size as the
+	# proxy saw it, to compare against the API's own "slow request" timings.
+	log
 	# JSON only: an SSE stream must not be buffered by the encoder, and the
 	# Ticket and Knowledge event endpoints serve text/event-stream.
 	encode {

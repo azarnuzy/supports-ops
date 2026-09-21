@@ -1,4 +1,5 @@
 import { apiConfig, loggerConfig } from "./config";
+import type { HttpBindings } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "./utils/logger";
@@ -25,23 +26,38 @@ import { whatsAppWebhookRouter } from "./modules/whatsapp-config/webhook";
 export const app = new Hono<{ Variables: AuthVariables }>()
   /** Registered before every route so it covers the Channel endpoints too.
    * Only slow requests are logged, so a healthy API stays quiet; `SLOW_REQUEST_MS`
-   * tunes the threshold without a code change. An SSE endpoint is measured up to
-   * the point it starts streaming, not for the life of the stream. */
+   * tunes the threshold without a code change. `handlerMs` ends when the handler
+   * returns; `totalMs` ends when the socket closes, so a gap between them is time
+   * spent writing the body to the proxy, not computing it. An SSE endpoint is
+   * measured up to the point it starts streaming, not for the life of the stream. */
   .use("*", async (c, next) => {
     const start = performance.now();
     await next();
-    const ms = Math.round(performance.now() - start);
-    if (ms >= loggerConfig.slowRequestMs)
+    const handlerMs = Math.round(performance.now() - start);
+    const report = (extra: { totalMs?: number; finished?: boolean } = {}) => {
+      if (Math.max(handlerMs, extra.totalMs ?? 0) < loggerConfig.slowRequestMs) return;
       logger.warn(
         {
           bytes: c.res.headers.get("content-length"),
+          encoding: c.req.header("accept-encoding"),
+          handlerMs,
           method: c.req.method,
-          ms,
           path: c.req.path,
           status: c.res.status,
+          ...extra,
         },
         "slow request",
       );
+    };
+    const outgoing = (c.env as Partial<HttpBindings> | undefined)?.outgoing;
+    if (!outgoing || c.res.headers.get("content-type")?.startsWith("text/event-stream"))
+      return report();
+    outgoing.once("close", () =>
+      report({
+        finished: outgoing.writableFinished,
+        totalMs: Math.round(performance.now() - start),
+      }),
+    );
   })
   .post("/internal/tickets/:ticketId/generate", async (c) => {
     if (
