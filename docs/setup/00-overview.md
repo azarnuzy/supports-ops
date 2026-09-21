@@ -34,6 +34,6 @@ pnpm seed:demo
 
 `pnpm seed:demo` creates an Admin, a Human Agent, a configured Web Widget, and published Knowledge Sources across both visibilities (Customer-Safe and Internal-Only). It prints the Admin and Human Agent credentials on completion. It is idempotent — re-running it leaves existing data untouched and only fills in what is missing. Business System customers, subscriptions, and invoices are seeded automatically the first time the API or worker connects to that database (`apps/business-system/src/database.ts`), also idempotently.
 
-See the root [README](../../README.md) for day-to-day development commands, and [supportops_prd.md](../../supportops_prd.md) section 54 for the full list of MVP success criteria to walk through once a Workspace is seeded.
+See the root [README](../../README.md) for day-to-day development commands.
 
 For the complete local Customer-to-Human-Agent walkthrough, Widget host, Langfuse inspection, and AI eval matrix, use the [end-to-end runbook](../testing/e2e-runbook.md).

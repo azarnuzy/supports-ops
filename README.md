@@ -179,7 +179,7 @@ pnpm cost:measure faq-short ingest # a subset
 COST_RUNS=1 pnpm cost:measure      # fewer runs
 ```
 
-Stop the dev worker first, or it consumes this run's jobs outside the tap. Cost model and the first measurement: [`docs/research/ai-agent-session-cost.md`](docs/research/ai-agent-session-cost.md).
+Stop the dev worker first, or it consumes this run's jobs outside the tap.
 
 ## Model and Gateway Configuration
 
