@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import type { UpdateAiSettingsInput } from "./schema";
+import { modelCatalog, resolveAgentModelId } from "../ai-agent/model-catalog";
 import { rescheduleIdleClosures } from "../follow-up/queue";
 
 const defaults = {
@@ -25,19 +26,22 @@ export async function getAiSettings() {
   if (!aiAgent) throw new Error("Workspace AI Agent not found.");
   return {
     ...(settings ?? { ...defaults, workspaceId }),
+    agentModel: resolveAgentModelId(aiAgent.agentModel),
     aiAgentId: aiAgent.id,
     handoffMessage: aiAgent.handoffMessage ?? defaultAiAgentMessages.handoffMessage,
     instructions: aiAgent.instructions ?? "",
+    modelCatalog,
     resolutionMessage: aiAgent.resolutionMessage ?? defaultAiAgentMessages.resolutionMessage,
   };
 }
 
 export async function updateAiSettings(input: UpdateAiSettingsInput) {
   const workspaceId = requireWorkspaceId();
-  const { aiAgentId, handoffMessage, instructions, resolutionMessage, ...timers } = input;
+  const { agentModel, aiAgentId, handoffMessage, instructions, resolutionMessage, ...timers } =
+    input;
   const settings = await prisma.$transaction(async (tx) => {
     await tx.aiAgent.update({
-      data: { handoffMessage, instructions, resolutionMessage },
+      data: { agentModel, handoffMessage, instructions, resolutionMessage },
       where: { workspaceId_id: { id: aiAgentId, workspaceId } },
     });
     const settings = await tx.aiSettings.upsert({
@@ -45,7 +49,7 @@ export async function updateAiSettings(input: UpdateAiSettingsInput) {
       update: timers,
       where: { workspaceId },
     });
-    return { ...settings, aiAgentId, handoffMessage, instructions, resolutionMessage };
+    return { ...settings, agentModel, aiAgentId, handoffMessage, instructions, resolutionMessage };
   });
   await rescheduleIdleClosures(workspaceId);
   return settings;
