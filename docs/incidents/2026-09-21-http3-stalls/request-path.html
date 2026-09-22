@@ -131,12 +131,12 @@ for(const el of document.querySelectorAll('.ic')){
   const u=`url("https://img.icons8.com/?id=${ICONS[el.dataset.icon]}&format=png&size=96")`;
   el.style.webkitMaskImage=u; el.style.maskImage=u;
 }
-const fit=()=>{
+const applyScale=()=>{
   const s=window.innerWidth/1600;
   document.getElementById('scaler').style.transform=`scale(${s})`;
-  document.body.style.height=(900*s)+'px';
+  document.body.style.height=`${900*s}px`;
 };
-fit(); addEventListener('resize',fit);
+applyScale(); addEventListener('resize',applyScale);
 </script>
 </body>
 </html>
