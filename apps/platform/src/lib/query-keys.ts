@@ -31,5 +31,8 @@ export const queryKeys = {
     conversationSession: (id: string) => ["workspace", "conversation-session", id] as const,
     tools: (aiAgentId: string) => ["workspace", "tools", aiAgentId] as const,
     mcpServers: ["workspace", "mcp-servers"] as const,
+    aiUsageSummary: (range: { from: string; to: string }) =>
+      ["workspace", "ai-usage-summary", range] as const,
+    creditLedger: ["workspace", "credit-ledger"] as const,
   },
 } as const;
