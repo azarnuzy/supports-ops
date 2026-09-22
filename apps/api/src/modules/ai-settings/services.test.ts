@@ -91,13 +91,16 @@ describe("AI Agent settings", () => {
       resolutionMessage: "All done.",
     };
 
-    await withWorkspaceContext("ws-1", () => updateAiSettings(input));
+    const settings = await withWorkspaceContext("ws-1", () => updateAiSettings(input));
 
     expect(mocks.aiAgentUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ agentModel: "openai/gpt-5.6-luna" }),
         where: { workspaceId_id: { id: "ai-1", workspaceId: "ws-1" } },
       }),
+    );
+    expect(settings.modelCatalog).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "openai/gpt-5.6-luna" })]),
     );
   });
 });
