@@ -19,12 +19,15 @@ let database: TestDatabase;
 let prisma: typeof import("./prisma").prisma;
 let processIdleClosureJob: typeof import("./follow-up").processIdleClosureJob;
 let processAutoResolveJob: typeof import("./follow-up").processAutoResolveJob;
+let processFollowUpJob: typeof import("./follow-up").processFollowUpJob;
 
 beforeAll(async () => {
   database = await createTestDatabase();
   process.env.DATABASE_URL = database.url;
   ({ prisma } = await import("./prisma"));
-  ({ processAutoResolveJob, processIdleClosureJob } = await import("./follow-up"));
+  ({ processAutoResolveJob, processFollowUpJob, processIdleClosureJob } = await import(
+    "./follow-up"
+  ));
 }, 60_000);
 
 afterAll(async () => {
@@ -268,5 +271,130 @@ describe("Idle Closure worker", () => {
         status: "HUMAN_HANDLING",
       },
     );
+  });
+});
+
+describe("Follow-Up worker", () => {
+  async function seedAiHandlingTicket() {
+    const suffix = randomUUID();
+    const workspaceId = `workspace-${suffix}`;
+    const aiAgentId = `ai-${suffix}`;
+    const channelId = `channel-${suffix}`;
+    const customerIdentityId = `customer-${suffix}`;
+    const sessionId = `session-${suffix}`;
+    const ticketId = `ticket-${suffix}`;
+    const memoryId = `memory-${suffix}`;
+    const aiMessageId = `message-${suffix}`;
+
+    await prisma.workspace.create({
+      data: { id: workspaceId, name: "Demo", slug: suffix },
+    });
+    await prisma.aiAgent.create({ data: { id: aiAgentId, name: "AI Agent", workspaceId } });
+    await prisma.channel.create({
+      data: { aiAgentId, id: channelId, name: "WEB", type: "WEB", workspaceId },
+    });
+    await prisma.customerIdentity.create({
+      data: {
+        canonicalId: `${suffix}@example.com`,
+        channelType: "WEB",
+        email: `${suffix}@example.com`,
+        id: customerIdentityId,
+        name: "Customer",
+        workspaceId,
+      },
+    });
+    await prisma.session.create({
+      data: {
+        channelId,
+        conversation: {
+          create: {
+            id: memoryId,
+            metadata: {},
+            scopeKey: `session:${sessionId}`,
+            userId: customerIdentityId,
+            workspaceId,
+          },
+        },
+        customerIdentityId,
+        id: sessionId,
+        messageSeq: 1,
+        workspaceId,
+      },
+    });
+    await prisma.ticket.create({
+      data: {
+        aiAgentId,
+        channelId,
+        customerIdentityId,
+        id: ticketId,
+        sessionId,
+        status: "AI_HANDLING",
+        title: "Need help",
+        workspaceId,
+      },
+    });
+    await prisma.message.create({
+      data: {
+        content: "Here's the answer.",
+        externalMessageId: `ai:${suffix}`,
+        id: aiMessageId,
+        memorySessionId: memoryId,
+        message: { content: "Here's the answer." },
+        position: 1,
+        role: "assistant",
+        runId: randomUUID(),
+        senderType: "AI_AGENT",
+        sessionId,
+        ticketId,
+        turn: 1,
+        workspaceId,
+      },
+    });
+
+    return { aiAgentId, aiMessageId, ticketId, workspaceId };
+  }
+
+  it("spends a Credit at the Agent Model's Model Rate", async () => {
+    const seeded = await seedAiHandlingTicket();
+
+    await processFollowUpJob({
+      data: {
+        aiMessageId: seeded.aiMessageId,
+        ticketId: seeded.ticketId,
+        workspaceId: seeded.workspaceId,
+      },
+    });
+
+    const entries = await prisma.creditLedgerEntry.findMany({
+      where: { workspaceId: seeded.workspaceId },
+    });
+    expect(entries).toEqual([
+      expect.objectContaining({
+        agentModel: "openai/gpt-5.6-luna",
+        aiAgentId: seeded.aiAgentId,
+        credits: -1,
+        modelRate: 1,
+        ticketId: seeded.ticketId,
+        type: "SPEND",
+      }),
+    ]);
+  });
+
+  it("spends nothing when a newer message already beat the timer", async () => {
+    const seeded = await seedAiHandlingTicket();
+    await prisma.ticket.update({ data: { status: "RESOLVED" }, where: { id: seeded.ticketId } });
+
+    await processFollowUpJob({
+      data: {
+        aiMessageId: seeded.aiMessageId,
+        ticketId: seeded.ticketId,
+        workspaceId: seeded.workspaceId,
+      },
+    });
+
+    const count = await prisma.creditLedgerEntry.count({
+      where: { workspaceId: seeded.workspaceId },
+    });
+    expect(count).toBe(0);
   });
 });

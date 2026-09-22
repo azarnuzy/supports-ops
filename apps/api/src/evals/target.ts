@@ -13,6 +13,7 @@ import { unscopedPrisma } from "../utils/prisma";
 import { withWorkspaceContext } from "../utils/workspace-context";
 import { acknowledgementFor } from "../modules/ai-agent/turn";
 import { resolveAgentModelId } from "../modules/ai-agent/model-catalog";
+import { spendForTurn } from "../modules/credits/services";
 import { createAssignedToolExecutor, describeAssignedTools } from "../modules/tools/orchestration";
 import { resolveTools } from "../modules/tools/services";
 
@@ -251,6 +252,17 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
         // acknowledgement. Reporting it keeps the graded text equal to what a
         // Customer would actually read.
         text = content?.trim() || acknowledgementFor(input.message, reason);
+        // AI_GENERATION_FAILED and AI_TIMEOUT are the Turn giving up before a
+        // decision existed — a provider failure, not a spend-eligible outcome.
+        if (reason !== "AI_GENERATION_FAILED" && reason !== "AI_TIMEOUT") {
+          await spendForTurn(unscopedPrisma, {
+            agentModel: agentModelId,
+            aiAgentId: ticket.aiAgentId,
+            sessionId: ticket.sessionId,
+            ticketId: ticket.ticketId,
+            workspaceId: ticket.workspaceId,
+          });
+        }
       },
       finish: async () => {},
       isActive: () => true,
@@ -277,10 +289,24 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
       reply: async (replyDecision, content) => {
         decision = replyDecision;
         text = content;
+        await spendForTurn(unscopedPrisma, {
+          agentModel: agentModelId,
+          aiAgentId: ticket.aiAgentId,
+          sessionId: ticket.sessionId,
+          ticketId: ticket.ticketId,
+          workspaceId: ticket.workspaceId,
+        });
       },
       resolve: async (content) => {
         decision = "RESOLVE";
         text = content;
+        await spendForTurn(unscopedPrisma, {
+          agentModel: agentModelId,
+          aiAgentId: ticket.aiAgentId,
+          sessionId: ticket.sessionId,
+          ticketId: ticket.ticketId,
+          workspaceId: ticket.workspaceId,
+        });
       },
       // Ticket Attachments only; Knowledge is retrieved agentically via the
       // searchKnowledge Tool, exactly as it is in production.

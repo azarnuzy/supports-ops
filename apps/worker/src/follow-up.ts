@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { spendForTurn } from "@repo/api/credits";
 import { enqueueWhatsAppDelivery } from "@repo/api/whatsapp-queue";
 import { enqueueTicketKnowledgeIndex } from "@repo/api/ticket-queue";
 import { whatsAppTimerDelayMs } from "@repo/channels";
@@ -92,6 +93,7 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
     const [ticket, settings] = await Promise.all([
       tx.ticket.findFirst({
         include: {
+          aiAgent: { select: { agentModel: true } },
           channel: { select: { type: true } },
           messages: { orderBy: { position: "desc" }, take: 1 },
           session: { include: { conversation: true } },
@@ -132,6 +134,13 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
         ticketId: ticket.id,
         workspaceId: ticket.workspaceId,
       },
+    });
+    await spendForTurn(tx, {
+      agentModel: ticket.aiAgent.agentModel,
+      aiAgentId: ticket.aiAgentId,
+      sessionId: ticket.sessionId,
+      ticketId: ticket.id,
+      workspaceId: ticket.workspaceId,
     });
     const isWhatsApp = ticket.channel.type === "WHATSAPP";
     return {
