@@ -1,44 +1,135 @@
-# SupportOps
+<p align="center">
+  <img src="docs/research/assets/support-ops-logo.png" alt="SupportOps logo" width="96" />
+</p>
 
-pnpm workspace with:
+<h1 align="center">SupportOps</h1>
 
-- `apps/api`: Hono API on Node.js.
-- `apps/business-system`: separate, read-only Customer, Subscription, and Invoice HTTP service.
-- `apps/platform`: React + Vite + TanStack Router file routes + TanStack Query.
-- `apps/widget`: customer-facing Web Widget.
-- `apps/worker`: Redis + BullMQ deployable.
-- `packages/ai-agent`: AI Agent reasoning boundary.
-- `packages/api-client`: typed Hono RPC client shared by the frontend apps.
-- `packages/channels`: Channel Adapter boundary.
-- `packages/knowledge`: Knowledge retrieval boundary.
-- `packages/logger`: Pino logging and OpenTelemetry setup for server applications.
-- `packages/shared`: schemas shared across application boundaries.
-- `packages/storage`: S3-compatible object storage primitives.
-- `packages/test-db`: throwaway, migrated Postgres databases for `*.db.test.ts` suites.
-- `packages/tools`: Business Tool boundary.
-- `packages/ui`: shared shadcn components.
+<p align="center">
+  An AI-first, multi-tenant customer support platform.<br />
+  An AI Agent answers every conversation first and hands off to a Human Agent when it cannot safely resolve it.
+</p>
+
+<p align="center">
+  <a href="https://github.com/azarnuzy/supports-ops/actions/workflows/ci-cd.yml"><img src="https://github.com/azarnuzy/supports-ops/actions/workflows/ci-cd.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/pnpm-workspace-f69220.svg" alt="pnpm workspace" />
+</p>
+
+![SupportOps dashboard](docs/images/dashboard.png)
+
+## Features
+
+- **AI Agent first, humans when it matters** — the AI Agent answers from your Knowledge Sources and Tools, and escalates to the Shared Human Queue with a handoff summary (customer need, escalation reason, what was already tried) when it cannot resolve a conversation safely.
+- **Human Agent inbox** — Mine / Unassigned / All views, claim-and-reply, Ticket priority and category, attachments, and a full activity trail.
+- **Multiple Channels, one support logic** — a drop-in Web Widget (vanilla JS, Shadow DOM) and WhatsApp through the Meta Cloud API. Channel Adapters keep transport separate from reasoning, so new Channels don't touch support logic.
+- **Knowledge** — PDFs (with OCR), crawled documentation, and text, embedded into pgvector. Each source is either Customer-Safe or Internal-Only.
+- **Tools and MCP servers** — give the AI Agent HTTP Tools or tools discovered from MCP servers, each reviewed and assigned per Workspace.
+- **Multi-tenant by construction** — every row belongs to one Workspace, enforced by a Prisma extension rather than by convention.
+- **Measurable AI** — OpenTelemetry spans for agent, model, retrieval, and Tool calls, a manual eval suite, and a Session cost profiler.
+
+![A resolved Ticket: AI Agent answer, safety escalation, and Human Agent reply](docs/images/tickets.png)
+
+## Architecture
+
+```mermaid
+flowchart LR
+  customer([Customer]) --> widget[Web Widget]
+  customer --> whatsapp[WhatsApp]
+  widget -- HTTP + SSE --> api
+  whatsapp -- Meta webhook --> api
+  staff([Admin / Human Agent]) --> platform[Platform<br/>React + Vite]
+  platform -- Hono RPC --> api[API<br/>Hono]
+  api --> pg[(Postgres<br/>+ pgvector)]
+  api --> redis[(Redis)]
+  redis --> worker[Worker<br/>BullMQ]
+  worker --> pg
+  api & worker --> llm[LLM gateway<br/>OpenRouter]
+  api & worker --> s3[(S3-compatible<br/>storage)]
+  api -- Business Tools --> biz[Business System<br/>customers, subscriptions, invoices]
+```
+
+The domain language (Workspace, Session, Ticket, Knowledge Source, Channel, ...) is defined in [`CONTEXT.md`](CONTEXT.md), and the reasoning behind the main decisions lives in [`docs/adr/`](docs/adr/).
+
+### Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| API | Node.js, [Hono](https://hono.dev), [Better Auth](https://better-auth.com), Prisma |
+| Frontend | React, Vite, TanStack Router + Query, Tailwind, shadcn/ui |
+| Web Widget | Vanilla TypeScript in a Shadow DOM |
+| Data | PostgreSQL + pgvector, Redis + BullMQ |
+| AI | OpenRouter (or any OpenAI-compatible gateway), MCP |
+| Observability | Pino, OpenTelemetry (OTLP) |
+| Tooling | pnpm workspaces, Biome, Vitest, Playwright |
+
+## Project structure
+
+```text
+apps/
+  api/              Hono API on Node.js
+  business-system/  separate, read-only Customer, Subscription, and Invoice HTTP service
+  platform/         Admin and Human Agent app (React + Vite + TanStack Router + TanStack Query)
+  widget/           customer-facing Web Widget
+  worker/           Redis + BullMQ deployable
+packages/
+  ai-agent/         AI Agent reasoning boundary
+  api-client/       typed Hono RPC client shared by the frontend apps
+  channels/         Channel Adapter boundary
+  knowledge/        Knowledge retrieval boundary
+  logger/           Pino logging and OpenTelemetry setup for server applications
+  shared/           schemas shared across application boundaries
+  storage/          S3-compatible object storage primitives
+  test-db/          throwaway, migrated Postgres databases for *.db.test.ts suites
+  tools/            Business Tool boundary
+  ui/               shared shadcn components
+```
 
 Packages are source-only: they export their `.ts`/`.tsx` files directly and do not have a build step.
 Runtime-specific environment validation lives with the API and worker that consume it.
 
-## Setup
+## Getting started
+
+### Prerequisites
+
+- Node.js 22+ and pnpm 10 (`corepack enable`)
+- Docker (for Postgres and Redis)
+- An [OpenRouter](https://openrouter.ai) API key — see [AI credentials](docs/setup/03-ai-credentials.md)
+
+### Run locally
 
 ```sh
 pnpm install
-cp .env.example .env.local
+cp .env.example .env.local        # set OPENROUTER_API_KEY and BETTER_AUTH_SECRET at minimum
 docker compose -f docker-compose.dev.yaml up -d
 pnpm db:generate
 pnpm db:migrate
+pnpm seed:demo                    # demo Workspace; prints Admin and Human Agent logins
+pnpm dev                          # every app in parallel
 ```
 
-## Development
+Or run apps one at a time:
 
 ```sh
-pnpm --filter @repo/api dev
-pnpm --filter @repo/business-system dev
-pnpm --filter @repo/platform dev
+pnpm --filter @repo/api dev              # http://localhost:8000
+pnpm --filter @repo/business-system dev  # http://localhost:8001
+pnpm --filter @repo/platform dev         # http://localhost:3000
+pnpm --filter @repo/widget dev           # http://localhost:3002
 pnpm --filter @repo/worker dev
 ```
+
+Knowledge ingestion, object storage, email, telemetry, and WhatsApp each need their own credentials. [`docs/setup/`](docs/setup/00-overview.md) walks through them in order.
+
+### Useful scripts
+
+| Command | What it does |
+| --- | --- |
+| `pnpm test` | Vitest suites across the workspace |
+| `pnpm typecheck` | TypeScript in every package |
+| `pnpm check` / `pnpm check:fix` | Biome lint + format |
+| `pnpm createsuperuser` | Create or promote an admin user |
+| `pnpm eval:ai-agent` | Run the AI Agent eval suite |
+| `pnpm db:studio` | Open Prisma Studio |
 
 ## Tests
 
@@ -203,3 +294,16 @@ For local development, `docker-compose.dev.yaml` still provides Postgres and Red
 - API health: `http://localhost:8000/health`
 - Postgres with `docker-compose.dev.yaml`: `localhost:15432`
 - Redis with `docker-compose.dev.yaml`: `localhost:16379`
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+1. Read [`CONTEXT.md`](CONTEXT.md) — the codebase uses its terms (for example, never plain "Agent"; say AI Agent or Human Agent).
+2. Follow the conventions in [`docs/conventions.md`](docs/conventions.md) and check whether an [ADR](docs/adr/) already covers your change.
+3. Before opening a PR, make sure `pnpm check`, `pnpm typecheck`, and `pnpm test` pass.
+4. Use [Conventional Commits](https://www.conventionalcommits.org) (`feat(api): ...`, `fix(widget): ...`).
+
+## License
+
+[MIT](LICENSE)
