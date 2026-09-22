@@ -26,3 +26,18 @@ apps/platform/playwright-report
 !docs/setup/*.md
 !docs/agents/*.md
 !docs/testing/**/*.md
+!docs/incidents/**/*.md
+
+# Local-only material: loose images at the repo root, and any _local/ folder
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
+_local/
+
+# Tooling cache and personal study material
+.pnpm-store/
+/lessons/
+/reference/
+/assets/
