@@ -5,6 +5,7 @@ import { processKnowledgeIngestJob, type KnowledgeIngestJob } from "./knowledge-
 import { processAttachmentJob, type AttachmentProcessJob } from "./attachment-process";
 import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
+import { sendCreditAlertEmail, type CreditAlertEmailJob } from "./credit-alert-email";
 import { processAutoResolveJob, processFollowUpJob, processIdleClosureJob } from "./follow-up";
 import type { AutoResolveJob, FollowUpJob, IdleClosureJob } from "./follow-up";
 import {
@@ -69,6 +70,16 @@ export function startSessionEmailWorker() {
   );
 }
 
+export function startCreditAlertEmailWorker() {
+  return new Worker<CreditAlertEmailJob>(
+    "credit-alert-email",
+    async (job) => {
+      await sendCreditAlertEmail(job.data);
+    },
+    { connection },
+  );
+}
+
 export function startKnowledgeIngestWorker() {
   return new Worker<KnowledgeIngestJob>("knowledge-ingest", processKnowledgeIngestJob, {
     concurrency: 5,
@@ -117,6 +128,7 @@ export function startWhatsAppTurnWorker() {
 export function runWorker() {
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
+  const creditAlertEmailWorker = startCreditAlertEmailWorker();
   const knowledgeIngestWorker = startKnowledgeIngestWorker();
   const attachmentProcessWorker = startAttachmentProcessWorker();
   const followUpWorker = startFollowUpWorker();
@@ -132,6 +144,9 @@ export function runWorker() {
   });
   sessionEmailWorker.on("failed", (job, error) => {
     logger.error({ err: error, jobId: job?.id }, "Session Link email failed");
+  });
+  creditAlertEmailWorker.on("failed", (job, error) => {
+    logger.error({ err: error, jobId: job?.id }, "Credit alert email failed");
   });
   knowledgeIngestWorker.on("failed", (job, error) => {
     logger.error({ err: error, jobId: job?.id }, "Knowledge ingest failed");
@@ -151,6 +166,7 @@ export function runWorker() {
 
   return {
     attachmentProcessWorker,
+    creditAlertEmailWorker,
     followUpWorker,
     knowledgeIngestWorker,
     sessionEmailWorker,

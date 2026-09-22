@@ -34,6 +34,10 @@ vi.mock("../follow-up/queue", () => ({
 
 vi.mock("../tickets/queue", () => ({ enqueueTicketKnowledgeIndex: vi.fn(async () => undefined) }));
 
+vi.mock("../credits/alerts-queue", () => ({
+  enqueueCreditAlertEmail: vi.fn(async () => undefined),
+}));
+
 let database: TestDatabase;
 let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let turn: typeof import("./turn");
@@ -61,6 +65,9 @@ async function seed() {
   const workspaceId = randomUUID();
   await prisma.workspace.create({
     data: { id: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
+  });
+  await prisma.creditLedgerEntry.create({
+    data: { credits: 500, id: randomUUID(), type: "TRIAL_GRANT", workspaceId },
   });
   const aiAgentId = randomUUID();
   await prisma.aiAgent.create({ data: { id: aiAgentId, name: "Agent", workspaceId } });
@@ -109,8 +116,12 @@ async function seed() {
   return { aiAgentId, sessionId, ticketId, workspaceId };
 }
 
+/** Excludes the Trial Grant `seed()` gives every Workspace so existing
+ * assertions still read as "did this Turn spend?". */
 function ledgerEntries() {
-  return prisma.creditLedgerEntry.findMany({ where: { workspaceId: ids.workspaceId } });
+  return prisma.creditLedgerEntry.findMany({
+    where: { type: { not: "TRIAL_GRANT" }, workspaceId: ids.workspaceId },
+  });
 }
 
 describe("generateAiReply spend", () => {
@@ -182,6 +193,22 @@ describe("generateAiReply spend", () => {
     await turn.generateAiReply(ids.ticketId, ids.workspaceId, "Help me");
 
     expect(await ledgerEntries()).toHaveLength(0);
+  });
+
+  it("escalates with CREDIT_EXHAUSTION and never calls the model when the balance is zero or below", async () => {
+    await prisma.creditLedgerEntry.create({
+      data: { credits: -500, id: randomUUID(), type: "SPEND", workspaceId: ids.workspaceId },
+    });
+
+    await turn.generateAiReply(ids.ticketId, ids.workspaceId, "Help me");
+
+    expect(mocks.runAiAgentTurn).not.toHaveBeenCalled();
+    expect(await ledgerEntries()).toHaveLength(1);
+    const ticket = await prisma.ticket.findUniqueOrThrow({
+      select: { escalationReason: true, status: true },
+      where: { id: ids.ticketId },
+    });
+    expect(ticket).toMatchObject({ escalationReason: "CREDIT_EXHAUSTION", status: "ESCALATED" });
   });
 
   it("spends nothing when Takeover aborts the Turn before it replies", async () => {

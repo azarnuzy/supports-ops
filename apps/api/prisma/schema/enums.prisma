@@ -72,6 +72,7 @@ enum EscalationReason {
   CONFLICTING_KNOWLEDGE
   AI_GENERATION_FAILED
   AI_TIMEOUT
+  CREDIT_EXHAUSTION
 }
 
 enum TicketPriority {

@@ -11,7 +11,7 @@ import { aiAgentConfig, embeddingConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { withWorkspaceContext } from "../../utils/workspace-context";
-import { spendForTurn } from "../credits/services";
+import { creditBalance, spendForTurn } from "../credits/services";
 import {
   cancelFollowUpTimers,
   scheduleFollowUp,
@@ -28,6 +28,10 @@ import {
 } from "../widget/realtime";
 import { resolveAgentModelId } from "./model-catalog";
 
+// Credit Exhaustion is a pre-flight guard in this module, never a decision
+// the model itself makes, so it lives outside `@repo/ai-agent`'s decision schema.
+export type ApiEscalationReason = EscalationReason | "CREDIT_EXHAUSTION";
+
 type TurnTicket = {
   aiAgent: { instructions: string | null; resolutionMessage: string | null };
   aiAgentId: string;
@@ -38,6 +42,12 @@ type TurnTicket = {
 
 export function generateAiReply(ticketId: string, workspaceId: string, customerMessage: string) {
   return withWorkspaceContext(workspaceId, async () => {
+    // Zero or below escalates before the model is ever called; a Turn already
+    // running is unaffected since this only gates a Turn's start.
+    if ((await creditBalance(workspaceId)) <= 0) {
+      await escalate(ticketId, workspaceId, "CREDIT_EXHAUSTION", customerMessage);
+      return;
+    }
     let ticket: TurnTicket | null = null;
     const agentModelId = resolveAgentModelId(
       (
@@ -304,7 +314,7 @@ async function appendAiMessage(
 export async function escalate(
   ticketId: string,
   workspaceId: string,
-  reason: EscalationReason,
+  reason: ApiEscalationReason,
   customerMessage: string,
   content?: string,
   spend?: { agentModel: string; aiAgentId: string },
@@ -425,12 +435,16 @@ export async function resolveByAi(
 /** The Customer-visible message an escalation sends. Exported so the eval
  * suite can report the same text a Customer would actually see when the
  * Agent escalates, instead of an empty reply. */
-export function acknowledgementFor(customerMessage: string, reason: EscalationReason) {
+export function acknowledgementFor(customerMessage: string, reason: ApiEscalationReason) {
   const isIndonesian =
     /\b(?:saya|aku|mau|tolong|dengan|bicara|hubungkan|masalah|pesanan|pengiriman|tagihan)\b/i.test(
       customerMessage,
     );
-  const explanations: Record<EscalationReason, [string, string]> = {
+  const explanations: Record<ApiEscalationReason, [string, string]> = {
+    CREDIT_EXHAUSTION: [
+      "Kredit AI untuk workspace ini telah habis, jadi percakapan ini akan dilanjutkan oleh Human Agent.",
+      "This workspace's AI Credits are exhausted, so this conversation will continue with a Human Agent.",
+    ],
     AI_FAILED_ATTEMPTS: [
       "Saya belum mendapat informasi yang cukup untuk melanjutkan dengan aman.",
       "I still do not have enough information to continue safely.",
