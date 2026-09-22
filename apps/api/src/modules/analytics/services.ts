@@ -23,7 +23,7 @@ const DAY_MS = 24 * HOUR_MS;
 const DEFAULT_RANGE_DAYS = 7;
 
 /** The half-open UTC window behind a response's inclusive from/to dates. */
-type ResolvedRange = { from: string; to: string; startAt: Date; endAt: Date };
+export type ResolvedRange = { from: string; to: string; startAt: Date; endAt: Date };
 
 /** UTC midnight of a YYYY-MM-DD calendar date, as validated by the router. */
 function utcDayStart(date: string): Date {
@@ -39,7 +39,7 @@ function addDays(date: Date, days: number): Date {
 /** Absent from/to fall back to the trailing DEFAULT_RANGE_DAYS calendar days
  * ending today (UTC); an explicit `to` widens to an exclusive end so the
  * last day counts whole. */
-function resolveRange(query: AnalyticsRangeQuery): ResolvedRange {
+export function resolveRange(query: AnalyticsRangeQuery): ResolvedRange {
   const today = new Date(
     Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()),
   );

@@ -127,6 +127,64 @@ export async function fetchAnalyticsTraffic(client: ApiClient, range?: Analytics
   return (await response.json()) as { analytics: AnalyticsTraffic };
 }
 
+export type CreditLedgerEntryType = "TRIAL_GRANT" | "TOP_UP" | "SPEND";
+
+export type AiUsageDailyPoint = { date: string; creditsSpent: number; turnCount: number };
+export type AiUsageAgentBreakdown = {
+  aiAgentId: string;
+  aiAgentName: string;
+  creditsSpent: number;
+  turnCount: number;
+};
+export type AiUsageModelBreakdown = { agentModel: string; creditsSpent: number; turnCount: number };
+
+export type AiUsageSummary = {
+  balance: number;
+  range: { from: string; to: string };
+  daily: AiUsageDailyPoint[];
+  byAgent: AiUsageAgentBreakdown[];
+  byModel: AiUsageModelBreakdown[];
+};
+
+export async function fetchAiUsageSummary(client: ApiClient, range?: AnalyticsRange) {
+  const query = {
+    ...(range?.from ? { from: range.from } : {}),
+    ...(range?.to ? { to: range.to } : {}),
+  };
+  const response = await client["ai-usage"].summary.$get({ query });
+  if (response.status === 403) throw new Error("Only an Admin can view AI Usage.");
+  if (!response.ok) throw new Error("Failed to load AI Usage.");
+  return (await response.json()) as { aiUsage: AiUsageSummary };
+}
+
+/** Never carries `modelRate` or provider cost — AI Usage doesn't show tokens
+ * or dollar costs to Admins. */
+export type CreditLedgerEntry = {
+  id: string;
+  type: CreditLedgerEntryType;
+  credits: number;
+  note: string | null;
+  aiAgentId: string | null;
+  agentModel: string | null;
+  sessionId: string | null;
+  ticketId: string | null;
+  createdAt: string;
+};
+
+export async function fetchCreditLedger(
+  client: ApiClient,
+  params: { cursor?: string; limit?: number } = {},
+) {
+  const query = {
+    ...(params.cursor ? { cursor: params.cursor } : {}),
+    ...(params.limit ? { limit: String(params.limit) } : {}),
+  };
+  const response = await client["ai-usage"].ledger.$get({ query });
+  if (response.status === 403) throw new Error("Only an Admin can view the Credit Ledger.");
+  if (!response.ok) throw new Error("Failed to load the Credit Ledger.");
+  return (await response.json()) as { entries: CreditLedgerEntry[]; nextCursor: string | null };
+}
+
 export type WorkspaceUser = {
   createdAt: string;
   email: string;

@@ -15,6 +15,7 @@ import { widgetConfigRouter } from "./modules/widget-config/router";
 import { generateAttachmentReply } from "./modules/widget/services";
 import { attachmentRouter } from "./modules/attachments/router";
 import { aiSettingsRouter } from "./modules/ai-settings/router";
+import { aiUsageRouter } from "./modules/ai-usage/router";
 import { analyticsRouter } from "./modules/analytics/router";
 import { ticketCategoriesRouter } from "./modules/ticket-categories/router";
 import { ticketsRouter } from "./modules/tickets/router";
@@ -111,6 +112,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/widget-config", widgetConfigRouter)
   .route("/whatsapp-config", whatsAppConfigRouter)
   .route("/ai-settings", aiSettingsRouter)
+  .route("/ai-usage", aiUsageRouter)
   .route("/mcp-servers", mcpRouter)
   .route("/tools", toolsRouter);
 
