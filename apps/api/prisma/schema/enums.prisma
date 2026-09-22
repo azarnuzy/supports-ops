@@ -146,6 +146,12 @@ enum ChunkKind {
   TICKET
 }
 
+enum CreditLedgerEntryType {
+  TRIAL_GRANT
+  TOP_UP
+  SPEND
+}
+
 enum AiActivityType {
   TICKET_CREATED
   CLASSIFIED

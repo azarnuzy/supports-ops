@@ -22,6 +22,30 @@ model Workspace {
   mcpServers         McpServer[]
   mcpTools           McpTool[]
   ticketCategories   TicketCategory[]
+  creditLedgerEntries CreditLedgerEntry[]
+}
+
+/// The Credit Ledger: an append-only record of every change to a Workspace's Credits
+/// (Trial Grant, Top-Up, spend). Balance is the sum of `credits` across a Workspace's
+/// entries, never a separately stored number.
+/// `sessionId`/`ticketId` are plain columns, not relations, so deleting a Ticket or
+/// Session never cascades into the ledger.
+model CreditLedgerEntry {
+  id              String                @id
+  workspaceId     String
+  type            CreditLedgerEntryType
+  credits         Int
+  note            String?
+  aiAgentId       String?
+  agentModel      String?
+  modelRate       Int?
+  providerCostUsd Float?
+  sessionId       String?
+  ticketId        String?
+  createdAt       DateTime              @default(now())
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
 }
 
 /// Ticket categories are per-Workspace so a team can name them after its own product.
