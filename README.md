@@ -183,7 +183,7 @@ Stop the dev worker first, or it consumes this run's jobs outside the tap.
 
 ## Model and Gateway Configuration
 
-Completions go through OpenRouter by default. Point them at another OpenAI-compatible gateway with `COMPLETION_GATEWAY_BASE_URL` and `COMPLETION_GATEWAY_API_KEY`; leave both empty to keep using `OPENROUTER_API_KEY`. Models are chosen with `EMBEDDING_MODEL`, `LLM_MODEL_FAST`, and `LLM_MODEL_MAIN`; `LLM_MAIN_REASONING_EFFORT` and `LLM_MAIN_MAX_OUTPUT_TOKENS` tune the main model and may be left empty to use provider defaults. See `.env.example` and [`docs/setup/03-ai-credentials.md`](docs/setup/03-ai-credentials.md).
+Completions go through OpenRouter by default. Point them at another OpenAI-compatible gateway with `COMPLETION_GATEWAY_BASE_URL` and `COMPLETION_GATEWAY_API_KEY`; leave both empty to keep using `OPENROUTER_API_KEY`. `EMBEDDING_MODEL` and `LLM_MODEL_FAST` are set in the environment; `LLM_MAIN_REASONING_EFFORT` and `LLM_MAIN_MAX_OUTPUT_TOKENS` tune the reply model and may be left empty to use provider defaults. The reply model itself is each AI Agent's Agent Model, chosen from the code-defined Model Catalog — see `.env.example` and [`docs/setup/03-ai-credentials.md`](docs/setup/03-ai-credentials.md).
 
 ## Docker
 

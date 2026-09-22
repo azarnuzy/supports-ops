@@ -14,14 +14,13 @@ x-application-environment: &application-environment
 
 x-ai-environment: &ai-environment
   # The Worker runs the AI Agent turn for WhatsApp through @repo/api, so it needs
-  # the same completion settings as the API. Left unset it silently falls back to
-  # the schema default model, which is why WhatsApp and Web answered differently.
+  # the same completion settings as the API. The reply model itself comes from
+  # each AI Agent's Agent Model (ADR-0022), not from the environment.
   OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in env.production}"
   COMPLETION_GATEWAY_API_KEY: "${COMPLETION_GATEWAY_API_KEY:-}"
   COMPLETION_GATEWAY_BASE_URL: "${COMPLETION_GATEWAY_BASE_URL:-https://openrouter.ai/api/v1}"
   EMBEDDING_MODEL: "${EMBEDDING_MODEL:-openai/text-embedding-3-small}"
   LLM_MODEL_FAST: "${LLM_MODEL_FAST:-deepseek/deepseek-v4-flash-0731}"
-  LLM_MODEL_MAIN: "${LLM_MODEL_MAIN:-openai/gpt-5.6-luna}"
   LLM_MAIN_REASONING_EFFORT: "${LLM_MAIN_REASONING_EFFORT:-}"
   LLM_MAIN_MAX_OUTPUT_TOKENS: "${LLM_MAIN_MAX_OUTPUT_TOKENS:-}"
 

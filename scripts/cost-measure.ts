@@ -6,8 +6,9 @@
  * ingests the eight Knowledge PDFs into a throwaway Workspace to price
  * ingestion. Writes a token profile — no prices — to docs/research/cost-runs/.
  *
- * To measure another model, change LLM_MODEL_MAIN / LLM_MODEL_FAST /
- * EMBEDDING_MODEL in .env.local and run again; the profile name carries them.
+ * To measure another model, change EVAL_WORKSPACE_ID's AI Agent's Agent Model
+ * (the reply tier) or LLM_MODEL_FAST / EMBEDDING_MODEL in .env.local, and run
+ * again; the profile name carries them.
  *
  *   pnpm cost:measure                  # all scripts ×3 + ingest
  *   pnpm cost:measure faq-short ingest # a subset
@@ -57,7 +58,7 @@ function providerKind(url: string, model: string): CallKind | null {
   if (url.includes("/audio/transcriptions")) return "transcription";
   if (url.includes("/embeddings")) return "embedding";
   if (!url.includes("/chat/completions")) return null;
-  if (model === process.env.LLM_MODEL_MAIN) return "main";
+  if (model === mainModelId) return "main";
   if (model === process.env.LLM_MODEL_FAST) return "fast";
   return "other-llm";
 }
@@ -180,11 +181,18 @@ const { cancelFollowUpTimers } = await import("../apps/api/src/modules/follow-up
 const { claimTicket, completeHandoff } = await import("../apps/api/src/modules/tickets/services");
 const { storageConfig } = await import("../apps/api/src/config");
 const { createStorage } = await import("../packages/storage/src/index");
+const { resolveAgentModelId } = await import("../apps/api/src/modules/ai-agent/model-catalog");
 const worker = await import("../apps/worker/src/index");
 const { processKnowledgeIngestJob } = await import("../apps/worker/src/knowledge-ingest");
 
 if (!process.env.EVAL_WORKSPACE_ID) throw new Error("EVAL_WORKSPACE_ID is required.");
 const workspaceId: string = process.env.EVAL_WORKSPACE_ID;
+// The reply model is the eval Workspace's Agent Model (ADR-0022), not an
+// environment variable — resolved once, before any provider call is tapped.
+const mainModelId = resolveAgentModelId(
+  (await prisma.aiAgent.findFirst({ select: { agentModel: true }, where: { workspaceId } }))
+    ?.agentModel,
+);
 const queues = [getAttachmentProcessQueue(), getTicketKnowledgeIndexQueue()];
 for (const queue of queues) {
   if ((await queue.getWorkers()).length) {
@@ -639,7 +647,7 @@ const runs = Number(process.env.COST_RUNS ?? 3);
 const models = {
   embedding: process.env.EMBEDDING_MODEL,
   fast: process.env.LLM_MODEL_FAST,
-  main: process.env.LLM_MODEL_MAIN,
+  main: mainModelId,
   ocr: "mistral-ocr-latest",
 };
 const slug = (value = "") => value.replace(/[^a-z0-9.]+/gi, "-");
