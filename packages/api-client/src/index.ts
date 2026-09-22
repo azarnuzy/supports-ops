@@ -545,6 +545,8 @@ export async function generateSuggestedReply(client: ApiClient, id: string) {
   if (response.status === 409) throw new Error("This Ticket is no longer open for replies.");
   if (response.status === 503)
     throw new Error("Configure OPENROUTER_API_KEY to use the AI Copilot.");
+  if (response.status === 402)
+    throw new Error("The AI Copilot is unavailable because this Workspace's Credits ran out.");
   if (response.status === 502)
     throw new Error("The AI Copilot could not generate a Suggested Reply. Please try again.");
   if (!response.ok) throw new Error("Failed to generate the Suggested Reply.");
