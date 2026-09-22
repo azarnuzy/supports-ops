@@ -288,6 +288,16 @@ _Avoid_: Billing, Consumption, AI analysis, Analytics (Analytics reports Ticket 
 The model provider's unit of text an AI Turn reads and writes, shown to an Admin for insight only. A Workspace is never charged by Token — a Credit is spent per AI Turn however many Tokens it used.
 _Avoid_: Credit (Credits are what a Workspace pays), Usage unit
 
+### Operating the platform
+
+**Operator**:
+A member of SupportOps staff who oversees every Workspace from outside them — watching usage, recording Top-Ups, and granting Unlimited Periods. Has their own sign-in, separate from every Workspace user, and belongs to no Workspace: an Operator is never a Workspace user, and a Workspace user can never become an Operator. Sees Workspace totals, never a Customer's Messages. Workspaces and their Admins are created by registering, never by an Operator.
+_Avoid_: Superadmin, Root, Staff Admin (Admin is a Workspace role)
+
+**Unlimited Period**:
+A dated window, granted by an Operator, during which a Workspace's AI Agents keep answering without spending its Credits — typically a proof of concept. Its AI Turns are still recorded as AI Usage, so what it would have cost stays visible, but the balance is left exactly as it was. When the window ends the Workspace is back on its own Credits. A Workspace has at most one active at a time.
+_Avoid_: Unmetered, Free plan, Trial (the Trial Grant is something else)
+
 ### Dashboard and reporting
 
 **Live** (dashboard):
