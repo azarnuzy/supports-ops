@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP/3 Request Flow</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#fff;color:#1e3a5f;overflow:auto;
+       font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+  #scaler{transform-origin:top left}
+  #page{width:1600px;height:900px;padding:30px 40px;display:flex;flex-direction:column;justify-content:space-between}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  /* Icons8 m_outlined glyphs, PNG used as an alpha mask */
+  .tile{border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ic{background-color:#fff;-webkit-mask:no-repeat center/contain;mask:no-repeat center/contain}
+  .t-blue{background:#2f6fed}.t-amber{background:#d97706}.t-slate{background:#64748b}
+  .t-purple{background:#a855f7}.t-indigo{background:#6366f1}
+
+  header{display:flex;gap:16px;align-items:center}
+  .logo{width:52px;height:52px;border-radius:12px}
+  .brand{font-size:30px;font-weight:800;color:#123a6b;line-height:1}
+  .subtitle{font-size:16px;font-weight:700;color:#3f6ea8;margin-top:6px}
+
+  /* one lane = label + five hops joined by links */
+  .lane{border-radius:18px;padding:18px 24px 20px;display:flex;flex-direction:column;gap:14px}
+  .bad{background:#fdf1f1;border:2px solid #f3b4b4}
+  .good{background:#eefaf1;border:2px solid #a3dcb2}
+  .lane h3{margin:0;font-size:19px;font-weight:800;display:flex;gap:10px;align-items:center}
+  .bad h3{color:#991b1b}.good h3{color:#166534}
+  .lane h3 small{font-size:14px;font-weight:700;opacity:.8}
+  .flow{display:flex;align-items:center}
+  .hop{width:170px;flex:none;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .hop .tile{width:64px;height:64px}.hop .ic{width:36px;height:36px}
+  .hop b{font-size:16px;font-weight:800;color:#123a6b}
+  .link{flex:1;position:relative;height:64px;display:flex;align-items:center;justify-content:center;
+        margin-bottom:30px}
+  .link::before{content:"";position:absolute;left:0;right:12px;top:50%;height:4px;margin-top:-2px;border-radius:2px}
+  .link::after{content:"";position:absolute;right:0;top:50%;margin-top:-9px;border:9px solid transparent;border-right:0}
+  .bad .link::before{background:#e08a8a}.bad .link::after{border-left:12px solid #e08a8a}
+  .good .link::before{background:#4fbf6f}.good .link::after{border-left:12px solid #4fbf6f}
+  .bad .link.broken::before{background:repeating-linear-gradient(90deg,#dc2626 0 14px,transparent 14px 24px)}
+  .bad .link.broken::after{border-left-color:#dc2626}
+  .mark{position:relative;z-index:1;width:40px;height:40px;border-radius:50%;color:#fff;font-weight:800;
+        font-size:21px;display:flex;align-items:center;justify-content:center}
+  .x{background:#dc2626}.ok{background:#16a34a}
+  .pill{position:absolute;top:58px;white-space:nowrap;font-size:14px;font-weight:800;padding:3px 10px;border-radius:99px}
+  .bad .pill{background:#fff;color:#b91c1c;border:1.5px solid #f3b4b4}
+  .good .pill{background:#fff;color:#166534;border:1.5px solid #a3dcb2}
+  .result{font-size:17px;font-weight:800;text-align:center}
+  .bad .result{color:#7f1d1d}.good .result{color:#14532d}
+  .result code{font-size:15px;background:#fff;padding:2px 8px;border-radius:6px}
+
+  /* why the request hung: five steps */
+  .why h3{margin:0 0 12px;font-size:19px;font-weight:800;color:#8a6a12}
+  .steps{display:flex;align-items:stretch}
+  .step{flex:1;background:#fdf6dd;border:2px solid #e6cf7a;border-radius:14px;padding:12px 14px;
+        display:flex;flex-direction:column;gap:6px}
+  .step.fail{background:#fdf1f1;border-color:#f3b4b4}
+  .step .n{font-size:13px;font-weight:800;color:#8a6a12;text-transform:uppercase;letter-spacing:.5px}
+  .step.fail .n{color:#b91c1c}
+  .step b{font-size:17px;font-weight:800;color:#123a6b;line-height:1.25}
+  .arrow{flex:none;width:34px;display:flex;align-items:center;justify-content:center;color:#b7a060;font-size:26px;font-weight:800}
+</style>
+</head>
+<body>
+<div id="scaler"><div id="page">
+
+  <header>
+    <img class="logo" src="../../research/assets/support-ops-logo.png" alt="SupportOps logo">
+    <div>
+      <div class="brand">SupportOps</div>
+      <div class="subtitle">Incident 2026-09-21 · the same request over two transports</div>
+    </div>
+  </header>
+
+  <div class="lane bad">
+    <h3>Before <small>HTTP/3 · QUIC · UDP 443</small></h3>
+    <div class="flow">
+      <div class="hop"><div class="tile t-blue"><i class="ic" data-icon="monitor"></i></div><b>Browser</b></div>
+      <div class="link broken"><span class="mark x">✕</span><span class="pill">UDP packets lost</span></div>
+      <div class="hop"><div class="tile t-amber"><i class="ic" data-icon="cloud"></i></div><b>Mobile hotspot</b></div>
+      <div class="link"></div>
+      <div class="hop"><div class="tile t-slate"><i class="ic" data-icon="globe"></i></div><b>Internet</b></div>
+      <div class="link"></div>
+      <div class="hop"><div class="tile t-purple"><i class="ic" data-icon="server"></i></div><b>Caddy</b></div>
+      <div class="link"><span class="pill">124 ms</span></div>
+      <div class="hop"><div class="tile t-indigo"><i class="ic" data-icon="api"></i></div><b>API</b></div>
+    </div>
+    <div class="result">16 kB body took <code>9.42 s</code>, or never arrived</div>
+  </div>
+
+  <div class="lane good">
+    <h3>After <small>HTTP/2 · TCP 443</small></h3>
+    <div class="flow">
+      <div class="hop"><div class="tile t-blue"><i class="ic" data-icon="monitor"></i></div><b>Browser</b></div>
+      <div class="link"><span class="mark ok">✓</span></div>
+      <div class="hop"><div class="tile t-amber"><i class="ic" data-icon="cloud"></i></div><b>Mobile hotspot</b></div>
+      <div class="link"></div>
+      <div class="hop"><div class="tile t-slate"><i class="ic" data-icon="globe"></i></div><b>Internet</b></div>
+      <div class="link"></div>
+      <div class="hop"><div class="tile t-purple"><i class="ic" data-icon="server"></i></div><b>Caddy</b></div>
+      <div class="link"><span class="pill"><code>protocols h1 h2</code></span></div>
+      <div class="hop"><div class="tile t-indigo"><i class="ic" data-icon="api"></i></div><b>API</b></div>
+    </div>
+    <div class="result">Median <code>0.23 s</code> over 30 runs, no stalls</div>
+  </div>
+
+  <div class="why">
+  <h3>Why one request hung</h3>
+  <div class="steps">
+    <div class="step"><span class="n">1 · HTTP/2</span><b>Caddy sends <code>alt-svc: h3</code></b></div>
+    <div class="arrow">→</div>
+    <div class="step"><span class="n">2 · QUIC</span><b>Handshake succeeds</b></div>
+    <div class="arrow">→</div>
+    <div class="step"><span class="n">3 · Response</span><b>Headers arrive in 124 ms</b></div>
+    <div class="arrow">→</div>
+    <div class="step fail"><span class="n">4 · UDP</span><b>Body packets dropped</b></div>
+    <div class="arrow">→</div>
+    <div class="step fail"><span class="n">5 · Browser</span><b>No fallback to TCP</b></div>
+  </div>
+  </div>
+
+</div></div>
+
+<script>
+const ICONS={monitor:"85457",cloud:"85919",globe:"89777",server:"85780",api:"121835"};
+for(const el of document.querySelectorAll('.ic')){
+  const u=`url("https://img.icons8.com/?id=${ICONS[el.dataset.icon]}&format=png&size=96")`;
+  el.style.webkitMaskImage=u; el.style.maskImage=u;
+}
+const fit=()=>{
+  const s=window.innerWidth/1600;
+  document.getElementById('scaler').style.transform=`scale(${s})`;
+  document.body.style.height=(900*s)+'px';
+};
+fit(); addEventListener('resize',fit);
+</script>
+</body>
+</html>
