@@ -268,7 +268,10 @@ describe("a Customer message arrived on a Session", () => {
     });
     const ticket = await prisma.ticket.findFirstOrThrow({ where: { sessionId: session.id } });
 
-    await aiAgentTurn.resolveByAi(ticket.id, ticket.workspaceId, "Glad that's sorted.");
+    await aiAgentTurn.resolveByAi(ticket.id, ticket.workspaceId, "Glad that's sorted.", {
+      agentModel: "openai/gpt-5.6-luna",
+      aiAgentId: ticket.aiAgentId,
+    });
 
     const closed = await prisma.session.findUniqueOrThrow({ where: { id: session.id } });
     expect(closed.status).toBe("CLOSED");

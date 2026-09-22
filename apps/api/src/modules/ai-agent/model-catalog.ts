@@ -23,3 +23,10 @@ export function isCatalogModelId(modelId: string): boolean {
 export function resolveAgentModelId(modelId: string | null | undefined): string {
   return modelId && catalogById.has(modelId) ? modelId : defaultAgentModelId;
 }
+
+/** The Model Rate for a resolved Agent Model id — how many Credits one AI Turn
+ * costs. Call {@link resolveAgentModelId} first for an id that may not be in
+ * the catalog. */
+export function modelRateFor(modelId: string): number {
+  return catalogById.get(modelId)?.rate ?? modelCatalog[0].rate;
+}

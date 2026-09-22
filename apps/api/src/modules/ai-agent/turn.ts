@@ -11,6 +11,7 @@ import { aiAgentConfig, embeddingConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { withWorkspaceContext } from "../../utils/workspace-context";
+import { spendForTurn } from "../credits/services";
 import {
   cancelFollowUpTimers,
   scheduleFollowUp,
@@ -55,8 +56,21 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         unscopedPrisma.aiActivity.count({
           where: { eventType: "CLARIFICATION_ASKED", ticketId },
         }),
-      escalate: (reason, content) =>
-        escalate(ticketId, workspaceId, reason, customerMessage, content),
+      escalate: (reason, content) => {
+        if (!ticket) throw new Error("AI Agent runtime is not ready.");
+        // AI_GENERATION_FAILED and AI_TIMEOUT are the Turn giving up before the
+        // model ever produced a decision — a provider failure, not one of the
+        // outcomes an AI Turn spends Credits for.
+        const isProviderFailure = reason === "AI_GENERATION_FAILED" || reason === "AI_TIMEOUT";
+        return escalate(
+          ticketId,
+          workspaceId,
+          reason,
+          customerMessage,
+          content,
+          isProviderFailure ? undefined : { agentModel: agentModelId, aiAgentId: ticket.aiAgentId },
+        );
+      },
       finish: async () => {
         setTicketGenerating(ticketId, false);
         const finalTicket = await unscopedPrisma.ticket.findUnique({
@@ -107,7 +121,11 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
           data: { delta, provisionalId },
         }),
       reply: async (decision, content, provisionalId) => {
-        const message = await appendAiMessage(ticketId, workspaceId, content);
+        if (!ticket) throw new Error("AI Agent runtime is not ready.");
+        const message = await appendAiMessage(ticketId, workspaceId, content, {
+          agentModel: agentModelId,
+          aiAgentId: ticket.aiAgentId,
+        });
         if (!message) return;
         await unscopedPrisma.aiActivity.create({
           data: {
@@ -126,7 +144,13 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         );
         await publishTicketQueueEvent(workspaceId);
       },
-      resolve: (content) => resolveByAi(ticketId, workspaceId, content),
+      resolve: (content) => {
+        if (!ticket) throw new Error("AI Agent runtime is not ready.");
+        return resolveByAi(ticketId, workspaceId, content, {
+          agentModel: agentModelId,
+          aiAgentId: ticket.aiAgentId,
+        });
+      },
       retrieve: async () => {
         if (!ticket) throw new Error("AI Agent runtime is not ready.");
         const attachments = await unscopedPrisma.attachment.findMany({
@@ -237,7 +261,12 @@ async function getPriorAiMessage(ticketId: string): Promise<string | null> {
   return message?.content ?? null;
 }
 
-async function appendAiMessage(ticketId: string, workspaceId: string, content: string) {
+async function appendAiMessage(
+  ticketId: string,
+  workspaceId: string,
+  content: string,
+  spend: { agentModel: string; aiAgentId: string },
+) {
   return unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
       data: { status: "AI_HANDLING" },
@@ -248,7 +277,7 @@ async function appendAiMessage(ticketId: string, workspaceId: string, content: s
       select: { channel: { select: { type: true } }, sessionId: true },
       where: { id: ticketId },
     });
-    return tx.message.create({
+    const message = await tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, ticket.sessionId)),
         content,
@@ -261,6 +290,14 @@ async function appendAiMessage(ticketId: string, workspaceId: string, content: s
         workspaceId,
       },
     });
+    await spendForTurn(tx, {
+      agentModel: spend.agentModel,
+      aiAgentId: spend.aiAgentId,
+      sessionId: ticket.sessionId,
+      ticketId,
+      workspaceId,
+    });
+    return message;
   });
 }
 
@@ -270,6 +307,7 @@ export async function escalate(
   reason: EscalationReason,
   customerMessage: string,
   content?: string,
+  spend?: { agentModel: string; aiAgentId: string },
 ) {
   const acknowledgement = content?.trim() || acknowledgementFor(customerMessage, reason);
   const result = await unscopedPrisma.$transaction(async (tx) => {
@@ -304,6 +342,15 @@ export async function escalate(
         workspaceId,
       },
     });
+    if (spend) {
+      await spendForTurn(tx, {
+        agentModel: spend.agentModel,
+        aiAgentId: spend.aiAgentId,
+        sessionId: ticket.sessionId,
+        ticketId,
+        workspaceId,
+      });
+    }
     return acknowledgementMessage;
   });
   if (!result) return;
@@ -314,7 +361,12 @@ export async function escalate(
   await publishTicketQueueEvent(workspaceId);
 }
 
-export async function resolveByAi(ticketId: string, workspaceId: string, content: string) {
+export async function resolveByAi(
+  ticketId: string,
+  workspaceId: string,
+  content: string,
+  spend: { agentModel: string; aiAgentId: string },
+) {
   const closing = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
       data: {
@@ -352,6 +404,13 @@ export async function resolveByAi(ticketId: string, workspaceId: string, content
         ticketId,
         workspaceId,
       },
+    });
+    await spendForTurn(tx, {
+      agentModel: spend.agentModel,
+      aiAgentId: spend.aiAgentId,
+      sessionId: ticket.sessionId,
+      ticketId,
+      workspaceId,
     });
     return closingMessage;
   });
