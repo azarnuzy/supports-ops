@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   packages: write
 
@@ -75,7 +76,7 @@ jobs:
 
   changes:
     name: Detect changed apps
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.apps.outputs.any }}
@@ -90,12 +91,23 @@ jobs:
       - name: Find affected apps
         id: apps
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          before="${{ github.event.before }}"
-          if [[ "${before}" == "0000000000000000000000000000000000000000" ]]; then
-            mapfile -t files < <(git ls-files)
+          # Diff against the last successful main run, not the previous commit, so
+          # changes from pushes whose CI failed still ship on the next green run.
+          # A manual run redeploys everything.
+          base=""
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            base="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci-cd.yml/runs?branch=main&status=success&per_page=50" \
+              --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].head_sha // ""')"
+          fi
+          if [[ -n "${base}" ]] && git merge-base --is-ancestor "${base}" "${GITHUB_SHA}"; then
+            echo "Changes since last successful deploy ${base}"
+            mapfile -t files < <(git diff --name-only "${base}" "${GITHUB_SHA}")
           else
-            mapfile -t files < <(git diff --name-only "${before}" "${GITHUB_SHA}")
+            echo "No usable baseline; deploying all apps"
+            mapfile -t files < <(git ls-files)
           fi
           apps=()
           for app in api worker business-system platform widget; do
