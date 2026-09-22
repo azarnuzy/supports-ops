@@ -30,6 +30,7 @@ import {
   markTicketRead,
   reassignTicket,
   suggestReply,
+  SuggestedReplyCreditsExhaustedError,
   SuggestedReplyNotConfiguredError,
   TicketAlreadyClaimedError,
   TicketNotAvailableForAssignmentError,
@@ -246,6 +247,8 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       if (error instanceof TicketNotOwnedError) return c.json({ error: "ticket_not_owned" }, 409);
       if (error instanceof SuggestedReplyNotConfiguredError)
         return c.json({ error: "copilot_not_configured" }, 503);
+      if (error instanceof SuggestedReplyCreditsExhaustedError)
+        return c.json({ error: "credits_exhausted" }, 402);
       if (error instanceof SuggestedReplyGenerationFailedError)
         return c.json({ error: "suggested_reply_generation_failed" }, 502);
       throw error;
