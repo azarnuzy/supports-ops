@@ -17,6 +17,7 @@ export type UpdateProfileInput = {
 };
 
 export type AiSettings = {
+  agentModel: string;
   aiAgentId: string;
   followUpAfterSeconds: number;
   autoResolveAfterSeconds: number;

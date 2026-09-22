@@ -16,6 +16,7 @@ import {
 } from "@repo/knowledge";
 import { createBusinessTools } from "@repo/tools";
 import { describeMessageContent } from "../ai-agent/customer-message";
+import { resolveAgentModelId } from "../ai-agent/model-catalog";
 import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
@@ -487,7 +488,7 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
   const ticket = await unscopedPrisma.ticket.findFirst({
     select: {
       assignedHumanAgent: { select: { name: true } },
-      aiAgent: { select: { handoffMessage: true } },
+      aiAgent: { select: { agentModel: true, handoffMessage: true } },
       escalationReason: true,
       id: true,
       messages: {
@@ -523,7 +524,11 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
   try {
     if (!aiAgentConfig.apiKey) throw new Error("AI Agent is not configured.");
     const summary = await generateEscalationSummary({
-      model: createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }),
+      model: createReplyModel({
+        ...aiAgentConfig,
+        apiKey: aiAgentConfig.apiKey,
+        modelId: resolveAgentModelId(ticket.aiAgent.agentModel),
+      }),
       sessionId: ticket.sessionId,
       ticket: {
         escalationReason: ticket.escalationReason,
@@ -798,6 +803,7 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
     throw new SuggestedReplyNotConfiguredError();
   const ticket = await unscopedPrisma.ticket.findFirst({
     select: {
+      aiAgent: { select: { agentModel: true } },
       aiAgentId: true,
       customerIdentity: { select: { email: true, externalCustomerId: true, id: true } },
       id: true,
@@ -888,7 +894,11 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
     internalOnlySources: sources
       .filter((source) => source.visibility === "INTERNAL_ONLY")
       .map((source) => source.content),
-    model: createReplyModel({ ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }),
+    model: createReplyModel({
+      ...aiAgentConfig,
+      apiKey: aiAgentConfig.apiKey,
+      modelId: resolveAgentModelId(ticket.aiAgent.agentModel),
+    }),
     sessionId: ticket.sessionId,
     previousTicketContext: previousTickets
       .map(

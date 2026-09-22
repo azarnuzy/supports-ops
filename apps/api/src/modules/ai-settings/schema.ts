@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCatalogModelId } from "../ai-agent/model-catalog";
 
 const handoffMessageSchema = z
   .string()
@@ -12,6 +13,7 @@ const handoffMessageSchema = z
 
 export const updateAiSettingsSchema = z.object({
   aiAgentId: z.string().min(1),
+  agentModel: z.string().min(1).refine(isCatalogModelId, "Unknown Agent Model."),
   followUpAfterSeconds: z
     .number()
     .int()

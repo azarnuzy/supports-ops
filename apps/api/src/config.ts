@@ -12,7 +12,6 @@ const defaultBetterAuthSecret = "dev-change-me";
 const productionSecretMinimumLength = 32;
 const defaultEmbeddingModel = "openai/text-embedding-3-small";
 const defaultFastModel = "openai/gpt-4.1-nano";
-const defaultMainModel = "openai/gpt-4o-mini";
 /** Embeddings stay on OpenRouter: the vector store holds chunks embedded by
  * `EMBEDDING_MODEL`, so moving this provider would invalidate every stored
  * chunk and force a full re-ingest. Completions are free to move. */
@@ -61,7 +60,6 @@ const apiEnvSchema = z
     EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
-    LLM_MODEL_MAIN: z.string().trim().min(1).default(defaultMainModel),
     // An unset var and one set to "" must mean the same thing: Compose passes
     // an empty string for an optional override, and z.coerce would read it as 0.
     LLM_MAIN_MAX_OUTPUT_TOKENS: z.preprocess(
@@ -171,7 +169,6 @@ export const aiAgentConfig = {
   apiKey: env.COMPLETION_GATEWAY_API_KEY ?? env.OPENROUTER_API_KEY,
   baseUrl: env.COMPLETION_GATEWAY_BASE_URL,
   maxOutputTokens: env.LLM_MAIN_MAX_OUTPUT_TOKENS,
-  modelId: env.LLM_MODEL_MAIN,
   reasoningEffort: env.LLM_MAIN_REASONING_EFFORT,
 } as const;
 

@@ -38,6 +38,7 @@ describe("AI Agent settings", () => {
   it("returns migration fallbacks for an unconfigured Workspace AI Agent", async () => {
     mocks.aiSettingsFindFirst.mockResolvedValue(null);
     mocks.aiAgentFindFirst.mockResolvedValue({
+      agentModel: "openai/gpt-5.6-luna",
       handoffMessage: null,
       id: "ai-1",
       instructions: null,
@@ -47,19 +48,39 @@ describe("AI Agent settings", () => {
     const settings = await withWorkspaceContext("ws-1", getAiSettings);
 
     expect(settings).toMatchObject({
+      agentModel: "openai/gpt-5.6-luna",
       aiAgentId: "ai-1",
       handoffMessage: expect.stringContaining("{humanAgentName}"),
       idleCloseAfterSeconds: 28_800,
       instructions: "",
+      modelCatalog: expect.arrayContaining([
+        expect.objectContaining({ id: "openai/gpt-5.6-luna" }),
+      ]),
       resolutionMessage: "This conversation has been resolved.",
       workspaceId: "ws-1",
     });
+  });
+
+  it("falls back to the default when the stored Agent Model has left the catalog", async () => {
+    mocks.aiSettingsFindFirst.mockResolvedValue(null);
+    mocks.aiAgentFindFirst.mockResolvedValue({
+      agentModel: "openai/retired-model",
+      handoffMessage: null,
+      id: "ai-1",
+      instructions: null,
+      resolutionMessage: null,
+    });
+
+    const settings = await withWorkspaceContext("ws-1", getAiSettings);
+
+    expect(settings.agentModel).toBe("openai/gpt-5.6-luna");
   });
 
   it("updates only the selected AI Agent in the current Workspace", async () => {
     mocks.aiAgentUpdate.mockResolvedValue({ id: "ai-1" });
     mocks.aiSettingsUpsert.mockResolvedValue({ workspaceId: "ws-1" });
     const input = {
+      agentModel: "openai/gpt-5.6-luna",
       aiAgentId: "ai-1",
       autoResolveAfterSeconds: 60,
       autoResolveEnabled: true,
@@ -73,7 +94,10 @@ describe("AI Agent settings", () => {
     await withWorkspaceContext("ws-1", () => updateAiSettings(input));
 
     expect(mocks.aiAgentUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { workspaceId_id: { id: "ai-1", workspaceId: "ws-1" } } }),
+      expect.objectContaining({
+        data: expect.objectContaining({ agentModel: "openai/gpt-5.6-luna" }),
+        where: { workspaceId_id: { id: "ai-1", workspaceId: "ws-1" } },
+      }),
     );
   });
 });
