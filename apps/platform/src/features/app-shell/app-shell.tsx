@@ -28,6 +28,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import {
   BotIcon,
   ChevronRightIcon,
+  CoinsIcon,
   InboxIcon,
   LayoutDashboardIcon,
   LayoutListIcon,
@@ -159,6 +160,7 @@ export function PlatformAppShell({
             items: [
               { icon: UsersRoundIcon, label: "Users", to: "/workspace/users" },
               { icon: TagsIcon, label: "Ticket categories", to: "/workspace/categories" },
+              { icon: CoinsIcon, label: "AI Usage", to: "/workspace/ai-usage" },
             ],
             label: "Workspace",
           },
