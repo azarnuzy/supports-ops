@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
+import { grantTrialCredits } from "../credits/services";
 import { seedDefaultTicketCategories } from "../ticket-categories/services";
 import { isUniqueConstraintError, unscopedPrisma } from "../../utils/prisma";
 import {
@@ -43,6 +44,7 @@ export async function registerAdminWorkspace(input: RegisterInput) {
       const userId = randomUUID();
 
       await seedDefaultTicketCategories(tx, workspace.id);
+      await grantTrialCredits(tx, workspace.id);
 
       await tx.aiSettings.create({
         data: { id: randomUUID(), workspaceId: workspace.id },

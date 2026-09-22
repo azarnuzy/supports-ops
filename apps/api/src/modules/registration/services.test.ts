@@ -66,6 +66,7 @@ describe("registerAdminWorkspace", () => {
       channel?: unknown;
       webWidgetConfig?: unknown;
       ticketCategories?: Record<string, unknown>[];
+      creditLedgerEntry?: Record<string, unknown>;
     } = {};
 
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => {
@@ -115,6 +116,12 @@ describe("registerAdminWorkspace", () => {
         webWidgetConfig: {
           create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
             created.webWidgetConfig = data;
+            return data;
+          }),
+        },
+        creditLedgerEntry: {
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            created.creditLedgerEntry = data;
             return data;
           }),
         },
@@ -176,6 +183,12 @@ describe("registerAdminWorkspace", () => {
     });
     expect(typeof webWidgetConfig.widgetKey).toBe("string");
     expect((webWidgetConfig.widgetKey as string).startsWith("widget_")).toBe(true);
+
+    expect(created.creditLedgerEntry).toMatchObject({
+      type: "TRIAL_GRANT",
+      credits: 500,
+      workspaceId: workspace.id,
+    });
   });
 
   it("converts a race-condition unique email violation into a clear error", async () => {
