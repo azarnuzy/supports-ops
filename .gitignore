@@ -41,3 +41,6 @@ _local/
 /lessons/
 /reference/
 /assets/
+/docs/references/
+/docs/research/assets/*
+!/docs/research/assets/support-ops-logo.png
