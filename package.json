@@ -18,6 +18,7 @@
     "with-production-env": "dotenv -e .env --",
     "createsuperuser": "pnpm with-env tsx scripts/createsuperuser.ts",
     "seed:demo": "pnpm with-env tsx scripts/seed-demo.ts",
+    "credits:top-up": "pnpm with-env tsx scripts/credits-top-up.ts",
     "eval:ai-agent": "pnpm with-env tsx apps/api/src/evals/run.ts",
     "cost:measure": "pnpm with-env tsx scripts/cost-measure.ts",
     "db:generate": "pnpm --filter @repo/api db:generate",
