@@ -84,7 +84,10 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             <FieldLabel className="text-sm font-medium" htmlFor="agent-model">
               Agent Model
             </FieldLabel>
-            <Select value={values.agentModel} onValueChange={(value) => update("agentModel", value)}>
+            <Select
+              value={values.agentModel}
+              onValueChange={(value) => update("agentModel", value)}
+            >
               <SelectTrigger id="agent-model" className="w-full">
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>

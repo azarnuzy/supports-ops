@@ -19,7 +19,7 @@
       "!**/.pnpm-store",
       "!**/.tanstack",
       "!**/routeTree.gen.ts",
-      "!docs/research/assets"
+      "!docs"
     ]
   },
   "formatter": {
