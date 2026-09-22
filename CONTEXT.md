@@ -91,7 +91,7 @@ The AI Agent handing a Ticket to humans because it cannot safely continue. After
 _Avoid_: Handover, Transfer, Fallback
 
 **Escalation Reason**:
-The specific, recorded condition that triggered an Escalation — low knowledge confidence, an explicit request for a human, a failed Business Tool, and so on. Always one of a fixed set, never free text.
+The specific, recorded condition that triggered an Escalation — low knowledge confidence, an explicit request for a human, a failed Business Tool, Credit Exhaustion, and so on. Always one of a fixed set, never free text.
 _Avoid_: Cause, Error, Trigger
 
 **Shared Human Queue**:
@@ -241,6 +241,44 @@ _Avoid_: Test suite, Benchmark
 **Judge**:
 A separate model asked to score an AI Agent response against an Eval Case where no deterministic check can. Used only where a requirement genuinely needs it, because judging costs money and its scores vary between runs.
 _Avoid_: Grader, Evaluator, Critic
+
+### Models, Credits, and usage
+
+**Agent Model**:
+The language model an AI Agent replies and uses Tools with, chosen by the Admin per AI Agent from the Model Catalog. Classification and embedding models are platform choices the Admin never sees — changing the embedding model would invalidate every Chunk the Workspace owns.
+_Avoid_: LLM, Engine, Brain, Main model
+
+**Model Catalog**:
+The short, curated list of models SupportOps offers as Agent Models. A model joins only after passing the Eval Suites, because not every model handles Tools and structured decisions reliably.
+_Avoid_: Model list, Providers, Model marketplace
+
+**Credit**:
+The prepaid unit a Workspace spends on AI. Always bought before it is spent, never billed after the fact. Belongs to the Workspace, shared by all its AI Agents. Only AI Turns and Follow-Ups spend Credits; everything else the AI does — classification, Escalation Summaries, Suggested Replies, reading Attachments, ingesting Knowledge Sources — is absorbed by the platform.
+_Avoid_: Token (the provider's unit, not the product's), Quota, Balance
+
+**Model Rate**:
+How many Credits one AI Turn costs on a given Agent Model. Fixed per model, however many Tool calls the turn makes, so an Admin can predict spend by counting replies.
+_Avoid_: Multiplier, Price, Cost
+
+**Credit Ledger**:
+The append-only record of every change to a Workspace's Credits — Trial Grant, Top-Up, and spend. A Workspace's balance is whatever its Credit Ledger adds up to. Its entries outlive the Tickets they were spent on, so deleting a Ticket never changes the balance.
+_Avoid_: Transactions, Wallet, Billing history
+
+**Trial Grant**:
+The one-time Credits a Workspace receives when it registers.
+_Avoid_: Free credits, Bonus, Starter pack
+
+**Top-Up**:
+Credits added to a Workspace after it has paid for them.
+_Avoid_: Recharge, Purchase, Deposit
+
+**Credit Exhaustion**:
+A Workspace's balance reaching zero. The AI Turn already running is allowed to finish, so the balance may dip slightly below zero; after that the AI Agent stops answering, the next Customer Message escalates with its own Escalation Reason, and the AI Copilot is unavailable. Counted apart from every other Escalation Reason so it never reads as the AI Agent failing.
+_Avoid_: Out of credits, Suspension, Paywall
+
+**AI Usage**:
+A Workspace's record of what its AI Agents consumed — AI Turns and the Credits they spent — visible to its Admin and to no other Workspace. Never read from Telemetry, which is allowed to expire.
+_Avoid_: Billing, Consumption, AI analysis, Analytics (Analytics reports Ticket outcomes)
 
 ### Dashboard and reporting
 
