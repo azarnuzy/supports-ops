@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { unscopedPrisma } from "../../utils/prisma";
 import { modelRateFor, resolveAgentModelId } from "../ai-agent/model-catalog";
+import { enqueueCreditAlertEmail } from "./alerts-queue";
 
 export const trialGrantCredits = 500;
+const lowBalanceThreshold = 100;
 
 export class WorkspaceNotFoundError extends Error {}
 export class InvalidTopUpAmountError extends Error {}
@@ -25,12 +27,37 @@ export async function grantTrialCredits(
 
 /** The balance is always the ledger sum, never a separately stored number. */
 export async function creditBalance(workspaceId: string) {
-  const { _sum } = await unscopedPrisma.creditLedgerEntry.aggregate({
+  return balanceWithin(unscopedPrisma, workspaceId);
+}
+
+async function balanceWithin(
+  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry">,
+  workspaceId: string,
+) {
+  const { _sum } = await tx.creditLedgerEntry.aggregate({
     where: { workspaceId },
     _sum: { credits: true },
   });
 
   return _sum.credits ?? 0;
+}
+
+/** Crossing below zero and crossing below the low-balance threshold each email
+ * every Admin once: only the spend that carries the balance across the line
+ * fires, so it never repeats until a Top-Up lifts the balance back up and a
+ * later spend crosses it again. */
+async function notifyBalanceCrossing(
+  workspaceId: string,
+  balanceBefore: number,
+  balanceAfter: number,
+) {
+  if (balanceBefore > 0 && balanceAfter <= 0) {
+    await enqueueCreditAlertEmail({ kind: "CREDIT_EXHAUSTED", workspaceId });
+    return;
+  }
+  if (balanceBefore >= lowBalanceThreshold && balanceAfter < lowBalanceThreshold) {
+    await enqueueCreditAlertEmail({ kind: "LOW_BALANCE", workspaceId });
+  }
 }
 
 /** Written for every AI Turn that finishes with a decision (reply, escalate,
@@ -49,13 +76,15 @@ export async function spendForTurn(
   },
 ) {
   const agentModel = resolveAgentModelId(params.agentModel);
+  const rate = modelRateFor(agentModel);
+  const balanceBefore = await balanceWithin(tx, params.workspaceId);
   await tx.creditLedgerEntry.create({
     data: {
       agentModel,
       aiAgentId: params.aiAgentId,
-      credits: -modelRateFor(agentModel),
+      credits: -rate,
       id: randomUUID(),
-      modelRate: modelRateFor(agentModel),
+      modelRate: rate,
       providerCostUsd: params.providerCostUsd ?? null,
       sessionId: params.sessionId,
       ticketId: params.ticketId,
@@ -63,6 +92,7 @@ export async function spendForTurn(
       workspaceId: params.workspaceId,
     },
   });
+  await notifyBalanceCrossing(params.workspaceId, balanceBefore, balanceBefore - rate);
 }
 
 /** The operator Top-Up path (`pnpm credits:top-up`). Runs outside any Workspace

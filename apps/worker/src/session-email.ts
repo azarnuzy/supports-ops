@@ -8,17 +8,33 @@ export type SessionEmailJob = {
 };
 
 export async function sendSessionLinkEmail({ customerName, email, sessionLink }: SessionEmailJob) {
-  const subject = "Return to your SupportOps chat";
-  const text = `Hi ${customerName},\n\nReturn to your support chat: ${sessionLink}`;
+  await sendEmail({
+    html: `<p>Hi ${escapeHtml(customerName)},</p><p><a href="${escapeHtml(sessionLink)}">Return to your support chat</a></p>`,
+    subject: "Return to your SupportOps chat",
+    text: `Hi ${customerName},\n\nReturn to your support chat: ${sessionLink}`,
+    to: email,
+  });
+}
 
+export async function sendEmail({
+  html,
+  subject,
+  text,
+  to,
+}: {
+  html?: string;
+  subject: string;
+  text: string;
+  to: string;
+}) {
   if (emailConfig.resendApiKey) {
     const response = await fetch("https://api.resend.com/emails", {
       body: JSON.stringify({
         from: emailConfig.from,
-        html: `<p>Hi ${escapeHtml(customerName)},</p><p><a href="${escapeHtml(sessionLink)}">Return to your support chat</a></p>`,
+        html: html ?? `<p>${escapeHtml(text)}</p>`,
         subject,
         text,
-        to: [email],
+        to: [to],
       }),
       headers: {
         Authorization: `Bearer ${emailConfig.resendApiKey}`,
@@ -26,14 +42,13 @@ export async function sendSessionLinkEmail({ customerName, email, sessionLink }:
       },
       method: "POST",
     });
-    if (!response.ok)
-      throw new Error(`Resend rejected the Session Link email (${response.status}).`);
+    if (!response.ok) throw new Error(`Resend rejected the email (${response.status}).`);
     return;
   }
 
   if (!emailConfig.smtpUrl)
-    throw new Error("Configure RESEND_API_KEY or SMTP_URL to deliver Session Link emails.");
-  await sendSmtpMessage(emailConfig.smtpUrl, email, subject, text);
+    throw new Error("Configure RESEND_API_KEY or SMTP_URL to deliver email.");
+  await sendSmtpMessage(emailConfig.smtpUrl, to, subject, text);
 }
 
 async function sendSmtpMessage(smtpUrl: string, recipient: string, subject: string, text: string) {
