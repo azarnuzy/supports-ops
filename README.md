@@ -32,22 +32,7 @@
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  customer([Customer]) --> widget[Web Widget]
-  customer --> whatsapp[WhatsApp]
-  widget -- HTTP + SSE --> api
-  whatsapp -- Meta webhook --> api
-  staff([Admin / Human Agent]) --> platform[Platform<br/>React + Vite]
-  platform -- Hono RPC --> api[API<br/>Hono]
-  api --> pg[(Postgres<br/>+ pgvector)]
-  api --> redis[(Redis)]
-  redis --> worker[Worker<br/>BullMQ]
-  worker --> pg
-  api & worker --> llm[LLM gateway<br/>OpenRouter]
-  api & worker --> s3[(S3-compatible<br/>storage)]
-  api -- Business Tools --> biz[Business System<br/>customers, subscriptions, invoices]
-```
+![SupportOps system architecture](docs/images/architecture.png)
 
 The domain language (Workspace, Session, Ticket, Knowledge Source, Channel, ...) is defined in [`CONTEXT.md`](CONTEXT.md), and the reasoning behind the main decisions lives in [`docs/adr/`](docs/adr/).
 
