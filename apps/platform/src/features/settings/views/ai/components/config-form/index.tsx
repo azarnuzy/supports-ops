@@ -9,6 +9,13 @@ import {
 import { Button } from "@repo/ui/components/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/components/select";
 import { Separator } from "@repo/ui/components/separator";
 import { Switch } from "@repo/ui/components/switch";
 import { Textarea } from "@repo/ui/components/textarea";
@@ -64,6 +71,32 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             <FieldDescription>
               Tone, scope, and escalation rules. {values.instructions.length}/10000
             </FieldDescription>
+          </Field>
+
+          <Separator />
+
+          <SectionHeading
+            title="Agent Model"
+            description="The model this AI Agent replies with. Changing it applies from the next reply."
+          />
+
+          <Field>
+            <FieldLabel className="text-sm font-medium" htmlFor="agent-model">
+              Agent Model
+            </FieldLabel>
+            <Select value={values.agentModel} onValueChange={(value) => update("agentModel", value)}>
+              <SelectTrigger id="agent-model" className="w-full">
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {values.modelCatalog.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.name} — {model.rate} Credit{model.rate === 1 ? "" : "s"} per reply
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>Applies from the AI Agent's next reply.</FieldDescription>
           </Field>
 
           <Separator />

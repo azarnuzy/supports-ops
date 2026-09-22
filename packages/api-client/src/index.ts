@@ -16,6 +16,12 @@ export type UpdateProfileInput = {
   name: string;
 };
 
+export type ModelCatalogEntry = {
+  id: string;
+  name: string;
+  rate: number;
+};
+
 export type AiSettings = {
   agentModel: string;
   aiAgentId: string;
@@ -26,6 +32,7 @@ export type AiSettings = {
   instructions: string;
   handoffMessage: string;
   resolutionMessage: string;
+  modelCatalog: readonly ModelCatalogEntry[];
 };
 
 export async function fetchAiSettings(client: ApiClient) {

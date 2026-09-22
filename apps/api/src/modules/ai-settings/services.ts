@@ -49,7 +49,15 @@ export async function updateAiSettings(input: UpdateAiSettingsInput) {
       update: timers,
       where: { workspaceId },
     });
-    return { ...settings, agentModel, aiAgentId, handoffMessage, instructions, resolutionMessage };
+    return {
+      ...settings,
+      agentModel,
+      aiAgentId,
+      handoffMessage,
+      instructions,
+      modelCatalog,
+      resolutionMessage,
+    };
   });
   await rescheduleIdleClosures(workspaceId);
   return settings;
