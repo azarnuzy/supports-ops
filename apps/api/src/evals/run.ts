@@ -11,6 +11,8 @@ import { createOtelEvalReporter } from "@anvia/otel";
 import { createReplyModel } from "@repo/ai-agent";
 import { shutdownTelemetry, startTelemetry } from "@repo/logger/telemetry";
 import { aiAgentConfig, embeddingConfig, evalConfig, telemetryConfig } from "../config";
+import { resolveAgentModelId } from "../modules/ai-agent/model-catalog";
+import { unscopedPrisma } from "../utils/prisma";
 import { cases, type MetricName } from "./cases";
 import {
   decisionMatches,
@@ -28,6 +30,7 @@ import {
 import {
   runEvalTurn,
   runRetrieverTurn,
+  setupEvalTicket,
   teardownEvalTicket,
   type EvalTurnInput,
   type EvalTurnOutput,
@@ -202,6 +205,15 @@ async function main() {
   }
 
   const { categoryFilter, idFilter, suiteFilter } = parseArgs(process.argv.slice(2));
+  const evalTicket = await setupEvalTicket();
+  const targetModelId = resolveAgentModelId(
+    (
+      await unscopedPrisma.aiAgent.findUnique({
+        select: { agentModel: true },
+        where: { id: evalTicket.aiAgentId },
+      })
+    )?.agentModel,
+  );
   startTelemetry({ config: telemetryConfig, serviceName: "ai-agent-evals" });
   // `includePayloads` defaults to false, which publishes outcomes with no
   // Input/Expected/Output — a run you cannot read without re-running it
@@ -277,7 +289,7 @@ async function main() {
             embeddingModel: embeddingConfig.modelId,
             judgeModel: evalConfig.judgeModelId,
             metric: suite.metric,
-            targetModel: aiAgentConfig.modelId,
+            targetModel: targetModelId,
             workspaceId: evalConfig.workspaceId ?? "unknown",
           },
         },

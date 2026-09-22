@@ -12,6 +12,7 @@ import { aiAgentConfig, embeddingConfig, evalConfig } from "../config";
 import { unscopedPrisma } from "../utils/prisma";
 import { withWorkspaceContext } from "../utils/workspace-context";
 import { acknowledgementFor } from "../modules/ai-agent/turn";
+import { resolveAgentModelId } from "../modules/ai-agent/model-catalog";
 import { createAssignedToolExecutor, describeAssignedTools } from "../modules/tools/orchestration";
 import { resolveTools } from "../modules/tools/services";
 
@@ -206,9 +207,17 @@ export async function teardownEvalTicket(): Promise<void> {
 export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput> {
   const startedAt = performance.now();
   const ticket = await setupEvalTicket();
+  const agentModelId = resolveAgentModelId(
+    (
+      await unscopedPrisma.aiAgent.findUnique({
+        select: { agentModel: true },
+        where: { id: ticket.aiAgentId },
+      })
+    )?.agentModel,
+  );
   const modelConfig =
     aiAgentConfig.apiKey && embeddingConfig.apiKey
-      ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }
+      ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey, modelId: agentModelId }
       : undefined;
   if (!modelConfig) {
     throw new Error(

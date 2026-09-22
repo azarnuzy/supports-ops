@@ -25,6 +25,7 @@ import {
   publishWidgetEvent,
   setTicketGenerating,
 } from "../widget/realtime";
+import { resolveAgentModelId } from "./model-catalog";
 
 type TurnTicket = {
   aiAgent: { instructions: string | null; resolutionMessage: string | null };
@@ -35,11 +36,19 @@ type TurnTicket = {
 };
 
 export function generateAiReply(ticketId: string, workspaceId: string, customerMessage: string) {
-  return withWorkspaceContext(workspaceId, () => {
+  return withWorkspaceContext(workspaceId, async () => {
     let ticket: TurnTicket | null = null;
+    const agentModelId = resolveAgentModelId(
+      (
+        await unscopedPrisma.ticket.findUnique({
+          select: { aiAgent: { select: { agentModel: true } } },
+          where: { id: ticketId },
+        })
+      )?.aiAgent.agentModel,
+    );
     const modelConfig =
       aiAgentConfig.apiKey && embeddingConfig.apiKey
-        ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey }
+        ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey, modelId: agentModelId }
         : undefined;
     const runtime: AiAgentTurnRuntime = {
       countClarifications: () =>
