@@ -69,9 +69,12 @@ export async function spendForTurn(
   params: {
     aiAgentId: string;
     agentModel: string | null;
+    channel?: "WEB" | "WHATSAPP" | null;
     providerCostUsd?: number | null;
     sessionId: string;
     ticketId: string;
+    /** Provider-reported Tokens for the whole Turn; absent for a Follow-Up, which calls no model. */
+    usage?: { cachedInputTokens: number; inputTokens: number; outputTokens: number } | null;
     workspaceId: string;
   },
 ) {
@@ -82,9 +85,13 @@ export async function spendForTurn(
     data: {
       agentModel,
       aiAgentId: params.aiAgentId,
+      cachedInputTokens: params.usage?.cachedInputTokens ?? null,
+      channel: params.channel ?? null,
       credits: -rate,
       id: randomUUID(),
+      inputTokens: params.usage?.inputTokens ?? null,
       modelRate: rate,
+      outputTokens: params.usage?.outputTokens ?? null,
       providerCostUsd: params.providerCostUsd ?? null,
       sessionId: params.sessionId,
       ticketId: params.ticketId,

@@ -254,7 +254,7 @@ _Avoid_: Model list, Providers, Model marketplace
 
 **Credit**:
 The prepaid unit a Workspace spends on AI. Always bought before it is spent, never billed after the fact. Belongs to the Workspace, shared by all its AI Agents. Only AI Turns and Follow-Ups spend Credits; everything else the AI does — classification, Escalation Summaries, Suggested Replies, reading Attachments, ingesting Knowledge Sources — is absorbed by the platform.
-_Avoid_: Token (the provider's unit, not the product's), Quota, Balance
+_Avoid_: Token (the provider's unit, not the product's), Quota, Balance, Subscription
 
 **Model Rate**:
 How many Credits one AI Turn costs on a given Agent Model. Fixed per model, however many Tool calls the turn makes, so an Admin can predict spend by counting replies.
@@ -269,16 +269,24 @@ The one-time Credits a Workspace receives when it registers.
 _Avoid_: Free credits, Bonus, Starter pack
 
 **Top-Up**:
-Credits added to a Workspace after it has paid for them.
+Credits added to a Workspace after it has paid for them — bought by an Admin as a Top-Up Pack, or recorded by SupportOps for a payment made outside the platform.
 _Avoid_: Recharge, Purchase, Deposit
+
+**Top-Up Pack**:
+One of a few fixed Credit amounts, each with a fixed Rupiah price, that an Admin can buy. There is no arbitrary amount, because each payment carries a flat fee that would eat a small one. A Workspace buys Packs one at a time; nothing renews on its own.
+_Avoid_: Plan, Subscription, Tier, Package, Bundle
 
 **Credit Exhaustion**:
 A Workspace's balance reaching zero. The AI Turn already running is allowed to finish, so the balance may dip slightly below zero; after that the AI Agent stops answering, the next Customer Message escalates with its own Escalation Reason, and the AI Copilot is unavailable. Counted apart from every other Escalation Reason so it never reads as the AI Agent failing.
 _Avoid_: Out of credits, Suspension, Paywall
 
 **AI Usage**:
-A Workspace's record of what its AI Agents consumed — AI Turns and the Credits they spent — visible to its Admin and to no other Workspace. Never read from Telemetry, which is allowed to expire.
+A Workspace's record of what its AI Agents consumed and did — AI Turns, the Credits and Tokens they spent, and the Tool calls they made — visible to its Admin and to no other Workspace. Never read from Telemetry, which is allowed to expire.
 _Avoid_: Billing, Consumption, AI analysis, Analytics (Analytics reports Ticket outcomes)
+
+**Token**:
+The model provider's unit of text an AI Turn reads and writes, shown to an Admin for insight only. A Workspace is never charged by Token — a Credit is spent per AI Turn however many Tokens it used.
+_Avoid_: Credit (Credits are what a Workspace pays), Usage unit
 
 ### Dashboard and reporting
 

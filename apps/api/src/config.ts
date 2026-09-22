@@ -69,6 +69,9 @@ const apiEnvSchema = z
     LLM_MAIN_REASONING_EFFORT: optionalStringSchema,
     INTERNAL_WORKER_TOKEN: optionalStringSchema,
     LOG_LEVEL: logLevelSchema,
+    MAYAR_API_KEY: optionalStringSchema,
+    // Sandbox by default; production sets https://api.mayar.id/hl/v2.
+    MAYAR_API_URL: z.string().trim().url().default("https://api.mayar.io/hl/v2"),
     // Requests slower than this are logged with their duration. Compose passes
     // an empty string for an unset override, which z.coerce would read as 0.
     SLOW_REQUEST_MS: z.preprocess(
@@ -177,6 +180,11 @@ export const aiAgentConfig = {
 export const evalConfig = {
   judgeModelId: env.EVAL_JUDGE_MODEL ?? env.LLM_MODEL_FAST,
   workspaceId: env.EVAL_WORKSPACE_ID,
+} as const;
+
+export const mayarConfig = {
+  apiKey: env.MAYAR_API_KEY,
+  apiUrl: env.MAYAR_API_URL.replace(/\/$/, ""),
 } as const;
 
 export const toolEncryptionConfig = {

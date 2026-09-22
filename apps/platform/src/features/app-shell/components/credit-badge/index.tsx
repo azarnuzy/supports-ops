@@ -44,7 +44,7 @@ export function CreditBadge() {
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link to="/workspace/ai-usage">
+          <Link to="/workspace/billing">
             <Badge variant="outline" className={stateStyles[state]}>
               <CoinsIcon className="size-3.5" />
               {formatCredits(balance)}

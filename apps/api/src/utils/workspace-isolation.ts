@@ -15,6 +15,7 @@ const workspaceScopedModels = new Set([
   "Ticket",
   "TicketCategory",
   "CreditLedgerEntry",
+  "TopUpPayment",
   "TicketReadState",
   "AiActivity",
   "Conversation",

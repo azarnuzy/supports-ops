@@ -98,10 +98,10 @@ describe("getAiUsageSummary", () => {
     expect(summary.daily.at(-1)).toMatchObject({ creditsSpent: 3, turnCount: 3 });
     expect(summary.daily.at(-2)).toMatchObject({ creditsSpent: 2, turnCount: 2 });
     expect(summary.daily.slice(0, -2).every((day) => day.creditsSpent === 0)).toBe(true);
-    expect(summary.byAgent).toEqual([
+    expect(summary.byAgent).toMatchObject([
       { aiAgentId, aiAgentName: "AI Agent", creditsSpent: 5, turnCount: 5 },
     ]);
-    expect(summary.byModel).toEqual([
+    expect(summary.byModel).toMatchObject([
       { agentModel: "openai/gpt-5.6-luna", creditsSpent: 5, turnCount: 5 },
     ]);
   });
@@ -133,6 +133,120 @@ describe("getAiUsageSummary", () => {
     const summary = await withWorkspaceContext(workspaceId, () => services.getAiUsageSummary());
 
     expect(summary.balance).toBe(500);
+  });
+});
+
+describe("getAiUsageSummary Tokens, Channels, and comparison", () => {
+  it("sums Tokens, filters by Channel, and compares against the period before", async () => {
+    const spend = (createdAt: Date, channel: "WEB" | "WHATSAPP", tokens: boolean) =>
+      prisma.creditLedgerEntry.create({
+        data: {
+          aiAgentId,
+          agentModel: "m",
+          channel,
+          createdAt,
+          credits: -1,
+          id: randomUUID(),
+          sessionId: "session-1",
+          type: "SPEND",
+          workspaceId,
+          ...(tokens ? { cachedInputTokens: 40, inputTokens: 100, outputTokens: 20 } : {}),
+        },
+      });
+    await spend(daysAgo(0), "WEB", true);
+    await spend(daysAgo(0), "WHATSAPP", true);
+    await spend(daysAgo(1), "WEB", false);
+    await spend(daysAgo(10), "WEB", true);
+
+    const all = await withWorkspaceContext(workspaceId, () => services.getAiUsageSummary());
+    expect(all.totals).toMatchObject({
+      cachedInputTokens: 80,
+      creditsSpent: 3,
+      inputTokens: 200,
+      outputTokens: 40,
+      sessionCount: 1,
+      turnCount: 3,
+    });
+    expect(all.previousTotals).toEqual({ creditsSpent: 1, turnCount: 1 });
+    expect(all.byChannel.map((row) => [row.channel, row.turnCount]).sort()).toEqual([
+      ["WEB", 2],
+      ["WHATSAPP", 1],
+    ]);
+
+    const web = await withWorkspaceContext(workspaceId, () =>
+      services.getAiUsageSummary({ channel: "WEB" }),
+    );
+    expect(web.totals).toMatchObject({ inputTokens: 100, turnCount: 2 });
+  });
+});
+
+describe("getToolUsage", () => {
+  it("counts calls, failures, and latency per Tool within the range", async () => {
+    const channelId = randomUUID();
+    await prisma.channel.create({
+      data: { aiAgentId, id: channelId, name: "Web", type: "WEB", workspaceId },
+    });
+    const customerIdentityId = randomUUID();
+    await prisma.customerIdentity.create({
+      data: {
+        canonicalId: "a@b.test",
+        channelType: "WEB",
+        email: "a@b.test",
+        id: customerIdentityId,
+        name: "A",
+        workspaceId,
+      },
+    });
+    const sessionId = randomUUID();
+    await prisma.session.create({
+      data: { channelId, customerIdentityId, id: sessionId, workspaceId },
+    });
+    const ticketId = randomUUID();
+    await prisma.ticket.create({
+      data: {
+        aiAgentId,
+        channelId,
+        customerIdentityId,
+        id: ticketId,
+        sessionId,
+        title: "Help",
+        workspaceId,
+      },
+    });
+    const call = (tool: string, latencyMs: number, failed: boolean, createdAt = daysAgo(0)) =>
+      prisma.aiActivity.create({
+        data: {
+          createdAt,
+          eventType: failed ? "TOOL_FAILED" : "TOOL_CALLED",
+          id: randomUUID(),
+          metadata: { latencyMs, tool, toolId: tool },
+          ticketId,
+          workspaceId,
+        },
+      });
+    await call("getOrder", 100, false);
+    await call("getOrder", 300, true);
+    await call("getInvoice", 50, false);
+    await call("getInvoice", 999, false, daysAgo(30));
+
+    const usage = await withWorkspaceContext(workspaceId, () => services.getToolUsage());
+
+    expect(usage.totals).toMatchObject({
+      calls: 3,
+      failed: 1,
+      avgLatencyMs: 150,
+      p95LatencyMs: 300,
+    });
+    expect(usage.daily.at(-1)).toMatchObject({ calls: 3, failed: 1 });
+    expect(usage.byTool.find((tool) => tool.toolId === "getOrder")).toMatchObject({
+      calls: 2,
+      failed: 1,
+      avgLatencyMs: 200,
+    });
+    const whatsApp = await withWorkspaceContext(workspaceId, () =>
+      services.getToolUsage({ channel: "WHATSAPP" }),
+    );
+    expect(whatsApp.totals.calls).toBe(0);
   });
 });
 
@@ -176,6 +290,7 @@ describe("listCreditLedger", () => {
     expect(firstPage.entries.some((entry) => "modelRate" in entry)).toBe(false);
     expect(firstPage.entries.some((entry) => "providerCostUsd" in entry)).toBe(false);
     expect(firstPage.nextCursor).not.toBeNull();
+    expect(firstPage.total).toBe(3);
 
     const secondPage = await withWorkspaceContext(workspaceId, () =>
       services.listCreditLedger({ limit: 2, cursor: firstPage.nextCursor ?? undefined }),

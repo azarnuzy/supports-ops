@@ -1,4 +1,4 @@
-import type { CreditLedgerEntryType } from "@repo/api-client";
+import type { CreditLedgerEntryType, UsageChannel } from "@repo/api-client";
 
 export const lowBalanceThreshold = 100;
 
@@ -29,4 +29,38 @@ export function formatLedgerTimestamp(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+export const channelLabels: Record<UsageChannel, string> = {
+  WEB: "Web Widget",
+  WHATSAPP: "WhatsApp",
+};
+
+const compactFormat = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
+  notation: "compact",
+});
+
+/** 1.2K, 3.4M — Token counts are large and only read as magnitudes. */
+export function formatTokens(tokens: number) {
+  return compactFormat.format(tokens);
+}
+
+const idrFormat = new Intl.NumberFormat("id-ID", {
+  currency: "IDR",
+  maximumFractionDigits: 0,
+  style: "currency",
+});
+
+export function formatIdr(amount: number) {
+  return idrFormat.format(amount);
+}
+
+/** Percent change against the previous period; null when there is no baseline. */
+export function percentChange(current: number, previous: number) {
+  return previous === 0 ? null : ((current - previous) / previous) * 100;
+}
+
+export function formatLatency(ms: number) {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
 }

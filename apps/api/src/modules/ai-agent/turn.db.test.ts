@@ -126,8 +126,11 @@ function ledgerEntries() {
 
 describe("generateAiReply spend", () => {
   it("spends the Model Rate when the Turn replies", async () => {
-    mocks.runAiAgentTurn.mockImplementation(async ({ runtime }) => {
+    mocks.runAiAgentTurn.mockImplementation(async ({ onResult, runtime }) => {
       await runtime.loadTicket();
+      await onResult({
+        usage: { cachedInputTokens: 30, inputTokens: 120, outputTokens: 15 },
+      });
       await runtime.reply("REPLY", "Here's the answer.", randomUUID());
       await runtime.finish();
     });
@@ -138,7 +141,11 @@ describe("generateAiReply spend", () => {
       expect.objectContaining({
         agentModel: "openai/gpt-5.6-luna",
         aiAgentId: ids.aiAgentId,
+        cachedInputTokens: 30,
+        channel: "WEB",
         credits: -1,
+        inputTokens: 120,
+        outputTokens: 15,
         modelRate: 1,
         sessionId: ids.sessionId,
         ticketId: ids.ticketId,

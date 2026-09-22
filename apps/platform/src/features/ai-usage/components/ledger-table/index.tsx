@@ -1,7 +1,7 @@
 import { ReceiptTextIcon } from "lucide-react";
+import { useState } from "react";
 
 import { Badge } from "@repo/ui/components/badge";
-import { Button } from "@repo/ui/components/button";
 import {
   Card,
   CardContent,
@@ -19,15 +19,28 @@ import {
 } from "@repo/ui/components/table";
 
 import ResourceListState from "../../../settings/components/resource-list-state";
+import ResourcePagination from "../../../settings/components/resource-pagination";
 import {
+  channelLabels,
   formatLedgerTimestamp,
   formatSignedCredits,
+  formatTokens,
   ledgerEntryTypeLabels,
 } from "../../ai-usage.utils";
+import { creditLedgerPageSize } from "../../ai-usage.hooks";
 import type { LedgerTableProps } from "./index.types";
 
 export default function LedgerTable({ query }: LedgerTableProps) {
-  const entries = query.data?.pages.flatMap((page) => page.entries) ?? [];
+  const [page, setPage] = useState(1);
+  const pages = query.data?.pages ?? [];
+  const entries = pages[page - 1]?.entries ?? [];
+  const pageCount = Math.max(1, Math.ceil((pages[0]?.total ?? 0) / creditLedgerPageSize));
+
+  // Pages are cursor-based, so the next one is fetched only when first visited.
+  const goToPage = async (next: number) => {
+    if (next > pages.length) await query.fetchNextPage();
+    setPage(next);
+  };
 
   return (
     <Card>
@@ -58,6 +71,7 @@ export default function LedgerTable({ query }: LedgerTableProps) {
                   <TableHead>Type</TableHead>
                   <TableHead>Note</TableHead>
                   <TableHead>When</TableHead>
+                  <TableHead className="text-right">Tokens</TableHead>
                   <TableHead className="text-right">Credits</TableHead>
                 </TableRow>
               </TableHeader>
@@ -70,10 +84,19 @@ export default function LedgerTable({ query }: LedgerTableProps) {
                       </Badge>
                     </TableCell>
                     <TableCell className="max-w-xs truncate text-muted-foreground">
-                      {entry.note ?? (entry.agentModel ? entry.agentModel : "—")}
+                      {entry.note ??
+                        ([entry.agentModel, entry.channel ? channelLabels[entry.channel] : null]
+                          .filter(Boolean)
+                          .join(" · ") ||
+                          "—")}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatLedgerTimestamp(entry.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {entry.inputTokens === null
+                        ? "—"
+                        : formatTokens(entry.inputTokens + (entry.outputTokens ?? 0))}
                     </TableCell>
                     <TableCell
                       className={
@@ -88,17 +111,11 @@ export default function LedgerTable({ query }: LedgerTableProps) {
                 ))}
               </TableBody>
             </Table>
-            {query.hasNextPage ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-fit"
-                disabled={query.isFetchingNextPage}
-                onClick={() => query.fetchNextPage()}
-              >
-                {query.isFetchingNextPage ? "Loading…" : "Load more"}
-              </Button>
-            ) : null}
+            <ResourcePagination
+              page={page}
+              pageCount={pageCount}
+              onPageChange={(next) => void goToPage(next)}
+            />
           </div>
         ) : null}
       </CardContent>

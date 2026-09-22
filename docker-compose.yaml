@@ -33,6 +33,8 @@ services:
       BUSINESS_SYSTEM_URL: "http://business-system:8001"
       ENABLE_TELEMETRY: "${ENABLE_TELEMETRY:-false}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
+      MAYAR_API_KEY: "${MAYAR_API_KEY:-}"
+      MAYAR_API_URL: "${MAYAR_API_URL:-https://api.mayar.io/hl/v2}"
       TELEMETRY_API_KEY: "${TELEMETRY_API_KEY:-}"
       TELEMETRY_API_KEY_HEADER: "${TELEMETRY_API_KEY_HEADER:-authorization}"
       TELEMETRY_EXPORTER: "${TELEMETRY_EXPORTER:-console}"

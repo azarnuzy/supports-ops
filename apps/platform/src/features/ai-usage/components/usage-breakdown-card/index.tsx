@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@repo/ui/components/table";
 
-import { formatCredits } from "../../ai-usage.utils";
+import { formatCredits, formatTokens } from "../../ai-usage.utils";
 import type { UsageBreakdownCardProps } from "./index.types";
 
 export default function UsageBreakdownCard({ title, emptyLabel, rows }: UsageBreakdownCardProps) {
@@ -35,6 +35,7 @@ export default function UsageBreakdownCard({ title, emptyLabel, rows }: UsageBre
               <TableRow>
                 <TableHead>{title}</TableHead>
                 <TableHead className="text-right">AI Turns</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
                 <TableHead className="text-right">Credits</TableHead>
               </TableRow>
             </TableHeader>
@@ -43,6 +44,9 @@ export default function UsageBreakdownCard({ title, emptyLabel, rows }: UsageBre
                 <TableRow key={row.label}>
                   <TableCell className="truncate font-medium">{row.label}</TableCell>
                   <TableCell className="text-right tabular-nums">{row.turnCount}</TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {formatTokens(row.tokens)}
+                  </TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">
                     {formatCredits(row.creditsSpent)}
                   </TableCell>

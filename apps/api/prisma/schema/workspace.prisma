@@ -23,6 +23,7 @@ model Workspace {
   mcpTools           McpTool[]
   ticketCategories   TicketCategory[]
   creditLedgerEntries CreditLedgerEntry[]
+  topUpPayments       TopUpPayment[]
 }
 
 /// The Credit Ledger: an append-only record of every change to a Workspace's Credits
@@ -42,8 +43,34 @@ model CreditLedgerEntry {
   providerCostUsd Float?
   sessionId       String?
   ticketId        String?
+  /// Snapshot of the Channel the spend happened on, so a deleted Session never drops it from filters.
+  channel         ChannelType?
+  /// Provider-reported Tokens for the whole AI Turn, informational only (ADR-0021 still charges per Turn).
+  inputTokens       Int?
+  cachedInputTokens Int?
+  outputTokens      Int?
   createdAt       DateTime              @default(now())
   workspace       Workspace             @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+/// One checkout for a Top-Up Pack (ADR-0023). Its Credits reach the ledger only
+/// after Mayar confirms the payment on re-fetch. A PENDING row past `expiresAt`
+/// reads as expired; nothing sweeps it.
+model TopUpPayment {
+  id             String             @id
+  workspaceId    String
+  packId         String
+  credits        Int
+  amountIdr      Int
+  status         TopUpPaymentStatus @default(PENDING)
+  mayarPaymentId String             @unique
+  checkoutUrl    String
+  expiresAt      DateTime
+  paidAt         DateTime?
+  createdAt      DateTime           @default(now())
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId, createdAt])
 }

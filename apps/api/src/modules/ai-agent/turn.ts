@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
+import type { Usage } from "@anvia/core";
 import {
   createReplyModel,
   runAiAgentTurn,
@@ -32,6 +33,8 @@ import { resolveAgentModelId } from "./model-catalog";
 // the model itself makes, so it lives outside `@repo/ai-agent`'s decision schema.
 export type ApiEscalationReason = EscalationReason | "CREDIT_EXHAUSTION";
 
+type TurnSpend = { agentModel: string; aiAgentId: string; usage?: Usage };
+
 type TurnTicket = {
   aiAgent: { instructions: string | null; resolutionMessage: string | null };
   aiAgentId: string;
@@ -49,6 +52,8 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
       return;
     }
     let ticket: TurnTicket | null = null;
+    // Set by the model run before any decision callback fires, so every spend below sees it.
+    let usage: Usage | undefined;
     const agentModelId = resolveAgentModelId(
       (
         await unscopedPrisma.ticket.findUnique({
@@ -78,7 +83,9 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
           reason,
           customerMessage,
           content,
-          isProviderFailure ? undefined : { agentModel: agentModelId, aiAgentId: ticket.aiAgentId },
+          isProviderFailure
+            ? undefined
+            : { agentModel: agentModelId, aiAgentId: ticket.aiAgentId, usage },
         );
       },
       finish: async () => {
@@ -135,6 +142,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         const message = await appendAiMessage(ticketId, workspaceId, content, {
           agentModel: agentModelId,
           aiAgentId: ticket.aiAgentId,
+          usage,
         });
         if (!message) return;
         await unscopedPrisma.aiActivity.create({
@@ -159,6 +167,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         return resolveByAi(ticketId, workspaceId, content, {
           agentModel: agentModelId,
           aiAgentId: ticket.aiAgentId,
+          usage,
         });
       },
       retrieve: async () => {
@@ -218,6 +227,9 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
     return runAiAgentTurn({
       customerMessage,
       modelConfig,
+      onResult: (result) => {
+        usage = result.usage;
+      },
       runtime,
       ticketId,
       workspaceId,
@@ -275,7 +287,7 @@ async function appendAiMessage(
   ticketId: string,
   workspaceId: string,
   content: string,
-  spend: { agentModel: string; aiAgentId: string },
+  spend: TurnSpend,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
@@ -303,8 +315,10 @@ async function appendAiMessage(
     await spendForTurn(tx, {
       agentModel: spend.agentModel,
       aiAgentId: spend.aiAgentId,
+      channel: ticket.channel.type,
       sessionId: ticket.sessionId,
       ticketId,
+      usage: spend.usage,
       workspaceId,
     });
     return message;
@@ -317,7 +331,7 @@ export async function escalate(
   reason: ApiEscalationReason,
   customerMessage: string,
   content?: string,
-  spend?: { agentModel: string; aiAgentId: string },
+  spend?: TurnSpend,
 ) {
   const acknowledgement = content?.trim() || acknowledgementFor(customerMessage, reason);
   const result = await unscopedPrisma.$transaction(async (tx) => {
@@ -356,8 +370,10 @@ export async function escalate(
       await spendForTurn(tx, {
         agentModel: spend.agentModel,
         aiAgentId: spend.aiAgentId,
+        channel: ticket.channel.type,
         sessionId: ticket.sessionId,
         ticketId,
+        usage: spend.usage,
         workspaceId,
       });
     }
@@ -375,7 +391,7 @@ export async function resolveByAi(
   ticketId: string,
   workspaceId: string,
   content: string,
-  spend: { agentModel: string; aiAgentId: string },
+  spend: TurnSpend,
 ) {
   const closing = await unscopedPrisma.$transaction(async (tx) => {
     const transition = await tx.ticket.updateMany({
@@ -418,8 +434,10 @@ export async function resolveByAi(
     await spendForTurn(tx, {
       agentModel: spend.agentModel,
       aiAgentId: spend.aiAgentId,
+      channel: ticket.channel.type,
       sessionId: ticket.sessionId,
       ticketId,
+      usage: spend.usage,
       workspaceId,
     });
     return closingMessage;

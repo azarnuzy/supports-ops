@@ -153,6 +153,11 @@ enum CreditLedgerEntryType {
   SPEND
 }
 
+enum TopUpPaymentStatus {
+  PENDING
+  PAID
+}
+
 enum AiActivityType {
   TICKET_CREATED
   CLASSIFIED

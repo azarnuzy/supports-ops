@@ -129,36 +129,109 @@ export async function fetchAnalyticsTraffic(client: ApiClient, range?: Analytics
 
 export type CreditLedgerEntryType = "TRIAL_GRANT" | "TOP_UP" | "SPEND";
 
-export type AiUsageDailyPoint = { date: string; creditsSpent: number; turnCount: number };
-export type AiUsageAgentBreakdown = {
-  aiAgentId: string;
-  aiAgentName: string;
+export type UsageTotals = {
   creditsSpent: number;
   turnCount: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
 };
-export type AiUsageModelBreakdown = { agentModel: string; creditsSpent: number; turnCount: number };
+export type UsageChannel = "WEB" | "WHATSAPP";
+export type AiUsageDailyPoint = UsageTotals & { date: string };
+export type AiUsageAgentBreakdown = UsageTotals & { aiAgentId: string; aiAgentName: string };
+export type AiUsageModelBreakdown = UsageTotals & { agentModel: string };
+export type AiUsageChannelBreakdown = UsageTotals & { channel: UsageChannel };
 
 export type AiUsageSummary = {
+  aiAgents: { id: string; name: string }[];
   balance: number;
   range: { from: string; to: string };
+  totals: UsageTotals & { sessionCount: number };
+  previousTotals: { creditsSpent: number; turnCount: number };
   daily: AiUsageDailyPoint[];
   byAgent: AiUsageAgentBreakdown[];
   byModel: AiUsageModelBreakdown[];
+  byChannel: AiUsageChannelBreakdown[];
 };
 
-export async function fetchAiUsageSummary(client: ApiClient, range?: AnalyticsRange) {
-  const query = {
+export type AiUsageFilters = { aiAgentId?: string; channel?: UsageChannel };
+
+function aiUsageQuery(range?: AnalyticsRange, filters: AiUsageFilters = {}) {
+  return {
     ...(range?.from ? { from: range.from } : {}),
     ...(range?.to ? { to: range.to } : {}),
+    ...(filters.aiAgentId ? { aiAgentId: filters.aiAgentId } : {}),
+    ...(filters.channel ? { channel: filters.channel } : {}),
   };
-  const response = await client["ai-usage"].summary.$get({ query });
+}
+
+export async function fetchAiUsageSummary(
+  client: ApiClient,
+  range?: AnalyticsRange,
+  filters?: AiUsageFilters,
+) {
+  const response = await client["ai-usage"].summary.$get({ query: aiUsageQuery(range, filters) });
   if (response.status === 403) throw new Error("Only an Admin can view AI Usage.");
   if (!response.ok) throw new Error("Failed to load AI Usage.");
   return (await response.json()) as { aiUsage: AiUsageSummary };
 }
 
-/** Never carries `modelRate` or provider cost — AI Usage doesn't show tokens
- * or dollar costs to Admins. */
+export type ToolLatency = { avgLatencyMs: number; p95LatencyMs: number };
+export type AiToolUsage = {
+  range: { from: string; to: string };
+  totals: ToolLatency & { calls: number; failed: number };
+  daily: { date: string; calls: number; failed: number }[];
+  byTool: (ToolLatency & { toolId: string; toolName: string; calls: number; failed: number })[];
+};
+
+export async function fetchAiToolUsage(
+  client: ApiClient,
+  range?: AnalyticsRange,
+  filters?: AiUsageFilters,
+) {
+  const response = await client["ai-usage"].tools.$get({ query: aiUsageQuery(range, filters) });
+  if (response.status === 403) throw new Error("Only an Admin can view AI Usage.");
+  if (!response.ok) throw new Error("Failed to load Tool usage.");
+  return (await response.json()) as { toolUsage: AiToolUsage };
+}
+
+export type TopUpPack = { id: string; credits: number; priceIdr: number };
+export type TopUpPayment = {
+  id: string;
+  packId: string;
+  credits: number;
+  amountIdr: number;
+  status: "PENDING" | "PAID" | "EXPIRED";
+  checkoutUrl: string | null;
+  createdAt: string;
+  expiresAt: string;
+  paidAt: string | null;
+};
+export type Billing = {
+  balance: number;
+  modelRates: ModelCatalogEntry[];
+  packs: TopUpPack[];
+  payments: TopUpPayment[];
+  paymentsEnabled: boolean;
+};
+
+export async function fetchBilling(client: ApiClient) {
+  const response = await client.billing.$get();
+  if (response.status === 403) throw new Error("Only an Admin can manage billing.");
+  if (!response.ok) throw new Error("Failed to load billing.");
+  return (await response.json()) as { billing: Billing };
+}
+
+export async function createTopUpCheckout(client: ApiClient, packId: string) {
+  const response = await client.billing.checkout.$post({ json: { packId } });
+  if (response.status === 503) {
+    throw new Error("Online payments are unavailable right now. Please try again later.");
+  }
+  if (!response.ok) throw new Error("Failed to start checkout.");
+  return (await response.json()) as { payment: TopUpPayment };
+}
+
+/** Never carries `modelRate` or provider cost. Tokens are informational only. */
 export type CreditLedgerEntry = {
   id: string;
   type: CreditLedgerEntryType;
@@ -166,6 +239,9 @@ export type CreditLedgerEntry = {
   note: string | null;
   aiAgentId: string | null;
   agentModel: string | null;
+  channel: UsageChannel | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
   sessionId: string | null;
   ticketId: string | null;
   createdAt: string;
@@ -182,7 +258,11 @@ export async function fetchCreditLedger(
   const response = await client["ai-usage"].ledger.$get({ query });
   if (response.status === 403) throw new Error("Only an Admin can view the Credit Ledger.");
   if (!response.ok) throw new Error("Failed to load the Credit Ledger.");
-  return (await response.json()) as { entries: CreditLedgerEntry[]; nextCursor: string | null };
+  return (await response.json()) as {
+    entries: CreditLedgerEntry[];
+    nextCursor: string | null;
+    total: number;
+  };
 }
 
 export type WorkspaceUser = {

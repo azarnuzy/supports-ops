@@ -138,6 +138,7 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
     await spendForTurn(tx, {
       agentModel: ticket.aiAgent.agentModel,
       aiAgentId: ticket.aiAgentId,
+      channel: ticket.channel.type,
       sessionId: ticket.sessionId,
       ticketId: ticket.id,
       workspaceId: ticket.workspaceId,

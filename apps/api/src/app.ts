@@ -16,6 +16,7 @@ import { generateAttachmentReply } from "./modules/widget/services";
 import { attachmentRouter } from "./modules/attachments/router";
 import { aiSettingsRouter } from "./modules/ai-settings/router";
 import { aiUsageRouter } from "./modules/ai-usage/router";
+import { billingRouter, mayarWebhookRouter } from "./modules/billing/router";
 import { analyticsRouter } from "./modules/analytics/router";
 import { ticketCategoriesRouter } from "./modules/ticket-categories/router";
 import { ticketsRouter } from "./modules/tickets/router";
@@ -74,6 +75,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   })
   .route("/widget", widgetRouter)
   .route("/webhooks/whatsapp", whatsAppWebhookRouter)
+  .route("/webhooks/mayar", mayarWebhookRouter)
   .use(
     "*",
     cors({
@@ -113,6 +115,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/whatsapp-config", whatsAppConfigRouter)
   .route("/ai-settings", aiSettingsRouter)
   .route("/ai-usage", aiUsageRouter)
+  .route("/billing", billingRouter)
   .route("/mcp-servers", mcpRouter)
   .route("/tools", toolsRouter);
 
