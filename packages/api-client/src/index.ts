@@ -195,6 +195,38 @@ export async function fetchAiToolUsage(
   return (await response.json()) as { toolUsage: AiToolUsage };
 }
 
+export type OperatorTicketStatus = "AI_HANDLING" | "ESCALATED" | "HUMAN_HANDLING" | "RESOLVED";
+export type OperatorResolutionReason =
+  | "HUMAN_RESOLVED"
+  | "CUSTOMER_CONFIRMED"
+  | "CUSTOMER_INACTIVE"
+  | "CUSTOMER_INACTIVE_HUMAN_HANDLING"
+  | "CUSTOMER_INACTIVE_SHARED_QUEUE";
+
+export type OperatorOverview = {
+  range: { from: string; to: string };
+  workspaces: { total: number; new: number };
+  sessions: Record<ChannelType, number>;
+  tickets: {
+    byStatus: Partial<Record<OperatorTicketStatus, number>>;
+    byResolutionReason: Record<OperatorResolutionReason, number>;
+  };
+  credits: { spent: number; topUps: number; trialGrants: number };
+  revenueIdr: number;
+  providerCostUsd: number;
+};
+
+export async function fetchOperatorOverview(client: ApiClient, range?: AnalyticsRange) {
+  const query = {
+    ...(range?.from ? { from: range.from } : {}),
+    ...(range?.to ? { to: range.to } : {}),
+  };
+  const response = await client.operator.overview.$get({ query });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (!response.ok) throw new Error("Failed to load the Operator overview.");
+  return (await response.json()) as { overview: OperatorOverview };
+}
+
 export type TopUpPack = { id: string; credits: number; priceIdr: number };
 export type TopUpPayment = {
   id: string;
