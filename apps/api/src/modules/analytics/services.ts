@@ -1,5 +1,5 @@
 import type { TicketStatus } from "@prisma/client";
-import { prisma } from "../../utils/prisma";
+import { prisma, unscopedPrisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import type { AnalyticsRangeQuery } from "./schema";
 import type {
@@ -15,6 +15,22 @@ import type {
 /** Fixed order and completeness for the status spread, independent of which
  * statuses currently have rows. */
 const ticketStatuses: TicketStatus[] = ["AI_HANDLING", "ESCALATED", "HUMAN_HANDLING", "RESOLVED"];
+
+export async function getTicketStatusCounts(startAt: Date, endAt: Date, workspaceId?: string) {
+  const groups = await unscopedPrisma.ticket.groupBy({
+    by: ["status"],
+    where: {
+      ...(workspaceId ? { workspaceId } : {}),
+      deletedAt: null,
+      createdAt: { gte: startAt, lt: endAt },
+    },
+    _count: { _all: true },
+  });
+  return ticketStatuses.map((status) => ({
+    status,
+    count: groups.find((group) => group.status === status)?._count._all ?? 0,
+  }));
+}
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -130,7 +146,7 @@ function rateShare(count: number, totalTickets: number): number | null {
 export async function getAnalyticsOverview(
   query: AnalyticsRangeQuery = {},
 ): Promise<AnalyticsOverview> {
-  requireWorkspaceId();
+  const workspaceId = requireWorkspaceId();
 
   const { from, to, startAt, endAt } = resolveRange(query);
   const notDeleted = { deletedAt: null };
@@ -143,7 +159,7 @@ export async function getAnalyticsOverview(
     handledIdleCount,
     sharedQueueIdleCount,
     escalatedCount,
-    statusGroups,
+    statusCounts,
     channelGroups,
     openAgentGroups,
     resolvedGroups,
@@ -165,7 +181,7 @@ export async function getAnalyticsOverview(
       where: { ...createdInRange, resolutionReason: "CUSTOMER_INACTIVE_SHARED_QUEUE" },
     }),
     prisma.ticket.count({ where: { ...createdInRange, escalatedAt: { not: null } } }),
-    prisma.ticket.groupBy({ by: ["status"], where: createdInRange, _count: { _all: true } }),
+    getTicketStatusCounts(startAt, endAt, workspaceId),
     prisma.ticket.groupBy({ by: ["channelId"], where: createdInRange, _count: { _all: true } }),
     // Point-in-time load, deliberately outside the date range: a Ticket
     // handled today may have been opened long before the window.
@@ -225,11 +241,6 @@ export async function getAnalyticsOverview(
       rate: rateShare(sharedQueueIdleCount, totalTickets),
     },
   };
-
-  const statusCounts = ticketStatuses.map((status) => ({
-    status,
-    count: statusGroups.find((group) => group.status === status)?._count._all ?? 0,
-  }));
 
   const channelCounts: AnalyticsChannelCount[] = channels.map((channel) => ({
     channelId: channel.id,

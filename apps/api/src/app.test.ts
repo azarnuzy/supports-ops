@@ -116,12 +116,15 @@ describe("api app", () => {
 
   it("rejects unauthenticated, Workspace, and disabled identities from Operator routes", async () => {
     expect((await app.request("/operator/session")).status).toBe(401);
+    expect((await app.request("/operator/overview")).status).toBe(401);
 
     mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
     expect((await app.request("/operator/session")).status).toBe(401);
+    expect((await app.request("/operator/overview")).status).toBe(401);
 
     mocks.getOperatorSession.mockResolvedValue(createOperatorSession({ disabledAt: baseDate }));
     expect((await app.request("/operator/session")).status).toBe(401);
+    expect((await app.request("/operator/overview")).status).toBe(401);
   });
 
   it("isolates Operator and Workspace sessions", async () => {
@@ -140,7 +143,9 @@ describe("api app", () => {
     const response = await app.request("/operator/payments?status=PAID");
     expect(response.status).toBe(200);
     expect(mocks.listPayments).toHaveBeenCalledWith({
-      status: "PAID", page: 1, limit: 20,
+      status: "PAID",
+      page: 1,
+      limit: 20,
     });
   });
 
