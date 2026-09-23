@@ -1386,6 +1386,72 @@ export async function updateTicketCategory(
   return (await response.json()) as { category: TicketCategoryOption };
 }
 
+export type OperatorWorkspace = {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  userCount: number;
+  balance: number;
+  activeUnlimitedPeriod: { endAt: string } | null;
+  lastCustomerActivityAt: string | null;
+  creditSpend30Days: number;
+};
+
+export async function fetchOperatorWorkspaces(
+  client: ApiClient,
+  params: { search?: string; page?: number; limit?: number } = {},
+) {
+  const response = await client.operator.workspaces.$get({
+    query: {
+      ...(params.search ? { search: params.search } : {}),
+      ...(params.page ? { page: String(params.page) } : {}),
+      ...(params.limit ? { limit: String(params.limit) } : {}),
+    },
+  });
+  if (!response.ok) throw new Error("Failed to load Workspaces.");
+  return (await response.json()) as {
+    workspaces: OperatorWorkspace[];
+    total: number;
+    page: number;
+    limit: number;
+  };
+}
+
+export type OperatorWorkspaceUser = {
+  id: string;
+  email: string;
+  role: "ADMIN" | "HUMAN_AGENT";
+  lastSignInAt: string | null;
+};
+
+export type OperatorWorkspaceDetail = {
+  workspace: { id: string; name: string; slug: string; createdAt: string };
+  users: OperatorWorkspaceUser[];
+  channels: { webWidgetActive: boolean; whatsAppConnected: boolean };
+  knowledgeSources: { status: string; count: number }[];
+  aiAgents: { id: string; name: string; status: "ACTIVE" | "INACTIVE"; agentModel: string }[];
+  analytics: { overview: AnalyticsOverview; traffic: AnalyticsTraffic };
+  aiUsage: { summary: AiUsageSummary; tools: AiToolUsage };
+};
+
+export async function fetchOperatorWorkspaceDetail(
+  client: ApiClient,
+  workspaceId: string,
+  range?: AnalyticsRange,
+) {
+  const response = await client.operator.workspaces[":id"].$get({
+    param: { id: workspaceId },
+    query: {
+      ...(range?.from ? { from: range.from } : {}),
+      ...(range?.to ? { to: range.to } : {}),
+    },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("Failed to load the Workspace.");
+  return (await response.json()) as OperatorWorkspaceDetail;
+}
+
 export async function deleteTicketCategory(client: ApiClient, id: string) {
   const response = await client["ticket-categories"][":id"].$delete({ param: { id } });
   if (response.status === 409)
