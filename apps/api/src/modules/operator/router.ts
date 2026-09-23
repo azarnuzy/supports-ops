@@ -22,6 +22,10 @@ const listQuery = z.object({
   search: z.string().trim().min(1).max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  sortBy: z.enum(["createdAt", "name"]).default("createdAt"),
+  attention: z
+    .enum(["CREDIT_EXHAUSTED", "LOW_BALANCE", "UNLIMITED_ENDING_SOON", "INACTIVE"])
+    .optional(),
 });
 
 const withRangeQuery = zValidator("query", analyticsRangeQuerySchema, (result, c) => {

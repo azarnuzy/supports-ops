@@ -90,6 +90,27 @@ it("guards, searches, and paginates Workspaces without deleted rows", async () =
   ).toBe(0);
 });
 
+it("sorts by name and filters to a single attention condition before paginating", async () => {
+  sessions.operator = true;
+
+  const byName = (await (await app.request("/operator/workspaces?sortBy=name")).json()) as {
+    workspaces: { name: string }[];
+  };
+  expect(byName.workspaces.map((workspace) => workspace.name)).toEqual(["Alpha", "Beta"]);
+
+  const lowBalanceId = randomUUID();
+  await prisma.workspace.create({ data: { id: lowBalanceId, name: "Gamma", slug: "gamma" } });
+  await prisma.creditLedgerEntry.create({
+    data: { id: randomUUID(), workspaceId: lowBalanceId, type: "TRIAL_GRANT", credits: 10 },
+  });
+
+  const filtered = (await (
+    await app.request("/operator/workspaces?attention=LOW_BALANCE")
+  ).json()) as { workspaces: { id: string }[]; total: number };
+  expect(filtered.total).toBe(1);
+  expect(filtered.workspaces).toMatchObject([{ id: lowBalanceId, balance: 10 }]);
+});
+
 it("surfaces an active Unlimited Period in the Workspace list", async () => {
   const operatorId = randomUUID();
   await prisma.operator.create({

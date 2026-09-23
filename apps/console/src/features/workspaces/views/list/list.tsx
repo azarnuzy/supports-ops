@@ -1,5 +1,6 @@
-import { fetchOperatorWorkspaces } from "@repo/api-client";
+import { fetchOperatorWorkspaces, type OperatorAttentionCondition } from "@repo/api-client";
 import { Input } from "@repo/ui/components/input";
+import { NativeSelect, NativeSelectOption } from "@repo/ui/components/native-select";
 import {
   Table,
   TableBody,
@@ -19,8 +20,20 @@ import {
   ConsoleTablePagination,
 } from "../../../console/components/console-patterns";
 import { ConsoleShell } from "../../../console/shell";
+import { conditionLabel } from "../../../console/views/at-risk/at-risk";
 
 const LIMIT = 20;
+const ALL_ATTENTION = "ALL";
+const sortOptions = [
+  { value: "createdAt", label: "Newest first" },
+  { value: "name", label: "Name (A–Z)" },
+] as const;
+const attentionOptions: OperatorAttentionCondition[] = [
+  "CREDIT_EXHAUSTED",
+  "LOW_BALANCE",
+  "UNLIMITED_ENDING_SOON",
+  "INACTIVE",
+];
 
 const numberFormat = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -32,6 +45,10 @@ function formatDate(value: string | null) {
 export default function WorkspacesListView() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [sortBy, setSortBy] = useState<(typeof sortOptions)[number]["value"]>("createdAt");
+  const [attention, setAttention] = useState<OperatorAttentionCondition | typeof ALL_ATTENTION>(
+    ALL_ATTENTION,
+  );
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -43,15 +60,22 @@ export default function WorkspacesListView() {
   }, [search]);
 
   const workspaces = useQuery({
-    queryKey: ["operator", "workspaces", debouncedSearch, page],
+    queryKey: ["operator", "workspaces", debouncedSearch, sortBy, attention, page],
     queryFn: () =>
-      fetchOperatorWorkspaces(api, { search: debouncedSearch || undefined, page, limit: LIMIT }),
+      fetchOperatorWorkspaces(api, {
+        search: debouncedSearch || undefined,
+        page,
+        limit: LIMIT,
+        sortBy,
+        attention: attention === ALL_ATTENTION ? undefined : attention,
+      }),
     placeholderData: keepPreviousData,
   });
 
   const total = workspaces.data?.total ?? 0;
   const workspaceRows = workspaces.data?.workspaces ?? [];
   const pageCount = Math.max(1, Math.ceil(total / LIMIT));
+  const isFiltered = Boolean(debouncedSearch) || attention !== ALL_ATTENTION;
 
   return (
     <ConsoleShell>
@@ -59,22 +83,58 @@ export default function WorkspacesListView() {
         title="Workspaces"
         description="Search and monitor Workspace usage."
         actions={
-          <Input
-            className="w-full sm:w-80"
-            placeholder="Search by name or slug"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              className="w-full sm:w-64"
+              placeholder="Search by name or slug"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <NativeSelect
+              aria-label="Sort by"
+              value={sortBy}
+              onChange={(event) => {
+                setSortBy(event.target.value as (typeof sortOptions)[number]["value"]);
+                setPage(1);
+              }}
+            >
+              {sortOptions.map((option) => (
+                <NativeSelectOption key={option.value} value={option.value}>
+                  {option.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <NativeSelect
+              aria-label="Attention filter"
+              value={attention}
+              onChange={(event) => {
+                setAttention(
+                  event.target.value as OperatorAttentionCondition | typeof ALL_ATTENTION,
+                );
+                setPage(1);
+              }}
+            >
+              <NativeSelectOption value={ALL_ATTENTION}>All Workspaces</NativeSelectOption>
+              {attentionOptions.map((condition) => (
+                <NativeSelectOption key={condition} value={condition}>
+                  {conditionLabel[condition]}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <Link
+              to="/$section"
+              params={{ section: "billing-credits" }}
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              Billing & Credits →
+            </Link>
+          </div>
         }
       />
       <ConsoleDataTable
         footer={
           !workspaces.isError && pageCount > 1 ? (
-            <ConsoleTablePagination
-              page={page}
-              pageCount={pageCount}
-              onPageChange={setPage}
-            />
+            <ConsoleTablePagination page={page} pageCount={pageCount} onPageChange={setPage} />
           ) : null
         }
       >
@@ -84,14 +144,12 @@ export default function WorkspacesListView() {
             isError={workspaces.isError}
             error={workspaces.error}
             errorFallback="Failed to load Workspaces."
-            isEmpty={
-              !workspaces.isPending &&
-              !workspaces.isError &&
-              workspaceRows.length === 0
+            isEmpty={!workspaces.isPending && !workspaces.isError && workspaceRows.length === 0}
+            emptyTitle={
+              isFiltered ? "No Workspaces match this search and filter" : "No Workspaces yet"
             }
-            emptyTitle={debouncedSearch ? "No Workspaces match your search" : "No Workspaces yet"}
             emptyDescription={
-              debouncedSearch ? "Try another Workspace name or slug." : undefined
+              isFiltered ? "Try another Workspace name, slug, or attention filter." : undefined
             }
             onRetry={() => void workspaces.refetch()}
           />
@@ -104,7 +162,7 @@ export default function WorkspacesListView() {
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead>Unlimited Period</TableHead>
                 <TableHead>Last activity</TableHead>
-                <TableHead className="text-right">30-day spend</TableHead>
+                <TableHead className="text-right">Credit spend (30d)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
