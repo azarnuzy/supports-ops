@@ -1,4 +1,6 @@
 import { ChannelType, ResolutionReason } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { recordTopUp } from "../credits/services";
 import { getTicketStatusCounts, resolveRange } from "../analytics/services";
 import type { AnalyticsRangeQuery } from "../analytics/schema";
 import { unscopedPrisma } from "../../utils/prisma";
@@ -113,4 +115,15 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
     revenueIdr: payments._sum.amountIdr ?? 0,
     providerCostUsd: credits.find((row) => row.type === "SPEND")?._sum.providerCostUsd ?? 0,
   };
+}
+
+export async function topUpWorkspace(operatorId: string, workspaceId: string, credits: number, note: string) {
+  return unscopedPrisma.$transaction(async (tx) => {
+    const workspace = await tx.workspace.findFirst({ where: { id: workspaceId, deletedAt: null }, select: { id: true } });
+    if (!workspace) return null;
+    const entry = await recordTopUp(tx, workspaceId, credits, note);
+    const action = await tx.operatorAction.create({ data: { id: randomUUID(), operatorId, workspaceId, type: "TOP_UP", payload: { creditLedgerEntryId: entry.id, credits, note } } });
+    const balance = await tx.creditLedgerEntry.aggregate({ where: { workspaceId }, _sum: { credits: true } });
+    return { action, balance: balance._sum.credits ?? 0 };
+  });
 }

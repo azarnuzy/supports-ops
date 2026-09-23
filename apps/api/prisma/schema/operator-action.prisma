@@ -1,0 +1,13 @@
+model OperatorAction {
+  id          String @id
+  operatorId  String
+  workspaceId String
+  type        OperatorActionType
+  payload     Json
+  createdAt   DateTime @default(now())
+  operator    Operator @relation(fields: [operatorId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@index([createdAt])
+}

@@ -153,6 +153,13 @@ enum CreditLedgerEntryType {
   SPEND
 }
 
+enum OperatorActionType {
+  TOP_UP
+  UNLIMITED_PERIOD_GRANTED
+  UNLIMITED_PERIOD_EXTENDED
+  UNLIMITED_PERIOD_ENDED
+}
+
 enum TopUpPaymentStatus {
   PENDING
   PAID

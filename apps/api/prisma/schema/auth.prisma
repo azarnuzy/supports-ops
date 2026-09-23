@@ -71,6 +71,7 @@ model Operator {
   updatedAt     DateTime  @updatedAt
   authSessions  OperatorSession[]
   accounts      OperatorAccount[]
+  actions       OperatorAction[]
 }
 
 model OperatorSession {

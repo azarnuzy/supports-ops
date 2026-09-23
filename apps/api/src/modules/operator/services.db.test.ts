@@ -6,6 +6,7 @@ let database: TestDatabase;
 let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let getModelMargin: typeof import("./services").getModelMargin;
 let getOperatorOverview: typeof import("./services").getOperatorOverview;
+let topUpWorkspace: typeof import("./services").topUpWorkspace;
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -13,11 +14,27 @@ beforeAll(async () => {
   ({ unscopedPrisma: prisma } = await import("../../utils/prisma"));
   ({ getModelMargin } = await import("./services"));
   ({ getOperatorOverview } = await import("./services"));
+  ({ topUpWorkspace } = await import("./services"));
 }, 60_000);
 
 afterAll(async () => {
   await prisma?.$disconnect();
   await database?.drop();
+});
+
+it("records one Operator Action and one Top-Up in the same transaction", async () => {
+  const workspaceId = randomUUID();
+  const operatorId = randomUUID();
+  await prisma.workspace.create({ data: { id: workspaceId, name: "Acme", slug: workspaceId } });
+  await prisma.operator.create({ data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` } });
+  const result = await topUpWorkspace(operatorId, workspaceId, 25, "Invoice 42");
+  expect(result?.balance).toBe(25);
+  const entries = await prisma.creditLedgerEntry.findMany({ where: { workspaceId } });
+  const actions = await prisma.operatorAction.findMany({ where: { workspaceId } });
+  expect(entries).toHaveLength(1);
+  expect(actions).toHaveLength(1);
+  expect(actions[0].operatorId).toBe(operatorId);
+  expect(actions[0].payload).toEqual({ creditLedgerEntryId: entries[0].id, credits: 25, note: "Invoice 42" });
 });
 
 beforeEach(async () => {
