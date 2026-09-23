@@ -6,7 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "../../../../lib/api";
 import {
@@ -18,14 +18,23 @@ import {
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-const conditionLabel: Record<string, string> = {
+export const operatorAtRiskQueryOptions = queryOptions({
+  queryKey: ["operator", "at-risk"] as const,
+  queryFn: async () => {
+    const response = await api.operator["at-risk"].$get();
+    if (!response.ok) throw new Error("Failed to load at-risk workspaces.");
+    return response.json();
+  },
+});
+
+export const conditionLabel: Record<string, string> = {
   CREDIT_EXHAUSTED: "Credit exhausted",
   LOW_BALANCE: "Low balance",
   UNLIMITED_ENDING_SOON: "Unlimited ending soon",
   INACTIVE: "No Customer activity for 14 days",
 };
 
-const conditionTone: Record<string, "danger" | "warning" | "neutral"> = {
+export const conditionTone: Record<string, "danger" | "warning" | "neutral"> = {
   CREDIT_EXHAUSTED: "danger",
   LOW_BALANCE: "warning",
   UNLIMITED_ENDING_SOON: "warning",
@@ -33,14 +42,7 @@ const conditionTone: Record<string, "danger" | "warning" | "neutral"> = {
 };
 
 export default function AtRiskView() {
-  const query = useQuery({
-    queryKey: ["operator", "at-risk"],
-    queryFn: async () => {
-      const response = await api.operator["at-risk"].$get();
-      if (!response.ok) throw new Error("Failed to load at-risk workspaces.");
-      return response.json();
-    },
-  });
+  const query = useQuery(operatorAtRiskQueryOptions);
 
   const workspaces = query.data?.workspaces ?? [];
 
