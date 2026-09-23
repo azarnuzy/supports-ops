@@ -14,13 +14,13 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api } from "../../../../lib/api";
 import {
-  attentionConditionLabel,
   ConsoleDataTable,
   ConsolePageHeader,
   ConsoleQueryState,
   ConsoleTablePagination,
 } from "../../../console/components/console-patterns";
 import { ConsoleShell } from "../../../console/shell";
+import { conditionLabel } from "../../../console/views/at-risk/at-risk";
 
 const LIMIT = 20;
 const ALL_ATTENTION = "ALL";
@@ -117,7 +117,7 @@ export default function WorkspacesListView() {
               <NativeSelectOption value={ALL_ATTENTION}>All Workspaces</NativeSelectOption>
               {attentionOptions.map((condition) => (
                 <NativeSelectOption key={condition} value={condition}>
-                  {attentionConditionLabel[condition]}
+                  {conditionLabel[condition]}
                 </NativeSelectOption>
               ))}
             </NativeSelect>

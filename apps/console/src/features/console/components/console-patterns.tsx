@@ -1,4 +1,3 @@
-import type { OperatorAttentionCondition } from "@repo/api-client";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent } from "@repo/ui/components/card";
@@ -6,23 +5,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@repo/ui/compo
 import { Spinner } from "@repo/ui/components/spinner";
 import { cn } from "@repo/ui/lib/utils";
 import type { ReactNode } from "react";
-
-export const attentionConditionLabel: Record<OperatorAttentionCondition, string> = {
-  CREDIT_EXHAUSTED: "Credit exhausted",
-  LOW_BALANCE: "Low balance",
-  UNLIMITED_ENDING_SOON: "Unlimited ending soon",
-  INACTIVE: "No Customer activity for 14 days",
-};
-
-export const attentionConditionTone: Record<
-  OperatorAttentionCondition,
-  "danger" | "warning" | "neutral"
-> = {
-  CREDIT_EXHAUSTED: "danger",
-  LOW_BALANCE: "warning",
-  UNLIMITED_ENDING_SOON: "warning",
-  INACTIVE: "neutral",
-};
 
 export function ConsolePageHeader({
   title,
