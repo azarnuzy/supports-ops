@@ -47,7 +47,9 @@ export default function MarginView() {
           <CardContent>
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-destructive">
-                {margin.error instanceof Error ? margin.error.message : "Failed to load the Model margin."}
+                {margin.error instanceof Error
+                  ? margin.error.message
+                  : "Failed to load the Model margin."}
               </p>
               <Button size="sm" variant="outline" onClick={() => margin.refetch()}>
                 Try again
@@ -76,12 +78,22 @@ export default function MarginView() {
                   {models.map((model) => (
                     <TableRow key={model.agentModel}>
                       <TableCell className="font-medium">{model.agentModel}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCount(model.aiTurns)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCount(model.unlimitedTurns)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCount(model.creditsCharged)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatUsd(model.providerCostUsd)}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {model.usdPerCredit === null ? "—" : usdPerCreditFormat.format(model.usdPerCredit)}
+                        {formatCount(model.aiTurns)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCount(model.unlimitedTurns)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCount(model.creditsCharged)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatUsd(model.providerCostUsd)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {model.usdPerCredit === null
+                          ? "—"
+                          : usdPerCreditFormat.format(model.usdPerCredit)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -97,7 +109,10 @@ export default function MarginView() {
             />
             <BreakdownChart
               title="Provider cost (USD) per Agent Model"
-              data={models.map((model) => ({ label: model.agentModel, value: model.providerCostUsd }))}
+              data={models.map((model) => ({
+                label: model.agentModel,
+                value: model.providerCostUsd,
+              }))}
             />
           </div>
         </>

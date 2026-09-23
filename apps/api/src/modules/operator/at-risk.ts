@@ -4,7 +4,11 @@ import { lowBalanceThreshold } from "../credits/services";
 const unlimitedEndingWindowMs = 7 * 24 * 60 * 60 * 1000;
 const inactivityWindowMs = 14 * 24 * 60 * 60 * 1000;
 
-export type AtRiskCondition = "CREDIT_EXHAUSTED" | "LOW_BALANCE" | "UNLIMITED_ENDING_SOON" | "INACTIVE";
+export type AtRiskCondition =
+  | "CREDIT_EXHAUSTED"
+  | "LOW_BALANCE"
+  | "UNLIMITED_ENDING_SOON"
+  | "INACTIVE";
 
 /** A Workspace matching several conditions appears once, listing all of them. */
 export async function listAtRiskWorkspaces() {
@@ -47,8 +51,10 @@ export async function listAtRiskWorkspaces() {
       if (balance <= 0) conditions.push("CREDIT_EXHAUSTED");
       else if (balance < lowBalanceThreshold) conditions.push("LOW_BALANCE");
     }
-    if (activePeriod && activePeriod.endAt <= endingSoonBy) conditions.push("UNLIMITED_ENDING_SOON");
-    if (lastCustomerActivityAt === null || lastCustomerActivityAt < inactiveSince) conditions.push("INACTIVE");
+    if (activePeriod && activePeriod.endAt <= endingSoonBy)
+      conditions.push("UNLIMITED_ENDING_SOON");
+    if (lastCustomerActivityAt === null || lastCustomerActivityAt < inactiveSince)
+      conditions.push("INACTIVE");
 
     return {
       ...workspace,

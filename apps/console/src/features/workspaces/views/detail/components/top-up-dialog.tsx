@@ -44,14 +44,16 @@ export function TopUpDialog({
   }
 
   const mutation = useMutation({
-    mutationFn: () => topUpWorkspace(api, workspaceId, { credits: parsedCredits, note: note.trim() }),
+    mutationFn: () =>
+      topUpWorkspace(api, workspaceId, { credits: parsedCredits, note: note.trim() }),
     onSuccess: () => {
       toast.success(`Topped up ${numberFormat.format(parsedCredits)} Credits.`);
       queryClient.invalidateQueries({ queryKey: ["operator", "workspace", workspaceId] });
       onOpenChange(false);
       reset();
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to record the Top-Up."),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Failed to record the Top-Up."),
   });
 
   return (

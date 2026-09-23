@@ -42,7 +42,10 @@ const RANGE_PRESETS = [
 
 const numberFormat = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-const dateTimeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 function formatDate(value: string | null) {
   return value ? dateFormat.format(new Date(value)) : "—";
@@ -103,8 +106,16 @@ function WorkspaceDetail({
   days: 7 | 14 | 30;
   onDaysChange: (days: 7 | 14 | 30) => void;
 }) {
-  const { workspace, unlimitedPeriod, users, channels, knowledgeSources, aiAgents, analytics, aiUsage } =
-    detail;
+  const {
+    workspace,
+    unlimitedPeriod,
+    users,
+    channels,
+    knowledgeSources,
+    aiAgents,
+    analytics,
+    aiUsage,
+  } = detail;
   const [topUpOpen, setTopUpOpen] = useState(false);
 
   return (
@@ -279,7 +290,10 @@ function WorkspaceDetail({
             <p className="text-sm text-muted-foreground">No Knowledge Sources.</p>
           ) : (
             knowledgeSources.map((group) => (
-              <Badge key={group.status} variant={group.status === "FAILED" ? "destructive" : "outline"}>
+              <Badge
+                key={group.status}
+                variant={group.status === "FAILED" ? "destructive" : "outline"}
+              >
                 {group.status}: {numberFormat.format(group.count)}
               </Badge>
             ))

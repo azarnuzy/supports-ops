@@ -1,4 +1,8 @@
-import { fetchOperatorActions, fetchOperatorWorkspaces, type OperatorAction } from "@repo/api-client";
+import {
+  fetchOperatorActions,
+  fetchOperatorWorkspaces,
+  type OperatorAction,
+} from "@repo/api-client";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { NativeSelect, NativeSelectOption } from "@repo/ui/components/native-select";
@@ -30,7 +34,10 @@ function actionDetail(action: OperatorAction) {
   if (action.type === "TOP_UP") {
     const credits = payload.credits;
     const note = payload.note;
-    return [typeof credits === "number" ? `+${credits} Credits` : null, typeof note === "string" ? note : null]
+    return [
+      typeof credits === "number" ? `+${credits} Credits` : null,
+      typeof note === "string" ? note : null,
+    ]
       .filter(Boolean)
       .join(" — ");
   }

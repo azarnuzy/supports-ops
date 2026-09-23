@@ -15,10 +15,18 @@ vi.mock("../auth/instance", () => ({
   },
 }));
 
+type AtRiskWorkspace = { id: string; conditions: string[] };
+
 let database: TestDatabase;
 let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let app: typeof import("../../app").app;
 let operatorId: string;
+
+async function fetchAtRisk() {
+  const response = await app.request("/operator/at-risk");
+  const { workspaces } = (await response.json()) as { workspaces: AtRiskWorkspace[] };
+  return workspaces;
+}
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -36,7 +44,9 @@ beforeEach(async () => {
   await truncateAll(prisma);
   sessions.operator = true;
   operatorId = randomUUID();
-  await prisma.operator.create({ data: { id: operatorId, name: "Op", email: `${operatorId}@example.com` } });
+  await prisma.operator.create({
+    data: { id: operatorId, name: "Op", email: `${operatorId}@example.com` },
+  });
 });
 
 function daysAgo(days: number): Date {
@@ -53,7 +63,9 @@ async function recordActivity(workspaceId: string, customerLastMessageAt: Date) 
   const aiAgentId = randomUUID();
   await prisma.aiAgent.create({ data: { id: aiAgentId, name: "AI Agent", workspaceId } });
   const channelId = randomUUID();
-  await prisma.channel.create({ data: { aiAgentId, id: channelId, name: "Web", type: "WEB", workspaceId } });
+  await prisma.channel.create({
+    data: { aiAgentId, id: channelId, name: "Web", type: "WEB", workspaceId },
+  });
   const customerIdentityId = randomUUID();
   await prisma.customerIdentity.create({
     data: {
@@ -77,7 +89,7 @@ it("flags a Workspace below the low-balance threshold", async () => {
   });
   await recordActivity(workspaceId, new Date());
 
-  const { workspaces } = await (await app.request("/operator/at-risk")).json();
+  const workspaces = await fetchAtRisk();
 
   expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["LOW_BALANCE"] }]);
 });
@@ -89,7 +101,7 @@ it("flags a Workspace at Credit Exhaustion", async () => {
   });
   await recordActivity(workspaceId, new Date());
 
-  const { workspaces } = await (await app.request("/operator/at-risk")).json();
+  const workspaces = await fetchAtRisk();
 
   expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["CREDIT_EXHAUSTED"] }]);
 });
@@ -104,7 +116,7 @@ it("does not flag balance for a Workspace on an active Unlimited Period, even at
   });
   await recordActivity(workspaceId, new Date());
 
-  const { workspaces } = await (await app.request("/operator/at-risk")).json();
+  const workspaces = await fetchAtRisk();
 
   expect(workspaces).toEqual([]);
 });
@@ -119,7 +131,7 @@ it("flags a Workspace whose Unlimited Period ends within 7 days", async () => {
   });
   await recordActivity(workspaceId, new Date());
 
-  const { workspaces } = await (await app.request("/operator/at-risk")).json();
+  const workspaces = await fetchAtRisk();
 
   expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["UNLIMITED_ENDING_SOON"] }]);
 });
@@ -136,10 +148,13 @@ it("flags a Workspace with no Customer activity for 14 days, including no activi
     data: { id: randomUUID(), workspaceId: never, type: "TRIAL_GRANT", credits: 500 },
   });
 
-  const { workspaces } = await (await app.request("/operator/at-risk")).json();
+  const workspaces = await fetchAtRisk();
 
-  expect(workspaces.map((w: { id: string; conditions: string[] }) => [w.id, w.conditions]).sort()).toEqual(
-    [[stale, ["INACTIVE"]], [never, ["INACTIVE"]]].sort(),
+  expect(workspaces.map((w) => [w.id, w.conditions]).sort()).toEqual(
+    [
+      [stale, ["INACTIVE"]],
+      [never, ["INACTIVE"]],
+    ].sort(),
   );
 });
 
@@ -150,9 +165,11 @@ it("lists a Workspace matching several conditions once, with every condition", a
   });
   await recordActivity(workspaceId, daysAgo(20));
 
-  const { workspaces } = await (await app.request("/operator/at-risk")).json();
+  const workspaces = await fetchAtRisk();
 
-  expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["CREDIT_EXHAUSTED", "INACTIVE"] }]);
+  expect(workspaces).toMatchObject([
+    { id: workspaceId, conditions: ["CREDIT_EXHAUSTED", "INACTIVE"] },
+  ]);
 });
 
 it("leaves a healthy Workspace out", async () => {
@@ -162,7 +179,7 @@ it("leaves a healthy Workspace out", async () => {
   });
   await recordActivity(workspaceId, new Date());
 
-  const { workspaces } = await (await app.request("/operator/at-risk")).json();
+  const workspaces = await fetchAtRisk();
 
   expect(workspaces).toEqual([]);
 });

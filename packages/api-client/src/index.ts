@@ -1513,18 +1513,27 @@ export async function fetchOperatorWorkspaceDetail(
   return (await response.json()) as OperatorWorkspaceDetail;
 }
 
-export async function grantUnlimitedPeriod(client: ApiClient, workspaceId: string, endDate: string) {
+export async function grantUnlimitedPeriod(
+  client: ApiClient,
+  workspaceId: string,
+  endDate: string,
+) {
   const response = await client.operator.workspaces[":workspaceId"]["unlimited-period"].$post({
     param: { workspaceId },
     json: { endDate },
   });
   if (response.status === 404) throw new Error("Workspace not found.");
-  if (response.status === 409) throw new Error("This Workspace already has an active Unlimited Period.");
+  if (response.status === 409)
+    throw new Error("This Workspace already has an active Unlimited Period.");
   if (!response.ok) throw new Error("Failed to grant the Unlimited Period.");
   return (await response.json()) as { period: UnlimitedPeriod };
 }
 
-export async function extendUnlimitedPeriod(client: ApiClient, workspaceId: string, endDate: string) {
+export async function extendUnlimitedPeriod(
+  client: ApiClient,
+  workspaceId: string,
+  endDate: string,
+) {
   const response = await client.operator.workspaces[":workspaceId"]["unlimited-period"].$patch({
     param: { workspaceId },
     json: { endDate },
@@ -1559,7 +1568,10 @@ export type OperatorAction = {
   operator: { id: string; name: string; email: string };
 };
 
-export async function fetchOperatorActions(client: ApiClient, params: { workspaceId?: string } = {}) {
+export async function fetchOperatorActions(
+  client: ApiClient,
+  params: { workspaceId?: string } = {},
+) {
   const response = await client.operator.actions.$get({
     query: { ...(params.workspaceId ? { workspaceId: params.workspaceId } : {}) },
   });
@@ -1569,7 +1581,14 @@ export async function fetchOperatorActions(client: ApiClient, params: { workspac
 
 export type TopUpInput = { credits: number; note: string };
 export type TopUpResult = {
-  action: { id: string; operatorId: string; workspaceId: string; type: "TOP_UP"; payload: unknown; createdAt: string };
+  action: {
+    id: string;
+    operatorId: string;
+    workspaceId: string;
+    type: "TOP_UP";
+    payload: unknown;
+    createdAt: string;
+  };
   balance: number;
 };
 
