@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import ConsoleView from "../features/console/views/console/console";
+import OverviewView from "../features/console/views/overview/overview";
 import { ConsoleShell } from "../features/console/shell";
 
 export const Route = createFileRoute("/")({
   component: () => (
     <ConsoleShell>
-      <ConsoleView title="Overview" />
+      <OverviewView />
     </ConsoleShell>
   ),
 });
