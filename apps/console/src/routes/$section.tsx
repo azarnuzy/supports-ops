@@ -1,4 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import ActionLogView from "../features/console/views/action-log/action-log";
 import AtRiskView from "../features/console/views/at-risk/at-risk";
 import ConsoleView from "../features/console/views/console/console";
 import MarginView from "../features/console/views/margin/margin";
@@ -32,6 +33,13 @@ function Section() {
     return (
       <ConsoleShell>
         <MarginView />
+      </ConsoleShell>
+    );
+  }
+  if (section === "action-log") {
+    return (
+      <ConsoleShell>
+        <ActionLogView />
       </ConsoleShell>
     );
   }
