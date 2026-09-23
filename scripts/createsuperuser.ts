@@ -2,14 +2,15 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { registerAdminWorkspace } from "../apps/api/src/modules/registration/services";
 import { unscopedPrisma as prisma } from "../apps/api/src/utils/prisma";
+import { questionHidden } from "./operator-prompts";
 
 const rl = createInterface({ input, output });
 
 try {
   const email = normalizeEmail(await rl.question("Email: "));
   const name = normalizeOptional(await rl.question("Name (optional): "));
-  const password = await questionHidden("Password: ");
-  const passwordConfirmation = await questionHidden("Confirm password: ");
+  const password = await questionHidden(rl, "Password: ");
+  const passwordConfirmation = await questionHidden(rl, "Confirm password: ");
 
   if (!email) {
     throw new Error("Email is required.");
@@ -59,45 +60,4 @@ function normalizeEmail(email: string) {
 
 function normalizeOptional(value: string) {
   return value.trim() || null;
-}
-
-async function questionHidden(prompt: string) {
-  if (!input.isTTY || !output.isTTY || !input.setRawMode) {
-    return rl.question(prompt);
-  }
-
-  return new Promise<string>((resolve) => {
-    output.write(prompt);
-    input.setRawMode(true);
-    input.resume();
-    input.setEncoding("utf8");
-
-    let value = "";
-
-    const onData = (key: string) => {
-      if (key === "\u0003") {
-        output.write("\n");
-        input.setRawMode(false);
-        input.off("data", onData);
-        process.exit(130);
-      }
-
-      if (key === "\r" || key === "\n") {
-        output.write("\n");
-        input.setRawMode(false);
-        input.off("data", onData);
-        resolve(value);
-        return;
-      }
-
-      if (key === "\u007f") {
-        value = value.slice(0, -1);
-        return;
-      }
-
-      value += key;
-    };
-
-    input.on("data", onData);
-  });
 }
