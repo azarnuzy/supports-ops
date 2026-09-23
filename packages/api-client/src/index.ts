@@ -239,12 +239,15 @@ export type TopUpPayment = {
   expiresAt: string;
   paidAt: string | null;
 };
+export type UnlimitedPeriod = { endAt: string; endedEarlyAt: string | null };
+
 export type Billing = {
   balance: number;
   modelRates: ModelCatalogEntry[];
   packs: TopUpPack[];
   payments: TopUpPayment[];
   paymentsEnabled: boolean;
+  unlimitedPeriod: UnlimitedPeriod | null;
 };
 
 export async function fetchBilling(client: ApiClient) {
@@ -1459,6 +1462,7 @@ export type OperatorWorkspaceUser = {
 
 export type OperatorWorkspaceDetail = {
   workspace: { id: string; name: string; slug: string; createdAt: string };
+  unlimitedPeriod: UnlimitedPeriod | null;
   users: OperatorWorkspaceUser[];
   channels: { webWidgetActive: boolean; whatsAppConnected: boolean };
   knowledgeSources: { status: string; count: number }[];
@@ -1482,6 +1486,36 @@ export async function fetchOperatorWorkspaceDetail(
   if (response.status === 404) return null;
   if (!response.ok) throw new Error("Failed to load the Workspace.");
   return (await response.json()) as OperatorWorkspaceDetail;
+}
+
+export async function grantUnlimitedPeriod(client: ApiClient, workspaceId: string, endDate: string) {
+  const response = await client.operator.workspaces[":workspaceId"]["unlimited-period"].$post({
+    param: { workspaceId },
+    json: { endDate },
+  });
+  if (response.status === 404) throw new Error("Workspace not found.");
+  if (response.status === 409) throw new Error("This Workspace already has an active Unlimited Period.");
+  if (!response.ok) throw new Error("Failed to grant the Unlimited Period.");
+  return (await response.json()) as { period: UnlimitedPeriod };
+}
+
+export async function extendUnlimitedPeriod(client: ApiClient, workspaceId: string, endDate: string) {
+  const response = await client.operator.workspaces[":workspaceId"]["unlimited-period"].$patch({
+    param: { workspaceId },
+    json: { endDate },
+  });
+  if (response.status === 404) throw new Error("This Workspace has no active Unlimited Period.");
+  if (!response.ok) throw new Error("Failed to extend the Unlimited Period.");
+  return (await response.json()) as { period: UnlimitedPeriod };
+}
+
+export async function endUnlimitedPeriodEarly(client: ApiClient, workspaceId: string) {
+  const response = await client.operator.workspaces[":workspaceId"]["unlimited-period"].end.$post({
+    param: { workspaceId },
+  });
+  if (response.status === 404) throw new Error("This Workspace has no active Unlimited Period.");
+  if (!response.ok) throw new Error("Failed to end the Unlimited Period.");
+  return (await response.json()) as { period: UnlimitedPeriod };
 }
 
 export async function deleteTicketCategory(client: ApiClient, id: string) {

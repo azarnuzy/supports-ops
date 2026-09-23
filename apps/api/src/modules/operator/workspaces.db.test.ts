@@ -95,6 +95,9 @@ it("surfaces an active Unlimited Period in the Workspace list", async () => {
   const { workspaces } = await (await app.request("/operator/workspaces?search=ALP")).json();
 
   expect(workspaces).toMatchObject([{ id: firstId, activeUnlimitedPeriod: { endAt: endAt.toISOString() } }]);
+
+  const detail = await (await app.request(`/operator/workspaces/${firstId}`)).json();
+  expect(detail.unlimitedPeriod).toMatchObject({ endAt: endAt.toISOString(), endedEarlyAt: null });
 });
 
 it("returns the same analytics and AI Usage as the Workspace Admin", async () => {
