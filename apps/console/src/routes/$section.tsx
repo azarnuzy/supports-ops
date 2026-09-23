@@ -1,6 +1,7 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import AtRiskView from "../features/console/views/at-risk/at-risk";
 import ConsoleView from "../features/console/views/console/console";
+import MarginView from "../features/console/views/margin/margin";
 import PaymentsView from "../features/console/views/payments/payments";
 import { ConsoleShell, sections } from "../features/console/shell";
 
@@ -24,6 +25,13 @@ function Section() {
     return (
       <ConsoleShell>
         <AtRiskView />
+      </ConsoleShell>
+    );
+  }
+  if (section === "model-margin") {
+    return (
+      <ConsoleShell>
+        <MarginView />
       </ConsoleShell>
     );
   }

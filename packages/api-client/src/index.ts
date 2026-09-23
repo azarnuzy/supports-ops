@@ -227,6 +227,31 @@ export async function fetchOperatorOverview(client: ApiClient, range?: Analytics
   return (await response.json()) as { overview: OperatorOverview };
 }
 
+export type OperatorModelMargin = {
+  agentModel: string;
+  aiTurns: number;
+  unlimitedTurns: number;
+  creditsCharged: number;
+  providerCostUsd: number;
+  usdPerCredit: number | null;
+};
+
+export type OperatorMargin = {
+  range: { from: string; to: string };
+  models: OperatorModelMargin[];
+};
+
+export async function fetchOperatorMargin(client: ApiClient, range?: AnalyticsRange) {
+  const query = {
+    ...(range?.from ? { from: range.from } : {}),
+    ...(range?.to ? { to: range.to } : {}),
+  };
+  const response = await client.operator.margin.$get({ query });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (!response.ok) throw new Error("Failed to load the Model margin.");
+  return (await response.json()) as OperatorMargin;
+}
+
 export type TopUpPack = { id: string; credits: number; priceIdr: number };
 export type TopUpPayment = {
   id: string;
