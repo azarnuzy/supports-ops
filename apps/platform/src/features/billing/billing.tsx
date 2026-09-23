@@ -1,6 +1,13 @@
-import type { TopUpPack, TopUpPayment } from "@repo/api-client";
+import type { TopUpPack, TopUpPayment, UnlimitedPeriod } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { CheckIcon, CoinsIcon, ExternalLinkIcon, InfoIcon, ReceiptTextIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CoinsIcon,
+  ExternalLinkIcon,
+  InfinityIcon,
+  InfoIcon,
+  ReceiptTextIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@repo/ui/components/alert";
@@ -45,6 +52,7 @@ import { SettingsHeader } from "../settings/components/settings-header";
 const paymentPageSize = 10;
 
 const runwayRange = trailingRange(30);
+const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 const paymentStatusStyles: Record<TopUpPayment["status"], { label: string; className: string }> = {
   PAID: {
@@ -57,6 +65,28 @@ const paymentStatusStyles: Record<TopUpPayment["status"], { label: string; class
   },
   EXPIRED: { label: "Expired", className: "text-muted-foreground" },
 };
+
+function UnlimitedPeriodBanner({ unlimitedPeriod }: { unlimitedPeriod: UnlimitedPeriod | null }) {
+  if (!unlimitedPeriod) return null;
+
+  const active = !unlimitedPeriod.endedEarlyAt && new Date(unlimitedPeriod.endAt) > new Date();
+
+  return active ? (
+    <Alert>
+      <InfinityIcon />
+      <AlertTitle>Unlimited until {dateFormat.format(new Date(unlimitedPeriod.endAt))}</AlertTitle>
+      <AlertDescription>
+        Your AI Agents answer without spending Credits until then. Your balance won't change.
+      </AlertDescription>
+    </Alert>
+  ) : (
+    <Alert>
+      <InfoIcon />
+      <AlertTitle>Your Unlimited Period has ended</AlertTitle>
+      <AlertDescription>This Workspace is back on its own Credits.</AlertDescription>
+    </Alert>
+  );
+}
 
 function BalanceCard({ balance }: { balance: number }) {
   const usage = useQuery(aiUsageSummaryQueryOptions(runwayRange));
@@ -304,6 +334,8 @@ const BillingView = () => {
 
         {data ? (
           <>
+            <UnlimitedPeriodBanner unlimitedPeriod={data.unlimitedPeriod} />
+
             <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
               <BalanceCard balance={data.balance} />
               <Card>
