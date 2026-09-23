@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3001",
+    "dev": "vite --host 0.0.0.0 --port 3003",
     "build": "vite build",
     "generate:routes": "node scripts/generate-route-tree.mjs",
-    "preview": "vite preview --host 0.0.0.0 --port 3001",
+    "preview": "vite preview --host 0.0.0.0 --port 3003",
     "pretypecheck": "pnpm generate:routes",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

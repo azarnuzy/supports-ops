@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
-import { unscopedPrisma as prisma } from "../apps/api/src/utils/prisma";
+import { unscopedPrisma as prisma } from "../../utils/prisma";
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();

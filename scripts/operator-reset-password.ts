@@ -1,7 +1,7 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { questionHidden, assertPassword } from "./operator-prompts";
-import { disconnectOperatorDb, normalizeEmail, resetOperatorPassword } from "./operator-utils";
+import { disconnectOperatorDb, normalizeEmail, resetOperatorPassword } from "../apps/api/src/modules/operator/provisioning";
 
 const rl = createInterface({ input, output });
 try {

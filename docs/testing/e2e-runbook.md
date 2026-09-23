@@ -19,6 +19,9 @@ BETTER_AUTH_SECRET="..."
 ALLOW_LOCAL_HTTP_TOOLS="true"
 # wajib bila ingin membuat/menyimpan HTTP Tool dengan bearer token atau secret headers
 TOOL_MASTER_KEY="..."
+# wajib untuk skenario Operator (bagian 5); gunakan nilai acak terpisah
+# setidaknya 32 karakter
+OPERATOR_AUTH_SECRET="..."
 ```
 
 Untuk Telemetry Langfuse, tambahkan juga konfigurasi pada bagian [Telemetry](#6-telemetry-di-langfuse). Attachment PDF/gambar merupakan skenario opsional yang juga memerlukan S3-compatible storage, `MISTRAL_API_KEY`, dan `INTERNAL_WORKER_TOKEN`.
@@ -163,7 +166,48 @@ Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak
 
 Catatan keputusan: bila Admin melakukan Takeover, tetapkan kembali Ticket ke Human Agent sebelum Resolution bila UI/API menolak Admin untuk melakukan Resolution langsung.
 
-## 5. Test case AI yang wajib dijalankan
+## 5. Operator Console dan identitas Operator
+
+Alur ini mencakup fondasi deployment Console dan identitas Operator terpisah
+([#219](https://github.com/azarnuzy/supports-ops/issues/219),
+[#220](https://github.com/azarnuzy/supports-ops/issues/220)). UI Console belum
+memiliki halaman login atau fitur operasional, sehingga autentikasi diuji melalui API.
+
+1. Isi `OPERATOR_AUTH_SECRET` di `.env.local` dengan nilai acak berbeda dari
+   `BETTER_AUTH_SECRET`, jalankan migrasi, lalu restart API:
+
+   ```sh
+   pnpm db:migrate
+   pnpm --filter @repo/api dev
+   ```
+
+2. Buat akun Operator melalui prompt lokal:
+
+   ```sh
+   pnpm operator:create
+   ```
+
+   `pnpm operator:disable` menonaktifkan akun dan mencabut semua sesinya;
+   `pnpm operator:reset-password` mengganti password dan mencabut semua sesinya.
+
+3. Jalankan Console pada terminal lain dan buka `http://localhost:3001`:
+
+   ```sh
+   pnpm --filter @repo/console dev
+   ```
+
+   Shell terbuka, tetapi halamannya masih kosong dan belum menyediakan login UI.
+
+4. Dengan API client atau `curl`, kirim `POST http://localhost:8000/operator/auth/sign-in/email`
+   dengan JSON `{"email":"<email-operator>","password":"<password>"}`, origin
+   `http://localhost:3001`, dan simpan cookie respons. Kirim cookie itu ke
+   `GET http://localhost:8000/operator/session`: respons harus `200` dengan Operator.
+   Tanpa cookie, endpoint harus `401`. Cookie sesi Workspace tidak boleh
+   mengautentikasi `/operator/session`; cookie Operator juga tidak boleh
+   mengautentikasi `GET /session`. Setelah `pnpm operator:disable`, sesi Operator
+   lama harus gagal mengakses `/operator/session`.
+
+## 6. Test case AI yang wajib dijalankan
 
 Eval dijalankan terhadap Workspace live yang ditunjuk `EVAL_WORKSPACE_ID` (bukan corpus
 in-memory), memakai Knowledge Source, instructions, dan Tool Assignment Workspace tersebut.
@@ -190,7 +234,7 @@ Karena eval memakai Workspace live, tabel W1–W14 tetap dipakai untuk membuktik
 produk, dan eval untuk mencegah regresi perilaku AI. Inventaris Case dan panduan triage:
 [docs/testing/ai-agent-eval-cases.md](ai-agent-eval-cases.md).
 
-## 6. Telemetry di Langfuse
+## 7. Telemetry di Langfuse
 
 1. Buat project di Langfuse Cloud (pilih region EU atau US), lalu buat API key pair di **Settings → API Keys**.
 2. Bentuk Basic credential tanpa menyimpan outputnya ke shell history:
@@ -215,8 +259,8 @@ produk, dan eval untuk mencegah regresi perilaku AI. Inventaris Case dan panduan
 
 Trace satu AI Agent run berisi root `ai_agent.run`, dengan child span retrieval, setiap Business Tool, dan generasi model (`gen_ai.*`). Periksa atribut keputusan akhir (`REPLY`, `CLARIFY`, `ESCALATE`, atau `RESOLVE`) dan Escalation Reason bila ada. Prompt dan response body memang tidak dikirim: telemetry berada pada mode redacted/safe. Untuk debug tanpa Langfuse, gunakan `TELEMETRY_EXPORTER="console"` dan lihat stdout API/Worker.
 
-## 7. Kriteria selesai
+## 8. Kriteria selesai
 
-Sebuah run dapat dianggap lengkap bila W1–W10, W13, dan W14 selesai; W3a–W3c perlu bila alur Tools/MCP (#94) berada dalam scope release; W11 perlu bila Attachment berada dalam scope release, W12 perlu bila Ticket Knowledge berada dalam scope release; seluruh eval telah dijalankan dan negative control tercatat sebagai gagal yang diharapkan. Simpan tautan trace Langfuse yang relevan dan ID Ticket untuk setiap skenario—keduanya cukup untuk mengulang atau menelusuri kegagalan tanpa menyalin percakapan Customer ke dokumen.
+Sebuah run dapat dianggap lengkap bila W1–W10, W13, dan W14 selesai; skenario Operator Console perlu bila #219/#220 berada dalam scope release; W3a–W3c perlu bila alur Tools/MCP (#94) berada dalam scope release; W11 perlu bila Attachment berada dalam scope release, W12 perlu bila Ticket Knowledge berada dalam scope release; seluruh eval telah dijalankan dan negative control tercatat sebagai gagal yang diharapkan. Simpan tautan trace Langfuse yang relevan dan ID Ticket untuk setiap skenario—keduanya cukup untuk mengulang atau menelusuri kegagalan tanpa menyalin percakapan Customer ke dokumen.
 
 Alur Tools/MCP (W3–W3c) tidak memerlukan layanan MCP pihak ketiga: Business System yang sama (`apps/business-system`) berperan sebagai HTTP API dan demo MCP Server.
