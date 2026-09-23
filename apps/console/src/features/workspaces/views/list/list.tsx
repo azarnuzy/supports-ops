@@ -13,7 +13,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ConsoleShell } from "../../../console/shell";
-import { api } from "../../../../lib/auth";
+import { api } from "../../../../lib/api";
 
 const LIMIT = 20;
 

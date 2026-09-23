@@ -13,7 +13,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { ConsoleShell } from "../../../console/shell";
-import { api } from "../../../../lib/auth";
+import { api } from "../../../../lib/api";
 
 const RANGE_PRESETS = [
   { days: 7, label: "7 days" },
