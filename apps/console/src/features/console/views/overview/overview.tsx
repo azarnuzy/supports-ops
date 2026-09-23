@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -18,14 +19,14 @@ import BreakdownChart from "./components/breakdown-chart";
 import { operatorOverviewQueryOptions } from "./overview.services";
 import { formatCount, formatIdr, formatUsd } from "./overview.utils";
 
-const statusLabels: Record<string, string> = {
+export const statusLabels: Record<string, string> = {
   AI_HANDLING: "AI handling",
   ESCALATED: "Escalated",
   HUMAN_HANDLING: "Human handling",
   RESOLVED: "Resolved",
 };
 
-const resolutionReasonLabels: Record<string, string> = {
+export const resolutionReasonLabels: Record<string, string> = {
   HUMAN_RESOLVED: "Human resolved",
   CUSTOMER_CONFIRMED: "Customer confirmed",
   CUSTOMER_INACTIVE: "Customer inactive (AI)",
@@ -33,7 +34,7 @@ const resolutionReasonLabels: Record<string, string> = {
   CUSTOMER_INACTIVE_SHARED_QUEUE: "Customer inactive (unclaimed)",
 };
 
-const channelLabels: Record<string, string> = { WEB: "Web Widget", WHATSAPP: "WhatsApp" };
+export const channelLabels: Record<string, string> = { WEB: "Web Widget", WHATSAPP: "WhatsApp" };
 
 export default function OverviewView() {
   const [range, setRange] = useState<ConsoleDateRange>(() => trailingRange(7));
@@ -102,6 +103,17 @@ export default function OverviewView() {
               value={formatCount(Object.values(data.sessions).reduce((sum, n) => sum + n, 0))}
             />
           </div>
+
+          <p className="text-sm text-muted-foreground">
+            <Link
+              to="/$section"
+              params={{ section: "platform-analytics" }}
+              className="text-primary hover:underline"
+            >
+              Open Platform Analytics
+            </Link>{" "}
+            for daily Session/Ticket trends and AI-effectiveness across every Workspace.
+          </p>
 
           <div className="grid gap-4 lg:grid-cols-3">
             <BreakdownChart
