@@ -11,7 +11,15 @@ const mocks = vi.hoisted(() => ({
   signInEmail: vi.fn(),
   update: vi.fn(),
   operatorAuthHandler: vi.fn(),
+  listPayments: vi.fn(),
 }));
+
+vi.mock("./modules/operator/payments", async () => {
+  const actual = await vi.importActual<typeof import("./modules/operator/payments")>(
+    "./modules/operator/payments",
+  );
+  return { ...actual, listPayments: mocks.listPayments };
+});
 
 vi.mock("./modules/auth/instance", () => ({
   auth: {
@@ -55,6 +63,7 @@ describe("api app", () => {
     mocks.authHandler.mockReset();
     mocks.getOperatorSession.mockReset();
     mocks.operatorAuthHandler.mockReset();
+    mocks.listPayments.mockReset();
     mocks.findMany.mockReset();
     mocks.findUnique.mockReset();
     mocks.getSession.mockReset();
@@ -122,6 +131,22 @@ describe("api app", () => {
     mocks.getOperatorSession.mockResolvedValue(createOperatorSession());
     expect((await app.request("/operator/session")).status).toBe(200);
     expect((await app.request("/session")).status).toBe(401);
+  });
+
+  it("guards and validates the Operator payments endpoint", async () => {
+    expect((await app.request("/operator/payments")).status).toBe(401);
+    mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
+    expect((await app.request("/operator/payments")).status).toBe(401);
+    mocks.getOperatorSession.mockResolvedValue(createOperatorSession());
+    expect((await app.request("/operator/payments?status=OTHER")).status).toBe(400);
+    mocks.listPayments.mockResolvedValue({ payments: [], page: 1, limit: 20, total: 0 });
+    const response = await app.request("/operator/payments?status=PAID");
+    expect(response.status).toBe(200);
+    expect(mocks.listPayments).toHaveBeenCalledWith({
+      status: "PAID",
+      page: 1,
+      limit: 20,
+    });
   });
 
   it("forbids users access without an admin session", async () => {

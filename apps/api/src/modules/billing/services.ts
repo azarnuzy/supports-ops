@@ -60,7 +60,7 @@ export async function verifyTopUpPayment(payment: TopUpPayment) {
       where: { id: payment.id, status: "PENDING" },
     });
     if (!transition.count) return false;
-    await tx.creditLedgerEntry.create({
+    const ledgerEntry = await tx.creditLedgerEntry.create({
       data: {
         credits: payment.credits,
         id: randomUUID(),
@@ -68,6 +68,10 @@ export async function verifyTopUpPayment(payment: TopUpPayment) {
         type: "TOP_UP",
         workspaceId: payment.workspaceId,
       },
+    });
+    await tx.topUpPayment.update({
+      data: { ledgerEntryId: ledgerEntry.id },
+      where: { id: payment.id },
     });
     return true;
   });

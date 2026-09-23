@@ -12,6 +12,7 @@ vi.mock("./mayar", () => ({ ...mayar, MayarUnavailableError: class extends Error
 let database: TestDatabase;
 let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let services: typeof import("./services");
+let listPayments: typeof import("../operator/payments").listPayments;
 let workspaceId: string;
 
 beforeAll(async () => {
@@ -19,6 +20,7 @@ beforeAll(async () => {
   process.env.DATABASE_URL = database.url;
   ({ unscopedPrisma: prisma } = await import("../../utils/prisma"));
   services = await import("./services");
+  ({ listPayments } = await import("../operator/payments"));
 }, 60_000);
 
 afterAll(async () => {
@@ -72,8 +74,52 @@ describe("Top-Up Payments", () => {
     await services.handleMayarWebhook({ data: { productId: "mayar-1" } });
 
     expect(await balance()).toBe(1_000);
+    const ledgerEntry = await prisma.creditLedgerEntry.findFirstOrThrow({
+      where: { workspaceId, type: "TOP_UP" },
+    });
+    expect(await prisma.topUpPayment.findFirstOrThrow()).toMatchObject({
+      ledgerEntryId: ledgerEntry.id,
+    });
     const billing = await withWorkspaceContext(workspaceId, () => services.getBilling());
     expect(billing.payments[0]).toMatchObject({ checkoutUrl: null, status: "PAID" });
+  });
+
+  it("lists payments across Workspaces with status and date filters and the paid ledger id", async () => {
+    await checkout();
+    mayar.fetchMayarPayment.mockResolvedValue({ amount: 250_000, id: "mayar-1", status: "paid" });
+    await services.handleMayarWebhook({ data: { productId: "mayar-1" } });
+    const secondWorkspaceId = randomUUID();
+    await prisma.workspace.create({
+      data: { id: secondWorkspaceId, name: "Other", slug: `other-${secondWorkspaceId.slice(0, 8)}` },
+    });
+    await prisma.topUpPayment.create({
+      data: {
+        id: randomUUID(),
+        workspaceId: secondWorkspaceId,
+        packId: "credits-1000",
+        credits: 1000,
+        amountIdr: 250_000,
+        mayarPaymentId: "mayar-2",
+        checkoutUrl: "https://pay.test/2",
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    });
+
+    const paid = await listPayments({ page: 1, limit: 20, status: "PAID" });
+    expect(paid.total).toBe(1);
+    expect(paid.payments[0]).toMatchObject({
+      workspace: { id: workspaceId },
+      status: "PAID",
+      ledgerEntryId: expect.any(String),
+    });
+    const expired = await listPayments({ page: 1, limit: 20, status: "EXPIRED" });
+    expect(expired.payments[0]).toMatchObject({
+      workspace: { id: secondWorkspaceId },
+      status: "EXPIRED",
+      ledgerEntryId: null,
+    });
+    const future = new Date(Date.now() + 1000).toISOString();
+    expect((await listPayments({ page: 1, limit: 20, from: future })).total).toBe(0);
   });
 
   it("never trusts the webhook body: an unpaid or mismatched payment adds nothing", async () => {
