@@ -3,6 +3,7 @@ import { withWorkspaceContext } from "../../utils/workspace-context";
 import type { AnalyticsRangeQuery } from "../analytics/schema";
 import { getAnalyticsOverview, getAnalyticsTraffic } from "../analytics/services";
 import { getAiUsageSummary, getToolUsage } from "../ai-usage/services";
+import { currentOrLastUnlimitedPeriod } from "./unlimited-periods";
 
 export async function listWorkspaces({
   search,
@@ -103,6 +104,7 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
       analyticsTraffic,
       aiUsageSummary,
       toolUsage,
+      unlimitedPeriod,
     ] = await Promise.all([
       prisma.user.findMany({
         where: { deletedAt: null },
@@ -135,9 +137,13 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
       getAnalyticsTraffic(range),
       getAiUsageSummary(range),
       getToolUsage(range),
+      currentOrLastUnlimitedPeriod(id),
     ]);
     return {
       workspace,
+      unlimitedPeriod: unlimitedPeriod
+        ? { endAt: unlimitedPeriod.endAt, endedEarlyAt: unlimitedPeriod.endedEarlyAt }
+        : null,
       users: users.map(({ authSessions, ...user }) => ({
         ...user,
         lastSignInAt: authSessions[0]?.createdAt ?? null,
