@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { unscopedPrisma } from "../../utils/prisma";
 import { analyticsRangeQuerySchema } from "../analytics/schema";
+import { listAtRiskWorkspaces } from "./at-risk";
 import { loadOperatorSession, requireOperator } from "./middleware";
 import { listPayments, paymentQuerySchema } from "./payments";
 import { getModelMargin, getOperatorOverview, topUpWorkspace } from "./services";
@@ -122,6 +123,7 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .get("/workspaces", zValidator("query", listQuery), async (c) =>
     c.json(await listWorkspaces(c.req.valid("query"))),
   )
+  .get("/at-risk", async (c) => c.json(await listAtRiskWorkspaces()))
   .get(
     "/workspaces/:id",
     withRangeQuery,

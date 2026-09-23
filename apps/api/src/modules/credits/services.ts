@@ -4,7 +4,7 @@ import { modelRateFor, resolveAgentModelId } from "../ai-agent/model-catalog";
 import { enqueueCreditAlertEmail } from "./alerts-queue";
 
 export const trialGrantCredits = 500;
-const lowBalanceThreshold = 100;
+export const lowBalanceThreshold = 100;
 
 export class WorkspaceNotFoundError extends Error {}
 export class InvalidTopUpAmountError extends Error {}
