@@ -51,6 +51,7 @@ model CreditLedgerEntry {
   outputTokens      Int?
   createdAt       DateTime              @default(now())
   workspace       Workspace             @relation(fields: [workspaceId], references: [id])
+  topUpPayment    TopUpPayment?
 
   @@index([workspaceId, createdAt])
 }
@@ -69,8 +70,10 @@ model TopUpPayment {
   checkoutUrl    String
   expiresAt      DateTime
   paidAt         DateTime?
+  ledgerEntryId  String?            @unique
   createdAt      DateTime           @default(now())
   workspace      Workspace          @relation(fields: [workspaceId], references: [id])
+  ledgerEntry    CreditLedgerEntry? @relation(fields: [ledgerEntryId], references: [id])
 
   @@index([workspaceId, createdAt])
 }
