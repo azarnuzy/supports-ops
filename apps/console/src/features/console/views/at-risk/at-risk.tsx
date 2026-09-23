@@ -10,6 +10,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "../../../../lib/api";
 import {
+  attentionConditionLabel,
+  attentionConditionTone,
   ConsoleDataTable,
   ConsolePageHeader,
   ConsoleQueryState,
@@ -17,20 +19,6 @@ import {
 } from "../../components/console-patterns";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
-
-const conditionLabel: Record<string, string> = {
-  CREDIT_EXHAUSTED: "Credit exhausted",
-  LOW_BALANCE: "Low balance",
-  UNLIMITED_ENDING_SOON: "Unlimited ending soon",
-  INACTIVE: "No Customer activity for 14 days",
-};
-
-const conditionTone: Record<string, "danger" | "warning" | "neutral"> = {
-  CREDIT_EXHAUSTED: "danger",
-  LOW_BALANCE: "warning",
-  UNLIMITED_ENDING_SOON: "warning",
-  INACTIVE: "neutral",
-};
 
 export default function AtRiskView() {
   const query = useQuery({
@@ -88,8 +76,11 @@ export default function AtRiskView() {
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {workspace.conditions.map((condition) => (
-                        <ConsoleStatusBadge key={condition} tone={conditionTone[condition]}>
-                          {conditionLabel[condition] ?? condition}
+                        <ConsoleStatusBadge
+                          key={condition}
+                          tone={attentionConditionTone[condition]}
+                        >
+                          {attentionConditionLabel[condition] ?? condition}
                         </ConsoleStatusBadge>
                       ))}
                     </div>
