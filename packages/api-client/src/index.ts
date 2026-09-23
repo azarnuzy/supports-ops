@@ -1446,6 +1446,12 @@ export async function updateTicketCategory(
   return (await response.json()) as { category: TicketCategoryOption };
 }
 
+export type OperatorAttentionCondition =
+  | "CREDIT_EXHAUSTED"
+  | "LOW_BALANCE"
+  | "UNLIMITED_ENDING_SOON"
+  | "INACTIVE";
+
 export type OperatorWorkspace = {
   id: string;
   name: string;
@@ -1460,13 +1466,21 @@ export type OperatorWorkspace = {
 
 export async function fetchOperatorWorkspaces(
   client: ApiClient,
-  params: { search?: string; page?: number; limit?: number } = {},
+  params: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: "createdAt" | "name";
+    attention?: OperatorAttentionCondition;
+  } = {},
 ) {
   const response = await client.operator.workspaces.$get({
     query: {
       ...(params.search ? { search: params.search } : {}),
       ...(params.page ? { page: String(params.page) } : {}),
       ...(params.limit ? { limit: String(params.limit) } : {}),
+      ...(params.sortBy ? { sortBy: params.sortBy } : {}),
+      ...(params.attention ? { attention: params.attention } : {}),
     },
   });
   if (!response.ok) throw new Error("Failed to load Workspaces.");

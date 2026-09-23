@@ -4,15 +4,20 @@ import type { AnalyticsRangeQuery } from "../analytics/schema";
 import { getAnalyticsOverview, getAnalyticsTraffic } from "../analytics/services";
 import { getAiUsageSummary, getToolUsage } from "../ai-usage/services";
 import { currentOrLastUnlimitedPeriod } from "./unlimited-periods";
+import { type AtRiskCondition, getAttentionDetails } from "./at-risk";
 
 export async function listWorkspaces({
   search,
   page,
   limit,
+  sortBy = "createdAt",
+  attention,
 }: {
   search?: string;
   page: number;
   limit: number;
+  sortBy?: "createdAt" | "name";
+  attention?: AtRiskCondition;
 }) {
   const where = {
     deletedAt: null,
@@ -25,16 +30,34 @@ export async function listWorkspaces({
         }
       : {}),
   };
-  const [workspaces, total] = await Promise.all([
-    unscopedPrisma.workspace.findMany({
-      where,
-      select: { id: true, name: true, slug: true, createdAt: true },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    unscopedPrisma.workspace.count({ where }),
-  ]);
+  const orderBy =
+    sortBy === "name"
+      ? [{ name: "asc" as const }]
+      : [{ createdAt: "desc" as const }, { id: "desc" as const }];
+  const select = { id: true, name: true, slug: true, createdAt: true } as const;
+
+  let workspaces: { id: string; name: string; slug: string; createdAt: Date }[];
+  let total: number;
+  if (attention) {
+    const matching = await unscopedPrisma.workspace.findMany({ where, select, orderBy });
+    const details = await getAttentionDetails(matching.map((workspace) => workspace.id));
+    const filtered = matching.filter((workspace) =>
+      details.get(workspace.id)?.conditions.includes(attention),
+    );
+    total = filtered.length;
+    workspaces = filtered.slice((page - 1) * limit, (page - 1) * limit + limit);
+  } else {
+    [workspaces, total] = await Promise.all([
+      unscopedPrisma.workspace.findMany({
+        where,
+        select,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      unscopedPrisma.workspace.count({ where }),
+    ]);
+  }
   const ids = workspaces.map((workspace) => workspace.id);
   if (!ids.length) return { workspaces: [], total, page, limit };
 
