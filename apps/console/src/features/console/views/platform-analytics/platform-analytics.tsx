@@ -13,10 +13,26 @@ import DateRangePicker, {
 } from "../../components/date-range-picker";
 import BreakdownChart from "../overview/components/breakdown-chart";
 import { operatorOverviewQueryOptions } from "../overview/overview.services";
-import { channelLabels, resolutionReasonLabels, statusLabels } from "../overview/overview";
 import { formatCount } from "../overview/overview.utils";
 import TrendChart from "./components/trend-chart";
 import { platformAnalyticsTrendsQueryOptions } from "./platform-analytics.services";
+
+const statusLabels: Record<string, string> = {
+  AI_HANDLING: "AI handling",
+  ESCALATED: "Escalated",
+  HUMAN_HANDLING: "Human handling",
+  RESOLVED: "Resolved",
+};
+
+const resolutionReasonLabels: Record<string, string> = {
+  HUMAN_RESOLVED: "Human resolved",
+  CUSTOMER_CONFIRMED: "Customer confirmed",
+  CUSTOMER_INACTIVE: "Customer inactive (AI)",
+  CUSTOMER_INACTIVE_HUMAN_HANDLING: "Customer inactive (assigned)",
+  CUSTOMER_INACTIVE_SHARED_QUEUE: "Customer inactive (unclaimed)",
+};
+
+const channelLabels: Record<string, string> = { WEB: "Web Widget", WHATSAPP: "WhatsApp" };
 
 function formatRate(rate: number | null): string {
   return rate === null ? "—" : `${Math.round(rate * 1000) / 10}%`;
