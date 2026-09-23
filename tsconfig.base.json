@@ -22,6 +22,7 @@
       "@repo/api-client": ["./packages/api-client/src/index.ts"],
       "@repo/channels": ["./packages/channels/src/index.ts"],
       "@repo/knowledge": ["./packages/knowledge/src/index.ts"],
+      "@repo/layouts/*": ["./packages/layouts/src/*"],
       "@repo/logger": ["./packages/logger/src/index.ts"],
       "@repo/logger/telemetry": ["./packages/logger/src/telemetry.ts"],
       "@repo/shared": ["./packages/shared/src/index.ts"],

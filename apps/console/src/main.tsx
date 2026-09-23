@@ -1,9 +1,11 @@
 import { Toaster } from "@repo/ui/components/sonner";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "@repo/ui/components/theme-selector";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@repo/ui/styles.css";
+import "./styles.css";
 import { queryClient } from "./lib/query-client";
 import { routeTree } from "./routeTree.gen";
 
@@ -26,9 +28,11 @@ declare module "@tanstack/react-router" {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster closeButton richColors />
-    </QueryClientProvider>
+    <ThemeProvider storageKey="console:theme">
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <Toaster closeButton richColors />
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

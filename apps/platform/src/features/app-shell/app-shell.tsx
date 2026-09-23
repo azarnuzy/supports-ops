@@ -1,33 +1,12 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/ui/components/avatar";
 import { Button } from "@repo/ui/components/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@repo/ui/components/collapsible";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarRail,
-  SidebarSeparator,
-  SidebarTrigger,
-} from "@repo/ui/components/sidebar";
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@repo/ui/components/sidebar";
 import { toast } from "@repo/ui/components/sonner";
+import { AppShell, type AppShellNavSection } from "@repo/layouts/app-shell";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   BotIcon,
-  ChevronRightIcon,
   ChartColumnIcon,
   CoinsIcon,
   InboxIcon,
@@ -47,7 +26,6 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth";
 import { getInitials } from "../../lib/utils";
-import { cn } from "@repo/ui/lib/utils";
 import { HeaderControls } from "./components/header-controls";
 
 type NavItem = {
@@ -78,17 +56,6 @@ function activeNavItemTo(pathname: string, items: NavItem[]) {
     }
   }
   return best?.to;
-}
-
-function NavMenuButton({ active, item }: { active: boolean; item: NavItem }) {
-  return (
-    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
-      <Link to={item.to}>
-        <item.icon className="size-4 shrink-0" />
-        <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-      </Link>
-    </SidebarMenuButton>
-  );
 }
 
 export function PlatformAppShell({
@@ -174,124 +141,59 @@ export function PlatformAppShell({
     navSections.flatMap((section) => section.items),
   );
 
+  const shellNavSections: AppShellNavSection[] = navSections.map((section) => ({
+    collapsible: section.collapsible,
+    items: section.items.map((item) => ({ ...item, active: item.to === activeTo })),
+    label: section.label,
+  }));
+
+  const footer = (
+    <SidebarMenu className="rounded-lg border bg-background p-1 group-data-[collapsible=icon]:items-center">
+      <SidebarMenuItem>
+        <div className="flex items-center group-data-[collapsible=icon]:flex-col">
+          <SidebarMenuButton asChild size="lg" tooltip="Edit profile" className="flex-1">
+            <Link to="/profile">
+              <Avatar className="shrink-0 rounded-md">
+                {user.data.image ? (
+                  <AvatarImage src={user.data.image} alt={`${user.data.name} avatar`} />
+                ) : null}
+                <AvatarFallback className="rounded-md">
+                  {getInitials(user.data.name)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate font-medium">{user.data.name}</span>
+                <span className="truncate text-xs text-muted-foreground">{user.data.email}</span>
+              </span>
+            </Link>
+          </SidebarMenuButton>
+          <Button
+            aria-label={logoutMutation.isPending ? "Logging out" : "Logout"}
+            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+            size="icon"
+            title={logoutMutation.isPending ? "Logging out..." : "Logout"}
+            type="button"
+            variant="ghost"
+            disabled={logoutMutation.isPending}
+            onClick={handleLogout}
+          >
+            <LogOutIcon className="size-4" />
+          </Button>
+        </div>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader className="h-12 justify-center py-0">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="SupportOps">
-                <Link to="/">
-                  <img src="/support-ops-logo.png" alt="" className="size-6 shrink-0" />
-                  <span className="text-[13px] font-semibold group-data-[collapsible=icon]:hidden">
-                    SupportOps
-                  </span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          {navSections.map((section) => {
-            const items = section.items.map((item) => (
-              <SidebarMenuItem key={item.to}>
-                <NavMenuButton active={item.to === activeTo} item={item} />
-              </SidebarMenuItem>
-            ));
-            return (
-              <SidebarGroup key={section.label ?? section.items[0]?.to}>
-                {section.collapsible ? (
-                  <Collapsible className="group/collapsible" defaultOpen>
-                    <SidebarGroupLabel asChild>
-                      <CollapsibleTrigger className="w-full">
-                        {section.label}
-                        <ChevronRightIcon className="ml-auto size-3.5 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                      </CollapsibleTrigger>
-                    </SidebarGroupLabel>
-                    <CollapsibleContent>
-                      <SidebarGroupContent>
-                        <div className="ml-3.5 border-l pl-2 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-l-0 group-data-[collapsible=icon]:pl-0">
-                          <SidebarMenu>{items}</SidebarMenu>
-                        </div>
-                      </SidebarGroupContent>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ) : (
-                  <>
-                    {section.label ? <SidebarGroupLabel>{section.label}</SidebarGroupLabel> : null}
-                    <SidebarGroupContent>
-                      <SidebarMenu>{items}</SidebarMenu>
-                    </SidebarGroupContent>
-                  </>
-                )}
-              </SidebarGroup>
-            );
-          })}
-        </SidebarContent>
-        <div className="px-2">
-          <SidebarSeparator className="mx-0" />
-        </div>
-        <SidebarFooter>
-          <SidebarMenu className="rounded-lg border bg-background p-1 group-data-[collapsible=icon]:items-center">
-            <SidebarMenuItem>
-              <div className="flex items-center group-data-[collapsible=icon]:flex-col">
-                <SidebarMenuButton asChild size="lg" tooltip="Edit profile" className="flex-1">
-                  <Link to="/profile">
-                    <Avatar className="shrink-0 rounded-md">
-                      {user.data.image ? (
-                        <AvatarImage src={user.data.image} alt={`${user.data.name} avatar`} />
-                      ) : null}
-                      <AvatarFallback className="rounded-md">
-                        {getInitials(user.data.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                      <span className="truncate font-medium">{user.data.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {user.data.email}
-                      </span>
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
-                <Button
-                  aria-label={logoutMutation.isPending ? "Logging out" : "Logout"}
-                  className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-                  size="icon"
-                  title={logoutMutation.isPending ? "Logging out..." : "Logout"}
-                  type="button"
-                  variant="ghost"
-                  disabled={logoutMutation.isPending}
-                  onClick={handleLogout}
-                >
-                  <LogOutIcon className="size-4" />
-                </Button>
-              </div>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-        <SidebarRail />
-      </Sidebar>
-      <SidebarInset className={fullBleed ? undefined : "overflow-y-auto"}>
-        <header className="flex h-12 shrink-0 items-center justify-between border-b px-3">
-          <div className="flex items-center gap-1.5">
-            <SidebarTrigger />
-            <span className="text-[13px] font-medium text-muted-foreground">SupportOps</span>
-          </div>
-          <HeaderControls />
-        </header>
-        <div
-          className={
-            fullBleed
-              ? "flex min-h-0 w-full flex-1 flex-col overflow-hidden"
-              : cn(
-                  "mx-auto flex min-w-0 w-full flex-1 flex-col gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-8",
-                  fullWidth ? "max-w-none" : "max-w-6xl",
-                )
-          }
-        >
-          {children}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <AppShell
+      brand={{ name: "SupportOps", to: "/" }}
+      footer={footer}
+      fullBleed={fullBleed}
+      fullWidth={fullWidth}
+      headerRight={<HeaderControls />}
+      navSections={shellNavSections}
+    >
+      {children}
+    </AppShell>
   );
 }
