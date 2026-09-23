@@ -1,7 +1,7 @@
 import { ChannelType, ResolutionReason } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { recordTopUp } from "../credits/services";
-import { getTicketStatusCounts, resolveRange } from "../analytics/services";
+import { bucketByDay, getTicketStatusCounts, resolveRange } from "../analytics/services";
 import type { AnalyticsRangeQuery } from "../analytics/schema";
 import { unscopedPrisma } from "../../utils/prisma";
 
@@ -126,6 +126,93 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
     },
     revenueIdr: payments._sum.amountIdr ?? 0,
     providerCostUsd: credits.find((row) => row.type === "SPEND")?._sum.providerCostUsd ?? 0,
+  };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** One count bucket per UTC day; a day with no Sessions still appears with
+ * count 0, mirroring the Ticket trend buckets. */
+function bucketSessionsByDay(sessions: { createdAt: Date }[], start: Date, days: number) {
+  const buckets = Array.from({ length: days }, (_, index) => ({
+    date: new Date(start.getTime() + index * DAY_MS).toISOString().slice(0, 10),
+    count: 0,
+  }));
+  for (const session of sessions) {
+    const index = Math.floor((session.createdAt.getTime() - start.getTime()) / DAY_MS);
+    if (index >= 0 && index < days) buckets[index].count += 1;
+  }
+  return buckets;
+}
+
+/** Platform idle closure (assigned to a Human Agent) and abandoned Shared
+ * Human Queue outcomes are excluded from both sides of the rate: they are
+ * neither an AI nor a countable human success. */
+const excludedFromAiEffectiveness = new Set([
+  "CUSTOMER_INACTIVE_HUMAN_HANDLING",
+  "CUSTOMER_INACTIVE_SHARED_QUEUE",
+]);
+
+function getAiEffectiveness(
+  tickets: { resolvedAt: Date | null; resolutionReason: string | null }[],
+  startAt: Date,
+  endAt: Date,
+) {
+  const resolvedInRange = tickets.filter(
+    (ticket) =>
+      ticket.resolvedAt &&
+      ticket.resolvedAt >= startAt &&
+      ticket.resolvedAt < endAt &&
+      ticket.resolutionReason &&
+      !excludedFromAiEffectiveness.has(ticket.resolutionReason),
+  );
+  const aiResolvedCount = resolvedInRange.filter(
+    (ticket) => ticket.resolutionReason === "CUSTOMER_CONFIRMED",
+  ).length;
+  return {
+    count: aiResolvedCount,
+    total: resolvedInRange.length,
+    rate: resolvedInRange.length
+      ? Math.round((aiResolvedCount / resolvedInRange.length) * 10000) / 10000
+      : null,
+  };
+}
+
+/**
+ * Cross-Workspace daily Session and Ticket series for the request's date
+ * range, plus the AI-effectiveness rate among Tickets resolved in range.
+ * Sessions are counted by createdAt; a Session may have no Ticket, so this
+ * never derives from Ticket rows. Ticket trend buckets reuse the same
+ * created/escalated/resolved definitions as the Workspace-scoped analytics
+ * trend, run here unscoped across every Workspace.
+ */
+export async function getPlatformAnalyticsTrends(query: AnalyticsRangeQuery = {}) {
+  const { from, to, startAt, endAt } = resolveRange(query);
+  const days = Math.round((endAt.getTime() - startAt.getTime()) / DAY_MS);
+
+  const [sessions, tickets] = await Promise.all([
+    unscopedPrisma.session.findMany({
+      where: { createdAt: { gte: startAt, lt: endAt } },
+      select: { createdAt: true },
+    }),
+    unscopedPrisma.ticket.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { createdAt: { gte: startAt, lt: endAt } },
+          { escalatedAt: { gte: startAt, lt: endAt } },
+          { resolvedAt: { gte: startAt, lt: endAt } },
+        ],
+      },
+      select: { createdAt: true, escalatedAt: true, resolvedAt: true, resolutionReason: true },
+    }),
+  ]);
+
+  return {
+    range: { from, to },
+    sessions: bucketSessionsByDay(sessions, startAt, days),
+    tickets: bucketByDay(tickets, startAt, days),
+    aiEffectiveness: getAiEffectiveness(tickets, startAt, endAt),
   };
 }
 

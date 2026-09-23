@@ -4,6 +4,7 @@ import AtRiskView from "../features/console/views/at-risk/at-risk";
 import ConsoleView from "../features/console/views/console/console";
 import MarginView from "../features/console/views/margin/margin";
 import PaymentsView from "../features/console/views/payments/payments";
+import PlatformAnalyticsView from "../features/console/views/platform-analytics/platform-analytics";
 import { ConsoleShell, legacySectionAliases, sections } from "../features/console/shell";
 
 export const Route = createFileRoute("/$section")({
@@ -47,17 +48,17 @@ function Section() {
       </ConsoleShell>
     );
   }
+  if (slug === "platform-analytics") {
+    return (
+      <ConsoleShell>
+        <PlatformAnalyticsView />
+      </ConsoleShell>
+    );
+  }
   const sectionPage = sections.find((item) => item.slug === slug);
   return (
     <ConsoleShell>
-      <ConsoleView
-        title={sectionPage?.label ?? ""}
-        description={
-          slug === "platform-analytics"
-            ? "Cross-Workspace Sessions, Tickets, and Channel reports."
-            : undefined
-        }
-      />
+      <ConsoleView title={sectionPage?.label ?? ""} />
     </ConsoleShell>
   );
 }

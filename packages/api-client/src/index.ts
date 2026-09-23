@@ -252,6 +252,24 @@ export async function fetchOperatorMargin(client: ApiClient, range?: AnalyticsRa
   return (await response.json()) as OperatorMargin;
 }
 
+export type PlatformAnalyticsTrends = {
+  range: { from: string; to: string };
+  sessions: { date: string; count: number }[];
+  tickets: { date: string; created: number; aiResolved: number; escalated: number }[];
+  aiEffectiveness: { count: number; total: number; rate: number | null };
+};
+
+export async function fetchPlatformAnalyticsTrends(client: ApiClient, range?: AnalyticsRange) {
+  const query = {
+    ...(range?.from ? { from: range.from } : {}),
+    ...(range?.to ? { to: range.to } : {}),
+  };
+  const response = await client.operator.analytics.trends.$get({ query });
+  if (response.status === 401) throw new UnauthorizedApiError();
+  if (!response.ok) throw new Error("Failed to load Platform Analytics trends.");
+  return (await response.json()) as PlatformAnalyticsTrends;
+}
+
 export type TopUpPack = { id: string; credits: number; priceIdr: number };
 export type TopUpPayment = {
   id: string;
