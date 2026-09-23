@@ -24,6 +24,7 @@ pnpm db:migrate
 pnpm --filter @repo/api dev
 pnpm --filter @repo/business-system dev
 pnpm --filter @repo/platform dev
+pnpm --filter @repo/console dev
 pnpm --filter @repo/worker dev
 ```
 

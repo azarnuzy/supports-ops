@@ -2,6 +2,10 @@ support.azarnuzy.com {
 	reverse_proxy supports-ops-platform:80
 }
 
+console.support.azarnuzy.com {
+	reverse_proxy supports-ops-console:80
+}
+
 api.support.azarnuzy.com {
 	# Access log to stderr (docker logs): per-request duration and size as the
 	# proxy saw it, to compare against the API's own "slow request" timings.

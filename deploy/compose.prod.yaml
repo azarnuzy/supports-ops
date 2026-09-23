@@ -33,7 +33,7 @@ x-api-service: &api-service
     BUSINESS_SYSTEM_URL: "http://business-system:8001"
     BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
     BETTER_AUTH_URL: "https://api.support.azarnuzy.com"
-    CLIENT_ORIGINS: "https://support.azarnuzy.com,https://widget.support.azarnuzy.com"
+    CLIENT_ORIGINS: "https://support.azarnuzy.com,https://console.support.azarnuzy.com,https://widget.support.azarnuzy.com"
     INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
     REDIS_URL: "redis://redis:6379"
     SESSION_LINK_BASE_URL: "https://api.support.azarnuzy.com/widget/session"
@@ -162,6 +162,20 @@ services:
     networks:
       proxy:
         aliases: [supports-ops-platform]
+
+  console:
+    image: "ghcr.io/azarnuzy/supports-ops-console:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
+    restart: unless-stopped
+    expose: ["80"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    networks:
+      proxy:
+        aliases: [supports-ops-console]
 
   widget:
     image: "ghcr.io/azarnuzy/supports-ops-widget:${IMAGE_TAG:?Set IMAGE_TAG through deploy.sh}"
