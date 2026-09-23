@@ -268,9 +268,9 @@ export type UnlimitedPeriod = { endAt: string; endedEarlyAt: string | null };
 
 export type Billing = {
   balance: number;
-  modelRates: ModelCatalogEntry[];
-  packs: TopUpPack[];
-  payments: TopUpPayment[];
+  modelRates: readonly ModelCatalogEntry[];
+  packs: readonly TopUpPack[];
+  payments: readonly TopUpPayment[];
   paymentsEnabled: boolean;
   unlimitedPeriod: UnlimitedPeriod | null;
 };

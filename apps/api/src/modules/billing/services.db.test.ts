@@ -90,7 +90,11 @@ describe("Top-Up Payments", () => {
     await services.handleMayarWebhook({ data: { productId: "mayar-1" } });
     const secondWorkspaceId = randomUUID();
     await prisma.workspace.create({
-      data: { id: secondWorkspaceId, name: "Other", slug: `other-${secondWorkspaceId.slice(0, 8)}` },
+      data: {
+        id: secondWorkspaceId,
+        name: "Other",
+        slug: `other-${secondWorkspaceId.slice(0, 8)}`,
+      },
     });
     await prisma.topUpPayment.create({
       data: {

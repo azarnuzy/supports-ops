@@ -196,7 +196,7 @@ function PackCard({
   );
 }
 
-function PaymentHistory({ payments }: { payments: TopUpPayment[] }) {
+function PaymentHistory({ payments }: { payments: readonly TopUpPayment[] }) {
   const [page, setPage] = useState(1);
   const pageCount = Math.max(1, Math.ceil(payments.length / paymentPageSize));
   const currentPage = Math.min(page, pageCount);

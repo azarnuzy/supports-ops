@@ -19,7 +19,11 @@ async function findActivePeriod(
   });
 }
 
-export async function grantUnlimitedPeriod(operatorId: string, workspaceId: string, endDate: string) {
+export async function grantUnlimitedPeriod(
+  operatorId: string,
+  workspaceId: string,
+  endDate: string,
+) {
   return unscopedPrisma.$transaction(async (tx) => {
     const workspace = await tx.workspace.findFirst({
       where: { id: workspaceId, deletedAt: null },
@@ -45,7 +49,11 @@ export async function grantUnlimitedPeriod(operatorId: string, workspaceId: stri
   });
 }
 
-export async function extendUnlimitedPeriod(operatorId: string, workspaceId: string, endDate: string) {
+export async function extendUnlimitedPeriod(
+  operatorId: string,
+  workspaceId: string,
+  endDate: string,
+) {
   return unscopedPrisma.$transaction(async (tx) => {
     const active = await findActivePeriod(tx, workspaceId);
     if (!active) throw new NoActiveUnlimitedPeriodError();

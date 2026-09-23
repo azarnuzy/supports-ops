@@ -30,7 +30,9 @@ describe("API environment config", () => {
 
   it("requires a separate Operator auth secret in production", () => {
     const { OPERATOR_AUTH_SECRET: _operatorAuthSecret, ...environment } = productionEnv;
-    expect(() => parseApiEnv(environment)).toThrow("OPERATOR_AUTH_SECRET must be set in production.");
+    expect(() => parseApiEnv(environment)).toThrow(
+      "OPERATOR_AUTH_SECRET must be set in production.",
+    );
   });
 
   it("accepts a strong auth secret in production", () => {

@@ -25,7 +25,9 @@ beforeEach(async () => {
   workspaceId = randomUUID();
   operatorId = randomUUID();
   await prisma.workspace.create({ data: { id: workspaceId, name: "Acme", slug: workspaceId } });
-  await prisma.operator.create({ data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` } });
+  await prisma.operator.create({
+    data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` },
+  });
 });
 
 it("resolves the end date to 23:59 Asia/Jakarta (16:59 UTC)", () => {
@@ -53,10 +55,17 @@ it("rejects an overlapping grant", async () => {
 it("extends the active period and records one Operator Action", async () => {
   await unlimitedPeriods.grantUnlimitedPeriod(operatorId, workspaceId, "2026-10-05");
 
-  const extended = await unlimitedPeriods.extendUnlimitedPeriod(operatorId, workspaceId, "2026-10-12");
+  const extended = await unlimitedPeriods.extendUnlimitedPeriod(
+    operatorId,
+    workspaceId,
+    "2026-10-12",
+  );
 
   expect(extended.endAt.toISOString()).toBe("2026-10-12T16:59:59.999Z");
-  const actions = await prisma.operatorAction.findMany({ where: { workspaceId }, orderBy: { createdAt: "asc" } });
+  const actions = await prisma.operatorAction.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "asc" },
+  });
   expect(actions).toHaveLength(2);
   expect(actions[1]).toMatchObject({ type: "UNLIMITED_PERIOD_EXTENDED" });
 });
@@ -74,7 +83,10 @@ it("ends the active period early and records one Operator Action", async () => {
 
   expect(ended.endedEarlyAt).not.toBeNull();
   expect(ended.endAt.getTime()).toBe(ended.endedEarlyAt!.getTime());
-  const actions = await prisma.operatorAction.findMany({ where: { workspaceId }, orderBy: { createdAt: "asc" } });
+  const actions = await prisma.operatorAction.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "asc" },
+  });
   expect(actions).toHaveLength(2);
   expect(actions[1]).toMatchObject({ type: "UNLIMITED_PERIOD_ENDED" });
 

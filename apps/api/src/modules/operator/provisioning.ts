@@ -15,7 +15,13 @@ export async function createOperator(email: string, password: string) {
   await prisma.$transaction([
     prisma.operator.create({ data: { id, email, name: email } }),
     prisma.operatorAccount.create({
-      data: { id: randomUUID(), accountId: id, providerId: "credential", userId: id, password: passwordHash },
+      data: {
+        id: randomUUID(),
+        accountId: id,
+        providerId: "credential",
+        userId: id,
+        password: passwordHash,
+      },
     }),
   ]);
 }

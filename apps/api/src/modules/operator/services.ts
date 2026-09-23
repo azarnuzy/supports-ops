@@ -13,20 +13,27 @@ export async function getModelMargin(query: AnalyticsRangeQuery = {}) {
     _count: { _all: true },
     _sum: { providerCostUsd: true },
   });
-  const models = new Map<string, {
-    agentModel: string;
-    aiTurns: number;
-    unlimitedTurns: number;
-    creditsCharged: number;
-    providerCostUsd: number;
-    chargedProviderCostUsd: number;
-  }>();
+  const models = new Map<
+    string,
+    {
+      agentModel: string;
+      aiTurns: number;
+      unlimitedTurns: number;
+      creditsCharged: number;
+      providerCostUsd: number;
+      chargedProviderCostUsd: number;
+    }
+  >();
 
   for (const row of rows) {
     const agentModel = row.agentModel ?? "unknown";
     const model = models.get(agentModel) ?? {
-      agentModel, aiTurns: 0, unlimitedTurns: 0, creditsCharged: 0,
-      providerCostUsd: 0, chargedProviderCostUsd: 0,
+      agentModel,
+      aiTurns: 0,
+      unlimitedTurns: 0,
+      creditsCharged: 0,
+      providerCostUsd: 0,
+      chargedProviderCostUsd: 0,
     };
     const cost = row._sum.providerCostUsd ?? 0;
     model.aiTurns += row._count._all;
@@ -41,12 +48,12 @@ export async function getModelMargin(query: AnalyticsRangeQuery = {}) {
 
   return {
     range: { from, to },
-    models: [...models.values()].sort((a, b) => a.agentModel.localeCompare(b.agentModel)).map(
-      ({ chargedProviderCostUsd, ...model }) => ({
+    models: [...models.values()]
+      .sort((a, b) => a.agentModel.localeCompare(b.agentModel))
+      .map(({ chargedProviderCostUsd, ...model }) => ({
         ...model,
         usdPerCredit: model.creditsCharged ? chargedProviderCostUsd / model.creditsCharged : null,
-      }),
-    ),
+      })),
   };
 }
 
@@ -88,7 +95,10 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
   const sessionCount = (type: ChannelType) =>
     sessions.reduce(
       (sum, row) =>
-        sum + (channels.find((channel) => channel.id === row.channelId)?.type === type ? row._count._all : 0),
+        sum +
+        (channels.find((channel) => channel.id === row.channelId)?.type === type
+          ? row._count._all
+          : 0),
       0,
     );
   const creditTotal = (type: "SPEND" | "TOP_UP" | "TRIAL_GRANT") =>
@@ -97,7 +107,9 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
   return {
     range: { from, to },
     workspaces: { total: workspaces, new: newWorkspaces },
-    sessions: Object.fromEntries(Object.values(ChannelType).map((type) => [type, sessionCount(type)])),
+    sessions: Object.fromEntries(
+      Object.values(ChannelType).map((type) => [type, sessionCount(type)]),
+    ),
     tickets: {
       byStatus: Object.fromEntries(statusCounts.map(({ status, count }) => [status, count])),
       byResolutionReason: Object.fromEntries(
@@ -117,13 +129,32 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
   };
 }
 
-export async function topUpWorkspace(operatorId: string, workspaceId: string, credits: number, note: string) {
+export async function topUpWorkspace(
+  operatorId: string,
+  workspaceId: string,
+  credits: number,
+  note: string,
+) {
   return unscopedPrisma.$transaction(async (tx) => {
-    const workspace = await tx.workspace.findFirst({ where: { id: workspaceId, deletedAt: null }, select: { id: true } });
+    const workspace = await tx.workspace.findFirst({
+      where: { id: workspaceId, deletedAt: null },
+      select: { id: true },
+    });
     if (!workspace) return null;
     const entry = await recordTopUp(tx, workspaceId, credits, note);
-    const action = await tx.operatorAction.create({ data: { id: randomUUID(), operatorId, workspaceId, type: "TOP_UP", payload: { creditLedgerEntryId: entry.id, credits, note } } });
-    const balance = await tx.creditLedgerEntry.aggregate({ where: { workspaceId }, _sum: { credits: true } });
+    const action = await tx.operatorAction.create({
+      data: {
+        id: randomUUID(),
+        operatorId,
+        workspaceId,
+        type: "TOP_UP",
+        payload: { creditLedgerEntryId: entry.id, credits, note },
+      },
+    });
+    const balance = await tx.creditLedgerEntry.aggregate({
+      where: { workspaceId },
+      _sum: { credits: true },
+    });
     return { action, balance: balance._sum.credits ?? 0 };
   });
 }

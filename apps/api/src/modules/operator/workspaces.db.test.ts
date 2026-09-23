@@ -74,44 +74,67 @@ it("guards, searches, and paginates Workspaces without deleted rows", async () =
 
   const page = await app.request("/operator/workspaces?limit=1&page=2");
   expect(page.status).toBe(200);
-  expect((await page.json()).total).toBe(2);
+  expect(((await page.json()) as { total: number }).total).toBe(2);
   expect(
-    (await (await app.request("/operator/workspaces?search=ALP")).json()).workspaces,
+    (
+      (await (await app.request("/operator/workspaces?search=ALP")).json()) as {
+        workspaces: unknown;
+      }
+    ).workspaces,
   ).toMatchObject([
     { id: firstId, balance: 497, creditSpend30Days: 3, activeUnlimitedPeriod: null },
   ]);
-  expect((await (await app.request("/operator/workspaces?search=deleted")).json()).total).toBe(0);
+  expect(
+    ((await (await app.request("/operator/workspaces?search=deleted")).json()) as { total: number })
+      .total,
+  ).toBe(0);
 });
 
 it("surfaces an active Unlimited Period in the Workspace list", async () => {
   const operatorId = randomUUID();
-  await prisma.operator.create({ data: { id: operatorId, name: "Op", email: `${operatorId}@example.com` } });
+  await prisma.operator.create({
+    data: { id: operatorId, name: "Op", email: `${operatorId}@example.com` },
+  });
   const endAt = new Date(Date.now() + 60_000);
   await prisma.unlimitedPeriod.create({
     data: { id: randomUUID(), workspaceId: firstId, operatorId, endAt },
   });
   sessions.operator = true;
 
-  const { workspaces } = await (await app.request("/operator/workspaces?search=ALP")).json();
+  const { workspaces } = (await (await app.request("/operator/workspaces?search=ALP")).json()) as {
+    workspaces: unknown;
+  };
 
-  expect(workspaces).toMatchObject([{ id: firstId, activeUnlimitedPeriod: { endAt: endAt.toISOString() } }]);
+  expect(workspaces).toMatchObject([
+    { id: firstId, activeUnlimitedPeriod: { endAt: endAt.toISOString() } },
+  ]);
 
-  const detail = await (await app.request(`/operator/workspaces/${firstId}`)).json();
+  const detail = (await (await app.request(`/operator/workspaces/${firstId}`)).json()) as {
+    unlimitedPeriod: unknown;
+  };
   expect(detail.unlimitedPeriod).toMatchObject({ endAt: endAt.toISOString(), endedEarlyAt: null });
 });
 
 it("returns the same analytics and AI Usage as the Workspace Admin", async () => {
   sessions.workspaceId = firstId;
-  const adminOverview = (await (await app.request("/analytics/overview")).json()).analytics;
-  const adminTraffic = (await (await app.request("/analytics/traffic")).json()).analytics;
-  const adminUsage = (await (await app.request("/ai-usage/summary")).json()).aiUsage;
-  const adminTools = (await (await app.request("/ai-usage/tools")).json()).toolUsage;
+  const adminOverview = (
+    (await (await app.request("/analytics/overview")).json()) as { analytics: unknown }
+  ).analytics;
+  const adminTraffic = (
+    (await (await app.request("/analytics/traffic")).json()) as { analytics: unknown }
+  ).analytics;
+  const adminUsage = (
+    (await (await app.request("/ai-usage/summary")).json()) as { aiUsage: unknown }
+  ).aiUsage;
+  const adminTools = (
+    (await (await app.request("/ai-usage/tools")).json()) as { toolUsage: unknown }
+  ).toolUsage;
   sessions.workspaceId = "";
   sessions.operator = true;
 
   const response = await app.request(`/operator/workspaces/${firstId}`);
   expect(response.status).toBe(200);
-  const detail = await response.json();
+  const detail = (await response.json()) as { analytics: unknown; aiUsage: unknown };
   expect(detail.analytics).toEqual({ overview: adminOverview, traffic: adminTraffic });
   expect(detail.aiUsage).toEqual({ summary: adminUsage, tools: adminTools });
   expect(JSON.stringify(detail)).not.toContain("accessToken");

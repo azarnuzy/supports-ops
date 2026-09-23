@@ -1,7 +1,11 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { questionHidden, assertPassword } from "./operator-prompts";
-import { disconnectOperatorDb, normalizeEmail, resetOperatorPassword } from "../apps/api/src/modules/operator/provisioning";
+import {
+  disconnectOperatorDb,
+  normalizeEmail,
+  resetOperatorPassword,
+} from "../apps/api/src/modules/operator/provisioning";
 
 const rl = createInterface({ input, output });
 try {
@@ -13,7 +17,9 @@ try {
   await resetOperatorPassword(email, password);
   output.write(`Operator password reset: ${email}\n`);
 } catch (error) {
-  output.write(`Error: ${error instanceof Error ? error.message : "Failed to reset Operator password."}\n`);
+  output.write(
+    `Error: ${error instanceof Error ? error.message : "Failed to reset Operator password."}\n`,
+  );
   process.exitCode = 1;
 } finally {
   rl.close();

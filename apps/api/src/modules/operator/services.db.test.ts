@@ -26,7 +26,9 @@ it("records one Operator Action and one Top-Up in the same transaction", async (
   const workspaceId = randomUUID();
   const operatorId = randomUUID();
   await prisma.workspace.create({ data: { id: workspaceId, name: "Acme", slug: workspaceId } });
-  await prisma.operator.create({ data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` } });
+  await prisma.operator.create({
+    data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` },
+  });
   const result = await topUpWorkspace(operatorId, workspaceId, 25, "Invoice 42");
   expect(result?.balance).toBe(25);
   const entries = await prisma.creditLedgerEntry.findMany({ where: { workspaceId } });
@@ -34,7 +36,11 @@ it("records one Operator Action and one Top-Up in the same transaction", async (
   expect(entries).toHaveLength(1);
   expect(actions).toHaveLength(1);
   expect(actions[0].operatorId).toBe(operatorId);
-  expect(actions[0].payload).toEqual({ creditLedgerEntryId: entries[0].id, credits: 25, note: "Invoice 42" });
+  expect(actions[0].payload).toEqual({
+    creditLedgerEntryId: entries[0].id,
+    credits: 25,
+    note: "Invoice 42",
+  });
 });
 
 beforeEach(async () => {
@@ -46,32 +52,58 @@ it("reconciles charged Credits across Workspaces and excludes unlimited turns fr
   await prisma.workspace.createMany({
     data: workspaces.map((id, index) => ({ id, name: `Workspace ${index}`, slug: id })),
   });
-  const spend = (workspaceId: string, agentModel: string, credits: number, providerCostUsd: number, createdAt: Date) =>
+  const spend = (
+    workspaceId: string,
+    agentModel: string,
+    credits: number,
+    providerCostUsd: number,
+    createdAt: Date,
+  ) =>
     prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId, type: "SPEND", agentModel, credits, providerCostUsd, createdAt },
+      data: {
+        id: randomUUID(),
+        workspaceId,
+        type: "SPEND",
+        agentModel,
+        credits,
+        providerCostUsd,
+        createdAt,
+      },
     });
   const inRange = new Date("2026-09-23T12:00:00Z");
   await spend(workspaces[0], "model-a", -2, 0.04, inRange);
   await spend(workspaces[1], "model-a", -2, 0.06, inRange);
-  await spend(workspaces[1], "model-a", 0, 0.20, inRange);
+  await spend(workspaces[1], "model-a", 0, 0.2, inRange);
   await spend(workspaces[0], "model-b", 0, 0.03, inRange);
-  await spend(workspaces[0], "model-a", -2, 0.50, new Date("2026-09-22T12:00:00Z"));
+  await spend(workspaces[0], "model-a", -2, 0.5, new Date("2026-09-22T12:00:00Z"));
 
   const result = await getModelMargin({ from: "2026-09-23", to: "2026-09-23" });
   const ledger = await prisma.creditLedgerEntry.aggregate({
-    where: { type: "SPEND", createdAt: { gte: new Date("2026-09-23"), lt: new Date("2026-09-24") } },
+    where: {
+      type: "SPEND",
+      createdAt: { gte: new Date("2026-09-23"), lt: new Date("2026-09-24") },
+    },
     _sum: { credits: true },
   });
 
-  expect(result.models.reduce((sum, model) => sum + model.creditsCharged, 0)).toBe(-ledger._sum.credits!);
+  expect(result.models.reduce((sum, model) => sum + model.creditsCharged, 0)).toBe(
+    -ledger._sum.credits!,
+  );
   expect(result.models[0]).toMatchObject({
-    agentModel: "model-a", aiTurns: 3, unlimitedTurns: 1, creditsCharged: 4,
+    agentModel: "model-a",
+    aiTurns: 3,
+    unlimitedTurns: 1,
+    creditsCharged: 4,
   });
   expect(result.models[0].providerCostUsd).toBeCloseTo(0.3);
   expect(result.models[0].usdPerCredit).toBeCloseTo(0.025);
   expect(result.models[1]).toEqual({
-    agentModel: "model-b", aiTurns: 1, unlimitedTurns: 1,
-    creditsCharged: 0, providerCostUsd: 0.03, usdPerCredit: null,
+    agentModel: "model-b",
+    aiTurns: 1,
+    unlimitedTurns: 1,
+    creditsCharged: 0,
+    providerCostUsd: 0.03,
+    usdPerCredit: null,
   });
 });
 
@@ -80,7 +112,12 @@ it("adds two Workspace figures without exposing customer content", async () => {
   const now = new Date("2026-09-23T12:00:00.000Z");
   for (const [index, workspaceId] of workspaceIds.entries()) {
     await prisma.workspace.create({
-      data: { id: workspaceId, name: `Workspace ${index}`, slug: `workspace-${workspaceId}`, createdAt: now },
+      data: {
+        id: workspaceId,
+        name: `Workspace ${index}`,
+        slug: `workspace-${workspaceId}`,
+        createdAt: now,
+      },
     });
     const aiAgentId = randomUUID();
     const channelId = randomUUID();
@@ -88,26 +125,68 @@ it("adds two Workspace figures without exposing customer content", async () => {
     const sessionId = randomUUID();
     await prisma.aiAgent.create({ data: { id: aiAgentId, name: "AI Agent", workspaceId } });
     await prisma.channel.create({
-      data: { id: channelId, aiAgentId, name: "Channel", type: index ? "WHATSAPP" : "WEB", workspaceId },
+      data: {
+        id: channelId,
+        aiAgentId,
+        name: "Channel",
+        type: index ? "WHATSAPP" : "WEB",
+        workspaceId,
+      },
     });
     await prisma.customerIdentity.create({
-      data: { id: customerIdentityId, workspaceId, channelType: index ? "WHATSAPP" : "WEB", canonicalId: `secret-${index}`, name: "Secret Customer" },
+      data: {
+        id: customerIdentityId,
+        workspaceId,
+        channelType: index ? "WHATSAPP" : "WEB",
+        canonicalId: `secret-${index}`,
+        name: "Secret Customer",
+      },
     });
     await prisma.session.create({
       data: { id: sessionId, workspaceId, channelId, customerIdentityId, createdAt: now },
     });
     await prisma.ticket.create({
-      data: { id: randomUUID(), workspaceId, channelId, aiAgentId, customerIdentityId, sessionId, title: "Secret ticket", status: index ? "RESOLVED" : "AI_HANDLING", resolutionReason: index ? "CUSTOMER_CONFIRMED" : null, createdAt: now },
+      data: {
+        id: randomUUID(),
+        workspaceId,
+        channelId,
+        aiAgentId,
+        customerIdentityId,
+        sessionId,
+        title: "Secret ticket",
+        status: index ? "RESOLVED" : "AI_HANDLING",
+        resolutionReason: index ? "CUSTOMER_CONFIRMED" : null,
+        createdAt: now,
+      },
     });
     await prisma.creditLedgerEntry.createMany({
       data: [
         { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500, createdAt: now },
         { id: randomUUID(), workspaceId, type: "TOP_UP", credits: 100, createdAt: now },
-        { id: randomUUID(), workspaceId, type: "SPEND", credits: -(index + 1), providerCostUsd: 0.01 * (index + 1), createdAt: now },
+        {
+          id: randomUUID(),
+          workspaceId,
+          type: "SPEND",
+          credits: -(index + 1),
+          providerCostUsd: 0.01 * (index + 1),
+          createdAt: now,
+        },
       ],
     });
     await prisma.topUpPayment.create({
-      data: { id: randomUUID(), workspaceId, packId: "test", credits: 100, amountIdr: 10000 * (index + 1), status: "PAID", mayarPaymentId: randomUUID(), checkoutUrl: "https://example.com", expiresAt: now, paidAt: now, createdAt: now },
+      data: {
+        id: randomUUID(),
+        workspaceId,
+        packId: "test",
+        credits: 100,
+        amountIdr: 10000 * (index + 1),
+        status: "PAID",
+        mayarPaymentId: randomUUID(),
+        checkoutUrl: "https://example.com",
+        expiresAt: now,
+        paidAt: now,
+        createdAt: now,
+      },
     });
   }
 
