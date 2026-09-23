@@ -1,10 +1,11 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
+import { unscopedPrisma } from "../../utils/prisma";
 import { analyticsRangeQuerySchema } from "../analytics/schema";
 import { loadOperatorSession, requireOperator } from "./middleware";
 import { listPayments, paymentQuerySchema } from "./payments";
-import { getModelMargin, getOperatorOverview } from "./services";
+import { getModelMargin, getOperatorOverview, topUpWorkspace } from "./services";
 import type { OperatorVariables } from "./types";
 import { getWorkspaceDetail, listWorkspaces } from "./workspaces";
 
@@ -18,10 +19,30 @@ const withRangeQuery = zValidator("query", analyticsRangeQuerySchema, (result, c
   if (!result.success) return c.json({ error: "invalid_range" }, 400);
 });
 
+const topUpSchema = z.object({ credits: z.number().int().positive(), note: z.string().trim().min(1) });
+
 export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .use("*", loadOperatorSession)
   .use("*", requireOperator)
   .get("/session", (c) => c.json({ operator: c.get("operator") }))
+  .post("/workspaces/:workspaceId/top-ups", zValidator("json", topUpSchema, (result, c) => {
+    if (!result.success) return c.json({ error: "invalid_top_up" }, 400);
+  }), async (c) => {
+    const { credits, note } = c.req.valid("json");
+    const result = await topUpWorkspace(c.get("operator")!.id, c.req.param("workspaceId"), credits, note);
+    if (!result) return c.json({ error: "workspace_not_found" }, 404);
+    return c.json(result, 201);
+  })
+  .get("/actions", zValidator("query", z.object({ workspaceId: z.string().min(1).optional() })), async (c) => {
+    const { workspaceId } = c.req.valid("query");
+    const actions = await unscopedPrisma.operatorAction.findMany({
+      where: workspaceId ? { workspaceId } : undefined,
+      include: { operator: { select: { id: true, name: true, email: true } } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 100,
+    });
+    return c.json({ actions });
+  })
   .get("/margin", withRangeQuery, async (c) => c.json(await getModelMargin(c.req.valid("query"))))
   .get(
     "/payments",

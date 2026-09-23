@@ -9,6 +9,18 @@ const lowBalanceThreshold = 100;
 export class WorkspaceNotFoundError extends Error {}
 export class InvalidTopUpAmountError extends Error {}
 
+export async function recordTopUp(
+  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry">,
+  workspaceId: string,
+  credits: number,
+  note: string,
+) {
+  if (!Number.isInteger(credits) || credits <= 0) throw new InvalidTopUpAmountError();
+  return tx.creditLedgerEntry.create({
+    data: { id: randomUUID(), workspaceId, type: "TOP_UP", credits, note },
+  });
+}
+
 /** Written in the same transaction that creates the Workspace, so a Workspace never
  * exists without its balance. */
 export async function grantTrialCredits(
@@ -115,15 +127,7 @@ export async function topUpBySlug(slug: string, credits: number, note: string) {
     throw new WorkspaceNotFoundError();
   }
 
-  await unscopedPrisma.creditLedgerEntry.create({
-    data: {
-      id: randomUUID(),
-      workspaceId: workspace.id,
-      type: "TOP_UP",
-      credits,
-      note,
-    },
-  });
+  await recordTopUp(unscopedPrisma, workspace.id, credits, note);
 
   return creditBalance(workspace.id);
 }

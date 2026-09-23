@@ -4,7 +4,9 @@ Every Workspace pays for AI with Credits, tracked in the append-only Credit Ledg
 
 ## Recording a Top-Up
 
-A Top-Up is a manual operator action, recorded after a payment lands outside the platform:
+A signed-in Operator can record a Top-Up in the Console with a positive whole number of Credits and a required payment note. The Console records the Operator and the Credit Ledger entry together. Use it after a payment lands outside the platform.
+
+The server CLI remains available as a fallback. It records the Credit Ledger entry without an Operator Action:
 
 ```sh
 pnpm credits:top-up <workspace-slug> <credits> "<note>"

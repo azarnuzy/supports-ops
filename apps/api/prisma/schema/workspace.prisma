@@ -24,6 +24,7 @@ model Workspace {
   ticketCategories   TicketCategory[]
   creditLedgerEntries CreditLedgerEntry[]
   topUpPayments       TopUpPayment[]
+  operatorActions     OperatorAction[]
 }
 
 /// The Credit Ledger: an append-only record of every change to a Workspace's Credits
