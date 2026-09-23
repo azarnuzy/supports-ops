@@ -23,6 +23,7 @@ ARG VITE_WIDGET_URL
 ENV VITE_WIDGET_URL=${VITE_WIDGET_URL}
 
 RUN pnpm --filter @repo/platform build \
+  && pnpm --filter @repo/console build \
   && pnpm --filter @repo/widget build
 
 FROM build AS api
@@ -53,6 +54,13 @@ FROM caddy:2-alpine AS platform
 
 COPY deploy/Caddyfile.static /etc/caddy/Caddyfile
 COPY --from=build /app/apps/platform/dist /srv
+
+EXPOSE 80
+
+FROM caddy:2-alpine AS console
+
+COPY deploy/Caddyfile.static /etc/caddy/Caddyfile
+COPY --from=build /app/apps/console/dist /srv
 
 EXPOSE 80
 

@@ -3,7 +3,7 @@ import type { HttpBindings } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "./utils/logger";
-import { auth } from "./modules/auth/instance";
+import { auth, operatorAuth } from "./modules/auth/instance";
 import { loadAuthSession, loadWorkspaceContext } from "./modules/auth/middleware";
 import type { AuthVariables } from "./modules/auth/types";
 import { knowledgeRouter } from "./modules/knowledge/router";
@@ -24,6 +24,7 @@ import { toolsRouter } from "./modules/tools/router";
 import { mcpRouter } from "./modules/mcp/router";
 import { whatsAppConfigRouter } from "./modules/whatsapp-config/router";
 import { whatsAppWebhookRouter } from "./modules/whatsapp-config/webhook";
+import { operatorRouter } from "./modules/operator/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   /** Registered before every route so it covers the Channel endpoints too.
@@ -85,6 +86,8 @@ export const app = new Hono<{ Variables: AuthVariables }>()
       origin: (origin) => (apiConfig.clientOrigins.includes(origin) ? origin : null),
     }),
   )
+  .on(["POST", "GET"], "/operator/auth/*", (c) => operatorAuth.handler(c.req.raw))
+  .route("/operator", operatorRouter)
   .use("*", loadAuthSession)
   .use("*", loadWorkspaceContext)
   .get("/health", (c) => {

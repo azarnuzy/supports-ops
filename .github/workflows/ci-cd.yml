@@ -110,7 +110,7 @@ jobs:
             mapfile -t files < <(git ls-files)
           fi
           apps=()
-          for app in api worker business-system platform widget; do
+          for app in api worker business-system platform console widget; do
             changed=false
             for file in "${files[@]}"; do
               case "${file}" in

@@ -1,4 +1,4 @@
-import { betterAuthConfig } from "../../config";
+import { betterAuthConfig, operatorAuthConfig } from "../../config";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { unscopedPrisma } from "../../utils/prisma";
@@ -38,4 +38,22 @@ export const auth = betterAuth({
   session: { cookieCache: { enabled: true, maxAge: 60 }, modelName: "authSession" },
   secret: betterAuthConfig.secret,
   trustedOrigins: betterAuthConfig.trustedOrigins,
+});
+
+export const operatorAuth = betterAuth({
+  appName: "SupportOps Console",
+  baseURL: new URL("/operator/auth", operatorAuthConfig.url).toString(),
+  database: prismaAdapter(unscopedPrisma, { provider: "postgresql" }),
+  emailAndPassword: { enabled: true, disableSignUp: true },
+  user: {
+    modelName: "operator",
+    additionalFields: {
+      disabledAt: { type: "date", input: false, required: false },
+    },
+  },
+  session: { expiresIn: 8 * 60 * 60, modelName: "operatorSession" },
+  account: { modelName: "operatorAccount" },
+  advanced: { cookiePrefix: "supportops-operator" },
+  secret: operatorAuthConfig.secret,
+  trustedOrigins: operatorAuthConfig.trustedOrigins,
 });

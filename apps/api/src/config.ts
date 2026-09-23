@@ -79,6 +79,7 @@ const apiEnvSchema = z
       z.coerce.number().int().positive().default(500),
     ),
     OPENROUTER_API_KEY: optionalStringSchema,
+    OPERATOR_AUTH_SECRET: optionalStringSchema,
     COMPLETION_GATEWAY_API_KEY: optionalStringSchema,
     EVAL_JUDGE_MODEL: optionalStringSchema,
     EVAL_WORKSPACE_ID: optionalStringSchema,
@@ -120,6 +121,20 @@ const apiEnvSchema = z
         path: ["BETTER_AUTH_SECRET"],
       });
     }
+
+    if (!env.OPERATOR_AUTH_SECRET) {
+      context.addIssue({
+        code: "custom",
+        message: "OPERATOR_AUTH_SECRET must be set in production.",
+        path: ["OPERATOR_AUTH_SECRET"],
+      });
+    } else if (env.OPERATOR_AUTH_SECRET.length < productionSecretMinimumLength) {
+      context.addIssue({
+        code: "custom",
+        message: `OPERATOR_AUTH_SECRET must be at least ${productionSecretMinimumLength} characters in production.`,
+        path: ["OPERATOR_AUTH_SECRET"],
+      });
+    }
   });
 
 export function parseApiEnv(environment: NodeJS.ProcessEnv) {
@@ -142,6 +157,12 @@ export const apiConfig = {
 
 export const betterAuthConfig = {
   secret: env.BETTER_AUTH_SECRET ?? env.AUTH_SECRET ?? defaultBetterAuthSecret,
+  trustedOrigins: parseCsv(env.CLIENT_ORIGINS),
+  url: env.BETTER_AUTH_URL,
+} as const;
+
+export const operatorAuthConfig = {
+  secret: env.OPERATOR_AUTH_SECRET ?? defaultBetterAuthSecret,
   trustedOrigins: parseCsv(env.CLIENT_ORIGINS),
   url: env.BETTER_AUTH_URL,
 } as const;
