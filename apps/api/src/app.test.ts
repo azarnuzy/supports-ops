@@ -3,12 +3,14 @@ import { app } from "./app";
 
 const mocks = vi.hoisted(() => ({
   authHandler: vi.fn(),
+  getOperatorSession: vi.fn(),
   findMany: vi.fn(),
   findUnique: vi.fn(),
   getSession: vi.fn(),
   registerAdminWorkspace: vi.fn(),
   signInEmail: vi.fn(),
   update: vi.fn(),
+  operatorAuthHandler: vi.fn(),
 }));
 
 vi.mock("./modules/auth/instance", () => ({
@@ -18,6 +20,10 @@ vi.mock("./modules/auth/instance", () => ({
       signInEmail: mocks.signInEmail,
     },
     handler: mocks.authHandler,
+  },
+  operatorAuth: {
+    api: { getSession: mocks.getOperatorSession },
+    handler: mocks.operatorAuthHandler,
   },
 }));
 
@@ -47,6 +53,8 @@ const baseDate = new Date("2026-07-03T00:00:00.000Z");
 describe("api app", () => {
   beforeEach(() => {
     mocks.authHandler.mockReset();
+    mocks.getOperatorSession.mockReset();
+    mocks.operatorAuthHandler.mockReset();
     mocks.findMany.mockReset();
     mocks.findUnique.mockReset();
     mocks.getSession.mockReset();
@@ -55,6 +63,8 @@ describe("api app", () => {
     mocks.update.mockReset();
 
     mocks.authHandler.mockResolvedValue(new Response(null, { status: 404 }));
+    mocks.getOperatorSession.mockResolvedValue(null);
+    mocks.operatorAuthHandler.mockResolvedValue(new Response(null, { status: 404 }));
     mocks.findMany.mockResolvedValue([]);
     mocks.findUnique.mockResolvedValue(null);
     mocks.getSession.mockResolvedValue(null);
@@ -93,6 +103,22 @@ describe("api app", () => {
 
     await expect(response.json()).resolves.toEqual({ error: "unauthorized" });
     expect(response.status).toBe(401);
+  });
+
+  it("rejects unauthenticated, Workspace, and disabled identities from Operator routes", async () => {
+    expect((await app.request("/operator/session")).status).toBe(401);
+
+    mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
+    expect((await app.request("/operator/session")).status).toBe(401);
+
+    mocks.getOperatorSession.mockResolvedValue(createOperatorSession({ disabledAt: baseDate }));
+    expect((await app.request("/operator/session")).status).toBe(401);
+  });
+
+  it("isolates Operator and Workspace sessions", async () => {
+    mocks.getOperatorSession.mockResolvedValue(createOperatorSession());
+    expect((await app.request("/operator/session")).status).toBe(200);
+    expect((await app.request("/session")).status).toBe(401);
   });
 
   it("forbids users access without an admin session", async () => {
@@ -364,6 +390,29 @@ function createAuthSession(role: "ADMIN" | "HUMAN_AGENT") {
       role,
       updatedAt: baseDate,
       workspaceId: "workspace-1",
+    },
+  };
+}
+
+function createOperatorSession({ disabledAt = null }: { disabledAt?: Date | null } = {}) {
+  return {
+    session: {
+      createdAt: baseDate,
+      expiresAt: baseDate,
+      id: "operator-session-id",
+      token: "operator-session-token",
+      updatedAt: baseDate,
+      userId: "operator-id",
+    },
+    user: {
+      createdAt: baseDate,
+      disabledAt,
+      email: "operator@example.com",
+      emailVerified: true,
+      id: "operator-id",
+      image: null,
+      name: "Operator",
+      updatedAt: baseDate,
     },
   };
 }
