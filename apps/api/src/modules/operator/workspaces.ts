@@ -38,7 +38,7 @@ export async function listWorkspaces({
   if (!ids.length) return { workspaces: [], total, page, limit };
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const [users, balances, spend, activity] = await Promise.all([
+  const [users, balances, spend, activity, unlimitedPeriods] = await Promise.all([
     unscopedPrisma.user.groupBy({
       by: ["workspaceId"],
       where: { workspaceId: { in: ids }, deletedAt: null },
@@ -59,13 +59,20 @@ export async function listWorkspaces({
       where: { workspaceId: { in: ids } },
       _max: { customerLastMessageAt: true },
     }),
+    unscopedPrisma.unlimitedPeriod.findMany({
+      where: { workspaceId: { in: ids }, endedEarlyAt: null, endAt: { gt: new Date() } },
+      select: { workspaceId: true, endAt: true },
+    }),
   ]);
   return {
     workspaces: workspaces.map((workspace) => ({
       ...workspace,
       userCount: users.find((row) => row.workspaceId === workspace.id)?._count._all ?? 0,
       balance: balances.find((row) => row.workspaceId === workspace.id)?._sum.credits ?? 0,
-      activeUnlimitedPeriod: null,
+      activeUnlimitedPeriod:
+        unlimitedPeriods
+          .filter((row) => row.workspaceId === workspace.id)
+          .map((row) => ({ endAt: row.endAt }))[0] ?? null,
       lastCustomerActivityAt:
         activity.find((row) => row.workspaceId === workspace.id)?._max.customerLastMessageAt ??
         null,

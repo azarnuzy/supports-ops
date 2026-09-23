@@ -6,6 +6,7 @@ import { prisma, unscopedPrisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { modelCatalog } from "../ai-agent/model-catalog";
 import { creditBalance } from "../credits/services";
+import { currentOrLastUnlimitedPeriod } from "../operator/unlimited-periods";
 import { createMayarPayment, fetchMayarPayment } from "./mayar";
 import { findTopUpPack, topUpPacks } from "./packs";
 
@@ -98,10 +99,11 @@ export async function getBilling() {
   const workspaceId = requireWorkspaceId();
   await verifyAll(await prisma.topUpPayment.findMany({ where: pendingWhere() }));
 
-  const [balance, payments] = await Promise.all([
+  const [balance, payments, unlimitedPeriod] = await Promise.all([
     creditBalance(workspaceId),
     prisma.topUpPayment.findMany({ orderBy: { createdAt: "desc" }, take: paymentHistoryLimit }),
-  ]);
+    currentOrLastUnlimitedPeriod(workspaceId),
+  ] as const);
 
   return {
     balance,
@@ -109,6 +111,9 @@ export async function getBilling() {
     packs: topUpPacks,
     payments: payments.map((payment) => toView(payment)),
     paymentsEnabled: Boolean(mayarConfig.apiKey),
+    unlimitedPeriod: unlimitedPeriod
+      ? { endAt: unlimitedPeriod.endAt, endedEarlyAt: unlimitedPeriod.endedEarlyAt }
+      : null,
   };
 }
 

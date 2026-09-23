@@ -25,6 +25,7 @@ model Workspace {
   creditLedgerEntries CreditLedgerEntry[]
   topUpPayments       TopUpPayment[]
   operatorActions     OperatorAction[]
+  unlimitedPeriods    UnlimitedPeriod[]
 }
 
 /// The Credit Ledger: an append-only record of every change to a Workspace's Credits

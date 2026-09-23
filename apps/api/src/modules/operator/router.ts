@@ -7,6 +7,14 @@ import { loadOperatorSession, requireOperator } from "./middleware";
 import { listPayments, paymentQuerySchema } from "./payments";
 import { getModelMargin, getOperatorOverview, topUpWorkspace } from "./services";
 import type { OperatorVariables } from "./types";
+import {
+  extendUnlimitedPeriod,
+  grantUnlimitedPeriod,
+  NoActiveUnlimitedPeriodError,
+  OverlappingUnlimitedPeriodError,
+  WorkspaceNotFoundError,
+  endUnlimitedPeriodEarly,
+} from "./unlimited-periods";
 import { getWorkspaceDetail, listWorkspaces } from "./workspaces";
 
 const listQuery = z.object({
@@ -20,6 +28,7 @@ const withRangeQuery = zValidator("query", analyticsRangeQuerySchema, (result, c
 });
 
 const topUpSchema = z.object({ credits: z.number().int().positive(), note: z.string().trim().min(1) });
+const unlimitedPeriodSchema = z.object({ endDate: z.iso.date() });
 
 export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .use("*", loadOperatorSession)
@@ -32,6 +41,60 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
     const result = await topUpWorkspace(c.get("operator")!.id, c.req.param("workspaceId"), credits, note);
     if (!result) return c.json({ error: "workspace_not_found" }, 404);
     return c.json(result, 201);
+  })
+  .post(
+    "/workspaces/:workspaceId/unlimited-period",
+    zValidator("json", unlimitedPeriodSchema, (result, c) => {
+      if (!result.success) return c.json({ error: "invalid_unlimited_period" }, 400);
+    }),
+    async (c) => {
+      try {
+        const period = await grantUnlimitedPeriod(
+          c.get("operator")!.id,
+          c.req.param("workspaceId"),
+          c.req.valid("json").endDate,
+        );
+        return c.json({ period }, 201);
+      } catch (error) {
+        if (error instanceof WorkspaceNotFoundError) return c.json({ error: "workspace_not_found" }, 404);
+        if (error instanceof OverlappingUnlimitedPeriodError) {
+          return c.json({ error: "overlapping_unlimited_period" }, 409);
+        }
+        throw error;
+      }
+    },
+  )
+  .patch(
+    "/workspaces/:workspaceId/unlimited-period",
+    zValidator("json", unlimitedPeriodSchema, (result, c) => {
+      if (!result.success) return c.json({ error: "invalid_unlimited_period" }, 400);
+    }),
+    async (c) => {
+      try {
+        const period = await extendUnlimitedPeriod(
+          c.get("operator")!.id,
+          c.req.param("workspaceId"),
+          c.req.valid("json").endDate,
+        );
+        return c.json({ period });
+      } catch (error) {
+        if (error instanceof NoActiveUnlimitedPeriodError) {
+          return c.json({ error: "no_active_unlimited_period" }, 404);
+        }
+        throw error;
+      }
+    },
+  )
+  .post("/workspaces/:workspaceId/unlimited-period/end", async (c) => {
+    try {
+      const period = await endUnlimitedPeriodEarly(c.get("operator")!.id, c.req.param("workspaceId"));
+      return c.json({ period });
+    } catch (error) {
+      if (error instanceof NoActiveUnlimitedPeriodError) {
+        return c.json({ error: "no_active_unlimited_period" }, 404);
+      }
+      throw error;
+    }
   })
   .get("/actions", zValidator("query", z.object({ workspaceId: z.string().min(1).optional() })), async (c) => {
     const { workspaceId } = c.req.valid("query");

@@ -158,4 +158,21 @@ describe("Top-Up Payments", () => {
     expect(billing.payments[0]).toMatchObject({ checkoutUrl: null, status: "EXPIRED" });
     expect(mayar.fetchMayarPayment).not.toHaveBeenCalled();
   });
+
+  it("exposes the Workspace's current or most recently ended Unlimited Period", async () => {
+    const billingWithout = await withWorkspaceContext(workspaceId, () => services.getBilling());
+    expect(billingWithout.unlimitedPeriod).toBeNull();
+
+    const operatorId = randomUUID();
+    await prisma.operator.create({
+      data: { id: operatorId, name: "Op", email: `${operatorId}@example.com` },
+    });
+    const endAt = new Date(Date.now() + 60_000);
+    await prisma.unlimitedPeriod.create({
+      data: { id: randomUUID(), workspaceId, operatorId, endAt },
+    });
+
+    const billing = await withWorkspaceContext(workspaceId, () => services.getBilling());
+    expect(billing.unlimitedPeriod).toMatchObject({ endAt, endedEarlyAt: null });
+  });
 });

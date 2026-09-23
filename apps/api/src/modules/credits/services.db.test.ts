@@ -157,6 +157,77 @@ describe("spendForTurn balance-crossing emails", () => {
   });
 });
 
+describe("spendForTurn during an Unlimited Period", () => {
+  async function grantUnlimitedPeriod(endAt: Date) {
+    await prisma.operator.create({
+      data: { id: randomUUID(), name: "Op", email: `${randomUUID()}@example.com` },
+    });
+    const operatorId = (await prisma.operator.findFirstOrThrow()).id;
+    await prisma.unlimitedPeriod.create({
+      data: { id: randomUUID(), workspaceId, operatorId, endAt },
+    });
+  }
+
+  it("spends 0 Credits and leaves the balance untouched, even at zero balance", async () => {
+    await grantUnlimitedPeriod(new Date(Date.now() + 60_000));
+    const balanceBefore = await services.creditBalance(workspaceId);
+
+    await spendOnce();
+
+    expect(await services.creditBalance(workspaceId)).toBe(balanceBefore);
+    const entry = await prisma.creditLedgerEntry.findFirstOrThrow({ where: { workspaceId } });
+    expect(entry.credits).toBe(0);
+    expect(entry.modelRate).toBe(1);
+    expect(mocks.enqueueCreditAlertEmail).not.toHaveBeenCalled();
+  });
+
+  it("still records Model Rate, Tokens, and provider cost", async () => {
+    await grantUnlimitedPeriod(new Date(Date.now() + 60_000));
+    await prisma.$transaction((tx) =>
+      services.spendForTurn(tx, {
+        agentModel: null,
+        aiAgentId: randomUUID(),
+        providerCostUsd: 0.05,
+        sessionId: randomUUID(),
+        ticketId: randomUUID(),
+        usage: { cachedInputTokens: 1, inputTokens: 2, outputTokens: 3 },
+        workspaceId,
+      }),
+    );
+    const entry = await prisma.creditLedgerEntry.findFirstOrThrow({ where: { workspaceId } });
+    expect(entry).toMatchObject({
+      credits: 0,
+      modelRate: 1,
+      providerCostUsd: 0.05,
+      inputTokens: 2,
+      cachedInputTokens: 1,
+      outputTokens: 3,
+    });
+  });
+
+  it("spends Credits normally once the period has ended", async () => {
+    await grantUnlimitedPeriod(new Date(Date.now() - 1000));
+    await grantBalance(10);
+
+    await spendOnce();
+
+    expect(await services.creditBalance(workspaceId)).toBe(9);
+  });
+
+  it("spends Credits normally after an early end", async () => {
+    await grantUnlimitedPeriod(new Date(Date.now() + 60_000));
+    await grantBalance(10);
+    await prisma.unlimitedPeriod.updateMany({
+      where: { workspaceId },
+      data: { endedEarlyAt: new Date() },
+    });
+
+    await spendOnce();
+
+    expect(await services.creditBalance(workspaceId)).toBe(9);
+  });
+});
+
 describe("topUpBySlug", () => {
   it("rejects an unknown slug", async () => {
     await expect(services.topUpBySlug("no-such-workspace", 100, "note")).rejects.toBeInstanceOf(

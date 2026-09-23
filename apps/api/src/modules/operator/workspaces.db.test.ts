@@ -83,6 +83,20 @@ it("guards, searches, and paginates Workspaces without deleted rows", async () =
   expect((await (await app.request("/operator/workspaces?search=deleted")).json()).total).toBe(0);
 });
 
+it("surfaces an active Unlimited Period in the Workspace list", async () => {
+  const operatorId = randomUUID();
+  await prisma.operator.create({ data: { id: operatorId, name: "Op", email: `${operatorId}@example.com` } });
+  const endAt = new Date(Date.now() + 60_000);
+  await prisma.unlimitedPeriod.create({
+    data: { id: randomUUID(), workspaceId: firstId, operatorId, endAt },
+  });
+  sessions.operator = true;
+
+  const { workspaces } = await (await app.request("/operator/workspaces?search=ALP")).json();
+
+  expect(workspaces).toMatchObject([{ id: firstId, activeUnlimitedPeriod: { endAt: endAt.toISOString() } }]);
+});
+
 it("returns the same analytics and AI Usage as the Workspace Admin", async () => {
   sessions.workspaceId = firstId;
   const adminOverview = (await (await app.request("/analytics/overview")).json()).analytics;

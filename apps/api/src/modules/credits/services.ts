@@ -77,7 +77,7 @@ async function notifyBalanceCrossing(
  * only invoke this for a genuine decision — a Turn aborted by Takeover or
  * failed by a provider error must never reach it. */
 export async function spendForTurn(
-  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry">,
+  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry" | "unlimitedPeriod">,
   params: {
     aiAgentId: string;
     agentModel: string | null;
@@ -92,14 +92,20 @@ export async function spendForTurn(
 ) {
   const agentModel = resolveAgentModelId(params.agentModel);
   const rate = modelRateFor(agentModel);
-  const balanceBefore = await balanceWithin(tx, params.workspaceId);
+  const now = new Date();
+  const unlimited = await tx.unlimitedPeriod.findFirst({
+    where: { workspaceId: params.workspaceId, endedEarlyAt: null, endAt: { gt: now } },
+    select: { id: true },
+  });
+  const credits = unlimited ? 0 : rate;
+  const balanceBefore = unlimited ? 0 : await balanceWithin(tx, params.workspaceId);
   await tx.creditLedgerEntry.create({
     data: {
       agentModel,
       aiAgentId: params.aiAgentId,
       cachedInputTokens: params.usage?.cachedInputTokens ?? null,
       channel: params.channel ?? null,
-      credits: -rate,
+      credits: -credits,
       id: randomUUID(),
       inputTokens: params.usage?.inputTokens ?? null,
       modelRate: rate,
@@ -111,6 +117,7 @@ export async function spendForTurn(
       workspaceId: params.workspaceId,
     },
   });
+  if (unlimited) return;
   await notifyBalanceCrossing(params.workspaceId, balanceBefore, balanceBefore - rate);
 }
 
