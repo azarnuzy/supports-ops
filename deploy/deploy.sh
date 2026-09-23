@@ -22,7 +22,7 @@ fi
 
 for service in "${SERVICES[@]}"; do
   case "${service}" in
-    api|worker|business-system|platform|widget) ;;
+    api|worker|business-system|platform|console|widget) ;;
     *) echo "Unknown service: ${service}" >&2; exit 64 ;;
   esac
 done
