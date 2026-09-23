@@ -102,7 +102,11 @@ type TrendTicket = {
 /** Daily created / AI-confirmed-resolved / escalated counts across `days`
  * UTC days starting at `start`. Buckets are always complete: a day with no
  * activity still appears with count 0, mirroring the hourly traffic window. */
-function bucketByDay(tickets: TrendTicket[], start: Date, days: number): AnalyticsDailyTrend[] {
+export function bucketByDay(
+  tickets: TrendTicket[],
+  start: Date,
+  days: number,
+): AnalyticsDailyTrend[] {
   const buckets = Array.from({ length: days }, (_, index) => ({
     date: addDays(start, index).toISOString().slice(0, 10),
     created: 0,

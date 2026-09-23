@@ -6,7 +6,12 @@ import { analyticsRangeQuerySchema } from "../analytics/schema";
 import { listAtRiskWorkspaces } from "./at-risk";
 import { loadOperatorSession, requireOperator } from "./middleware";
 import { listPayments, paymentQuerySchema } from "./payments";
-import { getModelMargin, getOperatorOverview, topUpWorkspace } from "./services";
+import {
+  getModelMargin,
+  getOperatorOverview,
+  getPlatformAnalyticsTrends,
+  topUpWorkspace,
+} from "./services";
 import type { OperatorVariables } from "./types";
 import {
   extendUnlimitedPeriod,
@@ -140,6 +145,9 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   )
   .get("/overview", withRangeQuery, async (c) =>
     c.json({ overview: await getOperatorOverview(c.req.valid("query")) }),
+  )
+  .get("/analytics/trends", withRangeQuery, async (c) =>
+    c.json(await getPlatformAnalyticsTrends(c.req.valid("query"))),
   )
   .get("/workspaces", zValidator("query", listQuery), async (c) =>
     c.json(await listWorkspaces(c.req.valid("query"))),
