@@ -101,7 +101,10 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
     const { workspaceId } = c.req.valid("query");
     const actions = await unscopedPrisma.operatorAction.findMany({
       where: workspaceId ? { workspaceId } : undefined,
-      include: { operator: { select: { id: true, name: true, email: true } } },
+      include: {
+        operator: { select: { id: true, name: true, email: true } },
+        workspace: { select: { id: true, name: true } },
+      },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 100,
     });

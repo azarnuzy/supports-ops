@@ -1543,6 +1543,46 @@ export async function endUnlimitedPeriodEarly(client: ApiClient, workspaceId: st
   return (await response.json()) as { period: UnlimitedPeriod };
 }
 
+export type OperatorActionType =
+  | "TOP_UP"
+  | "UNLIMITED_PERIOD_GRANTED"
+  | "UNLIMITED_PERIOD_EXTENDED"
+  | "UNLIMITED_PERIOD_ENDED";
+
+export type OperatorAction = {
+  id: string;
+  type: OperatorActionType;
+  workspaceId: string;
+  workspace: { id: string; name: string } | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  operator: { id: string; name: string; email: string };
+};
+
+export async function fetchOperatorActions(client: ApiClient, params: { workspaceId?: string } = {}) {
+  const response = await client.operator.actions.$get({
+    query: { ...(params.workspaceId ? { workspaceId: params.workspaceId } : {}) },
+  });
+  if (!response.ok) throw new Error("Failed to load the Action log.");
+  return (await response.json()) as { actions: OperatorAction[] };
+}
+
+export type TopUpInput = { credits: number; note: string };
+export type TopUpResult = {
+  action: { id: string; operatorId: string; workspaceId: string; type: "TOP_UP"; payload: unknown; createdAt: string };
+  balance: number;
+};
+
+export async function topUpWorkspace(client: ApiClient, workspaceId: string, input: TopUpInput) {
+  const response = await client.operator.workspaces[":workspaceId"]["top-ups"].$post({
+    param: { workspaceId },
+    json: input,
+  });
+  if (response.status === 404) throw new Error("This Workspace no longer exists.");
+  if (!response.ok) throw new Error("Failed to record the Top-Up.");
+  return (await response.json()) as TopUpResult;
+}
+
 export async function deleteTicketCategory(client: ApiClient, id: string) {
   const response = await client["ticket-categories"][":id"].$delete({ param: { id } });
   if (response.status === 409)
