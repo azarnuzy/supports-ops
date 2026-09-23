@@ -1,7 +1,25 @@
-import { fetchOperatorWorkspaceDetail } from "@repo/api-client";
+import {
+  endUnlimitedPeriodEarly,
+  extendUnlimitedPeriod,
+  fetchOperatorWorkspaceDetail,
+  grantUnlimitedPeriod,
+  type UnlimitedPeriod,
+} from "@repo/api-client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@repo/ui/components/alert-dialog";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import { Input } from "@repo/ui/components/input";
 import {
   Table,
   TableBody,
@@ -10,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ConsoleShell } from "../../../console/shell";
 import { api } from "../../../../lib/api";
@@ -62,6 +80,7 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
           </p>
         ) : (
           <WorkspaceDetail
+            workspaceId={workspaceId}
             detail={detail.data}
             days={days}
             onDaysChange={setDays}
@@ -73,15 +92,18 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
 }
 
 function WorkspaceDetail({
+  workspaceId,
   detail,
   days,
   onDaysChange,
 }: {
+  workspaceId: string;
   detail: NonNullable<Awaited<ReturnType<typeof fetchOperatorWorkspaceDetail>>>;
   days: 7 | 14 | 30;
   onDaysChange: (days: 7 | 14 | 30) => void;
 }) {
-  const { workspace, users, channels, knowledgeSources, aiAgents, analytics, aiUsage } = detail;
+  const { workspace, unlimitedPeriod, users, channels, knowledgeSources, aiAgents, analytics, aiUsage } =
+    detail;
 
   return (
     <div className="grid gap-8">
@@ -104,6 +126,8 @@ function WorkspaceDetail({
           </Button>
         ))}
       </div>
+
+      <UnlimitedPeriodCard workspaceId={workspaceId} unlimitedPeriod={unlimitedPeriod} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -274,5 +298,108 @@ function WorkspaceDetail({
         </Table>
       </section>
     </div>
+  );
+}
+
+function isActive(period: UnlimitedPeriod | null): period is UnlimitedPeriod {
+  return Boolean(period) && !period!.endedEarlyAt && new Date(period!.endAt) > new Date();
+}
+
+function UnlimitedPeriodCard({
+  workspaceId,
+  unlimitedPeriod,
+}: {
+  workspaceId: string;
+  unlimitedPeriod: UnlimitedPeriod | null;
+}) {
+  const queryClient = useQueryClient();
+  const active = isActive(unlimitedPeriod);
+  const [endDate, setEndDate] = useState("");
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["operator", "workspace", workspaceId] });
+
+  const grant = useMutation({
+    mutationFn: (date: string) => grantUnlimitedPeriod(api, workspaceId, date),
+    onSuccess: () => {
+      setEndDate("");
+      invalidate();
+    },
+  });
+  const extend = useMutation({
+    mutationFn: (date: string) => extendUnlimitedPeriod(api, workspaceId, date),
+    onSuccess: () => {
+      setEndDate("");
+      invalidate();
+    },
+  });
+  const endEarly = useMutation({
+    mutationFn: () => endUnlimitedPeriodEarly(api, workspaceId),
+    onSuccess: invalidate,
+  });
+
+  const mutation = active ? extend : grant;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Unlimited Period</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <p className="text-sm">
+          {active ? (
+            <>
+              Active until <span className="font-medium">{formatDate(unlimitedPeriod!.endAt)}</span>
+            </>
+          ) : (
+            "No active Unlimited Period."
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="date"
+            aria-label="Unlimited Period end date"
+            className="w-40"
+            value={endDate}
+            onChange={(event) => setEndDate(event.target.value)}
+          />
+          <Button
+            size="sm"
+            disabled={!endDate || mutation.isPending}
+            onClick={() => mutation.mutate(endDate)}
+          >
+            {active ? "Extend" : "Grant"}
+          </Button>
+          {active && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="outline" disabled={endEarly.isPending}>
+                  End early
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>End this Unlimited Period now?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The Workspace goes back to spending its own Credits immediately.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => endEarly.mutate()}>End early</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+        {(grant.isError || extend.isError || endEarly.isError) && (
+          <p className="text-sm text-destructive">
+            {(grant.error ?? extend.error ?? endEarly.error) instanceof Error
+              ? ((grant.error ?? extend.error ?? endEarly.error) as Error).message
+              : "Something went wrong."}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
