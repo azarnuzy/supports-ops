@@ -19,13 +19,38 @@ import { type ReactNode, useEffect, useState } from "react";
 import { operatorQuery, signOut } from "../../lib/auth";
 
 export const sections = [
-  { icon: LayoutDashboardIcon, label: "Overview", slug: "" },
-  { icon: UsersIcon, label: "Workspaces", slug: "workspaces" },
-  { icon: AlertTriangleIcon, label: "At-risk", slug: "at-risk" },
-  { icon: CreditCardIcon, label: "Payments", slug: "payments" },
-  { icon: LineChartIcon, label: "Model margin", slug: "model-margin" },
-  { icon: ClipboardListIcon, label: "Action log", slug: "action-log" },
+  { group: "Monitor", icon: LayoutDashboardIcon, label: "Overview", slug: "" },
+  { group: "Monitor", icon: UsersIcon, label: "Workspaces", slug: "workspaces" },
+  { group: "Monitor", icon: AlertTriangleIcon, label: "Needs Attention", slug: "needs-attention" },
+  {
+    group: "Monitor",
+    icon: LineChartIcon,
+    label: "Platform Analytics",
+    slug: "platform-analytics",
+  },
+  {
+    group: "Finance",
+    icon: CreditCardIcon,
+    label: "Billing & Credits",
+    slug: "billing-credits",
+  },
+  {
+    group: "Finance",
+    icon: LineChartIcon,
+    label: "AI Usage & Economics",
+    slug: "ai-usage-economics",
+  },
+  { group: "Governance", icon: ClipboardListIcon, label: "Audit Log", slug: "audit-log" },
 ] as const;
+
+export const legacySectionAliases: Record<string, string> = {
+  "at-risk": "needs-attention",
+  payments: "billing-credits",
+  "model-margin": "ai-usage-economics",
+  "action-log": "audit-log",
+};
+
+const navGroups = ["Monitor", "Finance", "Governance"] as const;
 
 function getInitials(email: string) {
   return email.slice(0, 2).toUpperCase();
@@ -56,16 +81,19 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
     }
   }
 
-  const navSections: AppShellNavSection[] = [
-    {
-      items: sections.map(({ icon, label, slug }) => ({
-        active: location.pathname === (slug ? `/${slug}` : "/"),
+  const currentSlug = location.pathname.split("/")[1] ?? "";
+  const activeSlug = legacySectionAliases[currentSlug] ?? currentSlug;
+  const navSections: AppShellNavSection[] = navGroups.map((group) => ({
+    label: group,
+    items: sections
+      .filter((section) => section.group === group)
+      .map(({ icon, label, slug }) => ({
+        active: activeSlug === slug,
         icon,
         label,
         to: slug ? `/${slug}` : "/",
       })),
-    },
-  ];
+  }));
 
   const footer = (
     <SidebarMenu className="rounded-lg border bg-background p-1 group-data-[collapsible=icon]:items-center">
@@ -101,6 +129,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
     <AppShell
       brand={{ name: "Console", to: "/" }}
       footer={footer}
+      fullWidth
       headerRight={
         <ThemeSelector
           ariaLabel="Theme"

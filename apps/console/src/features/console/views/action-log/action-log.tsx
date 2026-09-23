@@ -3,8 +3,6 @@ import {
   fetchOperatorWorkspaces,
   type OperatorAction,
 } from "@repo/api-client";
-import { Button } from "@repo/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { NativeSelect, NativeSelectOption } from "@repo/ui/components/native-select";
 import {
   Table,
@@ -18,6 +16,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api } from "../../../../lib/api";
+import {
+  ConsoleDataTable,
+  ConsolePageHeader,
+  ConsoleQueryState,
+} from "../../components/console-patterns";
 
 const ALL = "ALL";
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -58,13 +61,14 @@ export default function ActionLogView() {
     queryFn: () =>
       fetchOperatorActions(api, { workspaceId: workspaceId === ALL ? undefined : workspaceId }),
   });
+  const actionRows = actions.data?.actions ?? [];
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-2xl font-semibold">Action log</h1>
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-sm">Operator Actions</CardTitle>
+    <>
+      <ConsolePageHeader
+        title="Audit Log"
+        description="Operator actions across all Workspaces."
+        actions={
           <NativeSelect
             aria-label="Filter by Workspace"
             className="w-64"
@@ -78,59 +82,64 @@ export default function ActionLogView() {
               </NativeSelectOption>
             ))}
           </NativeSelect>
-        </CardHeader>
-        <CardContent>
-          {actions.isPending ? (
-            <p className="p-6 text-sm text-muted-foreground">Loading actions…</p>
-          ) : actions.isError ? (
-            <div className="grid place-items-center gap-3 p-12 text-center">
-              <p className="text-sm text-destructive">Failed to load the Action log.</p>
-              <Button size="sm" variant="outline" onClick={() => actions.refetch()}>
-                Try again
-              </Button>
-            </div>
-          ) : actions.data.actions.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No Operator Actions yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Workspace</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Detail</TableHead>
+        }
+      />
+      <ConsoleDataTable>
+        {actions.isPending || actions.isError || actionRows.length === 0 ? (
+          <ConsoleQueryState
+            isPending={actions.isPending}
+            isError={actions.isError}
+            error={actions.error}
+            errorFallback="Failed to load the Action log."
+            isEmpty={!actions.isPending && !actions.isError && actionRows.length === 0}
+            emptyTitle={
+              workspaceId === ALL
+                ? "No Operator Actions yet"
+                : "No Operator Actions for this Workspace"
+            }
+            onRetry={() => void actions.refetch()}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Operator</TableHead>
+                <TableHead>Workspace</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Detail</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {actionRows.map((action) => (
+                <TableRow key={action.id}>
+                  <TableCell className="text-muted-foreground">
+                    {dateFormat.format(new Date(action.createdAt))}
+                  </TableCell>
+                  <TableCell>{action.operator.name}</TableCell>
+                  <TableCell>
+                    {action.workspace ? (
+                      <Link
+                        to="/workspaces/$workspaceId"
+                        params={{ workspaceId: action.workspace.id }}
+                        className="text-primary hover:underline"
+                      >
+                        {action.workspace.name}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell>{actionLabel[action.type]}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {actionDetail(action)}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {actions.data.actions.map((action) => (
-                  <TableRow key={action.id}>
-                    <TableCell className="text-muted-foreground">
-                      {dateFormat.format(new Date(action.createdAt))}
-                    </TableCell>
-                    <TableCell>{action.operator.name}</TableCell>
-                    <TableCell>
-                      {action.workspace ? (
-                        <Link
-                          to="/workspaces/$workspaceId"
-                          params={{ workspaceId: action.workspace.id }}
-                          className="text-primary hover:underline"
-                        >
-                          {action.workspace.name}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>{actionLabel[action.type]}</TableCell>
-                    <TableCell className="text-muted-foreground">{actionDetail(action)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </main>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </ConsoleDataTable>
+    </>
   );
 }

@@ -1,6 +1,3 @@
-import { Badge } from "@repo/ui/components/badge";
-import { Button } from "@repo/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import {
   Table,
   TableBody,
@@ -12,6 +9,12 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { api } from "../../../../lib/api";
+import {
+  ConsoleDataTable,
+  ConsolePageHeader,
+  ConsoleQueryState,
+  ConsoleStatusBadge,
+} from "../../components/console-patterns";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
@@ -19,14 +22,14 @@ const conditionLabel: Record<string, string> = {
   CREDIT_EXHAUSTED: "Credit exhausted",
   LOW_BALANCE: "Low balance",
   UNLIMITED_ENDING_SOON: "Unlimited ending soon",
-  INACTIVE: "No activity 14d",
+  INACTIVE: "No Customer activity for 14 days",
 };
 
-const conditionVariant: Record<string, "default" | "outline" | "secondary"> = {
-  CREDIT_EXHAUSTED: "default",
-  LOW_BALANCE: "outline",
-  UNLIMITED_ENDING_SOON: "secondary",
-  INACTIVE: "secondary",
+const conditionTone: Record<string, "danger" | "warning" | "neutral"> = {
+  CREDIT_EXHAUSTED: "danger",
+  LOW_BALANCE: "warning",
+  UNLIMITED_ENDING_SOON: "warning",
+  INACTIVE: "neutral",
 };
 
 export default function AtRiskView() {
@@ -42,78 +45,71 @@ export default function AtRiskView() {
   const workspaces = query.data?.workspaces ?? [];
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-2xl font-semibold">At-risk Workspaces</h1>
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-sm">Workspaces needing attention</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {query.isPending ? (
-            <p className="p-6 text-sm text-muted-foreground">Loading at-risk workspaces…</p>
-          ) : query.isError ? (
-            <div className="grid place-items-center gap-3 p-12 text-center">
-              <p className="text-sm text-destructive">
-                {query.error instanceof Error
-                  ? query.error.message
-                  : "Failed to load at-risk workspaces."}
-              </p>
-              <Button size="sm" variant="outline" onClick={() => query.refetch()}>
-                Try again
-              </Button>
-            </div>
-          ) : workspaces.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No at-risk workspaces.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Workspace</TableHead>
-                  <TableHead>Balance</TableHead>
-                  <TableHead>Conditions</TableHead>
-                  <TableHead>Unlimited Period ends</TableHead>
-                  <TableHead>Last Customer activity</TableHead>
+    <>
+      <ConsolePageHeader
+        title="Needs Attention"
+        description="Workspaces meeting one or more existing attention conditions."
+      />
+      <ConsoleDataTable>
+        {query.isPending || query.isError || workspaces.length === 0 ? (
+          <ConsoleQueryState
+            isPending={query.isPending}
+            isError={query.isError}
+            error={query.error}
+            errorFallback="Failed to load at-risk workspaces."
+            isEmpty={!query.isPending && !query.isError && workspaces.length === 0}
+            emptyTitle="No Workspaces need attention"
+            onRetry={() => void query.refetch()}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Workspace</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+                <TableHead>Conditions</TableHead>
+                <TableHead>Unlimited Period ends</TableHead>
+                <TableHead>Last Customer activity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {workspaces.map((workspace) => (
+                <TableRow key={workspace.id}>
+                  <TableCell>
+                    <Link
+                      to="/workspaces/$workspaceId"
+                      params={{ workspaceId: workspace.id }}
+                      className="text-primary hover:underline"
+                    >
+                      {workspace.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{workspace.balance}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {workspace.conditions.map((condition) => (
+                        <ConsoleStatusBadge key={condition} tone={conditionTone[condition]}>
+                          {conditionLabel[condition] ?? condition}
+                        </ConsoleStatusBadge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {workspace.activeUnlimitedPeriod
+                      ? dateFormat.format(new Date(workspace.activeUnlimitedPeriod.endAt))
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {workspace.lastCustomerActivityAt
+                      ? dateFormat.format(new Date(workspace.lastCustomerActivityAt))
+                      : "—"}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {workspaces.map((workspace) => (
-                  <TableRow key={workspace.id}>
-                    <TableCell>
-                      <Link
-                        to="/workspaces/$workspaceId"
-                        params={{ workspaceId: workspace.id }}
-                        className="text-primary hover:underline"
-                      >
-                        {workspace.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="tabular-nums">{workspace.balance}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {workspace.conditions.map((condition) => (
-                          <Badge key={condition} variant={conditionVariant[condition]}>
-                            {conditionLabel[condition] ?? condition}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {workspace.activeUnlimitedPeriod
-                        ? dateFormat.format(new Date(workspace.activeUnlimitedPeriod.endAt))
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {workspace.lastCustomerActivityAt
-                        ? dateFormat.format(new Date(workspace.lastCustomerActivityAt))
-                        : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </main>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </ConsoleDataTable>
+    </>
   );
 }

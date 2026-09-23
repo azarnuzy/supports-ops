@@ -30,6 +30,13 @@ import {
 } from "@repo/ui/components/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import {
+  ConsoleDataTable,
+  ConsolePageHeader,
+  ConsoleQueryState,
+  ConsoleSectionHeading,
+  ConsoleStatusBadge,
+} from "../../../console/components/console-patterns";
 import { ConsoleShell } from "../../../console/shell";
 import { api } from "../../../../lib/api";
 import { TopUpDialog } from "./components/top-up-dialog";
@@ -75,22 +82,23 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
 
   return (
     <ConsoleShell>
-      <main className="mx-auto max-w-6xl p-6">
-        {detail.isPending ? (
-          <p className="text-muted-foreground">Loading…</p>
-        ) : detail.isError || detail.data === null ? (
-          <p className="text-destructive">
-            {detail.data === null ? "Workspace not found." : "Failed to load the Workspace."}
-          </p>
-        ) : (
-          <WorkspaceDetail
-            workspaceId={workspaceId}
-            detail={detail.data}
-            days={days}
-            onDaysChange={setDays}
-          />
-        )}
-      </main>
+      {detail.isPending || detail.isError || detail.data === null ? (
+        <ConsoleQueryState
+          isPending={detail.isPending}
+          isError={detail.isError}
+          errorFallback="Failed to load the Workspace."
+          isEmpty={!detail.isPending && !detail.isError && detail.data === null}
+          emptyTitle="Workspace not found"
+          onRetry={() => void detail.refetch()}
+        />
+      ) : (
+        <WorkspaceDetail
+          workspaceId={workspaceId}
+          detail={detail.data}
+          days={days}
+          onDaysChange={setDays}
+        />
+      )}
     </ConsoleShell>
   );
 }
@@ -120,14 +128,12 @@ function WorkspaceDetail({
 
   return (
     <div className="grid gap-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{workspace.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {workspace.slug} · Created {formatDate(workspace.createdAt)}
-          </p>
-        </div>
-        <Button onClick={() => setTopUpOpen(true)}>Top-Up</Button>
+      <div>
+        <ConsolePageHeader
+          title={workspace.name}
+          description={`${workspace.slug} · Created ${formatDate(workspace.createdAt)}`}
+          actions={<Button onClick={() => setTopUpOpen(true)}>Top-Up</Button>}
+        />
         <TopUpDialog
           workspaceId={workspace.id}
           balance={aiUsage.summary.balance}
@@ -157,9 +163,9 @@ function WorkspaceDetail({
             <CardTitle>Web Widget</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge variant={channels.webWidgetActive ? "default" : "outline"}>
+            <ConsoleStatusBadge tone={channels.webWidgetActive ? "success" : "neutral"}>
               {channels.webWidgetActive ? "Active" : "Inactive"}
-            </Badge>
+            </ConsoleStatusBadge>
           </CardContent>
         </Card>
         <Card>
@@ -167,9 +173,9 @@ function WorkspaceDetail({
             <CardTitle>WhatsApp</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge variant={channels.whatsAppConnected ? "default" : "outline"}>
+            <ConsoleStatusBadge tone={channels.whatsAppConnected ? "success" : "neutral"}>
               {channels.whatsAppConnected ? "Connected" : "Not connected"}
-            </Badge>
+            </ConsoleStatusBadge>
           </CardContent>
         </Card>
         <Card>
@@ -191,7 +197,7 @@ function WorkspaceDetail({
       </div>
 
       <section>
-        <h2 className="text-lg font-semibold">AI Usage ({days}d)</h2>
+        <ConsoleSectionHeading title={`AI Usage (${days}d)`} />
         <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader>
@@ -228,63 +234,73 @@ function WorkspaceDetail({
           </Card>
         </div>
         {aiUsage.summary.byModel.length > 0 && (
-          <Table className="mt-4">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Agent Model</TableHead>
-                <TableHead>Turns</TableHead>
-                <TableHead>Credits spent</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {aiUsage.summary.byModel.map((row) => (
-                <TableRow key={row.agentModel}>
-                  <TableCell>{row.agentModel}</TableCell>
-                  <TableCell>{numberFormat.format(row.turnCount)}</TableCell>
-                  <TableCell>{numberFormat.format(row.creditsSpent)}</TableCell>
+          <ConsoleDataTable className="mt-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agent Model</TableHead>
+                  <TableHead className="text-right">Turns</TableHead>
+                  <TableHead className="text-right">Credits spent</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {aiUsage.summary.byModel.map((row) => (
+                  <TableRow key={row.agentModel}>
+                    <TableCell>{row.agentModel}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {numberFormat.format(row.turnCount)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {numberFormat.format(row.creditsSpent)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ConsoleDataTable>
         )}
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold">AI Agents</h2>
-        <Table className="mt-3">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Agent Model</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {aiAgents.length === 0 ? (
+        <ConsoleSectionHeading title="AI Agents" />
+        <ConsoleDataTable className="mt-3">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground">
-                  No AI Agents.
-                </TableCell>
+                <TableHead>Name</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Agent Model</TableHead>
               </TableRow>
-            ) : (
-              aiAgents.map((agent) => (
-                <TableRow key={agent.id}>
-                  <TableCell>{agent.name}</TableCell>
-                  <TableCell>
-                    <Badge variant={agent.status === "ACTIVE" ? "default" : "outline"}>
-                      {agent.status}
-                    </Badge>
+            </TableHeader>
+            <TableBody>
+              {aiAgents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                    No AI Agents.
                   </TableCell>
-                  <TableCell>{agent.agentModel}</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                aiAgents.map((agent) => (
+                  <TableRow key={agent.id}>
+                    <TableCell>{agent.name}</TableCell>
+                    <TableCell>
+                      <ConsoleStatusBadge
+                        tone={agent.status === "ACTIVE" ? "success" : "neutral"}
+                      >
+                        {agent.status === "ACTIVE" ? "Active" : agent.status}
+                      </ConsoleStatusBadge>
+                    </TableCell>
+                    <TableCell>{agent.agentModel}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </ConsoleDataTable>
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold">Knowledge Sources</h2>
+        <ConsoleSectionHeading title="Knowledge Sources" />
         <div className="mt-3 flex flex-wrap gap-2">
           {knowledgeSources.length === 0 ? (
             <p className="text-sm text-muted-foreground">No Knowledge Sources.</p>
@@ -302,25 +318,27 @@ function WorkspaceDetail({
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold">Users</h2>
-        <Table className="mt-3">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Last sign-in</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>{user.role}</TableCell>
-                <TableCell>{formatDateTime(user.lastSignInAt)}</TableCell>
+        <ConsoleSectionHeading title="Users" />
+        <ConsoleDataTable className="mt-3">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Last sign-in</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>{user.role}</TableCell>
+                  <TableCell>{formatDateTime(user.lastSignInAt)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ConsoleDataTable>
       </section>
     </div>
   );
