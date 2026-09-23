@@ -1,8 +1,6 @@
-import { createApiClient, UnauthorizedApiError } from "@repo/api-client";
+import { UnauthorizedApiError } from "@repo/api-client";
 import { queryOptions } from "@tanstack/react-query";
-
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
-const api = createApiClient(apiBaseUrl);
+import { api, apiBaseUrl } from "./api";
 
 export const operatorQuery = queryOptions({
   queryKey: ["operator"],
