@@ -1,4 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import AtRiskView from "../features/console/views/at-risk/at-risk";
 import ConsoleView from "../features/console/views/console/console";
 import PaymentsView from "../features/console/views/payments/payments";
 import { ConsoleShell, sections } from "../features/console/shell";
@@ -16,6 +17,13 @@ function Section() {
     return (
       <ConsoleShell>
         <PaymentsView />
+      </ConsoleShell>
+    );
+  }
+  if (section === "at-risk") {
+    return (
+      <ConsoleShell>
+        <AtRiskView />
       </ConsoleShell>
     );
   }
