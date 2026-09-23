@@ -32,6 +32,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ConsoleShell } from "../../../console/shell";
 import { api } from "../../../../lib/api";
+import { TopUpDialog } from "./components/top-up-dialog";
 
 const RANGE_PRESETS = [
   { days: 7, label: "7 days" },
@@ -104,14 +105,24 @@ function WorkspaceDetail({
 }) {
   const { workspace, unlimitedPeriod, users, channels, knowledgeSources, aiAgents, analytics, aiUsage } =
     detail;
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
   return (
     <div className="grid gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold">{workspace.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {workspace.slug} · Created {formatDate(workspace.createdAt)}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{workspace.name}</h1>
+          <p className="text-sm text-muted-foreground">
+            {workspace.slug} · Created {formatDate(workspace.createdAt)}
+          </p>
+        </div>
+        <Button onClick={() => setTopUpOpen(true)}>Top-Up</Button>
+        <TopUpDialog
+          workspaceId={workspace.id}
+          balance={aiUsage.summary.balance}
+          open={topUpOpen}
+          onOpenChange={setTopUpOpen}
+        />
       </div>
 
       <div className="flex gap-2">
