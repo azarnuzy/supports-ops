@@ -110,6 +110,7 @@ it("reconciles charged Credits across Workspaces and excludes unlimited turns fr
 it("adds two Workspace figures without exposing customer content", async () => {
   const workspaceIds = [randomUUID(), randomUUID()];
   const now = new Date("2026-09-23T12:00:00.000Z");
+  const previousDay = new Date("2026-09-22T12:00:00.000Z");
   for (const [index, workspaceId] of workspaceIds.entries()) {
     await prisma.workspace.create({
       data: {
@@ -143,7 +144,19 @@ it("adds two Workspace figures without exposing customer content", async () => {
       },
     });
     await prisma.session.create({
-      data: { id: sessionId, workspaceId, channelId, customerIdentityId, createdAt: now },
+      data: { id: sessionId, workspaceId, channelId, customerIdentityId, createdAt: index ? previousDay : now },
+    });
+    const conversationId = randomUUID();
+    await prisma.conversation.create({
+      data: { id: conversationId, scopeKey: conversationId, sessionId, userId: customerIdentityId, metadata: {}, workspaceId },
+    });
+    await prisma.message.create({
+      data: {
+        id: randomUUID(), memorySessionId: conversationId, runId: randomUUID(), turn: 1,
+        position: 1, role: "user", message: {}, workspaceId, sessionId,
+        senderType: "CUSTOMER", content: "Secret message", externalMessageId: randomUUID(),
+        createdAt: index ? previousDay : now,
+      },
     });
     await prisma.ticket.create({
       data: {
@@ -156,7 +169,8 @@ it("adds two Workspace figures without exposing customer content", async () => {
         title: "Secret ticket",
         status: index ? "RESOLVED" : "AI_HANDLING",
         resolutionReason: index ? "CUSTOMER_CONFIRMED" : null,
-        createdAt: now,
+        createdAt: index ? previousDay : now,
+        resolvedAt: index ? now : null,
       },
     });
     await prisma.creditLedgerEntry.createMany({
@@ -193,6 +207,12 @@ it("adds two Workspace figures without exposing customer content", async () => {
   const range = { from: "2026-09-23", to: "2026-09-23" };
   const all = await getOperatorOverview(range);
   const perWorkspace = await Promise.all(workspaceIds.map((id) => getOperatorOverview(range, id)));
+  expect(all.workspaces.active).toBe(1);
+  expect(all.previous.activeWorkspaces).toBe(1);
+  expect(all.previous.sessions).toBe(1);
+  expect(all.topWorkspaces.map((workspace) => workspace.id)).toEqual([workspaceIds[0]]);
+  expect(all.tickets.byResolutionReason.CUSTOMER_CONFIRMED).toBe(0);
+  expect(all.tickets.resolvedByReason.CUSTOMER_CONFIRMED).toBe(1);
   for (const path of [
     (overview: typeof all) => overview.workspaces.total,
     (overview: typeof all) => overview.workspaces.new,

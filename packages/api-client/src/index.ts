@@ -205,11 +205,21 @@ export type OperatorResolutionReason =
 
 export type OperatorOverview = {
   range: { from: string; to: string };
-  workspaces: { total: number; new: number };
+  workspaces: { total: number; active: number; new: number };
+  previous: {
+    activeWorkspaces: number;
+    newWorkspaces: number;
+    sessions: number;
+    creditsSpent: number;
+    revenueIdr: number;
+    providerCostUsd: number;
+  };
+  topWorkspaces: { id: string; name: string; sessions: number; previousSessions: number }[];
   sessions: Record<ChannelType, number>;
   tickets: {
     byStatus: Partial<Record<OperatorTicketStatus, number>>;
     byResolutionReason: Record<OperatorResolutionReason, number>;
+    resolvedByReason: Record<OperatorResolutionReason, number>;
   };
   credits: { spent: number; topUps: number; trialGrants: number };
   revenueIdr: number;
