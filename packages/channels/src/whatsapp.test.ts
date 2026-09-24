@@ -8,10 +8,10 @@ import {
   whatsAppCustomerServiceWindowClosesAt,
   whatsAppTimerDelayMs,
   verifyWhatsAppSignature,
-  webDeliveryStates,
   whatsAppAttachmentCapability,
   whatsAppDeliveryStates,
-} from "./index";
+} from "./whatsapp";
+import { webDeliveryStates } from "./web";
 
 describe("verifyWhatsAppSignature", () => {
   const genuineBody = new TextEncoder().encode('{"entry":[]}\n');

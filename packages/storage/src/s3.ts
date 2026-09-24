@@ -15,13 +15,6 @@ import type {
   StorageConfig,
 } from "./types";
 
-export type {
-  GetSignedObjectUrlInput,
-  PutObjectInput,
-  PutSignedObjectUrlInput,
-  StorageConfig,
-} from "./types";
-
 const defaultSignedUrlExpiresIn = 60 * 5;
 
 export function createStorageClient(config: StorageConfig) {
