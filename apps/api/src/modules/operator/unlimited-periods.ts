@@ -15,14 +15,18 @@ async function findActivePeriod(
   workspaceId: string,
 ) {
   return tx.unlimitedPeriod.findFirst({
-    where: { workspaceId, endedEarlyAt: null, endAt: { gt: new Date() } },
+    where: {
+      workspaceId,
+      endedEarlyAt: null,
+      OR: [{ endAt: null }, { endAt: { gt: new Date() } }],
+    },
   });
 }
 
 export async function grantUnlimitedPeriod(
   operatorId: string,
   workspaceId: string,
-  endDate: string,
+  endDate: string | null,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
     const workspace = await tx.workspace.findFirst({
@@ -32,7 +36,7 @@ export async function grantUnlimitedPeriod(
     if (!workspace) throw new WorkspaceNotFoundError();
     if (await findActivePeriod(tx, workspaceId)) throw new OverlappingUnlimitedPeriodError();
 
-    const endAt = endOfDayJakarta(endDate);
+    const endAt = endDate ? endOfDayJakarta(endDate) : null;
     const period = await tx.unlimitedPeriod.create({
       data: { id: randomUUID(), workspaceId, operatorId, endAt },
     });
@@ -42,7 +46,7 @@ export async function grantUnlimitedPeriod(
         operatorId,
         workspaceId,
         type: "UNLIMITED_PERIOD_GRANTED",
-        payload: { unlimitedPeriodId: period.id, endAt: endAt.toISOString() },
+        payload: { unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
       },
     });
     return period;
@@ -52,13 +56,13 @@ export async function grantUnlimitedPeriod(
 export async function extendUnlimitedPeriod(
   operatorId: string,
   workspaceId: string,
-  endDate: string,
+  endDate: string | null,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
     const active = await findActivePeriod(tx, workspaceId);
     if (!active) throw new NoActiveUnlimitedPeriodError();
 
-    const endAt = endOfDayJakarta(endDate);
+    const endAt = endDate ? endOfDayJakarta(endDate) : null;
     const period = await tx.unlimitedPeriod.update({ where: { id: active.id }, data: { endAt } });
     await tx.operatorAction.create({
       data: {
@@ -66,7 +70,7 @@ export async function extendUnlimitedPeriod(
         operatorId,
         workspaceId,
         type: "UNLIMITED_PERIOD_EXTENDED",
-        payload: { unlimitedPeriodId: period.id, endAt: endAt.toISOString() },
+        payload: { unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
       },
     });
     return period;

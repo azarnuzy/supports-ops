@@ -295,7 +295,7 @@ A member of SupportOps staff who oversees every Workspace from outside them — 
 _Avoid_: Superadmin, Root, Staff Admin (Admin is a Workspace role)
 
 **Unlimited Period**:
-A dated window, granted by an Operator, during which a Workspace's AI Agents keep answering without spending its Credits — typically a proof of concept. Its AI Turns are still recorded as AI Usage, so what it would have cost stays visible, but the balance is left exactly as it was. When the window ends the Workspace is back on its own Credits. A Workspace has at most one active at a time.
+A window, granted by an Operator, during which a Workspace's AI Agents keep answering without spending its Credits — typically a proof of concept. It can end on a chosen date or remain active until an Operator ends it. Its AI Turns are still recorded as AI Usage, so what it would have cost stays visible, but the balance is left exactly as it was. When the window ends the Workspace is back on its own Credits. A Workspace has at most one active at a time.
 _Avoid_: Unmetered, Free plan, Trial (the Trial Grant is something else)
 
 ### Dashboard and reporting

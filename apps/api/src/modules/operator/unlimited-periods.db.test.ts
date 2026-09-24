@@ -38,7 +38,7 @@ it("resolves the end date to 23:59 Asia/Jakarta (16:59 UTC)", () => {
 it("grants a period and records one Operator Action", async () => {
   const period = await unlimitedPeriods.grantUnlimitedPeriod(operatorId, workspaceId, "2026-10-05");
 
-  expect(period.endAt.toISOString()).toBe("2026-10-05T16:59:59.999Z");
+  expect(period.endAt?.toISOString()).toBe("2026-10-05T16:59:59.999Z");
   const actions = await prisma.operatorAction.findMany({ where: { workspaceId } });
   expect(actions).toHaveLength(1);
   expect(actions[0]).toMatchObject({ operatorId, type: "UNLIMITED_PERIOD_GRANTED" });
@@ -52,6 +52,22 @@ it("rejects an overlapping grant", async () => {
   ).rejects.toBeInstanceOf(unlimitedPeriods.OverlappingUnlimitedPeriodError);
 });
 
+it("keeps an undated period active until ended or given an end date", async () => {
+  const period = await unlimitedPeriods.grantUnlimitedPeriod(operatorId, workspaceId, null);
+  expect(period.endAt).toBeNull();
+  await expect(
+    unlimitedPeriods.grantUnlimitedPeriod(operatorId, workspaceId, null),
+  ).rejects.toBeInstanceOf(unlimitedPeriods.OverlappingUnlimitedPeriodError);
+
+  const dated = await unlimitedPeriods.extendUnlimitedPeriod(operatorId, workspaceId, "2026-10-12");
+  expect(dated.endAt?.toISOString()).toBe("2026-10-12T16:59:59.999Z");
+  await unlimitedPeriods.extendUnlimitedPeriod(operatorId, workspaceId, null);
+  await unlimitedPeriods.endUnlimitedPeriodEarly(operatorId, workspaceId);
+  expect(await prisma.unlimitedPeriod.findFirst({ where: { id: period.id } })).toMatchObject({
+    endedEarlyAt: expect.any(Date),
+  });
+});
+
 it("extends the active period and records one Operator Action", async () => {
   await unlimitedPeriods.grantUnlimitedPeriod(operatorId, workspaceId, "2026-10-05");
 
@@ -61,7 +77,7 @@ it("extends the active period and records one Operator Action", async () => {
     "2026-10-12",
   );
 
-  expect(extended.endAt.toISOString()).toBe("2026-10-12T16:59:59.999Z");
+  expect(extended.endAt?.toISOString()).toBe("2026-10-12T16:59:59.999Z");
   const actions = await prisma.operatorAction.findMany({
     where: { workspaceId },
     orderBy: { createdAt: "asc" },
@@ -82,7 +98,7 @@ it("ends the active period early and records one Operator Action", async () => {
   const ended = await unlimitedPeriods.endUnlimitedPeriodEarly(operatorId, workspaceId);
 
   expect(ended.endedEarlyAt).not.toBeNull();
-  expect(ended.endAt.getTime()).toBe(ended.endedEarlyAt!.getTime());
+  expect(ended.endAt?.getTime()).toBe(ended.endedEarlyAt?.getTime());
   const actions = await prisma.operatorAction.findMany({
     where: { workspaceId },
     orderBy: { createdAt: "asc" },
@@ -109,7 +125,7 @@ it("exposes the current or most recently ended period", async () => {
 
   await unlimitedPeriods.grantUnlimitedPeriod(operatorId, workspaceId, "2026-10-05");
   const current = await unlimitedPeriods.currentOrLastUnlimitedPeriod(workspaceId);
-  expect(current?.endAt.toISOString()).toBe("2026-10-05T16:59:59.999Z");
+  expect(current?.endAt?.toISOString()).toBe("2026-10-05T16:59:59.999Z");
 
   await unlimitedPeriods.endUnlimitedPeriodEarly(operatorId, workspaceId);
   const last = await unlimitedPeriods.currentOrLastUnlimitedPeriod(workspaceId);

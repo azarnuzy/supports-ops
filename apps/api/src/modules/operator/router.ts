@@ -4,7 +4,14 @@ import { z } from "zod";
 import { unscopedPrisma } from "../../utils/prisma";
 import { analyticsRangeQuerySchema } from "../analytics/schema";
 import { listAtRiskWorkspaces } from "./at-risk";
-import { loadOperatorSession, requireOperator } from "./middleware";
+import {
+  creditQuerySchema,
+  getBillingOverview,
+  listCreditOperations,
+  listUnlimitedPeriods,
+  periodQuerySchema,
+} from "./billing";
+import { currentOperator, loadOperatorSession, requireOperator } from "./middleware";
 import { listPayments, paymentQuerySchema } from "./payments";
 import {
   getModelMargin,
@@ -27,7 +34,18 @@ const listQuery = analyticsRangeQuerySchema.safeExtend({
   search: z.string().trim().min(1).max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(["createdAt", "name", "userCount", "balance", "unlimitedEndAt", "lastCustomerActivityAt", "sessionCount", "creditsUsed"]).default("lastCustomerActivityAt"),
+  sortBy: z
+    .enum([
+      "createdAt",
+      "name",
+      "userCount",
+      "balance",
+      "unlimitedEndAt",
+      "lastCustomerActivityAt",
+      "sessionCount",
+      "creditsUsed",
+    ])
+    .default("lastCustomerActivityAt"),
   sortDirection: z.enum(["asc", "desc"]).optional(),
   status: z.enum(["HEALTHY", "NEEDS_ATTENTION"]).optional(),
   channel: z.enum(["WEB", "WHATSAPP"]).optional(),
@@ -44,7 +62,7 @@ const topUpSchema = z.object({
   credits: z.number().int().positive(),
   note: z.string().trim().min(1),
 });
-const unlimitedPeriodSchema = z.object({ endDate: z.iso.date() });
+const unlimitedPeriodSchema = z.object({ endDate: z.iso.date().nullable() });
 
 export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .use("*", loadOperatorSession)
@@ -58,7 +76,7 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
     async (c) => {
       const { credits, note } = c.req.valid("json");
       const result = await topUpWorkspace(
-        c.get("operator")!.id,
+        currentOperator(c).id,
         c.req.param("workspaceId"),
         credits,
         note,
@@ -75,7 +93,7 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
     async (c) => {
       try {
         const period = await grantUnlimitedPeriod(
-          c.get("operator")!.id,
+          currentOperator(c).id,
           c.req.param("workspaceId"),
           c.req.valid("json").endDate,
         );
@@ -98,7 +116,7 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
     async (c) => {
       try {
         const period = await extendUnlimitedPeriod(
-          c.get("operator")!.id,
+          currentOperator(c).id,
           c.req.param("workspaceId"),
           c.req.valid("json").endDate,
         );
@@ -114,7 +132,7 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .post("/workspaces/:workspaceId/unlimited-period/end", async (c) => {
     try {
       const period = await endUnlimitedPeriodEarly(
-        c.get("operator")!.id,
+        currentOperator(c).id,
         c.req.param("workspaceId"),
       );
       return c.json({ period });
@@ -150,6 +168,15 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
     }),
     async (c) => c.json(await listPayments(c.req.valid("query"))),
   )
+  .get("/billing/overview", withRangeQuery, async (c) =>
+    c.json(await getBillingOverview(c.req.valid("query"))),
+  )
+  .get("/billing/credits", zValidator("query", creditQuerySchema), async (c) =>
+    c.json(await listCreditOperations(c.req.valid("query"))),
+  )
+  .get("/billing/unlimited-periods", zValidator("query", periodQuerySchema), async (c) =>
+    c.json(await listUnlimitedPeriods(c.req.valid("query"))),
+  )
   .get("/overview", withRangeQuery, async (c) =>
     c.json({ overview: await getOperatorOverview(c.req.valid("query")) }),
   )
@@ -159,7 +186,9 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .get("/workspaces", zValidator("query", listQuery), async (c) =>
     c.json(await listWorkspaces(c.req.valid("query"))),
   )
-  .get("/at-risk", async (c) => c.json(await listAtRiskWorkspaces()))
+  .get("/at-risk", withRangeQuery, async (c) =>
+    c.json(await listAtRiskWorkspaces(c.req.valid("query"))),
+  )
   .get("/workspaces/:id", withRangeQuery, async (c) => {
     const detail = await getWorkspaceDetail(c.req.param("id"), c.req.valid("query"));
     return detail ? c.json(detail) : c.json({ error: "not_found" }, 404);

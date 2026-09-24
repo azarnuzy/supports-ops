@@ -21,7 +21,15 @@ export async function listWorkspaces({
   search?: string;
   page: number;
   limit: number;
-  sortBy?: "createdAt" | "name" | "userCount" | "balance" | "unlimitedEndAt" | "lastCustomerActivityAt" | "sessionCount" | "creditsUsed";
+  sortBy?:
+    | "createdAt"
+    | "name"
+    | "userCount"
+    | "balance"
+    | "unlimitedEndAt"
+    | "lastCustomerActivityAt"
+    | "sessionCount"
+    | "creditsUsed";
   sortDirection?: "asc" | "desc";
   attention?: AtRiskCondition;
   status?: "HEALTHY" | "NEEDS_ATTENTION";
@@ -48,12 +56,18 @@ export async function listWorkspaces({
     unscopedPrisma.workspace.findMany({ where, select }),
     unscopedPrisma.channel.findMany({
       where: { deletedAt: null, status: "ACTIVE", workspace: { deletedAt: null } },
-      select: { workspaceId: true, type: true, whatsAppConfig: { select: { webhookVerifiedAt: true, accessTokenFailedAt: true } } },
+      select: {
+        workspaceId: true,
+        type: true,
+        whatsAppConfig: { select: { webhookVerifiedAt: true, accessTokenFailedAt: true } },
+      },
     }),
   ]);
-  const readyChannels = allChannels.filter((row) => row.type === "WEB" || (
-    row.whatsAppConfig?.webhookVerifiedAt && !row.whatsAppConfig.accessTokenFailedAt
-  ));
+  const readyChannels = allChannels.filter(
+    (row) =>
+      row.type === "WEB" ||
+      (row.whatsAppConfig?.webhookVerifiedAt && !row.whatsAppConfig.accessTokenFailedAt),
+  );
   const channelCounts = {
     WEB: readyChannels.filter((row) => row.type === "WEB").length,
     WHATSAPP: readyChannels.filter((row) => row.type === "WHATSAPP").length,
@@ -69,52 +83,82 @@ export async function listWorkspaces({
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
     unscopedPrisma.session.groupBy({
-      by: ["workspaceId"], where: { workspaceId: { in: ids }, createdAt: { gte: startAt, lt: endAt } }, _count: { _all: true },
+      by: ["workspaceId"],
+      where: { workspaceId: { in: ids }, createdAt: { gte: startAt, lt: endAt } },
+      _count: { _all: true },
     }),
     unscopedPrisma.session.groupBy({
-      by: ["workspaceId"], where: { workspaceId: { in: ids }, createdAt: previousAt }, _count: { _all: true },
+      by: ["workspaceId"],
+      where: { workspaceId: { in: ids }, createdAt: previousAt },
+      _count: { _all: true },
     }),
     unscopedPrisma.creditLedgerEntry.groupBy({
-      by: ["workspaceId"], where: { workspaceId: { in: ids }, type: "SPEND", createdAt: { gte: startAt, lt: endAt } }, _sum: { credits: true },
+      by: ["workspaceId"],
+      where: { workspaceId: { in: ids }, type: "SPEND", createdAt: { gte: startAt, lt: endAt } },
+      _sum: { credits: true },
     }),
     unscopedPrisma.creditLedgerEntry.groupBy({
-      by: ["workspaceId"], where: { workspaceId: { in: ids }, type: "SPEND", createdAt: previousAt }, _sum: { credits: true },
+      by: ["workspaceId"],
+      where: { workspaceId: { in: ids }, type: "SPEND", createdAt: previousAt },
+      _sum: { credits: true },
     }),
   ]);
   // ponytail: scans matched Workspaces and aggregates in memory; move sorting and paging into SQL if list volume grows.
-  const rows = workspaces.map((workspace) => {
-    const info = details.get(workspace.id)!;
-    const admins = users.filter((user) => user.workspaceId === workspace.id && user.role === "ADMIN");
-    return {
-      ...workspace,
-      userCount: users.filter((user) => user.workspaceId === workspace.id).length,
-      adminName: admins[0]?.name ?? null,
-      adminCount: admins.length,
-      balance: info.balance,
-      activeUnlimitedPeriod: info.activeUnlimitedPeriod,
-      lastCustomerActivityAt: info.lastCustomerActivityAt,
-      conditions: info.conditions,
-      channels: readyChannels.filter((row) => row.workspaceId === workspace.id).map((row) => row.type),
-      sessionCount: sessions.find((row) => row.workspaceId === workspace.id)?._count._all ?? 0,
-      previousSessionCount: previousSessions.find((row) => row.workspaceId === workspace.id)?._count._all ?? 0,
-      creditsUsed: -(spend.find((row) => row.workspaceId === workspace.id)?._sum.credits ?? 0),
-      previousCreditsUsed: -(previousSpend.find((row) => row.workspaceId === workspace.id)?._sum.credits ?? 0),
-    };
-  }).filter((workspace) =>
-    (!attention || workspace.conditions.includes(attention)) &&
-    (!status || (status === "HEALTHY" ? workspace.conditions.length === 0 : workspace.conditions.length > 0)) &&
-    (!channel || workspace.channels.includes(channel))
-  );
+  const rows = workspaces
+    .map((workspace) => {
+      const info = details.get(workspace.id);
+      if (!info) throw new Error(`missing attention details for workspace ${workspace.id}`);
+      const admins = users.filter(
+        (user) => user.workspaceId === workspace.id && user.role === "ADMIN",
+      );
+      return {
+        ...workspace,
+        userCount: users.filter((user) => user.workspaceId === workspace.id).length,
+        adminName: admins[0]?.name ?? null,
+        adminCount: admins.length,
+        balance: info.balance,
+        activeUnlimitedPeriod: info.activeUnlimitedPeriod,
+        lastCustomerActivityAt: info.lastCustomerActivityAt,
+        conditions: info.conditions,
+        channels: readyChannels
+          .filter((row) => row.workspaceId === workspace.id)
+          .map((row) => row.type),
+        sessionCount: sessions.find((row) => row.workspaceId === workspace.id)?._count._all ?? 0,
+        previousSessionCount:
+          previousSessions.find((row) => row.workspaceId === workspace.id)?._count._all ?? 0,
+        creditsUsed: -(spend.find((row) => row.workspaceId === workspace.id)?._sum.credits ?? 0),
+        previousCreditsUsed: -(
+          previousSpend.find((row) => row.workspaceId === workspace.id)?._sum.credits ?? 0
+        ),
+      };
+    })
+    .filter(
+      (workspace) =>
+        (!attention || workspace.conditions.includes(attention)) &&
+        (!status ||
+          (status === "HEALTHY"
+            ? workspace.conditions.length === 0
+            : workspace.conditions.length > 0)) &&
+        (!channel || workspace.channels.includes(channel)),
+    );
   const value = (row: (typeof rows)[number]) => {
     switch (sortBy) {
-      case "name": return row.name.toLocaleLowerCase();
-      case "userCount": return row.userCount;
-      case "balance": return row.balance;
-      case "unlimitedEndAt": return row.activeUnlimitedPeriod?.endAt.getTime() ?? null;
-      case "sessionCount": return row.sessionCount;
-      case "creditsUsed": return row.creditsUsed;
-      case "createdAt": return row.createdAt.getTime();
-      default: return row.lastCustomerActivityAt?.getTime() ?? null;
+      case "name":
+        return row.name.toLocaleLowerCase();
+      case "userCount":
+        return row.userCount;
+      case "balance":
+        return row.balance;
+      case "unlimitedEndAt":
+        return row.activeUnlimitedPeriod?.endAt?.getTime() ?? null;
+      case "sessionCount":
+        return row.sessionCount;
+      case "creditsUsed":
+        return row.creditsUsed;
+      case "createdAt":
+        return row.createdAt.getTime();
+      default:
+        return row.lastCustomerActivityAt?.getTime() ?? null;
     }
   };
   rows.sort((a, b) => {
@@ -122,8 +166,10 @@ export async function listWorkspaces({
     const right = value(b);
     if (left === null) return right === null ? a.id.localeCompare(b.id) : 1;
     if (right === null) return -1;
-    const difference = typeof left === "string" && typeof right === "string"
-      ? left.localeCompare(right) : Number(left) - Number(right);
+    const difference =
+      typeof left === "string" && typeof right === "string"
+        ? left.localeCompare(right)
+        : Number(left) - Number(right);
     return (sortDirection === "asc" ? difference : -difference) || a.id.localeCompare(b.id);
   });
   return {
@@ -145,7 +191,9 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
   return withWorkspaceContext(id, async () => {
     const { startAt, endAt } = resolveRange(range);
     const previousStartAt = new Date(startAt.getTime() - (endAt.getTime() - startAt.getTime()));
-    const monthStartAt = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+    const monthStartAt = new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+    );
     const [
       users,
       channels,
@@ -197,18 +245,28 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
       getToolUsage(range),
       currentOrLastUnlimitedPeriod(id),
       getAttentionDetails([id]),
-      prisma.session.findMany({ where: { createdAt: { gte: startAt, lt: endAt } }, select: { createdAt: true } }),
+      prisma.session.findMany({
+        where: { createdAt: { gte: startAt, lt: endAt } },
+        select: { createdAt: true },
+      }),
       prisma.session.count({ where: { createdAt: { gte: previousStartAt, lt: startAt } } }),
       prisma.ticket.groupBy({
         by: ["resolutionReason"],
-        where: { deletedAt: null, resolvedAt: { gte: startAt, lt: endAt }, resolutionReason: { not: null } },
+        where: {
+          deletedAt: null,
+          resolvedAt: { gte: startAt, lt: endAt },
+          resolutionReason: { not: null },
+        },
         _count: { _all: true },
       }),
       prisma.creditLedgerEntry.groupBy({
-        by: ["type"], where: { createdAt: { gte: monthStartAt } }, _sum: { credits: true },
+        by: ["type"],
+        where: { createdAt: { gte: monthStartAt } },
+        _sum: { credits: true },
       }),
       prisma.topUpPayment.findFirst({
-        where: { status: "PAID" }, orderBy: { paidAt: "desc" },
+        where: { status: "PAID" },
+        orderBy: { paidAt: "desc" },
         select: { id: true, paidAt: true, credits: true, amountIdr: true },
       }),
     ]);
@@ -217,15 +275,23 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
       const day = session.createdAt.toISOString().slice(0, 10);
       sessionsByDay.set(day, (sessionsByDay.get(day) ?? 0) + 1);
     }
+    const workspaceAttention = attention.get(id);
+    if (!workspaceAttention) throw new Error(`missing attention details for workspace ${id}`);
     return {
       workspace,
-      attention: attention.get(id)!,
+      attention: workspaceAttention,
       sessions: {
         count: sessions.length,
         previousCount: previousSessionCount,
-        daily: aiUsageSummary.daily.map(({ date }) => ({ date, count: sessionsByDay.get(date) ?? 0 })),
+        daily: aiUsageSummary.daily.map(({ date }) => ({
+          date,
+          count: sessionsByDay.get(date) ?? 0,
+        })),
       },
-      outcomes: outcomes.map((row) => ({ reason: row.resolutionReason!, count: row._count._all })),
+      outcomes: outcomes.map((row) => ({
+        reason: row.resolutionReason ?? "unknown",
+        count: row._count._all,
+      })),
       billing: {
         toppedUpThisMonth: monthCredits.find((row) => row.type === "TOP_UP")?._sum.credits ?? 0,
         spentThisMonth: -(monthCredits.find((row) => row.type === "SPEND")?._sum.credits ?? 0),

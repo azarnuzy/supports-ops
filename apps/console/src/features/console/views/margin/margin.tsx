@@ -56,8 +56,8 @@ export default function MarginView() {
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            AI Turn vs. Follow-Up split: not implemented — requires new business logic/data
-            marker. Spend entries below count all SPEND ledger rows regardless of turn type.
+            AI Turn vs. Follow-Up split: not implemented — requires new business logic/data marker.
+            Spend entries below count all SPEND ledger rows regardless of turn type.
           </p>
 
           <ConsoleDataTable>

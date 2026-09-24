@@ -12,16 +12,16 @@ model OperatorAction {
   @@index([createdAt])
 }
 
-/// A dated window (ADR-0025) in which a Workspace's AI Turns and Follow-Ups spend
+/// A window (ADR-0025) in which a Workspace's AI Turns and Follow-Ups spend
 /// no Credits. At most one is active per Workspace: active means `endedEarlyAt`
-/// is null and `endAt` is in the future. Periods for a Workspace never overlap,
+/// is null and `endAt` is null or in the future. Periods for a Workspace never overlap,
 /// so the latest one by `createdAt` is always its current-or-most-recent period.
 model UnlimitedPeriod {
   id           String    @id
   workspaceId  String
   operatorId   String
   startAt      DateTime  @default(now())
-  endAt        DateTime
+  endAt        DateTime?
   endedEarlyAt DateTime?
   createdAt    DateTime  @default(now())
   workspace    Workspace @relation(fields: [workspaceId], references: [id])

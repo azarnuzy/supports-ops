@@ -104,7 +104,7 @@ export type OperatorWorkspace = {
   adminName: string | null;
   adminCount: number;
   balance: number;
-  activeUnlimitedPeriod: { endAt: string } | null;
+  activeUnlimitedPeriod: { endAt: string | null } | null;
   lastCustomerActivityAt: string | null;
   conditions: OperatorAttentionCondition[];
   channels: ChannelType[];
@@ -173,7 +173,7 @@ export type OperatorWorkspaceDetail = {
   workspace: { id: string; name: string; slug: string; createdAt: string };
   attention: {
     balance: number;
-    activeUnlimitedPeriod: { endAt: string } | null;
+    activeUnlimitedPeriod: { endAt: string | null } | null;
     lastCustomerActivityAt: string | null;
     conditions: ("CREDIT_EXHAUSTED" | "LOW_BALANCE" | "UNLIMITED_ENDING_SOON" | "INACTIVE")[];
   };
@@ -216,7 +216,7 @@ export async function fetchOperatorWorkspaceDetail(
 export async function grantUnlimitedPeriod(
   client: ApiClient,
   workspaceId: string,
-  endDate: string,
+  endDate: string | null,
 ) {
   const response = await client.operator.workspaces[":workspaceId"]["unlimited-period"].$post({
     param: { workspaceId },
@@ -232,7 +232,7 @@ export async function grantUnlimitedPeriod(
 export async function extendUnlimitedPeriod(
   client: ApiClient,
   workspaceId: string,
-  endDate: string,
+  endDate: string | null,
 ) {
   const response = await client.operator.workspaces[":workspaceId"]["unlimited-period"].$patch({
     param: { workspaceId },

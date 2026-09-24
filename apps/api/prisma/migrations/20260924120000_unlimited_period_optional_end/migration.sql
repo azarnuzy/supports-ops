@@ -1,0 +1,1 @@
+ALTER TABLE "UnlimitedPeriod" ALTER COLUMN "endAt" DROP NOT NULL;

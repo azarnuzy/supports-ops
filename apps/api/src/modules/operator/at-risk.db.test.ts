@@ -183,3 +183,28 @@ it("leaves a healthy Workspace out", async () => {
 
   expect(workspaces).toEqual([]);
 });
+
+it("reports configured channel failures and failed Knowledge Sources", async () => {
+  const workspaceId = await createWorkspace("Needs repair");
+  await prisma.creditLedgerEntry.create({
+    data: { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500 },
+  });
+  await recordActivity(workspaceId, new Date());
+  await prisma.channel.updateMany({ where: { workspaceId }, data: { status: "INACTIVE" } });
+  await prisma.knowledgeSource.create({
+    data: {
+      id: randomUUID(),
+      workspaceId,
+      sourceType: "MANUAL_FAQ",
+      title: "FAQ",
+      visibility: "CUSTOMER_SAFE",
+      status: "FAILED",
+    },
+  });
+
+  const workspaces = await fetchAtRisk();
+
+  expect(workspaces).toMatchObject([
+    { id: workspaceId, conditions: ["CHANNEL_ISSUE", "KNOWLEDGE_INGESTION_ISSUE"] },
+  ]);
+});

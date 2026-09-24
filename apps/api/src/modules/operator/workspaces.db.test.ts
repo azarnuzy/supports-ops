@@ -81,9 +81,7 @@ it("guards, searches, and paginates Workspaces without deleted rows", async () =
         workspaces: unknown;
       }
     ).workspaces,
-  ).toMatchObject([
-    { id: firstId, balance: 497, creditsUsed: 3, activeUnlimitedPeriod: null },
-  ]);
+  ).toMatchObject([{ id: firstId, balance: 497, creditsUsed: 3, activeUnlimitedPeriod: null }]);
   expect(
     ((await (await app.request("/operator/workspaces?search=deleted")).json()) as { total: number })
       .total,
@@ -113,7 +111,9 @@ it("sorts by name and filters to a single attention condition before paginating"
 
 it("sorts aggregate values before pagination and applies health filters", async () => {
   sessions.operator = true;
-  const first = (await (await app.request("/operator/workspaces?sortBy=balance&sortDirection=asc&limit=1")).json()) as {
+  const first = (await (
+    await app.request("/operator/workspaces?sortBy=balance&sortDirection=asc&limit=1")
+  ).json()) as {
     workspaces: { id: string; conditions: string[]; creditsUsed: number }[];
     total: number;
   };
@@ -121,7 +121,9 @@ it("sorts aggregate values before pagination and applies health filters", async 
   expect(first.workspaces[0]).toMatchObject({ id: firstId, creditsUsed: 3 });
   expect(first.workspaces[0].conditions).toContain("INACTIVE");
 
-  const healthy = (await (await app.request("/operator/workspaces?status=HEALTHY")).json()) as { total: number };
+  const healthy = (await (await app.request("/operator/workspaces?status=HEALTHY")).json()) as {
+    total: number;
+  };
   expect(healthy.total).toBe(0);
 });
 

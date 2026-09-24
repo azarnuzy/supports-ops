@@ -45,7 +45,11 @@ function actionDetail(action: OperatorAction) {
       .join(" — ");
   }
   const endAt = payload.endAt;
-  return typeof endAt === "string" ? `Ends ${dateFormat.format(new Date(endAt))}` : "";
+  return typeof endAt === "string"
+    ? `Ends ${dateFormat.format(new Date(endAt))}`
+    : endAt === null
+      ? "No end date"
+      : "";
 }
 
 export default function ActionLogView() {
@@ -131,9 +135,7 @@ export default function ActionLogView() {
                     )}
                   </TableCell>
                   <TableCell>{actionLabel[action.type]}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {actionDetail(action)}
-                  </TableCell>
+                  <TableCell className="text-muted-foreground">{actionDetail(action)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

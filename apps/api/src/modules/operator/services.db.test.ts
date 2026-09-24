@@ -87,7 +87,7 @@ it("reconciles charged Credits across Workspaces and excludes unlimited turns fr
   });
 
   expect(result.models.reduce((sum, model) => sum + model.creditsCharged, 0)).toBe(
-    -ledger._sum.credits!,
+    -(ledger._sum.credits ?? 0),
   );
   expect(result.models[0]).toMatchObject({
     agentModel: "model-a",
@@ -144,17 +144,39 @@ it("adds two Workspace figures without exposing customer content", async () => {
       },
     });
     await prisma.session.create({
-      data: { id: sessionId, workspaceId, channelId, customerIdentityId, createdAt: index ? previousDay : now },
+      data: {
+        id: sessionId,
+        workspaceId,
+        channelId,
+        customerIdentityId,
+        createdAt: index ? previousDay : now,
+      },
     });
     const conversationId = randomUUID();
     await prisma.conversation.create({
-      data: { id: conversationId, scopeKey: conversationId, sessionId, userId: customerIdentityId, metadata: {}, workspaceId },
+      data: {
+        id: conversationId,
+        scopeKey: conversationId,
+        sessionId,
+        userId: customerIdentityId,
+        metadata: {},
+        workspaceId,
+      },
     });
     await prisma.message.create({
       data: {
-        id: randomUUID(), memorySessionId: conversationId, runId: randomUUID(), turn: 1,
-        position: 1, role: "user", message: {}, workspaceId, sessionId,
-        senderType: "CUSTOMER", content: "Secret message", externalMessageId: randomUUID(),
+        id: randomUUID(),
+        memorySessionId: conversationId,
+        runId: randomUUID(),
+        turn: 1,
+        position: 1,
+        role: "user",
+        message: {},
+        workspaceId,
+        sessionId,
+        senderType: "CUSTOMER",
+        content: "Secret message",
+        externalMessageId: randomUUID(),
         createdAt: index ? previousDay : now,
       },
     });

@@ -69,14 +69,21 @@ const paymentStatusStyles: Record<TopUpPayment["status"], { label: string; class
 function UnlimitedPeriodBanner({ unlimitedPeriod }: { unlimitedPeriod: UnlimitedPeriod | null }) {
   if (!unlimitedPeriod) return null;
 
-  const active = !unlimitedPeriod.endedEarlyAt && new Date(unlimitedPeriod.endAt) > new Date();
+  const active =
+    !unlimitedPeriod.endedEarlyAt &&
+    (!unlimitedPeriod.endAt || new Date(unlimitedPeriod.endAt) > new Date());
 
   return active ? (
     <Alert>
       <InfinityIcon />
-      <AlertTitle>Unlimited until {dateFormat.format(new Date(unlimitedPeriod.endAt))}</AlertTitle>
+      <AlertTitle>
+        {unlimitedPeriod.endAt
+          ? `Unlimited until ${dateFormat.format(new Date(unlimitedPeriod.endAt))}`
+          : "Unlimited access active"}
+      </AlertTitle>
       <AlertDescription>
-        Your AI Agents answer without spending Credits until then. Your balance won't change.
+        Your AI Agents answer without spending Credits{unlimitedPeriod.endAt ? " until then" : ""}.
+        Your balance won't change.
       </AlertDescription>
     </Alert>
   ) : (

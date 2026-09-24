@@ -64,66 +64,96 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
   const createdAt = { gte: startAt, lt: endAt };
   const duration = endAt.getTime() - startAt.getTime();
   const previousAt = { gte: new Date(startAt.getTime() - duration), lt: startAt };
-  const activeWhere = { ...scope, deletedAt: null, senderType: "CUSTOMER" as const, session: { workspace: { deletedAt: null } } };
-  const [workspaces, newWorkspaces, sessions, statusCounts, reasons, resolvedReasons, credits, payments,
-    active, previousActive, previousNew, previousSessions, previousCredits, previousPayments,
-    workspaceSessions, previousWorkspaceSessions] =
-    await Promise.all([
-      unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null } }),
-      unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null, createdAt } }),
-      unscopedPrisma.session.groupBy({
-        by: ["channelId"],
-        where: { ...scope, createdAt },
-        _count: { _all: true },
-      }),
-      getTicketStatusCounts(startAt, endAt, workspaceId),
-      unscopedPrisma.ticket.groupBy({
-        by: ["resolutionReason"],
-        where: { ...scope, deletedAt: null, createdAt, resolutionReason: { not: null } },
-        _count: { _all: true },
-      }),
-      unscopedPrisma.ticket.groupBy({
-        by: ["resolutionReason"],
-        where: { ...scope, deletedAt: null, resolvedAt: createdAt, resolutionReason: { not: null } },
-        _count: { _all: true },
-      }),
-      unscopedPrisma.creditLedgerEntry.groupBy({
-        by: ["type"],
-        where: { ...scope, createdAt },
-        _sum: { credits: true, providerCostUsd: true },
-      }),
-      unscopedPrisma.topUpPayment.aggregate({
-        where: { ...scope, status: "PAID", paidAt: createdAt },
-        _sum: { amountIdr: true },
-      }),
-      unscopedPrisma.message.groupBy({
-        by: ["workspaceId"], where: { ...activeWhere, createdAt }, _count: { _all: true },
-      }),
-      unscopedPrisma.message.groupBy({
-        by: ["workspaceId"], where: { ...activeWhere, createdAt: previousAt }, _count: { _all: true },
-      }),
-      unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null, createdAt: previousAt } }),
-      unscopedPrisma.session.count({ where: { ...scope, createdAt: previousAt } }),
-      unscopedPrisma.creditLedgerEntry.aggregate({
-        where: { ...scope, type: "SPEND", createdAt: previousAt },
-        _sum: { credits: true, providerCostUsd: true },
-      }),
-      unscopedPrisma.topUpPayment.aggregate({
-        where: { ...scope, status: "PAID", paidAt: previousAt },
-        _sum: { amountIdr: true },
-      }),
-      unscopedPrisma.session.groupBy({
-        by: ["workspaceId"], where: { ...scope, workspace: { deletedAt: null }, createdAt }, _count: { _all: true },
-      }),
-      unscopedPrisma.session.groupBy({
-        by: ["workspaceId"], where: { ...scope, workspace: { deletedAt: null }, createdAt: previousAt }, _count: { _all: true },
-      }),
-    ]);
+  const activeWhere = {
+    ...scope,
+    deletedAt: null,
+    senderType: "CUSTOMER" as const,
+    session: { workspace: { deletedAt: null } },
+  };
+  const [
+    workspaces,
+    newWorkspaces,
+    sessions,
+    statusCounts,
+    reasons,
+    resolvedReasons,
+    credits,
+    payments,
+    active,
+    previousActive,
+    previousNew,
+    previousSessions,
+    previousCredits,
+    previousPayments,
+    workspaceSessions,
+    previousWorkspaceSessions,
+  ] = await Promise.all([
+    unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null } }),
+    unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null, createdAt } }),
+    unscopedPrisma.session.groupBy({
+      by: ["channelId"],
+      where: { ...scope, createdAt },
+      _count: { _all: true },
+    }),
+    getTicketStatusCounts(startAt, endAt, workspaceId),
+    unscopedPrisma.ticket.groupBy({
+      by: ["resolutionReason"],
+      where: { ...scope, deletedAt: null, createdAt, resolutionReason: { not: null } },
+      _count: { _all: true },
+    }),
+    unscopedPrisma.ticket.groupBy({
+      by: ["resolutionReason"],
+      where: { ...scope, deletedAt: null, resolvedAt: createdAt, resolutionReason: { not: null } },
+      _count: { _all: true },
+    }),
+    unscopedPrisma.creditLedgerEntry.groupBy({
+      by: ["type"],
+      where: { ...scope, createdAt },
+      _sum: { credits: true, providerCostUsd: true },
+    }),
+    unscopedPrisma.topUpPayment.aggregate({
+      where: { ...scope, status: "PAID", paidAt: createdAt },
+      _sum: { amountIdr: true },
+    }),
+    unscopedPrisma.message.groupBy({
+      by: ["workspaceId"],
+      where: { ...activeWhere, createdAt },
+      _count: { _all: true },
+    }),
+    unscopedPrisma.message.groupBy({
+      by: ["workspaceId"],
+      where: { ...activeWhere, createdAt: previousAt },
+      _count: { _all: true },
+    }),
+    unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null, createdAt: previousAt } }),
+    unscopedPrisma.session.count({ where: { ...scope, createdAt: previousAt } }),
+    unscopedPrisma.creditLedgerEntry.aggregate({
+      where: { ...scope, type: "SPEND", createdAt: previousAt },
+      _sum: { credits: true, providerCostUsd: true },
+    }),
+    unscopedPrisma.topUpPayment.aggregate({
+      where: { ...scope, status: "PAID", paidAt: previousAt },
+      _sum: { amountIdr: true },
+    }),
+    unscopedPrisma.session.groupBy({
+      by: ["workspaceId"],
+      where: { ...scope, workspace: { deletedAt: null }, createdAt },
+      _count: { _all: true },
+    }),
+    unscopedPrisma.session.groupBy({
+      by: ["workspaceId"],
+      where: { ...scope, workspace: { deletedAt: null }, createdAt: previousAt },
+      _count: { _all: true },
+    }),
+  ]);
   const channelIds = sessions.map((row) => row.channelId);
-  const topGroups = [...workspaceSessions].sort((a, b) => b._count._all - a._count._all).slice(0, 5);
+  const topGroups = [...workspaceSessions]
+    .sort((a, b) => b._count._all - a._count._all)
+    .slice(0, 5);
   const [channels, topWorkspaces] = await Promise.all([
     unscopedPrisma.channel.findMany({
-      where: { id: { in: channelIds } }, select: { id: true, type: true },
+      where: { id: { in: channelIds } },
+      select: { id: true, type: true },
     }),
     unscopedPrisma.workspace.findMany({
       where: { id: { in: topGroups.map((row) => row.workspaceId) } },
@@ -155,9 +185,12 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
     },
     topWorkspaces: topGroups.map((row) => ({
       id: row.workspaceId,
-      name: topWorkspaces.find((workspace) => workspace.id === row.workspaceId)?.name ?? "Workspace",
+      name:
+        topWorkspaces.find((workspace) => workspace.id === row.workspaceId)?.name ?? "Workspace",
       sessions: row._count._all,
-      previousSessions: previousWorkspaceSessions.find((previous) => previous.workspaceId === row.workspaceId)?._count._all ?? 0,
+      previousSessions:
+        previousWorkspaceSessions.find((previous) => previous.workspaceId === row.workspaceId)
+          ?._count._all ?? 0,
     })),
     sessions: Object.fromEntries(
       Object.values(ChannelType).map((type) => [type, sessionCount(type)]),

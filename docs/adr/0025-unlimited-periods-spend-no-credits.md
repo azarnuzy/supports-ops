@@ -1,6 +1,6 @@
 # Unlimited Periods record AI Turns without spending Credits
 
-An Operator can grant a Workspace an Unlimited Period — a dated window, typically a proof of concept, ending at 23:59 Asia/Jakarta on the chosen date. Inside it every AI Turn and Follow-Up is still written to the Credit Ledger with its Agent Model, Model Rate, Tokens, and provider cost, but spends zero Credits, so Credit Exhaustion cannot happen and the balance after the window is exactly the balance before it.
+An Operator can grant a Workspace an Unlimited Period — typically a proof of concept, ending at 23:59 Asia/Jakarta on the chosen date, or without an end date until an Operator ends it. Inside it every AI Turn and Follow-Up is still written to the Credit Ledger with its Agent Model, Model Rate, Tokens, and provider cost, but spends zero Credits, so Credit Exhaustion cannot happen and the balance after the window is exactly the balance before it.
 
 This is a deliberate exception to ADR-0021 ("always bought before it is spent").
 

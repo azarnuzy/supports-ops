@@ -94,7 +94,11 @@ export async function spendForTurn(
   const rate = modelRateFor(agentModel);
   const now = new Date();
   const unlimited = await tx.unlimitedPeriod.findFirst({
-    where: { workspaceId: params.workspaceId, endedEarlyAt: null, endAt: { gt: now } },
+    where: {
+      workspaceId: params.workspaceId,
+      endedEarlyAt: null,
+      OR: [{ endAt: null }, { endAt: { gt: now } }],
+    },
     select: { id: true },
   });
   const credits = unlimited ? 0 : rate;

@@ -16,7 +16,7 @@ export type TopUpPayment = {
   expiresAt: string;
   paidAt: string | null;
 };
-export type UnlimitedPeriod = { endAt: string; endedEarlyAt: string | null };
+export type UnlimitedPeriod = { endAt: string | null; endedEarlyAt: string | null };
 
 export type Billing = {
   balance: number;

@@ -10,6 +10,7 @@ export type ConsoleDateRange = { from: string; to: string };
 const rangePresets = [
   { days: 7, label: "Last 7 days" },
   { days: 14, label: "Last 14 days" },
+  { days: 23, label: "Last 23 days" },
   { days: 30, label: "Last 30 days" },
 ] as const;
 
