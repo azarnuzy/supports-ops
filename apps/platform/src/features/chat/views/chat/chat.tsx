@@ -37,7 +37,7 @@ import {
 } from "@repo/ui/components/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@repo/ui/components/sheet";
 import { Skeleton } from "@repo/ui/components/skeleton";
-import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
+import { PriorityBadge, StatusBadge } from "../../../tickets/components/ticket-badge";
 import { cn } from "@repo/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";

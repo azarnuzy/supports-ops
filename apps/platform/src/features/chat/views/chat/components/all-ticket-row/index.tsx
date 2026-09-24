@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback } from "@repo/ui/components/avatar";
 import { Badge } from "@repo/ui/components/badge";
-import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
+import { PriorityBadge, StatusBadge } from "../../../../../tickets/components/ticket-badge";
 import { cn } from "@repo/ui/lib/utils";
 import { formatEnumLabel, getInitials } from "../../../../../../lib/utils";
 import { formatShortDate } from "../../chat.utils";

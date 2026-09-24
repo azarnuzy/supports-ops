@@ -1,7 +1,7 @@
 import { ArrowRightIcon, GlobeIcon, MessageCircleIcon } from "lucide-react";
 
 import { Badge } from "@repo/ui/components/badge";
-import { StatusBadge } from "@repo/ui/components/ticket-badge";
+import { StatusBadge } from "../../../../../tickets/components/ticket-badge";
 import { Link } from "@tanstack/react-router";
 import {
   CardAction,

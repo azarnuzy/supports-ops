@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Marker, MarkerContent } from "@repo/ui/components/marker";
-import { PriorityBadge, StatusBadge } from "@repo/ui/components/ticket-badge";
+import { PriorityBadge, StatusBadge } from "../../../tickets/components/ticket-badge";
 import { PlatformAppShell } from "../../../app-shell";
 import { AttachmentStateSample, MessageSample } from "./components";
 
