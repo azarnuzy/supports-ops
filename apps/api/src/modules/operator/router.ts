@@ -23,11 +23,14 @@ import {
 } from "./unlimited-periods";
 import { getWorkspaceDetail, listWorkspaces } from "./workspaces";
 
-const listQuery = z.object({
+const listQuery = analyticsRangeQuerySchema.safeExtend({
   search: z.string().trim().min(1).max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(["createdAt", "name"]).default("createdAt"),
+  sortBy: z.enum(["createdAt", "name", "userCount", "balance", "unlimitedEndAt", "lastCustomerActivityAt", "sessionCount", "creditsUsed"]).default("lastCustomerActivityAt"),
+  sortDirection: z.enum(["asc", "desc"]).optional(),
+  status: z.enum(["HEALTHY", "NEEDS_ATTENTION"]).optional(),
+  channel: z.enum(["WEB", "WHATSAPP"]).optional(),
   attention: z
     .enum(["CREDIT_EXHAUSTED", "LOW_BALANCE", "UNLIMITED_ENDING_SOON", "INACTIVE"])
     .optional(),

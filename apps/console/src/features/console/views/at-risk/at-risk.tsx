@@ -47,7 +47,7 @@ export const conditionLabel: Record<string, string> = {
   CREDIT_EXHAUSTED: "Credit exhausted",
   LOW_BALANCE: "Low balance",
   UNLIMITED_ENDING_SOON: "Unlimited ending soon",
-  INACTIVE: "No Customer activity for 14 days",
+  INACTIVE: "Inactive 14+ days",
 };
 
 export const conditionTone: Record<string, "danger" | "warning" | "neutral"> = {
@@ -137,7 +137,7 @@ export default function AtRiskView() {
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead>Conditions</TableHead>
                 <TableHead>Unlimited Period ends</TableHead>
-                <TableHead>Last Customer message</TableHead>
+                <TableHead>Last customer activity</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>

@@ -49,6 +49,8 @@ export function TopUpDialog({
     onSuccess: () => {
       toast.success(`Topped up ${numberFormat.format(parsedCredits)} Credits.`);
       queryClient.invalidateQueries({ queryKey: ["operator", "workspace", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["operator", "workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["operator", "at-risk"] });
       onOpenChange(false);
       reset();
     },

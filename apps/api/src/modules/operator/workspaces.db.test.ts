@@ -82,7 +82,7 @@ it("guards, searches, and paginates Workspaces without deleted rows", async () =
       }
     ).workspaces,
   ).toMatchObject([
-    { id: firstId, balance: 497, creditSpend30Days: 3, activeUnlimitedPeriod: null },
+    { id: firstId, balance: 497, creditsUsed: 3, activeUnlimitedPeriod: null },
   ]);
   expect(
     ((await (await app.request("/operator/workspaces?search=deleted")).json()) as { total: number })
@@ -109,6 +109,20 @@ it("sorts by name and filters to a single attention condition before paginating"
   ).json()) as { workspaces: { id: string }[]; total: number };
   expect(filtered.total).toBe(1);
   expect(filtered.workspaces).toMatchObject([{ id: lowBalanceId, balance: 10 }]);
+});
+
+it("sorts aggregate values before pagination and applies health filters", async () => {
+  sessions.operator = true;
+  const first = (await (await app.request("/operator/workspaces?sortBy=balance&sortDirection=asc&limit=1")).json()) as {
+    workspaces: { id: string; conditions: string[]; creditsUsed: number }[];
+    total: number;
+  };
+  expect(first.total).toBe(2);
+  expect(first.workspaces[0]).toMatchObject({ id: firstId, creditsUsed: 3 });
+  expect(first.workspaces[0].conditions).toContain("INACTIVE");
+
+  const healthy = (await (await app.request("/operator/workspaces?status=HEALTHY")).json()) as { total: number };
+  expect(healthy.total).toBe(0);
 });
 
 it("surfaces an active Unlimited Period in the Workspace list", async () => {
@@ -155,9 +169,22 @@ it("returns the same analytics and AI Usage as the Workspace Admin", async () =>
 
   const response = await app.request(`/operator/workspaces/${firstId}`);
   expect(response.status).toBe(200);
-  const detail = (await response.json()) as { analytics: unknown; aiUsage: unknown };
+  const detail = (await response.json()) as {
+    analytics: unknown;
+    aiUsage: unknown;
+    attention: { balance: number };
+    sessions: { count: number; previousCount: number; daily: { count: number }[] };
+    billing: { spentThisMonth: number };
+    outcomes: unknown[];
+  };
   expect(detail.analytics).toEqual({ overview: adminOverview, traffic: adminTraffic });
   expect(detail.aiUsage).toEqual({ summary: adminUsage, tools: adminTools });
+  expect(detail.attention.balance).toBe(497);
+  expect(detail.sessions.count).toBe(0);
+  expect(detail.sessions.previousCount).toBe(0);
+  expect(detail.sessions.daily).toHaveLength(7);
+  expect(detail.outcomes).toEqual([]);
+  expect(detail.billing.spentThisMonth).toBe(3);
   expect(JSON.stringify(detail)).not.toContain("accessToken");
   expect((await app.request(`/operator/workspaces/${secondId}`)).status).toBe(200);
   expect((await app.request("/operator/workspaces/missing")).status).toBe(404);

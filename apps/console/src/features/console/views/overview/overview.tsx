@@ -1,10 +1,10 @@
-import { fetchOperatorActions, type OperatorAction, type OperatorOverview } from "@repo/api-client";
+import { fetchOperatorActions, type OperatorAction, type OperatorOverview, type OperatorResolutionReason } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, BarChart3Icon,
   Building2Icon, CircleDollarSignIcon, Clock3Icon, CoinsIcon, FileTextIcon,
-  MessageSquareIcon, RefreshCwIcon, TrendingUpIcon, TriangleAlertIcon,
+  MessageSquareIcon, RefreshCwIcon, TriangleAlertIcon,
   UserRoundPlusIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -13,20 +13,24 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent } from "@repo/ui/components/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@repo/ui/components/chart";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@repo/ui/components/tooltip";
 import { cn } from "@repo/ui/lib/utils";
 
-import { ConsolePageHeader, ConsoleQueryState, ConsoleStatusBadge } from "../../components/console-patterns";
+import { ConsolePageHeader, ConsoleQueryState } from "../../components/console-patterns";
 import DateRangePicker, { type ConsoleDateRange, trailingRange } from "../../components/date-range-picker";
 import { conditionLabel, operatorAtRiskQueryOptions } from "../at-risk/at-risk";
 import { platformAnalyticsTrendsQueryOptions } from "../platform-analytics/platform-analytics.services";
 import { api } from "../../../../lib/api";
 import { operatorOverviewQueryOptions } from "./overview.services";
-import { formatCount, formatIdr, formatUsd } from "./overview.utils";
+import { formatCount, formatIdr } from "./overview.utils";
 
 const dateTimeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const conditions = ["LOW_BALANCE", "UNLIMITED_ENDING_SOON", "INACTIVE"] as const;
-const outcomeReasons = [
-  { key: "CUSTOMER_INACTIVE", label: "Customer inactive (AI)", color: "var(--chart-1)" },
+const outcomeReasons: { key: OperatorResolutionReason; label: string; color: string; hint?: string }[] = [
+  {
+    key: "CUSTOMER_INACTIVE", label: "Customer inactive (AI)", color: "var(--chart-1)",
+    hint: "Ticket closed automatically after the customer stopped responding to the AI.",
+  },
   { key: "HUMAN_RESOLVED", label: "Human resolved", color: "var(--chart-2)" },
   { key: "CUSTOMER_CONFIRMED", label: "Customer confirmed", color: "var(--chart-3)" },
   { key: "CUSTOMER_INACTIVE_HUMAN_HANDLING", label: "Inactive (human)", color: "var(--chart-4)" },
@@ -56,8 +60,8 @@ function Change({ current, previous, goodWhenUp = true }: {
   );
 }
 
-function Metric({ icon, label, value, current, previous, tone, goodWhenUp }: {
-  icon: ReactNode; label: string; value: string; current: number; previous: number;
+function Metric({ icon, label, hint, value, current, previous, tone, goodWhenUp }: {
+  icon: ReactNode; label: string; hint: string; value: string; current: number; previous: number;
   tone: string; goodWhenUp?: boolean;
 }) {
   return (
@@ -67,7 +71,8 @@ function Metric({ icon, label, value, current, previous, tone, goodWhenUp }: {
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-muted-foreground" title={label}>{label}</p>
           <p className="mt-1 truncate text-2xl font-semibold tabular-nums tracking-tight" title={value}>{value}</p>
-          <p className="mt-1 text-xs"><Change current={current} previous={previous} goodWhenUp={goodWhenUp} /> <span className="text-muted-foreground">vs. previous period</span></p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>
+          <p className="mt-0.5 text-xs"><Change current={current} previous={previous} goodWhenUp={goodWhenUp} /> <span className="text-muted-foreground">vs. previous period</span></p>
         </div>
       </CardContent>
     </Card>
@@ -81,9 +86,9 @@ function SessionsChart({ data }: { data: { date: string; count: number }[] }) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Sessions trend</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Total support Sessions across all Channels</p>
+            <p className="mt-1 text-xs text-muted-foreground">Sessions across all channels in the selected period</p>
           </div>
-          <Link to="/platform-analytics" className="shrink-0 text-xs text-primary hover:underline">Sessions ↗</Link>
+          <Link to="/platform-analytics" className="shrink-0 text-xs text-primary hover:underline">Explore analytics ↗</Link>
         </div>
         <ChartContainer config={{ count: { label: "Sessions", color: "var(--primary)" } }} className="mt-4 h-40 w-full">
           <AreaChart data={data} margin={{ top: 8, left: 0, right: 8, bottom: 0 }}>
@@ -106,7 +111,7 @@ function SessionsChart({ data }: { data: { date: string; count: number }[] }) {
 }
 
 function OutcomeCard({ reasons }: { reasons: OperatorOverview["tickets"]["resolvedByReason"] }) {
-  const rows = outcomeReasons.map(({ key, label, color }) => ({ label, color, count: reasons[key] }));
+  const rows = outcomeReasons.map(({ key, label, color, hint }) => ({ label, color, hint, count: reasons[key] }));
   const total = rows.reduce((sum, row) => sum + row.count, 0);
   let offset = 0;
   const segments = rows.map((row) => {
@@ -117,8 +122,8 @@ function OutcomeCard({ reasons }: { reasons: OperatorOverview["tickets"]["resolv
   return (
     <Card className="h-full min-h-[230px] min-w-0 gap-0 py-0">
       <CardContent className="p-4">
-        <h2 className="text-sm font-semibold">Support outcome</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Tickets resolved in the selected range</p>
+        <h2 className="text-sm font-semibold">Ticket outcomes</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Tickets by outcome in selected period</p>
         {total === 0 ? <p className="grid h-40 place-items-center text-xs text-muted-foreground">No resolved Tickets in this range.</p> : (
           <div className="mt-4 flex items-center gap-4">
             <div className="grid size-36 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(${segments.join(", ")})` }}
@@ -132,7 +137,18 @@ function OutcomeCard({ reasons }: { reasons: OperatorOverview["tickets"]["resolv
               {rows.map((row) => (
                 <div key={row.label} className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 text-xs">
                   <span className="size-2.5 rounded-sm" style={{ background: row.color }} />
-                  <span className="truncate text-muted-foreground" title={row.label}>{row.label}</span>
+                  {row.hint ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="truncate text-muted-foreground underline decoration-dotted" title={row.label}>{row.label}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>{row.hint}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <span className="truncate text-muted-foreground" title={row.label}>{row.label}</span>
+                  )}
                   <span className="tabular-nums">{Math.round(row.count / total * 100)}%</span>
                   <span className="w-8 text-right tabular-nums text-muted-foreground">{formatCount(row.count)}</span>
                 </div>
@@ -152,10 +168,10 @@ function ChannelCard({ sessions }: { sessions: OperatorOverview["sessions"] }) {
   ] as const;
   const total = rows.reduce((sum, row) => sum + row.count, 0);
   return (
-    <Card className="h-full min-h-[230px] min-w-0 gap-0 py-0">
+    <Card className="min-w-0 gap-0 py-0">
       <CardContent className="p-4">
         <h2 className="text-sm font-semibold">Channel mix</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Sessions by Channel</p>
+        <p className="mt-1 text-xs text-muted-foreground">Sessions by channel</p>
         {total === 0 ? <p className="grid h-40 place-items-center text-xs text-muted-foreground">No Sessions in this range.</p> : (
           <div className="mt-6 space-y-5">
             {rows.map((row) => (
@@ -193,7 +209,7 @@ export default function OverviewView() {
     <div className="flex flex-col gap-4">
       <ConsolePageHeader
         title="Overview"
-        description="Monitor platform health, activity, and operator priorities. Report dates use UTC."
+        description="Platform health, activity, and operator priorities."
         actions={<>
           <DateRangePicker range={range} onChange={setRange} />
           <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full px-3 text-xs"
@@ -211,19 +227,17 @@ export default function OverviewView() {
           onRetry={() => void overview.refetch()} />
       ) : (
         <div className="flex flex-col gap-4">
-          <section aria-label="Platform summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <Metric icon={<Building2Icon />} label="Active workspaces" value={formatCount(data.workspaces.active)}
+          <section aria-label="Platform summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+            <Metric icon={<Building2Icon />} label="Active workspaces" hint="Had activity in selected period" value={formatCount(data.workspaces.active)}
               current={data.workspaces.active} previous={data.previous.activeWorkspaces} tone="bg-primary/10 text-primary" />
-            <Metric icon={<UserRoundPlusIcon />} label="New workspaces" value={formatCount(data.workspaces.new)}
+            <Metric icon={<UserRoundPlusIcon />} label="New workspaces" hint="Created in selected period" value={formatCount(data.workspaces.new)}
               current={data.workspaces.new} previous={data.previous.newWorkspaces} tone="bg-primary/10 text-primary" />
-            <Metric icon={<MessageSquareIcon />} label="Total Sessions" value={formatCount(sessions)}
+            <Metric icon={<MessageSquareIcon />} label="Sessions" hint="In selected period" value={formatCount(sessions)}
               current={sessions} previous={data.previous.sessions} tone="bg-primary/10 text-primary" />
-            <Metric icon={<CoinsIcon />} label="Net Credits consumed" value={formatCount(data.credits.spent)}
+            <Metric icon={<CoinsIcon />} label="Credits consumed" hint="In selected period" value={formatCount(data.credits.spent)}
               current={data.credits.spent} previous={data.previous.creditsSpent} tone="bg-chart-1/10 text-chart-1" />
-            <Metric icon={<CircleDollarSignIcon />} label="Revenue" value={formatIdr(data.revenueIdr)}
+            <Metric icon={<CircleDollarSignIcon />} label="Top-up revenue" hint="Paid top-ups in selected period" value={formatIdr(data.revenueIdr)}
               current={data.revenueIdr} previous={data.previous.revenueIdr} tone="bg-chart-2/10 text-chart-2" />
-            <Metric icon={<TrendingUpIcon />} label="Provider cost" value={formatUsd(data.providerCostUsd)}
-              current={data.providerCostUsd} previous={data.previous.providerCostUsd} goodWhenUp={false} tone="bg-muted text-muted-foreground" />
           </section>
 
           <section aria-label="Current attention conditions" className="flex min-h-[82px] items-center rounded-xl border bg-card px-4 py-3 shadow-sm">
@@ -235,16 +249,13 @@ export default function OverviewView() {
                 <div className="flex min-w-56 items-center gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-destructive/10 text-destructive"><TriangleAlertIcon className="size-5" /></span>
                   <div>
-                    <p className="text-sm font-semibold"><span className="text-destructive">{formatCount(workspaces.length)}</span> workspaces need attention</p>
-                    <p className="text-xs text-muted-foreground">Current · require your review</p>
+                    <p className="text-sm font-semibold"><span className="text-destructive">{formatCount(workspaces.length)}</span> {workspaces.length === 1 ? "workspace" : "workspaces"} require attention</p>
+                    <p className="text-xs text-muted-foreground">Issues requiring operator review</p>
                   </div>
                 </div>
-                {conditions.map((condition) => (
-                  <div key={condition} className="border-l pl-5">
-                    <p className="text-sm font-semibold tabular-nums">{workspaces.filter((workspace) => workspace.conditions.includes(condition)).length} workspaces</p>
-                    <p className="text-xs text-muted-foreground">{conditionLabel[condition]}</p>
-                  </div>
-                ))}
+                <p className="border-l pl-5 text-sm text-muted-foreground">
+                  {conditions.map((condition) => `${workspaces.filter((workspace) => workspace.conditions.includes(condition)).length} ${conditionLabel[condition]}`).join(" · ")}
+                </p>
                 <Button asChild size="sm" variant="outline" className="ml-auto h-8 text-xs">
                   <Link to="/needs-attention">View all <ArrowRightIcon className="ml-1 size-3.5" /></Link>
                 </Button>
@@ -270,7 +281,7 @@ export default function OverviewView() {
                 <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
                   <div className="flex items-center gap-2">
                     <span className="grid size-8 place-items-center rounded-lg bg-destructive/10 text-destructive"><TriangleAlertIcon className="size-4" /></span>
-                    <div><h2 className="text-sm font-semibold">Workspaces needing attention</h2><p className="text-xs text-muted-foreground">Current priorities</p></div>
+                    <div><h2 className="text-sm font-semibold">Workspaces requiring review</h2><p className="text-xs text-muted-foreground">Highest-priority workspace issues</p></div>
                   </div>
                   <Link to="/needs-attention" className="shrink-0 text-xs text-primary hover:underline">View all →</Link>
                 </div>
@@ -283,7 +294,7 @@ export default function OverviewView() {
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[570px] text-left text-xs">
                       <thead className="border-b bg-muted/30 text-muted-foreground">
-                        <tr><th className="px-3 py-2 font-medium">Workspace</th><th className="px-2 py-2 font-medium">Issue</th><th className="px-2 py-2 font-medium">Severity</th><th className="px-2 py-2 text-right font-medium">Balance</th><th className="px-2 py-2 font-medium">Last Customer Message</th><th className="px-3 py-2 font-medium">Action</th></tr>
+                        <tr><th className="px-3 py-2 font-medium">Workspace</th><th className="px-2 py-2 font-medium">Issue</th><th className="px-2 py-2 text-right font-medium">Balance</th><th className="px-2 py-2 font-medium">Last customer activity</th><th className="px-3 py-2 font-medium">Action</th></tr>
                       </thead>
                       <tbody className="divide-y">
                         {[...workspaces].sort((a, b) => Number(b.conditions.includes("CREDIT_EXHAUSTED")) - Number(a.conditions.includes("CREDIT_EXHAUSTED"))).slice(0, 5).map((workspace) => {
@@ -293,7 +304,6 @@ export default function OverviewView() {
                             <tr key={workspace.id}>
                               <td className="max-w-32 truncate px-3 py-2 font-medium"><Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }} className="text-primary hover:underline">{workspace.name}</Link></td>
                               <td className="px-2 py-2 text-muted-foreground">{conditionLabel[issue]}</td>
-                              <td className="px-2 py-2"><ConsoleStatusBadge tone={high ? "danger" : "warning"}>{high ? "High" : "Medium"}</ConsoleStatusBadge></td>
                               <td className="px-2 py-2 text-right tabular-nums">{formatCount(workspace.balance)}</td>
                               <td className="whitespace-nowrap px-2 py-2 text-muted-foreground">{workspace.lastCustomerActivityAt ? dateTimeFormat.format(new Date(workspace.lastCustomerActivityAt)) : "—"}</td>
                               <td className="px-3 py-2"><Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }} className="text-primary hover:underline">{issue === "LOW_BALANCE" || high ? "Top up" : "Review"}</Link></td>
@@ -311,7 +321,7 @@ export default function OverviewView() {
             <Card className="min-h-[290px] gap-0 py-0">
               <CardContent className="p-0">
                 <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-                  <div className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><BarChart3Icon className="size-4" /></span><div><h2 className="text-sm font-semibold">Top workspaces by activity</h2><p className="text-xs text-muted-foreground">Sessions in selected range</p></div></div>
+                  <div className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><BarChart3Icon className="size-4" /></span><div><h2 className="text-sm font-semibold">Most active workspaces</h2><p className="text-xs text-muted-foreground">Sessions in selected period</p></div></div>
                   <Link to="/workspaces" className="shrink-0 text-xs text-primary hover:underline">View all →</Link>
                 </div>
                 {data.topWorkspaces.length === 0 ? <p className="grid min-h-40 place-items-center text-xs text-muted-foreground">No Sessions in this range.</p> : (
@@ -332,7 +342,7 @@ export default function OverviewView() {
             <Card className="min-h-[290px] gap-0 py-0">
               <CardContent className="p-0">
                 <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-                  <div className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileTextIcon className="size-4" /></span><div><h2 className="text-sm font-semibold">Recent operator actions</h2><p className="text-xs text-muted-foreground">Latest actions in the Console</p></div></div>
+                  <div className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileTextIcon className="size-4" /></span><div><h2 className="text-sm font-semibold">Recent operator actions</h2><p className="text-xs text-muted-foreground">Latest administrative activity</p></div></div>
                   <Link to="/audit-log" className="shrink-0 text-xs text-primary hover:underline">View all →</Link>
                 </div>
                 {actions.isPending || actions.isError || !actions.data?.actions.length ? (
