@@ -25,7 +25,6 @@
       "@repo/layouts/*": ["./packages/layouts/src/*"],
       "@repo/logger": ["./packages/logger/src/index.ts"],
       "@repo/logger/telemetry": ["./packages/logger/src/telemetry.ts"],
-      "@repo/shared": ["./packages/shared/src/index.ts"],
       "@repo/storage": ["./packages/storage/src/index.ts"],
       "@repo/test-db": ["./packages/test-db/src/index.ts"],
       "@repo/tools": ["./packages/tools/src/index.ts"],
