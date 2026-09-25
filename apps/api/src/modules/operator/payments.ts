@@ -68,7 +68,12 @@ export async function listPayments(query: z.infer<typeof paymentQuerySchema>) {
   ]);
   const payments = rows.map(({ expiresAt, ledgerEntryId, ...payment }) => ({
     ...payment,
-    status: payment.status === "PAID" ? "PAID" : expiresAt <= now ? "EXPIRED" : "PENDING",
+    status:
+      payment.status === "PAID"
+        ? ("PAID" as const)
+        : expiresAt <= now
+          ? ("EXPIRED" as const)
+          : ("PENDING" as const),
     ledgerEntryId: payment.status === "PAID" ? ledgerEntryId : null,
   }));
   // ponytail: status sorting loads matching payments; use a stored effective status if this grows large.
