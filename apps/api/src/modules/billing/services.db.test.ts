@@ -85,6 +85,7 @@ describe("Top-Up Payments", () => {
   });
 
   it("lists payments across Workspaces with status and date filters and the paid ledger id", async () => {
+    const query = { page: 1, limit: 20, sortBy: "createdAt", sortDirection: "desc" } as const;
     await checkout();
     mayar.fetchMayarPayment.mockResolvedValue({ amount: 250_000, id: "mayar-1", status: "paid" });
     await services.handleMayarWebhook({ data: { productId: "mayar-1" } });
@@ -109,21 +110,21 @@ describe("Top-Up Payments", () => {
       },
     });
 
-    const paid = await listPayments({ page: 1, limit: 20, status: "PAID" });
+    const paid = await listPayments({ ...query, status: "PAID" });
     expect(paid.total).toBe(1);
     expect(paid.payments[0]).toMatchObject({
       workspace: { id: workspaceId },
       status: "PAID",
       ledgerEntryId: expect.any(String),
     });
-    const expired = await listPayments({ page: 1, limit: 20, status: "EXPIRED" });
+    const expired = await listPayments({ ...query, status: "EXPIRED" });
     expect(expired.payments[0]).toMatchObject({
       workspace: { id: secondWorkspaceId },
       status: "EXPIRED",
       ledgerEntryId: null,
     });
     const future = new Date(Date.now() + 1000).toISOString();
-    expect((await listPayments({ page: 1, limit: 20, from: future })).total).toBe(0);
+    expect((await listPayments({ ...query, from: future })).total).toBe(0);
   });
 
   it("never trusts the webhook body: an unpaid or mismatched payment adds nothing", async () => {
