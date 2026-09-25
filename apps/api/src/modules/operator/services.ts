@@ -61,6 +61,7 @@ export async function getModelMargin(query: AnalyticsRangeQuery = {}) {
 export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, workspaceId?: string) {
   const { from, to, startAt, endAt } = resolveRange(query);
   const scope = workspaceId ? { workspaceId } : {};
+  const workspaceScope = workspaceId ? { id: workspaceId } : {};
   const createdAt = { gte: startAt, lt: endAt };
   const duration = endAt.getTime() - startAt.getTime();
   const previousAt = { gte: new Date(startAt.getTime() - duration), lt: startAt };
@@ -88,8 +89,8 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
     workspaceSessions,
     previousWorkspaceSessions,
   ] = await Promise.all([
-    unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null } }),
-    unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null, createdAt } }),
+    unscopedPrisma.workspace.count({ where: { ...workspaceScope, deletedAt: null } }),
+    unscopedPrisma.workspace.count({ where: { ...workspaceScope, deletedAt: null, createdAt } }),
     unscopedPrisma.session.groupBy({
       by: ["channelId"],
       where: { ...scope, createdAt },
@@ -125,7 +126,9 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
       where: { ...activeWhere, createdAt: previousAt },
       _count: { _all: true },
     }),
-    unscopedPrisma.workspace.count({ where: { ...scope, deletedAt: null, createdAt: previousAt } }),
+    unscopedPrisma.workspace.count({
+      where: { ...workspaceScope, deletedAt: null, createdAt: previousAt },
+    }),
     unscopedPrisma.session.count({ where: { ...scope, createdAt: previousAt } }),
     unscopedPrisma.creditLedgerEntry.aggregate({
       where: { ...scope, type: "SPEND", createdAt: previousAt },

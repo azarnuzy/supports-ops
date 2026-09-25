@@ -146,6 +146,8 @@ describe("api app", () => {
       status: "PAID",
       page: 1,
       limit: 20,
+      sortBy: "createdAt",
+      sortDirection: "desc",
     });
   });
 
