@@ -54,6 +54,7 @@ import {
 import DateRangePicker, { trailingRange } from "../../../console/components/date-range-picker";
 import { ConsoleShell } from "../../../console/shell";
 import {
+  type AtRiskWorkspace,
   conditionLabel,
   conditionTone,
   operatorAtRiskQueryOptions,
@@ -163,7 +164,7 @@ function WorkspaceActions({
   workspace,
   onTopUp,
 }: {
-  workspace: { id: string; balance: number; conditions: OperatorAttentionCondition[] };
+  workspace: Pick<AtRiskWorkspace, "id" | "balance" | "conditions">;
   onTopUp: (workspace: { id: string; balance: number }) => void;
 }) {
   return (
@@ -646,7 +647,9 @@ export default function WorkspacesListView() {
                   <p className="text-xs text-muted-foreground">Workspaces needing attention now</p>
                 </div>
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/needs-attention">View all →</Link>
+                  <Link to="/$section" params={{ section: "needs-attention" }}>
+                    View all →
+                  </Link>
                 </Button>
               </div>
               {atRisk.isPending || atRisk.isError ? (

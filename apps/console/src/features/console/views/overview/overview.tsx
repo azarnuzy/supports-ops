@@ -160,7 +160,11 @@ function SessionsChart({ data }: { data: { date: string; count: number }[] }) {
               Sessions across all channels in the selected period
             </p>
           </div>
-          <Link to="/platform-analytics" className="shrink-0 text-xs text-primary hover:underline">
+          <Link
+            to="/$section"
+            params={{ section: "platform-analytics" }}
+            className="shrink-0 text-xs text-primary hover:underline"
+          >
             Explore analytics ↗
           </Link>
         </div>
@@ -460,8 +464,6 @@ export default function OverviewView() {
                     isPending={trends.isPending}
                     isError={trends.isError}
                     error={trends.error}
-                    isEmpty={!trends.isPending && !trends.isError && !trends.data}
-                    emptyTitle="No trend data"
                     onRetry={() => void trends.refetch()}
                   />
                 </Card>
@@ -492,7 +494,8 @@ export default function OverviewView() {
                     </div>
                   </div>
                   <Link
-                    to="/needs-attention"
+                    to="/$section"
+                    params={{ section: "needs-attention" }}
                     className="shrink-0 text-xs text-primary hover:underline"
                   >
                     View all →
@@ -653,7 +656,11 @@ export default function OverviewView() {
                       </p>
                     </div>
                   </div>
-                  <Link to="/audit-log" className="shrink-0 text-xs text-primary hover:underline">
+                  <Link
+                    to="/$section"
+                    params={{ section: "audit-log" }}
+                    className="shrink-0 text-xs text-primary hover:underline"
+                  >
                     View all →
                   </Link>
                 </div>

@@ -37,7 +37,10 @@ import {
   ConsoleStatusBadge,
   ConsoleTablePagination,
 } from "../../components/console-patterns";
-import DateRangePicker, { trailingRange } from "../../components/date-range-picker";
+import DateRangePicker, {
+  trailingRange,
+  type ConsoleDateRange,
+} from "../../components/date-range-picker";
 
 const numberFormat = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -51,9 +54,8 @@ const types = [
   "KNOWLEDGE_INGESTION_ISSUE",
 ] as const;
 type Issue = (typeof types)[number];
-type Workspace = Awaited<
-  ReturnType<typeof operatorAtRiskQueryOptions.queryFn>
->["workspaces"][number];
+export type AtRiskWorkspace = Awaited<ReturnType<typeof fetchAtRisk>>["workspaces"][number];
+type Workspace = AtRiskWorkspace;
 type Row = { workspace: Workspace; issue: Issue };
 type Sort = "severity" | "workspace" | "issue" | "balance" | "sessions" | "lastMessage";
 const cards = [
@@ -96,13 +98,15 @@ const cards = [
 const high = (issue: Issue) => issue === "CREDIT_EXHAUSTED" || issue === "CHANNEL_ISSUE";
 const date = (value: string | null) => (value ? dateFormat.format(new Date(value)) : "Never");
 
+async function fetchAtRisk(query?: ConsoleDateRange) {
+  const response = await api.operator["at-risk"].$get({ query: query ?? {} });
+  if (!response.ok) throw new Error("Failed to load at-risk workspaces.");
+  return response.json();
+}
+
 export const operatorAtRiskQueryOptions = queryOptions({
   queryKey: ["operator", "at-risk"] as const,
-  queryFn: async () => {
-    const response = await api.operator["at-risk"].$get();
-    if (!response.ok) throw new Error("Failed to load at-risk workspaces.");
-    return response.json();
-  },
+  queryFn: () => fetchAtRisk(),
 });
 export const conditionLabel: Record<string, string> = {
   CREDIT_EXHAUSTED: "Credits exhausted",
@@ -186,11 +190,7 @@ export default function AtRiskView() {
   const [extend, setExtend] = useState<Workspace | null>(null);
   const query = useQuery({
     queryKey: ["operator", "at-risk", range],
-    queryFn: async () => {
-      const response = await api.operator["at-risk"].$get({ query: range });
-      if (!response.ok) throw new Error("Failed to load at-risk workspaces.");
-      return response.json();
-    },
+    queryFn: () => fetchAtRisk(range),
   });
   const rows: Row[] = (query.data?.workspaces ?? []).flatMap((workspace) =>
     workspace.conditions.map((issue) => ({ workspace, issue: issue as Issue })),
