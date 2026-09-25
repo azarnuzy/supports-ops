@@ -8,7 +8,7 @@ Create `A` records pointing at the VPS public IPv4 address:
 
 | Hostname | Purpose |
 | --- | --- |
-| `support.azarnuzy.com` | Dashboard |
+| `app.support.azarnuzy.com` | Dashboard |
 | `console.support.azarnuzy.com` | Operator Console |
 | `api.support.azarnuzy.com` | API |
 | `widget.support.azarnuzy.com` | Web Widget |
@@ -41,7 +41,7 @@ cp env.production.example env.production
 chmod 600 env.production
 ```
 
-The shared Caddy container must be connected to the external `proxy` network and be the only container that publishes ports `80` and `443`. From the local checkout, copy `deploy/supports-ops.caddy` into the shared Caddy configuration directory, then validate and reload Caddy using that installation's normal commands. Caddy obtains and renews certificates automatically once all four DNS records resolve to the VPS.
+The shared Caddy container must be connected to the external `proxy` network and be the only container that publishes ports `80` and `443`. From the local checkout, copy `deploy/supports-ops.caddy` into the shared Caddy configuration directory, then validate and reload Caddy using that installation's normal commands. Caddy obtains and renews certificates automatically once all four application DNS records resolve to the VPS.
 
 ## GitHub environment
 
@@ -172,7 +172,7 @@ After the workflow has run on `main`, verify:
 
 ```bash
 curl --fail https://api.support.azarnuzy.com/health
-curl --fail --location https://support.azarnuzy.com/
+curl --fail --location https://app.support.azarnuzy.com/
 curl --fail --location https://console.support.azarnuzy.com/
 curl --fail --location https://widget.support.azarnuzy.com/
 ```
@@ -184,4 +184,4 @@ cd /srv/apps/supports-ops
 ./deploy.sh PREVIOUS_COMMIT_SHA
 ```
 
-Confirm the four HTTPS checks again. A successful rollback replaces `.release.env` with the restored SHA; no image is built on the VPS.
+Confirm the four application HTTPS checks again. The landing page at `support.azarnuzy.com` is deployed from the separate `supportops-landingpage` repository. A successful rollback replaces `.release.env` with the restored SHA; no image is built on the VPS.

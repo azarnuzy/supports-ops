@@ -1,4 +1,4 @@
-support.azarnuzy.com {
+app.support.azarnuzy.com {
 	reverse_proxy supports-ops-platform:80
 }
 

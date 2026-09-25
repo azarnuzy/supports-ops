@@ -34,7 +34,7 @@ x-api-service: &api-service
     BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in env.production}"
     OPERATOR_AUTH_SECRET: "${OPERATOR_AUTH_SECRET:?Set OPERATOR_AUTH_SECRET in env.production}"
     BETTER_AUTH_URL: "https://api.support.azarnuzy.com"
-    CLIENT_ORIGINS: "https://support.azarnuzy.com,https://console.support.azarnuzy.com,https://widget.support.azarnuzy.com"
+    CLIENT_ORIGINS: "https://app.support.azarnuzy.com,https://console.support.azarnuzy.com,https://widget.support.azarnuzy.com"
     INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
     REDIS_URL: "redis://redis:6379"
     SESSION_LINK_BASE_URL: "https://api.support.azarnuzy.com/widget/session"
