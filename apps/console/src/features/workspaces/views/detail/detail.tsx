@@ -516,7 +516,11 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                   title="Needs attention"
                   contentClassName="min-h-24"
                   action={
-                    <Link to="/$section" params={{ section: "needs-attention" }} className="text-xs text-primary">
+                    <Link
+                      to="/$section"
+                      params={{ section: "needs-attention" }}
+                      className="text-xs text-primary"
+                    >
                       View all →
                     </Link>
                   }
@@ -548,7 +552,11 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                 <Panel
                   title="Billing & credits"
                   action={
-                    <Link to="/$section" params={{ section: "ai-usage-economics" }} className="text-xs text-primary">
+                    <Link
+                      to="/$section"
+                      params={{ section: "ai-usage-economics" }}
+                      className="text-xs text-primary"
+                    >
                       View usage →
                     </Link>
                   }
@@ -586,7 +594,11 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                   title="Operator actions"
                   contentClassName="min-h-24"
                   action={
-                    <Link to="/$section" params={{ section: "audit-log" }} className="text-xs text-primary">
+                    <Link
+                      to="/$section"
+                      params={{ section: "audit-log" }}
+                      className="text-xs text-primary"
+                    >
                       View all →
                     </Link>
                   }
