@@ -117,7 +117,8 @@ Jika nilai tersebut diubah saat Worker sedang berjalan, restart proses Worker. K
 3. Di host demo Widget, isi dan kirim Pre-Chat dengan nama serta alamat email apa pun. Alamat tidak harus nyata karena Mailpit menangkap semua penerima lokal.
 4. Tunggu Worker memproses queue `session-email`, lalu buka email terbaru di Mailpit.
 5. Verifikasi penerima sesuai email Pre-Chat, pengirim `SupportOps <support@example.com>`, subject `Return to your SupportOps chat`, dan body berisi tautan untuk kembali ke Web Session.
-6. Buka tautan dari email. Secara default URL-nya diawali `http://localhost:8000/widget/session?token=...` dan harus membuka Web Session yang sama. Setelah Session selesai, tautan yang sama tetap membuka transkrip dalam mode read-only.
+6. Buka tautan dari email di tab atau browser lain. Secara default URL-nya diawali `http://localhost:8000/widget/session?token=...` dan harus membuka halaman chat penuh dengan transkrip Session yang sama, bukan respons JSON. Kirim pesan dari halaman itu dan pastikan muncul di Widget asal. Setelah Session ditutup, tautan yang sama hanya membuka transkrip; composer tidak tampil.
+7. Sebelum mengirim Pre-Chat berikutnya, periksa alamat email di formulir. Siapa pun yang menerima tautan dapat membaca Session dan mengirim pesan selama masih aktif; email tidak diverifikasi.
 
 Email dibuat segera setelah Pre-Chat berhasil, sebelum Customer mengirim pesan pertama.
 Karena pengirimannya asynchronous, Pre-Chat dapat sukses beberapa saat sebelum email muncul;
@@ -129,7 +130,7 @@ Jika email tidak muncul:
 - Pastikan `RESEND_API_KEY` kosong. Jika terisi, Worker memilih Resend dan tidak memakai Mailpit.
 - Pastikan proses `@repo/worker` dan Redis hidup; pengiriman Session Link diproses dari queue, bukan langsung oleh API.
 - Periksa log Worker untuk `Session Link email failed`. Error koneksi biasanya berarti `SMTP_URL` atau container Mailpit tidak tersedia.
-- Kirim Pre-Chat baru setelah Worker diperbaiki. Kegagalan enqueue sengaja tidak menggagalkan pembuatan Web Session.
+- Jika Redis gagal menerima job, Pre-Chat menampilkan error; perbaiki Redis lalu ulangi Pre-Chat. Jika Worker berhenti tetapi Redis hidup, Pre-Chat tetap berhasil dan email menunggu Worker berjalan lagi. Kegagalan pengiriman setelah job masuk antrean tercatat di log Worker.
 
 ### Konfigurasi Tools dan MCP Server
 
@@ -147,6 +148,8 @@ Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak
 | ID | Skenario dan input Customer | Hasil yang diharapkan | Bukti |
 | --- | --- | --- | --- |
 | W1 | Pre-Chat, lalu jangan mengirim pesan | Web Session aktif, tanpa Ticket | Widget terbuka; tidak ada Ticket baru di Platform |
+| W1a | Set Follow-Up dan Auto-Resolution ke beberapa detik di `/agent`, lalu setelah W1 kirim `Hi` dan biarkan AI membalas; kemudian diam | Follow-Up umum muncul tanpa Ticket dan tanpa pengurangan Credit; setelah jeda kedua, Session `CLOSED` tanpa Ticket/Resolution, tautan email hanya-baca | Widget, halaman chat penuh, `/chat/all`, AI Usage |
+| W1b | Setelah basa-basi W1a tetapi sebelum timer berakhir, gunakan tombol reset pada widget yang sama lalu mulai Session baru dengan email yang sama | Session lama tanpa Ticket langsung `CLOSED`; tautan lamanya hanya-baca dan tautan baru membuka Session baru. Jika Session lama sudah punya Ticket aktif, Ticket tersebut tetap aktif dan tautannya tetap dapat dipakai. Pre-Chat dari browser lain tanpa token lama tidak menutup Session hanya berdasarkan email | Widget, kedua email Session Link, `/chat/all` |
 | W2 | `How do I reset my password?` | AI menjawab dari Knowledge Customer-Safe, bahasa mengikuti Customer | Widget memperlihatkan balasan bertahap; Ticket diklasifikasi |
 | W3 | `Is my subscription active?` | AI Agent memilih sendiri Webhook Tool `getSubscriptionStatus` dari deskripsi dan guidance-nya, lalu menjawab dari data live Business System, bukan mengarang | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `HTTP` |
 | W3a | `What's the status of my latest invoice?` | Dari dua Tool yang aktif, AI Agent memilih MCP Tool `getInvoiceStatus` karena deskripsi dan guidance-nya yang cocok | Balasan Widget; AI Activity mencatat `TOOL_CALLED` origin `MCP` |

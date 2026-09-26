@@ -37,7 +37,7 @@ Both `apps/api` (classification, reply generation, Business Tool calls) and `app
 
 `safe` (the default, and the only value production may use) exports the shape of a run — spans, durations, token counts, decisions — but no prompt or response bodies. A trace then reads as "No data captured" where the content would be.
 
-`TELEMETRY_CAPTURE_MODE="full"` exports those bodies, which is how a local run shows what the AI Agent was actually asked, what each Tool returned, and what it answered. Use it only against a telemetry backend running on your own machine: a prompt can contain Internal-Only Knowledge and Customer data, and `full` sends both verbatim.
+`TELEMETRY_CAPTURE_MODE="full"` exports those bodies, which is how a development run shows what the AI Agent was actually asked, what each Tool returned, and what it answered. A prompt or Tool result can contain Internal-Only Knowledge and Customer data; `full` sends both verbatim to the configured telemetry backend.
 
 ## Sessions
 
@@ -68,4 +68,4 @@ For local debugging without any account, `TELEMETRY_EXPORTER="console"` prints e
 
 ## What a trace looks like
 
-One conversation produces one coherent trace per AI Agent run: the `ai_agent.run` span (ticket/workspace ids, and the final decision — REPLY, CLARIFY, ESCALATE, RESOLVE — plus the Escalation Reason when escalating) covers child spans for knowledge retrieval, each Business Tool call, and the model generations emitted by the agent observer (`gen_ai.*` spans). Classification and Copilot generations produce their own spans on the same pipeline.
+Each Web Widget message produces one `support.customer_turn` trace. Its children show classification when there is no Ticket yet, then `ai_agent.turn` with knowledge retrieval, model generations, and each Tool call when the AI Agent handles the message. A greeting or direct request for a Human Agent has no `ai_agent.turn`; the root records its reply or escalation outcome instead. All turns in a Session share the Session id. In `full` mode, the root shows the Customer message and final outcome, while child spans show the model and Tool input/output. Other AI Agent runs, including Copilot, continue to have their own traces.

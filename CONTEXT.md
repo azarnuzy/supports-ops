@@ -131,11 +131,11 @@ Why a Ticket ended: the Customer confirmed it was solved, the Customer went quie
 _Avoid_: Outcome, Status, Result
 
 **Follow-Up**:
-The context-aware message the AI Agent sends after a period of Customer silence, asking whether its answer worked. Only ever exists while the AI Agent owns the Ticket; humans never get one.
+The message sent after a period of Customer silence following an AI Agent reply. Before a Ticket exists, it asks whether the Customer still needs help and spends no Credit; after a Ticket exists, it asks whether the answer worked and spends Credit. Humans never get one.
 _Avoid_: Reminder, Nudge, Check-in
 
 **Auto-Resolution**:
-A Ticket ending because the Customer never replied to a Follow-Up. Counted apart from a confirmed Resolution so AI effectiveness is never overstated.
+A Ticket ending because the Customer never replied to a Follow-Up. Counted apart from a confirmed Resolution so AI effectiveness is never overstated. The same timer closes a Session without a Ticket, without creating a Ticket or a Resolution metric.
 _Avoid_: Timeout close, Auto-close, Expiry
 
 **Idle Closure**:
@@ -253,7 +253,7 @@ The short, curated list of models SupportOps offers as Agent Models. A model joi
 _Avoid_: Model list, Providers, Model marketplace
 
 **Credit**:
-The prepaid unit a Workspace spends on AI. Always bought before it is spent, never billed after the fact. Belongs to the Workspace, shared by all its AI Agents. Only AI Turns and Follow-Ups spend Credits; everything else the AI does — classification, Escalation Summaries, Suggested Replies, reading Attachments, ingesting Knowledge Sources — is absorbed by the platform.
+The prepaid unit a Workspace spends on AI. Always bought before it is spent, never billed after the fact. Belongs to the Workspace, shared by all its AI Agents. Only AI Turns and Follow-Ups after a Ticket exists spend Credits; pre-Ticket Follow-Ups and everything else the AI does — classification, Escalation Summaries, Suggested Replies, reading Attachments, ingesting Knowledge Sources — are absorbed by the platform.
 _Avoid_: Token (the provider's unit, not the product's), Quota, Balance, Subscription
 
 **Model Rate**:
