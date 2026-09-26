@@ -236,7 +236,10 @@ export async function runAiAgentTurn(params: {
             decision.decision === "CLARIFY"
               ? "AI_FAILED_ATTEMPTS"
               : (decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE");
-          run.setAttributes({ "ai_agent.decision": "ESCALATE", "ai_agent.escalation_reason": reason });
+          run.setAttributes({
+            "ai_agent.decision": "ESCALATE",
+            "ai_agent.escalation_reason": reason,
+          });
           if (captureMode === "full") {
             run.setAttribute(
               "langfuse.observation.output",

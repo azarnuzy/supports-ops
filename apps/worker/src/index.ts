@@ -6,8 +6,20 @@ import { processAttachmentJob, type AttachmentProcessJob } from "./attachment-pr
 import type { ExampleJob } from "./types";
 import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
 import { sendCreditAlertEmail, type CreditAlertEmailJob } from "./credit-alert-email";
-import { processAutoResolveJob, processFollowUpJob, processIdleClosureJob, processSessionAutoResolveJob, processSessionFollowUpJob } from "./follow-up";
-import type { AutoResolveJob, FollowUpJob, IdleClosureJob, SessionAutoResolveJob, SessionFollowUpJob } from "./follow-up";
+import {
+  processAutoResolveJob,
+  processFollowUpJob,
+  processIdleClosureJob,
+  processSessionAutoResolveJob,
+  processSessionFollowUpJob,
+} from "./follow-up";
+import type {
+  AutoResolveJob,
+  FollowUpJob,
+  IdleClosureJob,
+  SessionAutoResolveJob,
+  SessionFollowUpJob,
+} from "./follow-up";
 import {
   processTicketKnowledgeIndexJob,
   type TicketKnowledgeIndexJob,
@@ -94,12 +106,16 @@ export function startAttachmentProcessWorker() {
 }
 
 export function startFollowUpWorker() {
-  return new Worker<FollowUpJob | AutoResolveJob | IdleClosureJob | SessionFollowUpJob | SessionAutoResolveJob>(
+  return new Worker<
+    FollowUpJob | AutoResolveJob | IdleClosureJob | SessionFollowUpJob | SessionAutoResolveJob
+  >(
     "ticket-follow-up",
     async (job) => {
       if (job.name === "follow-up") return processFollowUpJob({ data: job.data as FollowUpJob });
-      if (job.name === "session-follow-up") return processSessionFollowUpJob({ data: job.data as SessionFollowUpJob });
-      if (job.name === "session-auto-resolve") return processSessionAutoResolveJob({ data: job.data as SessionAutoResolveJob });
+      if (job.name === "session-follow-up")
+        return processSessionFollowUpJob({ data: job.data as SessionFollowUpJob });
+      if (job.name === "session-auto-resolve")
+        return processSessionAutoResolveJob({ data: job.data as SessionAutoResolveJob });
       if (job.name === "idle-close")
         return processIdleClosureJob({ data: job.data as IdleClosureJob });
       return processAutoResolveJob({ data: job.data as AutoResolveJob });

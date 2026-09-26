@@ -100,7 +100,8 @@ export default function ConfigForm({ form }: ConfigFormProps) {
                     <span className="grid gap-0.5 text-left">
                       <span className="font-medium">{model.name}</span>
                       <span className="text-xs leading-snug text-muted-foreground">
-                        {model.description} · {model.rate} Credit{model.rate === 1 ? "" : "s"} per reply
+                        {model.description} · {model.rate} Credit{model.rate === 1 ? "" : "s"} per
+                        reply
                       </span>
                     </span>
                   </SelectItem>

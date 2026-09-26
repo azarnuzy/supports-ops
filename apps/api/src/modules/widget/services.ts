@@ -179,7 +179,9 @@ export async function getSession(accessToken: string) {
       customerIdentity: { select: { email: true, name: true } },
       channel: {
         select: {
-          webWidgetConfig: { select: { botName: true, primaryColor: true, welcomeMessage: true, logoKey: true } },
+          webWidgetConfig: {
+            select: { botName: true, primaryColor: true, welcomeMessage: true, logoKey: true },
+          },
         },
       },
     },
@@ -231,13 +233,24 @@ export async function createCustomerMessage(
           () => undefined,
         );
       }
-      const settings = await unscopedPrisma.aiSettings.findUnique({ where: { workspaceId: session.workspaceId } });
+      const settings = await unscopedPrisma.aiSettings.findUnique({
+        where: { workspaceId: session.workspaceId },
+      });
       await scheduleSessionFollowUp(
-        { aiMessageId: exchange.messages[1].id, sessionId: session.id, workspaceId: session.workspaceId },
+        {
+          aiMessageId: exchange.messages[1].id,
+          sessionId: session.id,
+          workspaceId: session.workspaceId,
+        },
         settings?.followUpAfterSeconds ?? 900,
       );
     }
-    return { kind: "reply", reply: exchange.reply, sessionId: session.id, workspaceId: session.workspaceId };
+    return {
+      kind: "reply",
+      reply: exchange.reply,
+      sessionId: session.id,
+      workspaceId: session.workspaceId,
+    };
   }
 
   try {

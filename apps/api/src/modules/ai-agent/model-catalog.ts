@@ -11,12 +11,53 @@ export type ModelCatalogEntry = {
 
 const availableModels: readonly ModelCatalogEntry[] = [
   // ponytail: one Credit for this eligible set; remeasure if provider prices or turn usage changes.
-  { id: "openai/gpt-5.6-luna", name: "GPT-5.6 Luna", rate: 1, description: "Balanced support conversations and tool use.", devscaleId: "gpt-5.6-luna", openRouterId: "openai/gpt-5.6-luna" },
-  { id: "openai/gpt-6-luna", name: "GPT-6 Luna", rate: 1, description: "Fast support conversations and tool use.", devscaleId: "gpt-6-luna", openRouterId: "openai/gpt-6-luna" },
-  { id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", rate: 1, description: "Fast reasoning and support replies.", devscaleId: "deepseek-v4.1-flash", openRouterId: "deepseek/deepseek-v4.1-flash" },
-  { id: "deepseek/deepseek-v4-flash-0731", name: "DeepSeek V4 Flash 0731", rate: 1, description: "Efficient support replies and tool use.", devscaleId: "deepseek-v4-flash-0731", openRouterId: "deepseek/deepseek-v4-flash-0731" },
-  { id: "xiaomi/mimo-v2.6-flash", name: "MiMo V2.6 Flash", rate: 1, description: "Efficient support conversations.", devscaleId: "mimo-v2.6-flash", openRouterId: "xiaomi/mimo-v2.6-flash" },
-  { id: "muse-spark-1.3-contributor", name: "Muse Spark 1.3 Contributor", rate: 1, description: "Available through Devscale.", devscaleId: "muse-spark-1.3-contributor" },
+  {
+    id: "openai/gpt-5.6-luna",
+    name: "GPT-5.6 Luna",
+    rate: 1,
+    description: "Balanced support conversations and tool use.",
+    devscaleId: "gpt-5.6-luna",
+    openRouterId: "openai/gpt-5.6-luna",
+  },
+  {
+    id: "openai/gpt-6-luna",
+    name: "GPT-6 Luna",
+    rate: 1,
+    description: "Fast support conversations and tool use.",
+    devscaleId: "gpt-6-luna",
+    openRouterId: "openai/gpt-6-luna",
+  },
+  {
+    id: "deepseek/deepseek-v4.1-flash",
+    name: "DeepSeek V4.1 Flash",
+    rate: 1,
+    description: "Fast reasoning and support replies.",
+    devscaleId: "deepseek-v4.1-flash",
+    openRouterId: "deepseek/deepseek-v4.1-flash",
+  },
+  {
+    id: "deepseek/deepseek-v4-flash-0731",
+    name: "DeepSeek V4 Flash 0731",
+    rate: 1,
+    description: "Efficient support replies and tool use.",
+    devscaleId: "deepseek-v4-flash-0731",
+    openRouterId: "deepseek/deepseek-v4-flash-0731",
+  },
+  {
+    id: "xiaomi/mimo-v2.6-flash",
+    name: "MiMo V2.6 Flash",
+    rate: 1,
+    description: "Efficient support conversations.",
+    devscaleId: "mimo-v2.6-flash",
+    openRouterId: "xiaomi/mimo-v2.6-flash",
+  },
+  {
+    id: "muse-spark-1.3-contributor",
+    name: "Muse Spark 1.3 Contributor",
+    rate: 1,
+    description: "Available through Devscale.",
+    devscaleId: "muse-spark-1.3-contributor",
+  },
 ];
 
 const isDevscale = new URL(aiAgentConfig.baseUrl).hostname === "gateway.devscale.id";
@@ -43,8 +84,8 @@ export function modelRateFor(modelId: string): number {
 }
 
 export function gatewayModelId(modelId: string): string {
-  const model = availableModels.find(
-    (entry) => [entry.id, entry.devscaleId, entry.openRouterId].includes(modelId),
+  const model = availableModels.find((entry) =>
+    [entry.id, entry.devscaleId, entry.openRouterId].includes(modelId),
   );
   return (isDevscale ? model?.devscaleId : model?.openRouterId) ?? modelId;
 }

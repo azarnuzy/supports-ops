@@ -22,7 +22,10 @@ const queueName = "ticket-follow-up";
 let queue: Queue<FollowUpJob | AutoResolveJob | IdleClosureJob | SessionFollowUpJob> | null = null;
 
 function getQueue() {
-  queue ??= new Queue<FollowUpJob | AutoResolveJob | IdleClosureJob | SessionFollowUpJob>(queueName, { connection });
+  queue ??= new Queue<FollowUpJob | AutoResolveJob | IdleClosureJob | SessionFollowUpJob>(
+    queueName,
+    { connection },
+  );
   return queue;
 }
 

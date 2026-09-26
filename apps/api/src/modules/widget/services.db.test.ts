@@ -102,7 +102,10 @@ beforeEach(async () => {
 });
 
 async function openSession(email = "budi@example.com", previousSessionToken?: string) {
-  const session = await services.createSession({ email, name: "Budi", previousSessionToken, widgetKey }, origin);
+  const session = await services.createSession(
+    { email, name: "Budi", previousSessionToken, widgetKey },
+    origin,
+  );
   if (!session.accessToken) throw new Error("The Web Widget always issues an access token.");
   return { ...session, accessToken: session.accessToken };
 }
@@ -129,9 +132,13 @@ describe("a Customer message arrived on a Session", () => {
       idempotencyKey: "greeting-before-new-session",
     });
     await openSession();
-    expect((await prisma.session.findUniqueOrThrow({ where: { id: oldGreeting.id } })).status).toBe("ACTIVE");
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: oldGreeting.id } })).status).toBe(
+      "ACTIVE",
+    );
     const ticketed = await openSession("budi@example.com", oldGreeting.accessToken);
-    expect((await prisma.session.findUniqueOrThrow({ where: { id: oldGreeting.id } })).status).toBe("CLOSED");
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: oldGreeting.id } })).status).toBe(
+      "CLOSED",
+    );
     supportRequest("Invoice charged twice");
     await services.createCustomerMessage(ticketed.accessToken, {
       content: "my invoice is wrong",
@@ -139,7 +146,9 @@ describe("a Customer message arrived on a Session", () => {
     });
     await openSession("budi@example.com", ticketed.accessToken);
 
-    expect((await prisma.session.findUniqueOrThrow({ where: { id: ticketed.id } })).status).toBe("ACTIVE");
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: ticketed.id } })).status).toBe(
+      "ACTIVE",
+    );
   });
 
   it("classifies the third message with both earlier turns in view and titles the Ticket from the real problem", async () => {

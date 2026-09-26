@@ -173,7 +173,9 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
               "anvia.trace.session_id": result.message.sessionId,
               "langfuse.session.id": result.message.sessionId,
               "supportops.workspace_id": result.message.workspaceId,
-              ...(result.message.ticketId ? { "supportops.ticket_id": result.message.ticketId } : {}),
+              ...(result.message.ticketId
+                ? { "supportops.ticket_id": result.message.ticketId }
+                : {}),
             });
             respond(c.json(result.message, result.created ? 201 : 200));
             accepted = true;
@@ -208,13 +210,16 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
                 result.message.workspaceId,
                 result.message.content,
               );
-              const outcome = decision ?? (await unscopedPrisma.ticket.findUnique({
-                select: { escalationReason: true, status: true },
-                where: { id: ticketId },
-              }));
+              const ticketRow = decision
+                ? null
+                : await unscopedPrisma.ticket.findUnique({
+                    select: { escalationReason: true, status: true },
+                    where: { id: ticketId },
+                  });
+              const outcome = decision ?? ticketRow;
               span.setAttribute(
                 "supportops.outcome",
-                decision?.decision ?? outcome?.escalationReason ?? outcome?.status ?? "UNKNOWN",
+                decision?.decision ?? ticketRow?.escalationReason ?? ticketRow?.status ?? "UNKNOWN",
               );
               if (captureMode === "full") {
                 span.setAttribute(
@@ -361,7 +366,8 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       return c.text("Invalid conversation link.", 400);
     const session = await getSession(accessToken);
     if (!session) return c.text("Invalid conversation link.", 404);
-    const scriptUrl = process.env.WIDGET_SCRIPT_URL ??
+    const scriptUrl =
+      process.env.WIDGET_SCRIPT_URL ??
       (process.env.NODE_ENV === "production"
         ? "https://widget.support.azarnuzy.com/widget.js"
         : "http://localhost:3002/src/loader.ts");
@@ -370,7 +376,9 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     c.header("X-Content-Type-Options", "nosniff");
     const apiUrl = new URL(process.env.SESSION_LINK_BASE_URL ?? c.req.url).origin;
     const scriptType = process.env.NODE_ENV === "production" ? "" : ' type="module"';
-    return c.html(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Support chat</title></head><body><script${scriptType} src="${scriptUrl}" data-session-token="${accessToken}" data-api-url="${apiUrl}"></script></body></html>`);
+    return c.html(
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Support chat</title></head><body><script${scriptType} src="${scriptUrl}" data-session-token="${accessToken}" data-api-url="${apiUrl}"></script></body></html>`,
+    );
   })
   .get("/session/info", async (c) => {
     const accessToken = c.req.query("token");
@@ -381,10 +389,13 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     const config = session.channel.webWidgetConfig;
     if (!config) return c.json({ error: "not_found" }, 404);
     c.header("Cache-Control", "no-store");
-    return c.json({
-      config: toPublicWidgetConfig(config),
-      customer: session.customerIdentity,
-      id: session.id,
-      status: session.status,
-    }, 200);
+    return c.json(
+      {
+        config: toPublicWidgetConfig(config),
+        customer: session.customerIdentity,
+        id: session.id,
+        status: session.status,
+      },
+      200,
+    );
   });

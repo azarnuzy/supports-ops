@@ -187,7 +187,9 @@ describe("Session Follow-Up without a Ticket", () => {
         workspaceId: seeded.workspaceId,
       },
     });
-    expect((await prisma.session.findUniqueOrThrow({ where: { id: seeded.sessionId } })).status).toBe("CLOSED");
+    expect(
+      (await prisma.session.findUniqueOrThrow({ where: { id: seeded.sessionId } })).status,
+    ).toBe("CLOSED");
     expect(await prisma.ticket.count()).toBe(0);
   });
 });

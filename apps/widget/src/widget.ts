@@ -50,27 +50,36 @@ function renderMarkdown(content: string) {
   }).trim();
 }
 
-export async function mountWidget({ apiUrl, widgetKey: suppliedKey, accessToken, fullPage = false }: WidgetOptions) {
+export async function mountWidget({
+  apiUrl,
+  widgetKey: suppliedKey,
+  accessToken,
+  fullPage = false,
+}: WidgetOptions) {
   if (document.querySelector(elementName)) {
     return true;
   }
 
-  const response = await fetch(accessToken
-    ? `${apiUrl.replace(/\/$/, "")}/widget/session/info?token=${encodeURIComponent(accessToken)}`
-    : `${apiUrl.replace(/\/$/, "")}/widget/config?key=${encodeURIComponent(suppliedKey ?? "")}`);
+  const response = await fetch(
+    accessToken
+      ? `${apiUrl.replace(/\/$/, "")}/widget/session/info?token=${encodeURIComponent(accessToken)}`
+      : `${apiUrl.replace(/\/$/, "")}/widget/config?key=${encodeURIComponent(suppliedKey ?? "")}`,
+  );
 
   if (!response.ok) {
     return false;
   }
 
-  const loaded = await response.json() as WidgetConfig | {
-    config: WidgetConfig;
-    customer: { email: string | null; name: string };
-    id: string;
-    status: string;
-  };
-  const session = accessToken ? loaded as Extract<typeof loaded, { config: WidgetConfig }> : null;
-  const config = session?.config ?? loaded as WidgetConfig;
+  const loaded = (await response.json()) as
+    | WidgetConfig
+    | {
+        config: WidgetConfig;
+        customer: { email: string | null; name: string };
+        id: string;
+        status: string;
+      };
+  const session = accessToken ? (loaded as Extract<typeof loaded, { config: WidgetConfig }>) : null;
+  const config = session?.config ?? (loaded as WidgetConfig);
   const widgetKey = suppliedKey ?? session?.id ?? "";
   const host = document.createElement(elementName);
   if (fullPage) host.setAttribute("data-full-page", "");
@@ -459,7 +468,8 @@ export async function mountWidget({ apiUrl, widgetKey: suppliedKey, accessToken,
     }
   });
   const resetSession = () => {
-    previousSessionToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`) ?? undefined;
+    previousSessionToken =
+      sessionStorage.getItem(`supportops:web-session:${widgetKey}`) ?? undefined;
     eventSource?.close();
     eventSource = undefined;
     window.clearTimeout(reconnectTimer);
