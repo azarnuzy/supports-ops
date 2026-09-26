@@ -13,6 +13,7 @@ import {
   type AssignedToolDescriptor,
   type AssignedToolExecutor,
 } from "./tools";
+import { captureMode } from "./telemetry";
 
 export type EscalationReason = NonNullable<ReplyDecision["escalationReason"]>;
 
@@ -104,9 +105,22 @@ export async function runAiAgentTurn(params: {
       "supportops.workspace_id": params.workspaceId,
     },
     async (run) => {
+      if (captureMode === "full") {
+        run.setAttribute("langfuse.observation.input", params.customerMessage);
+      }
       if (!params.modelConfig) {
+        run.setAttributes({
+          "ai_agent.decision": "ESCALATE",
+          "ai_agent.escalation_reason": "AI_GENERATION_FAILED",
+        });
+        if (captureMode === "full") {
+          run.setAttribute(
+            "langfuse.observation.output",
+            JSON.stringify({ decision: "ESCALATE", escalationReason: "AI_GENERATION_FAILED" }),
+          );
+        }
         await params.runtime.escalate("AI_GENERATION_FAILED");
-        return;
+        return { decision: "ESCALATE", escalationReason: "AI_GENERATION_FAILED" };
       }
 
       const provisionalId = randomUUID();
@@ -190,8 +204,14 @@ export async function runAiAgentTurn(params: {
               "ai_agent.decision": "ESCALATE",
               "ai_agent.escalation_reason": "AI_TIMEOUT",
             });
+            if (captureMode === "full") {
+              run.setAttribute(
+                "langfuse.observation.output",
+                JSON.stringify({ decision: "ESCALATE", escalationReason: "AI_TIMEOUT" }),
+              );
+            }
             await params.runtime.escalate("AI_TIMEOUT");
-            return;
+            return { decision: "ESCALATE", escalationReason: "AI_TIMEOUT" };
           }
           throw lastError ?? new ReplyGenerationFailedError();
         }
@@ -201,6 +221,12 @@ export async function runAiAgentTurn(params: {
             ? { "ai_agent.escalation_reason": decision.escalationReason }
             : {}),
         });
+        if (captureMode === "full") {
+          run.setAttribute(
+            "langfuse.observation.output",
+            JSON.stringify({ decision: decision.decision, content: decision.content }),
+          );
+        }
 
         if (
           decision.decision === "ESCALATE" ||
@@ -210,11 +236,22 @@ export async function runAiAgentTurn(params: {
             decision.decision === "CLARIFY"
               ? "AI_FAILED_ATTEMPTS"
               : (decision.escalationReason ?? "NO_RELEVANT_KNOWLEDGE");
-          run.setAttribute("ai_agent.escalation_reason", reason);
+          run.setAttributes({ "ai_agent.decision": "ESCALATE", "ai_agent.escalation_reason": reason });
+          if (captureMode === "full") {
+            run.setAttribute(
+              "langfuse.observation.output",
+              JSON.stringify({
+                decision: "ESCALATE",
+                escalationReason: reason,
+                content: decision.content,
+              }),
+            );
+          }
           await params.runtime.escalate(
             reason,
             decision.decision === "ESCALATE" ? (decision.content ?? undefined) : undefined,
           );
+          return { content: decision.content, decision: "ESCALATE", escalationReason: reason };
         } else if (decision.decision === "RESOLVE") {
           if (!decision.content) throw new ReplyGenerationFailedError();
           await params.runtime.resolve(decision.content);
@@ -222,13 +259,22 @@ export async function runAiAgentTurn(params: {
           if (!decision.content) throw new ReplyGenerationFailedError();
           await params.runtime.reply(decision.decision, decision.content, provisionalId);
         }
+        return decision;
       } catch (error) {
         run.recordException(error instanceof Error ? error : new Error(String(error)));
         run.setAttributes({
           "ai_agent.decision": "ESCALATE",
           "ai_agent.escalation_reason": "AI_GENERATION_FAILED",
+          "ai_agent.error": error instanceof Error ? error.message : String(error),
         });
+        if (captureMode === "full") {
+          run.setAttribute(
+            "langfuse.observation.output",
+            JSON.stringify({ decision: "ESCALATE", escalationReason: "AI_GENERATION_FAILED" }),
+          );
+        }
         await params.runtime.escalate("AI_GENERATION_FAILED");
+        return { decision: "ESCALATE", escalationReason: "AI_GENERATION_FAILED" };
       } finally {
         await params.runtime.finish();
       }

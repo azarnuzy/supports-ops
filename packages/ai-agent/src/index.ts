@@ -11,6 +11,7 @@ export {
   MutationIntentClassificationFailedError,
 } from "./mutation-intent";
 export { createAssignedTools, selectToolLoadout } from "./tools";
+export { captureMode } from "./telemetry";
 export { runAiAgentTurn, type AiAgentTurnRuntime, type EscalationReason } from "./turn";
 export {
   EscalationSummaryGenerationFailedError,
