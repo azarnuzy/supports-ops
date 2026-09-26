@@ -58,7 +58,7 @@ vi.mock("@repo/tools", () => ({
 }));
 
 vi.mock("../../config", () => ({
-  aiAgentConfig: {},
+  aiAgentConfig: { baseUrl: "https://openrouter.ai/api/v1" },
   apiConfig: {},
   embeddingConfig: {},
 }));

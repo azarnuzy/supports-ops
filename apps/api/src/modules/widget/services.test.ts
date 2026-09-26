@@ -9,7 +9,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ getObjectUrl: vi.fn() }));
 
 vi.mock("../../utils/prisma", () => ({ isUniqueConstraintError: () => false, unscopedPrisma: {} }));
-vi.mock("../../config", () => ({ classificationConfig: {}, storageConfig: {} }));
+vi.mock("../../config", () => ({
+  aiAgentConfig: { baseUrl: "https://openrouter.ai/api/v1" },
+  classificationConfig: {},
+  storageConfig: {},
+}));
 vi.mock("@repo/storage", () => ({ createStorage: () => ({ getObjectUrl: mocks.getObjectUrl }) }));
 vi.mock("@repo/ai-agent", () => ({
   classifyMessage: vi.fn(),

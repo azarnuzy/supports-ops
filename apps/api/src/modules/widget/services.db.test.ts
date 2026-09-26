@@ -48,7 +48,7 @@ vi.mock("../tickets/queue", () => ({ enqueueTicketKnowledgeIndex: vi.fn() }));
 // database this file creates.
 vi.mock("../../config", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../config")>()),
-  aiAgentConfig: { apiKey: "", baseUrl: "", modelId: "m" },
+  aiAgentConfig: { apiKey: "", baseUrl: "https://openrouter.ai/api/v1", modelId: "m" },
   classificationConfig: { apiKey: "sk-test", baseUrl: "", modelId: "m" },
   embeddingConfig: { apiKey: "", baseUrl: "", modelId: "m" },
 }));
