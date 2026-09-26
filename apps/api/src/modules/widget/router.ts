@@ -284,18 +284,11 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     const parsed = rawCursor === undefined ? null : Number(rawCursor);
     const position =
       parsed === null ? null : Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
-    const replay = await getMessagesAfter(accessToken, position);
-    if (!replay) return c.json({ error: "unauthorized" }, 401);
+    const initial = await getSession(accessToken);
+    if (!initial) return c.json({ error: "unauthorized" }, 401);
     return streamSSE(c, async (stream) => {
-      for (const message of replay.messages) {
-        await stream.writeSSE({
-          data: JSON.stringify(message),
-          event: "message.created",
-          id: String(message.position),
-        });
-      }
-      const unsubscribe = await (replay.ticketId
-        ? subscribeToWidgetEvents(replay.ticketId, async (event) => {
+      const unsubscribe = await (initial.ticket
+        ? subscribeToWidgetEvents(initial.ticket.id, async (event) => {
             const data = event.data as { position?: number };
             await stream.writeSSE({
               data: JSON.stringify(event.data),
@@ -303,7 +296,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
               id: data.position ? String(data.position) : undefined,
             });
           })
-        : subscribeToSessionEvents(replay.sessionId, async (event) => {
+        : subscribeToSessionEvents(initial.id, async (event) => {
             const data = event.data as { position?: number };
             await stream.writeSSE({
               data: JSON.stringify(event.data),
@@ -311,6 +304,25 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
               id: data.position ? String(data.position) : undefined,
             });
           }));
+      stream.onAbort(unsubscribe);
+      // Subscribe before replay: a Message written during the handshake is
+      // delivered by the subscription or the second read (duplicates are
+      // harmless because the Widget deduplicates by Session position).
+      const replay = await getMessagesAfter(accessToken, position);
+      if (!replay) return unsubscribe();
+      for (const message of replay.messages) {
+        await stream.writeSSE({
+          data: JSON.stringify(message),
+          event: "message.created",
+          id: String(message.position),
+        });
+      }
+      if (!initial.ticket && replay.ticketId) {
+        await stream.writeSSE({
+          data: JSON.stringify({ status: "ticket_created" }),
+          event: "ticket.status",
+        });
+      }
       await stream.writeSSE({
         data: JSON.stringify({
           status:
@@ -322,7 +334,6 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
         }),
         event: "ticket.status",
       });
-      stream.onAbort(unsubscribe);
       keepStreamAlive(stream);
       await new Promise<void>(() => undefined);
     });

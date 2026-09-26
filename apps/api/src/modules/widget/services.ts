@@ -175,6 +175,7 @@ export async function getSession(accessToken: string) {
       createdAt: true,
       id: true,
       status: true,
+      ticket: { select: { id: true } },
       customerIdentity: { select: { email: true, name: true } },
       channel: {
         select: {
