@@ -20,6 +20,8 @@ let prisma: typeof import("./prisma").prisma;
 let processIdleClosureJob: typeof import("./follow-up").processIdleClosureJob;
 let processAutoResolveJob: typeof import("./follow-up").processAutoResolveJob;
 let processFollowUpJob: typeof import("./follow-up").processFollowUpJob;
+let processSessionFollowUpJob: typeof import("./follow-up").processSessionFollowUpJob;
+let processSessionAutoResolveJob: typeof import("./follow-up").processSessionAutoResolveJob;
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -28,6 +30,7 @@ beforeAll(async () => {
   ({ processAutoResolveJob, processFollowUpJob, processIdleClosureJob } = await import(
     "./follow-up"
   ));
+  ({ processSessionFollowUpJob, processSessionAutoResolveJob } = await import("./follow-up"));
 }, 60_000);
 
 afterAll(async () => {
@@ -141,6 +144,53 @@ function jobFor(ticket: Awaited<ReturnType<typeof seedTicket>>) {
     },
   };
 }
+
+describe("Session Follow-Up without a Ticket", () => {
+  it("sends a free Follow-Up and closes only the Session after silence", async () => {
+    const seeded = await seedTicket("ESCALATED", "WEB");
+    await prisma.ticket.delete({ where: { id: seeded.ticketId } });
+    const conversation = await prisma.conversation.findUniqueOrThrow({
+      where: { sessionId: seeded.sessionId },
+    });
+    const aiMessageId = randomUUID();
+    await prisma.message.create({
+      data: {
+        content: "Hi!",
+        externalMessageId: aiMessageId,
+        id: aiMessageId,
+        memorySessionId: conversation.id,
+        message: { content: "Hi!" },
+        position: 1,
+        role: "assistant",
+        runId: randomUUID(),
+        senderType: "AI_AGENT",
+        sessionId: seeded.sessionId,
+        turn: 1,
+        workspaceId: seeded.workspaceId,
+      },
+    });
+    await prisma.session.update({ data: { messageSeq: 1 }, where: { id: seeded.sessionId } });
+
+    await processSessionFollowUpJob({
+      data: { aiMessageId, sessionId: seeded.sessionId, workspaceId: seeded.workspaceId },
+    });
+    const followUp = await prisma.message.findFirstOrThrow({
+      orderBy: { position: "desc" },
+      where: { sessionId: seeded.sessionId },
+    });
+    expect(followUp.content).toContain("still like help");
+    expect(await prisma.creditLedgerEntry.count()).toBe(0);
+    await processSessionAutoResolveJob({
+      data: {
+        followUpMessageId: followUp.id,
+        sessionId: seeded.sessionId,
+        workspaceId: seeded.workspaceId,
+      },
+    });
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: seeded.sessionId } })).status).toBe("CLOSED");
+    expect(await prisma.ticket.count()).toBe(0);
+  });
+});
 
 describe("Idle Closure worker", () => {
   it.each([

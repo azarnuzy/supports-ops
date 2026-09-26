@@ -9,6 +9,8 @@ import { Queue, type ConnectionOptions } from "bullmq";
 
 export type FollowUpJob = { ticketId: string; workspaceId: string; aiMessageId: string };
 export type AutoResolveJob = { ticketId: string; workspaceId: string; followUpMessageId: string };
+export type SessionFollowUpJob = { sessionId: string; workspaceId: string; aiMessageId: string };
+export type SessionAutoResolveJob = { sessionId: string; workspaceId: string; followUpMessageId: string };
 export type IdleClosureJob = {
   assignedHumanAgentId: string | null;
   channelType?: "WEB" | "WHATSAPP";
@@ -21,10 +23,10 @@ const connection: ConnectionOptions = {
   maxRetriesPerRequest: null,
   url: process.env.REDIS_URL ?? "redis://localhost:16379",
 };
-let followUpQueue: Queue<AutoResolveJob | IdleClosureJob> | undefined;
+let followUpQueue: Queue<AutoResolveJob | IdleClosureJob | SessionAutoResolveJob> | undefined;
 
 async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: number) {
-  followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob>("ticket-follow-up", { connection });
+  followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob | SessionAutoResolveJob>("ticket-follow-up", { connection });
   await followUpQueue.remove(`auto-resolve-${job.ticketId}`).catch(() => undefined);
   await followUpQueue.add("auto-resolve", job, {
     delay: delaySeconds * 1_000,
@@ -35,7 +37,7 @@ async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: number) {
 }
 
 async function scheduleIdleClosure(job: IdleClosureJob, delayMs: number) {
-  followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob>("ticket-follow-up", { connection });
+  followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob | SessionAutoResolveJob>("ticket-follow-up", { connection });
   await followUpQueue.add("idle-close", job, {
     delay: Math.max(0, delayMs),
     removeOnComplete: 100,
@@ -73,6 +75,93 @@ async function publish(ticketId: string, event: unknown) {
     maxRetriesPerRequest: null,
   });
   await publisher.publish(`supportops:ticket:${ticketId}`, JSON.stringify(event));
+}
+
+async function publishSession(sessionId: string, event: unknown) {
+  publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
+    maxRetriesPerRequest: null,
+  });
+  await publisher.publish(`supportops:session:${sessionId}`, JSON.stringify(event));
+}
+
+export async function processSessionFollowUpJob(job: { data: SessionFollowUpJob }) {
+  const result = await prisma.$transaction(async (tx) => {
+    const session = await tx.session.findFirst({
+      include: { conversation: true, messages: { orderBy: { position: "desc" }, take: 1 } },
+      where: { id: job.data.sessionId, status: "ACTIVE", ticket: { is: null }, workspaceId: job.data.workspaceId },
+    });
+    if (!session?.conversation || session.messages[0]?.id !== job.data.aiMessageId ||
+      session.messages[0].senderType !== "AI_AGENT") return null;
+    const content = "Would you still like help with anything in this chat?";
+    const message = await tx.message.create({
+      data: {
+        ...(await claimMessageSlot(tx, session.id, session.conversation.id)),
+        content,
+        externalMessageId: `session-follow-up:${session.id}:${job.data.aiMessageId}`,
+        message: { content },
+        role: "assistant",
+        senderType: "AI_AGENT",
+        workspaceId: session.workspaceId,
+      },
+    });
+    const settings = await tx.aiSettings.findUnique({ where: { workspaceId: session.workspaceId } });
+    return {
+      message,
+      autoResolveEnabled: settings?.autoResolveEnabled ?? true,
+      autoResolveAfterSeconds: settings?.autoResolveAfterSeconds ?? 3600,
+    };
+  });
+  if (!result) return;
+  await publishSession(job.data.sessionId, { type: "message.created", data: result.message });
+  if (result.autoResolveEnabled) {
+    followUpQueue ??= new Queue<AutoResolveJob | IdleClosureJob | SessionAutoResolveJob>("ticket-follow-up", { connection });
+    await followUpQueue.add("session-auto-resolve", {
+      followUpMessageId: result.message.id,
+      sessionId: job.data.sessionId,
+      workspaceId: job.data.workspaceId,
+    }, {
+      delay: result.autoResolveAfterSeconds * 1_000,
+      jobId: `session-auto-resolve-${job.data.sessionId}`,
+      removeOnComplete: 100,
+      removeOnFail: 500,
+    });
+  }
+}
+
+export async function processSessionAutoResolveJob(job: { data: SessionAutoResolveJob }) {
+  const result = await prisma.$transaction(async (tx) => {
+    const session = await tx.session.findFirst({
+      include: {
+        conversation: true,
+        messages: { orderBy: { position: "desc" }, take: 1 },
+        workspace: { select: { closingMessage: true } },
+      },
+      where: { id: job.data.sessionId, status: "ACTIVE", ticket: { is: null }, workspaceId: job.data.workspaceId },
+    });
+    const settings = await tx.aiSettings.findUnique({ where: { workspaceId: job.data.workspaceId } });
+    if (!session?.conversation || !(settings?.autoResolveEnabled ?? true) ||
+      session.messages[0]?.id !== job.data.followUpMessageId) return null;
+    const closed = await tx.session.updateMany({
+      data: { closedAt: new Date(), status: "CLOSED" },
+      where: { id: session.id, status: "ACTIVE", ticket: { is: null } },
+    });
+    if (!closed.count) return null;
+    const content = session.workspace.closingMessage ?? "This conversation has been resolved.";
+    return tx.message.create({
+      data: {
+        ...(await claimMessageSlot(tx, session.id, session.conversation.id)),
+        content,
+        externalMessageId: `session-auto-resolution:${session.id}`,
+        message: { content },
+        role: "system",
+        senderType: "SYSTEM",
+        workspaceId: session.workspaceId,
+      },
+    });
+  });
+  if (!result) return;
+  await publishSession(job.data.sessionId, { type: "message.created", data: result });
+  await publishSession(job.data.sessionId, { type: "ticket.status", data: { status: "resolved" } });
 }
 
 async function publishQueue(workspaceId: string) {

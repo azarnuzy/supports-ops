@@ -4,6 +4,7 @@ import { unscopedPrisma } from "../../utils/prisma";
 
 export type FollowUpJob = { ticketId: string; workspaceId: string; aiMessageId: string };
 export type AutoResolveJob = { ticketId: string; workspaceId: string; followUpMessageId: string };
+export type SessionFollowUpJob = { sessionId: string; workspaceId: string; aiMessageId: string };
 export type IdleClosureJob = {
   assignedHumanAgentId: string | null;
   channelType?: "WEB" | "WHATSAPP";
@@ -18,10 +19,10 @@ const connection: ConnectionOptions = {
   url: process.env.REDIS_URL ?? "redis://localhost:16379",
 };
 const queueName = "ticket-follow-up";
-let queue: Queue<FollowUpJob | AutoResolveJob | IdleClosureJob> | null = null;
+let queue: Queue<FollowUpJob | AutoResolveJob | IdleClosureJob | SessionFollowUpJob> | null = null;
 
 function getQueue() {
-  queue ??= new Queue<FollowUpJob | AutoResolveJob | IdleClosureJob>(queueName, { connection });
+  queue ??= new Queue<FollowUpJob | AutoResolveJob | IdleClosureJob | SessionFollowUpJob>(queueName, { connection });
   return queue;
 }
 
@@ -53,6 +54,18 @@ export async function scheduleAutoResolve(job: AutoResolveJob, delaySeconds: num
   await jobs.add("auto-resolve", job, {
     delay: delaySeconds * 1_000,
     jobId: `auto-resolve-${job.ticketId}`,
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  });
+}
+
+export async function scheduleSessionFollowUp(job: SessionFollowUpJob, delaySeconds: number) {
+  const jobs = getQueue();
+  await jobs.remove(`session-follow-up-${job.sessionId}`).catch(() => undefined);
+  await jobs.remove(`session-auto-resolve-${job.sessionId}`).catch(() => undefined);
+  await jobs.add("session-follow-up", job, {
+    delay: delaySeconds * 1_000,
+    jobId: `session-follow-up-${job.sessionId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
   });
