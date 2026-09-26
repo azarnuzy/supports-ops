@@ -75,32 +75,39 @@ export default function ConfigForm({ form }: ConfigFormProps) {
 
           <Separator />
 
-          <SectionHeading
-            title="Agent Model"
-            description="The model this AI Agent replies with. Changing it applies from the next reply."
-          />
-
-          <Field>
-            <FieldLabel className="text-sm font-medium" htmlFor="agent-model">
-              Agent Model
-            </FieldLabel>
+          <div className="grid gap-4 rounded-xl border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,1fr)] sm:items-center sm:p-5">
+            <div className="grid gap-1.5">
+              <FieldLabel className="text-sm font-semibold" htmlFor="agent-model">
+                Agent Model
+              </FieldLabel>
+              <FieldDescription className="leading-relaxed">
+                Choose the model used for Customer replies, Follow-Ups, and AI Agent assistance.
+                Changes apply from the next reply.
+              </FieldDescription>
+            </div>
             <Select
               value={values.agentModel}
               onValueChange={(value) => update("agentModel", value)}
             >
-              <SelectTrigger id="agent-model" className="w-full">
-                <SelectValue placeholder="Select a model" />
+              <SelectTrigger id="agent-model" className="h-10 w-full">
+                <SelectValue placeholder="Select a model">
+                  {values.modelCatalog.find((model) => model.id === values.agentModel)?.name}
+                </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="w-[min(28rem,var(--radix-select-trigger-width))]">
                 {values.modelCatalog.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name} — {model.rate} Credit{model.rate === 1 ? "" : "s"} per reply
+                  <SelectItem key={model.id} value={model.id} className="py-2.5">
+                    <span className="grid gap-0.5 text-left">
+                      <span className="font-medium">{model.name}</span>
+                      <span className="text-xs leading-snug text-muted-foreground">
+                        {model.description} · {model.rate} Credit{model.rate === 1 ? "" : "s"} per reply
+                      </span>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <FieldDescription>Applies from the AI Agent's next reply.</FieldDescription>
-          </Field>
+          </div>
 
           <Separator />
 
