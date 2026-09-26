@@ -56,6 +56,10 @@ function channel(ticketId: string) {
   return `supportops:ticket:${ticketId}`;
 }
 
+function sessionChannel(sessionId: string) {
+  return `supportops:session:${sessionId}`;
+}
+
 function queueChannel(workspaceId: string) {
   return `supportops:ticket-queue:${workspaceId}`;
 }
@@ -69,6 +73,11 @@ export async function publishWidgetEvent(ticketId: string, event: WidgetEvent) {
   await publisher.publish(channel(ticketId), JSON.stringify(event));
 }
 
+export async function publishSessionEvent(sessionId: string, event: WidgetEvent) {
+  publisher ??= new Redis(redisUrl, { maxRetriesPerRequest: null });
+  await publisher.publish(sessionChannel(sessionId), JSON.stringify(event));
+}
+
 export async function subscribeToWidgetEvents(
   ticketId: string,
   onEvent: (event: WidgetEvent) => void,
@@ -76,6 +85,16 @@ export async function subscribeToWidgetEvents(
   const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
   subscriber.on("message", (_channel, payload) => onEvent(JSON.parse(payload) as WidgetEvent));
   await subscriber.subscribe(channel(ticketId));
+  return () => subscriber.disconnect();
+}
+
+export async function subscribeToSessionEvents(
+  sessionId: string,
+  onEvent: (event: WidgetEvent) => void,
+) {
+  const subscriber = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  subscriber.on("message", (_channel, payload) => onEvent(JSON.parse(payload) as WidgetEvent));
+  await subscriber.subscribe(sessionChannel(sessionId));
   return () => subscriber.disconnect();
 }
 

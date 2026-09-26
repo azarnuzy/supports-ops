@@ -28,6 +28,7 @@ vi.mock("./session-email", () => ({ enqueueSessionEmail: mocks.enqueueSessionEma
 
 vi.mock("./realtime", () => ({
   isTicketGenerating: () => false,
+  publishSessionEvent: vi.fn(async () => undefined),
   publishTicketQueueEvent: vi.fn(),
   publishWidgetEvent: vi.fn(),
   setTicketGenerating: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("../follow-up/queue", () => ({
   cancelFollowUpTimers: vi.fn(),
   resetTimersAfterCustomerMessage: vi.fn(async () => undefined),
   scheduleFollowUp: vi.fn(),
+  scheduleSessionFollowUp: vi.fn(async () => undefined),
   scheduleIdleClosureForTicket: vi.fn(),
 }));
 
@@ -99,8 +101,8 @@ beforeEach(async () => {
   });
 });
 
-async function openSession(email = "budi@example.com") {
-  const session = await services.createSession({ email, name: "Budi", widgetKey }, origin);
+async function openSession(email = "budi@example.com", previousSessionToken?: string) {
+  const session = await services.createSession({ email, name: "Budi", previousSessionToken, widgetKey }, origin);
   if (!session.accessToken) throw new Error("The Web Widget always issues an access token.");
   return { ...session, accessToken: session.accessToken };
 }
@@ -119,6 +121,27 @@ function supportRequest(title: string) {
 }
 
 describe("a Customer message arrived on a Session", () => {
+  it("closes only unticketed sessions when the same Customer starts again", async () => {
+    const oldGreeting = await openSession();
+    greeting("Hi!");
+    await services.createCustomerMessage(oldGreeting.accessToken, {
+      content: "hello",
+      idempotencyKey: "greeting-before-new-session",
+    });
+    await openSession();
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: oldGreeting.id } })).status).toBe("ACTIVE");
+    const ticketed = await openSession("budi@example.com", oldGreeting.accessToken);
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: oldGreeting.id } })).status).toBe("CLOSED");
+    supportRequest("Invoice charged twice");
+    await services.createCustomerMessage(ticketed.accessToken, {
+      content: "my invoice is wrong",
+      idempotencyKey: "support-before-new-session",
+    });
+    await openSession("budi@example.com", ticketed.accessToken);
+
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: ticketed.id } })).status).toBe("ACTIVE");
+  });
+
   it("classifies the third message with both earlier turns in view and titles the Ticket from the real problem", async () => {
     const session = await openSession();
     greeting("Hi! What can I help you with?");

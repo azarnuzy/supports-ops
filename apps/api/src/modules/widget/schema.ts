@@ -3,6 +3,7 @@ import { z } from "zod";
 export const preChatSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320),
   name: z.string().trim().min(1).max(100),
+  previousSessionToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional(),
   widgetKey: z.string().trim().min(1),
 });
 

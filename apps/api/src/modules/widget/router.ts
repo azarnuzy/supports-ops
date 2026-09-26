@@ -1,4 +1,6 @@
 import { Hono, type Context, type Next } from "hono";
+import { captureMode } from "@repo/ai-agent";
+import { withSpan } from "@repo/logger/telemetry";
 import { createStorage } from "@repo/storage";
 import { storageConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
@@ -12,7 +14,9 @@ import {
   isTicketGenerating,
   publishTicketQueueEvent,
   publishWidgetEvent,
+  publishSessionEvent,
   subscribeToWidgetEvents,
+  subscribeToSessionEvents,
 } from "./realtime";
 import { clientAddress, limitWidgetMessage } from "./rate-limit";
 import { escalate, generateAiReply } from "../ai-agent/turn";
@@ -30,6 +34,7 @@ import {
   UnapprovedWidgetOriginError,
   WidgetNotFoundError,
   InvalidAttachmentError,
+  SessionClosedError,
 } from "./services";
 import type { PublicWidgetConfig } from "./services";
 
@@ -110,6 +115,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     }),
   )
   .use("/events", cors({ allowMethods: ["GET", "OPTIONS"], credentials: false, origin: "*" }))
+  .use("/session", cors({ allowMethods: ["GET", "OPTIONS"], credentials: false, origin: "*" }))
   .get("/config", (c) => c.json(c.get("widgetConfig"), 200))
   .post("/pre-chat", zValidator("json", preChatSchema), async (c) => {
     const origin = c.get("origin");
@@ -126,36 +132,113 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       return c.json({ error: "rate_limited", retryAfterSeconds: limit.retryAfterSeconds }, 429);
     }
     try {
-      const result = await createCustomerMessage(accessToken, c.req.valid("json"));
-      if (!result) return c.json({ error: "unauthorized" }, 401);
-      if (result.kind === "reply") {
-        return c.json({ reply: result.reply }, 200);
-      }
-      if (result.created && result.message.ticketId) {
-        const ticketId = result.message.ticketId;
-        void publishWidgetEvent(ticketId, {
-          type: "message.created",
-          data: result.message,
-        });
-        void publishTicketQueueEvent(result.message.workspaceId);
-        if (customerRequestedHuman(result.message.content)) {
-          void escalate(
-            ticketId,
-            result.message.workspaceId,
-            "CUSTOMER_REQUESTED_HUMAN",
-            result.message.content,
-          );
-        } else {
-          void generateAiReply(ticketId, result.message.workspaceId, result.message.content);
-        }
-      }
-      return c.json(result.message, result.created ? 201 : 200);
+      const input = c.req.valid("json");
+      let respond!: (response: Response) => void;
+      let rejectResponse!: (error: unknown) => void;
+      const response = new Promise<Response>((resolve, reject) => {
+        respond = resolve;
+        rejectResponse = reject;
+      });
+      // The HTTP response is ready once the Customer Message is stored. Keep
+      // its trace open while the AI finishes in the background for the Widget.
+      void withSpan(
+        "support.customer_turn",
+        {
+          "anvia.trace.name": "support.customer_turn",
+          "langfuse.trace.name": "support.customer_turn",
+          ...(captureMode === "full" ? { "langfuse.observation.input": input.content } : {}),
+        },
+        async (span) => {
+          let accepted = false;
+          try {
+            const result = await createCustomerMessage(accessToken, input);
+            if (!result) {
+              respond(c.json({ error: "unauthorized" }, 401));
+              return;
+            }
+            if (result.kind === "reply") {
+              span.setAttributes({
+                "anvia.trace.session_id": result.sessionId,
+                "langfuse.session.id": result.sessionId,
+                "supportops.workspace_id": result.workspaceId,
+              });
+              span.setAttribute("supportops.outcome", "GREETING_REPLY");
+              if (captureMode === "full") {
+                span.setAttribute("langfuse.observation.output", result.reply);
+              }
+              respond(c.json({ reply: result.reply }, 200));
+              return;
+            }
+            span.setAttributes({
+              "anvia.trace.session_id": result.message.sessionId,
+              "langfuse.session.id": result.message.sessionId,
+              "supportops.workspace_id": result.message.workspaceId,
+              ...(result.message.ticketId ? { "supportops.ticket_id": result.message.ticketId } : {}),
+            });
+            respond(c.json(result.message, result.created ? 201 : 200));
+            accepted = true;
+            if (!result.created || !result.message.ticketId) {
+              span.setAttribute("supportops.outcome", "DUPLICATE_OR_NO_TICKET");
+              return;
+            }
+            const ticketId = result.message.ticketId;
+            void publishSessionEvent(result.message.sessionId, {
+              type: "ticket.status",
+              data: { status: "ticket_created" },
+            }).catch(() => undefined);
+            void publishWidgetEvent(ticketId, {
+              type: "message.created",
+              data: result.message,
+            });
+            void publishTicketQueueEvent(result.message.workspaceId);
+            if (customerRequestedHuman(result.message.content)) {
+              await escalate(
+                ticketId,
+                result.message.workspaceId,
+                "CUSTOMER_REQUESTED_HUMAN",
+                result.message.content,
+              );
+              span.setAttribute("supportops.outcome", "CUSTOMER_REQUESTED_HUMAN");
+              if (captureMode === "full") {
+                span.setAttribute("langfuse.observation.output", "Escalated to Human Agent");
+              }
+            } else {
+              const decision = await generateAiReply(
+                ticketId,
+                result.message.workspaceId,
+                result.message.content,
+              );
+              const outcome = decision ?? (await unscopedPrisma.ticket.findUnique({
+                select: { escalationReason: true, status: true },
+                where: { id: ticketId },
+              }));
+              span.setAttribute(
+                "supportops.outcome",
+                decision?.decision ?? outcome?.escalationReason ?? outcome?.status ?? "UNKNOWN",
+              );
+              if (captureMode === "full") {
+                span.setAttribute(
+                  "langfuse.observation.output",
+                  JSON.stringify(outcome ?? { status: "UNKNOWN" }),
+                );
+              }
+            }
+          } catch (error) {
+            if (!accepted) rejectResponse(error);
+            throw error;
+          }
+        },
+      ).catch(() => undefined);
+      return await response;
     } catch (error) {
       if (error instanceof ClassificationNotConfiguredError) {
         return c.json({ error: "classification_not_configured", message: error.message }, 503);
       }
       if (error instanceof ClassificationFailedError) {
         return c.json({ error: "classification_failed", message: error.message }, 502);
+      }
+      if (error instanceof SessionClosedError) {
+        return c.json({ error: "session_closed" }, 409);
       }
       throw error;
     }
@@ -211,8 +294,8 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
           id: String(message.position),
         });
       }
-      const unsubscribe = replay.ticketId
-        ? await subscribeToWidgetEvents(replay.ticketId, async (event) => {
+      const unsubscribe = await (replay.ticketId
+        ? subscribeToWidgetEvents(replay.ticketId, async (event) => {
             const data = event.data as { position?: number };
             await stream.writeSSE({
               data: JSON.stringify(event.data),
@@ -220,7 +303,14 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
               id: data.position ? String(data.position) : undefined,
             });
           })
-        : undefined;
+        : subscribeToSessionEvents(replay.sessionId, async (event) => {
+            const data = event.data as { position?: number };
+            await stream.writeSSE({
+              data: JSON.stringify(event.data),
+              event: event.type,
+              id: data.position ? String(data.position) : undefined,
+            });
+          }));
       await stream.writeSSE({
         data: JSON.stringify({
           status:
@@ -232,7 +322,7 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
         }),
         event: "ticket.status",
       });
-      if (unsubscribe) stream.onAbort(unsubscribe);
+      stream.onAbort(unsubscribe);
       keepStreamAlive(stream);
       await new Promise<void>(() => undefined);
     });
@@ -256,10 +346,34 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
   })
   .get("/session", async (c) => {
     const accessToken = c.req.query("token");
+    if (!accessToken || !/^[A-Za-z0-9_-]{43}$/.test(accessToken))
+      return c.text("Invalid conversation link.", 400);
+    const session = await getSession(accessToken);
+    if (!session) return c.text("Invalid conversation link.", 404);
+    const scriptUrl = process.env.WIDGET_SCRIPT_URL ??
+      (process.env.NODE_ENV === "production"
+        ? "https://widget.support.azarnuzy.com/widget.js"
+        : "http://localhost:3002/src/loader.ts");
+    c.header("Cache-Control", "no-store");
+    c.header("Referrer-Policy", "no-referrer");
+    c.header("X-Content-Type-Options", "nosniff");
+    const apiUrl = new URL(process.env.SESSION_LINK_BASE_URL ?? c.req.url).origin;
+    const scriptType = process.env.NODE_ENV === "production" ? "" : ' type="module"';
+    return c.html(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Support chat</title></head><body><script${scriptType} src="${scriptUrl}" data-session-token="${accessToken}" data-api-url="${apiUrl}"></script></body></html>`);
+  })
+  .get("/session/info", async (c) => {
+    const accessToken = c.req.query("token");
     if (!accessToken) return c.json({ error: "unauthorized" }, 401);
 
     const session = await getSession(accessToken);
     if (!session) return c.json({ error: "unauthorized" }, 401);
-
-    return c.json(session, 200);
+    const config = session.channel.webWidgetConfig;
+    if (!config) return c.json({ error: "not_found" }, 404);
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      config: toPublicWidgetConfig(config),
+      customer: session.customerIdentity,
+      id: session.id,
+      status: session.status,
+    }, 200);
   });

@@ -11,7 +11,9 @@ type WidgetConfig = {
 
 type WidgetOptions = {
   apiUrl: string;
-  widgetKey: string;
+  widgetKey?: string;
+  accessToken?: string;
+  fullPage?: boolean;
 };
 
 type WidgetAttachment = {
@@ -48,21 +50,30 @@ function renderMarkdown(content: string) {
   }).trim();
 }
 
-export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
+export async function mountWidget({ apiUrl, widgetKey: suppliedKey, accessToken, fullPage = false }: WidgetOptions) {
   if (document.querySelector(elementName)) {
     return true;
   }
 
-  const response = await fetch(
-    `${apiUrl.replace(/\/$/, "")}/widget/config?key=${encodeURIComponent(widgetKey)}`,
-  );
+  const response = await fetch(accessToken
+    ? `${apiUrl.replace(/\/$/, "")}/widget/session/info?token=${encodeURIComponent(accessToken)}`
+    : `${apiUrl.replace(/\/$/, "")}/widget/config?key=${encodeURIComponent(suppliedKey ?? "")}`);
 
   if (!response.ok) {
     return false;
   }
 
-  const config = (await response.json()) as WidgetConfig;
+  const loaded = await response.json() as WidgetConfig | {
+    config: WidgetConfig;
+    customer: { email: string | null; name: string };
+    id: string;
+    status: string;
+  };
+  const session = accessToken ? loaded as Extract<typeof loaded, { config: WidgetConfig }> : null;
+  const config = session?.config ?? loaded as WidgetConfig;
+  const widgetKey = suppliedKey ?? session?.id ?? "";
   const host = document.createElement(elementName);
+  if (fullPage) host.setAttribute("data-full-page", "");
   const shadow = host.attachShadow({ mode: "open" });
 
   shadow.innerHTML = renderWidget(config);
@@ -82,17 +93,26 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   const preChat = shadow.querySelector<HTMLFormElement>("[data-pre-chat]");
   const preChatError = shadow.querySelector<HTMLElement>("[data-pre-chat-error]");
   const preChatSubmit = shadow.querySelector<HTMLButtonElement>("[data-pre-chat-submit]");
+  const emailField = preChat?.querySelector<HTMLInputElement>('input[name="email"]');
+  if (emailField && preChatSubmit) {
+    const hint = document.createElement("p");
+    hint.className = "privacy";
+    hint.textContent = "We'll email a link to the address above. Please check it before starting.";
+    preChatSubmit.before(hint);
+  }
   const chat = shadow.querySelector<HTMLElement>("[data-chat]");
   const messageForm = shadow.querySelector<HTMLFormElement>("[data-message-form]");
   const messageError = shadow.querySelector<HTMLElement>("[data-message-error]");
   const messages = shadow.querySelector<HTMLElement>("[data-messages]");
   const sessionEnded = shadow.querySelector<HTMLElement>("[data-session-ended]");
+  if (sessionEnded) sessionEnded.textContent = "This conversation has ended and is now read-only.";
   const startNew = shadow.querySelector<HTMLButtonElement>("[data-start-new]");
   const scrollMessages = () =>
     messages?.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
   let eventSource: EventSource | undefined;
   let reconnectAttempt = 0;
   let reconnectTimer: number | undefined;
+  let previousSessionToken: string | undefined;
   const streamedContent = new Map<string, string>();
   const identityKey = `supportops:web-identity:${widgetKey}`;
 
@@ -206,11 +226,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     container.append(element);
   };
   const appendMessage = (message: WidgetMessage) => {
-    // A positioned Message supersedes anything rendered without a position:
-    // the pre-Ticket ephemeral turns (they replay from the DB with their real
-    // position) and a streamed reply that has now been persisted. Clearing
-    // them here keeps every remaining bubble orderable.
-    messages?.querySelectorAll("[data-ephemeral], [data-provisional-id]").forEach((stale) => {
+    // A positioned Message supersedes a streamed reply that has now been persisted.
+    messages?.querySelectorAll("[data-provisional-id]").forEach((stale) => {
       stale.remove();
     });
     if (messages?.querySelector(`[data-position="${message.position}"]`)) return;
@@ -256,30 +273,6 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     // once text wraps — leaving a bubble stretched wider than any actual line.
     // Re-measure the rendered lines and clamp to the widest one to close the gap.
     if (content) tightenMessageCopyWidth(content);
-    scrollMessages();
-  };
-
-  // Used before a Ticket exists — the exchange is persisted against the
-  // session by the API, but replays only reach the client after a reload, so
-  // these render locally with no `data-position` to dedupe against.
-  const appendEphemeral = (content: string, senderType: "CUSTOMER" | "AI_AGENT") => {
-    const bubble = document.createElement("div");
-    bubble.className = `message ${senderType === "CUSTOMER" ? "message-customer" : ""}`;
-    bubble.dataset.ephemeral = "";
-    if (senderType === "CUSTOMER") {
-      bubble.textContent = content;
-    } else {
-      bubble.innerHTML = renderMarkdown(content);
-    }
-    messages?.append(bubble);
-    const time = document.createElement("time");
-    time.className = `message-time ${senderType === "CUSTOMER" ? "message-time-customer" : ""}`;
-    time.dateTime = new Date().toISOString();
-    time.textContent = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    bubble.append(time);
     scrollMessages();
   };
 
@@ -369,6 +362,10 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       const status = JSON.parse((event as MessageEvent<string>).data) as {
         status: string;
       };
+      if (status.status === "ticket_created") {
+        connect(accessToken);
+        return;
+      }
       if (input) input.disabled = status.status === "generating" || status.status === "resolved";
       if (status.status === "generating") {
         showTyping();
@@ -377,7 +374,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       }
       if (status.status === "resolved") {
         sessionEnded?.removeAttribute("hidden");
-        startNew?.removeAttribute("hidden");
+        messageForm?.setAttribute("hidden", "");
+        if (!fullPage) startNew?.removeAttribute("hidden");
       }
     });
     source.addEventListener("attachment.updated", (event) => {
@@ -421,6 +419,7 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
   };
 
   document.addEventListener("click", (event) => {
+    if (fullPage) return;
     if (!panel?.hasAttribute("data-open")) return;
     if (event.composedPath().includes(host)) return;
     setOpen(false);
@@ -441,11 +440,14 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       preChatSubmit.textContent = "Starting…";
     }
     try {
-      const session = await startSession(apiUrl, widgetKey, { email, name });
+      const session = await startSession(apiUrl, widgetKey, { email, name }, previousSessionToken);
+      previousSessionToken = undefined;
       sessionStorage.setItem(`supportops:web-session:${widgetKey}`, session.accessToken);
       setIdentity(name, email);
       showChat();
       sessionEnded?.setAttribute("hidden", "");
+      messageForm?.removeAttribute("hidden");
+      connect(session.accessToken);
       input?.focus();
     } catch {
       preChatError?.removeAttribute("hidden");
@@ -457,12 +459,16 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     }
   });
   const resetSession = () => {
+    previousSessionToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`) ?? undefined;
     eventSource?.close();
     eventSource = undefined;
+    window.clearTimeout(reconnectTimer);
+    reconnectAttempt = 0;
     sessionStorage.removeItem(`supportops:web-session:${widgetKey}`);
     clearIdentity();
     messages?.replaceChildren();
     sessionEnded?.setAttribute("hidden", "");
+    messageForm?.removeAttribute("hidden");
     startNew?.setAttribute("hidden", "");
     if (input) {
       input.disabled = false;
@@ -567,8 +573,8 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
       hideTyping();
       optimistic.remove();
       if ("reply" in result) {
-        appendEphemeral(content, "CUSTOMER");
-        appendEphemeral(result.reply, "AI_AGENT");
+        connect(accessToken);
+        connecting = true;
       } else {
         appendMessage(result);
         connect(accessToken);
@@ -603,12 +609,20 @@ export async function mountWidget({ apiUrl, widgetKey }: WidgetOptions) {
     }
   });
 
-  const accessToken = sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
-  if (accessToken) {
-    restoreIdentity();
+  const initialToken = accessToken ?? sessionStorage.getItem(`supportops:web-session:${widgetKey}`);
+  if (initialToken) {
+    if (accessToken && session) {
+      sessionStorage.setItem(`supportops:web-session:${widgetKey}`, accessToken);
+      setIdentity(session.customer.name, session.customer.email ?? "");
+    } else restoreIdentity();
     showChat();
-    connect(accessToken);
+    if (session?.status === "CLOSED") {
+      sessionEnded?.removeAttribute("hidden");
+      messageForm?.setAttribute("hidden", "");
+    }
+    connect(initialToken);
   }
+  if (fullPage) setOpen(true);
 
   return true;
 }
@@ -617,11 +631,12 @@ async function startSession(
   apiUrl: string,
   widgetKey: string,
   customer: { email: string; name: string },
+  previousSessionToken?: string,
 ) {
   const response = await fetch(
     `${apiUrl.replace(/\/$/, "")}/widget/pre-chat?key=${encodeURIComponent(widgetKey)}`,
     {
-      body: JSON.stringify({ ...customer, widgetKey }),
+      body: JSON.stringify({ ...customer, previousSessionToken, widgetKey }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
     },
@@ -694,6 +709,11 @@ function renderWidget(config: WidgetConfig) {
     .panel { display: flex; flex-direction: column; width: min(384px, calc(100vw - 32px)); max-height: min(620px, calc(100vh - 112px)); margin-bottom: 12px; overflow: hidden; border-radius: 20px; background: white; box-shadow: 0 20px 55px rgb(15 23 42 / 24%); visibility: hidden; opacity: 0; pointer-events: none; transform: scale(.96) translateY(6px); transform-origin: bottom right; transition: opacity 180ms ease, transform 180ms ease, visibility 180ms; }
     .panel[data-chat-active] { height: min(620px, calc(100vh - 112px)); }
     .panel[data-open] { visibility: visible; opacity: 1; pointer-events: auto; transform: none; }
+    :host([data-full-page]) .root { inset: 0; display: grid; place-items: center; background: #eef2f7; pointer-events: auto; }
+    :host([data-full-page]) .panel { width: min(820px, 100%); height: min(900px, 100dvh); max-height: 100dvh; margin: 0; border-radius: 16px; }
+    :host([data-full-page]) .panel[data-chat-active] { height: min(900px, 100dvh); }
+    :host([data-full-page]) .launcher, :host([data-full-page]) .close, :host([data-full-page]) .identity-reset { display: none; }
+    @media (max-width: 820px) { :host([data-full-page]) .panel { border-radius: 0; height: 100dvh; } }
     @media (prefers-reduced-motion: reduce) { .panel { transition: opacity 1ms; transform: none; } }
     .message.typing { flex-direction: row; align-items: center; gap: 0; }
     .typing span { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 999px; background: #94a3b8; animation: typing-bounce 1.1s infinite ease-in-out; }
@@ -757,6 +777,7 @@ function renderWidget(config: WidgetConfig) {
     .session-ready { margin: 16px 0 0; font-size: 14px; line-height: 1.45; }
     .start[data-start-new] { align-self: flex-start; margin-top: 10px; padding: 0; border: 0; background: transparent; color: ${escapeCss(config.primaryColor)}; cursor: pointer; font: inherit; font-size: 13px; font-weight: 650; text-decoration: underline; box-shadow: none; }
     .composer { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 12px; padding: 4px 4px 4px 6px; border: 1px solid #cbd5e1; border-radius: 18px; background: white; }
+    .composer[hidden] { display: none; }
     .composer:focus-within { border-color: ${escapeCss(config.primaryColor)}; box-shadow: 0 0 0 3px color-mix(in srgb, ${escapeCss(config.primaryColor)} 22%, transparent); }
     .composer-input { flex: 1; min-width: 0; border: 0; outline: none; padding: 8px 4px; font: inherit; font-size: 14px; color: inherit; background: transparent; }
     .icon-button { display: grid; place-items: center; flex-shrink: 0; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: #64748b; cursor: pointer; }

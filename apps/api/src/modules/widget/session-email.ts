@@ -7,6 +7,8 @@ export type SessionEmailJob = {
 };
 
 const connection: ConnectionOptions = {
+  connectTimeout: 5_000,
+  enableOfflineQueue: false,
   maxRetriesPerRequest: null,
   url: process.env.REDIS_URL ?? "redis://localhost:16379",
 };

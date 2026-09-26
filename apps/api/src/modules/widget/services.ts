@@ -15,7 +15,9 @@ import { enqueueSessionEmail } from "./session-email";
 import type { CustomerMessageInput, PreChatInput } from "./schema";
 import { enqueueAttachmentProcess } from "./attachment-queue";
 import { resetTimersAfterCustomerMessage } from "../follow-up/queue";
+import { scheduleSessionFollowUp } from "../follow-up/queue";
 import { ticketCategoryOptions } from "../ticket-categories/services";
+import { publishSessionEvent } from "./realtime";
 
 export type PublicWidgetConfig = {
   botName: string;
@@ -44,10 +46,11 @@ export class ReplyNotConfiguredError extends Error {
 }
 
 export class InvalidAttachmentError extends Error {}
+export class SessionClosedError extends Error {}
 
 export type CreateCustomerMessageResult =
   | { kind: "message"; created: boolean; message: Message }
-  | { kind: "reply"; reply: string };
+  | { kind: "reply"; reply: string; sessionId: string; workspaceId: string };
 
 export function customerRequestedHuman(content: string) {
   return /\b(?:human|real (?:person|agent)|live (?:agent|person)|customer service|representative|(?:speak|talk) (?:to|with) (?:a )?(?:human|person|someone|agent)|connect (?:me )?to (?:a )?(?:human|person|agent)|(?:bicara|ngobrol) (?:dengan|sama) (?:human|manusia|orang|cs|customer service)|hubungkan (?:saya|aku) (?:ke|dengan) (?:human|manusia|orang|cs|customer service)|orangnya|cs)\b/i.test(
@@ -81,7 +84,7 @@ export async function createSession(input: PreChatInput, origin: string) {
   const businessTools = createBusinessTools(apiConfig.businessSystemUrl);
   const customer = await businessTools.getCustomerByEmail(input.email).catch(() => null);
 
-  const session = await unscopedPrisma.$transaction(async (tx) => {
+  const { session, closedSessionIds } = await unscopedPrisma.$transaction(async (tx) => {
     // One Customer Identity per Workspace and Channel, keyed on the email the
     // Web Widget always has. A returning Customer gets the same identity.
     const customerIdentity = await tx.customerIdentity.upsert({
@@ -104,6 +107,19 @@ export async function createSession(input: PreChatInput, origin: string) {
       },
     });
 
+    const previous = await tx.session.findMany({
+      select: { id: true },
+      where: {
+        accessToken: input.previousSessionToken ?? "",
+        customerIdentityId: customerIdentity.id,
+        status: "ACTIVE",
+        ticket: { is: null },
+      },
+    });
+    await tx.session.updateMany({
+      data: { closedAt: new Date(), status: "CLOSED" },
+      where: { id: { in: previous.map(({ id }) => id) }, status: "ACTIVE", ticket: { is: null } },
+    });
     const sessionId = randomUUID();
     const created = await tx.session.create({
       data: {
@@ -127,8 +143,14 @@ export async function createSession(input: PreChatInput, origin: string) {
         workspaceId: config.workspaceId,
       },
     });
-    return created;
+    return { closedSessionIds: previous.map(({ id }) => id), session: created };
   });
+
+  for (const id of closedSessionIds) {
+    void publishSessionEvent(id, { type: "ticket.status", data: { status: "resolved" } }).catch(
+      () => undefined,
+    );
+  }
 
   const sessionLink = new URL(
     process.env.SESSION_LINK_BASE_URL ?? "http://localhost:8000/widget/session",
@@ -136,11 +158,11 @@ export async function createSession(input: PreChatInput, origin: string) {
   // The Web Widget always issues a token; other Channels leave it null.
   sessionLink.searchParams.set("token", accessToken);
 
-  void enqueueSessionEmail({
+  await enqueueSessionEmail({
     customerName: input.name,
     email: input.email,
     sessionLink: sessionLink.toString(),
-  }).catch(() => undefined);
+  });
 
   return session;
 }
@@ -151,11 +173,12 @@ export async function getSession(accessToken: string) {
     select: {
       accessToken: true,
       createdAt: true,
+      id: true,
       status: true,
-      customerIdentity: { select: { name: true } },
+      customerIdentity: { select: { email: true, name: true } },
       channel: {
         select: {
-          webWidgetConfig: { select: { botName: true, primaryColor: true, welcomeMessage: true } },
+          webWidgetConfig: { select: { botName: true, primaryColor: true, welcomeMessage: true, logoKey: true } },
         },
       },
     },
@@ -195,13 +218,25 @@ export async function createCustomerMessage(
   });
 
   if (!decision.qualifies) {
-    const reply = await persistSessionExchange(
+    const exchange = await persistSessionExchange(
       session.id,
       session.workspaceId,
       input,
       decision.reply,
     );
-    return { kind: "reply", reply };
+    if (exchange.messages) {
+      for (const message of exchange.messages) {
+        void publishSessionEvent(session.id, { type: "message.created", data: message }).catch(
+          () => undefined,
+        );
+      }
+      const settings = await unscopedPrisma.aiSettings.findUnique({ where: { workspaceId: session.workspaceId } });
+      await scheduleSessionFollowUp(
+        { aiMessageId: exchange.messages[1].id, sessionId: session.id, workspaceId: session.workspaceId },
+        settings?.followUpAfterSeconds ?? 900,
+      );
+    }
+    return { kind: "reply", reply: exchange.reply, sessionId: session.id, workspaceId: session.workspaceId };
   }
 
   try {
@@ -422,8 +457,8 @@ async function appendMessage(
 
 /** An exchange that qualified for no Ticket is still part of the conversation:
  * both turns are written to the Session's Agent Memory, in order, so the next
- * message is classified with them in view. Returns the reply that was stored,
- * which is the earlier one when this message is a duplicate. */
+ * message is classified with them in view. Duplicates return the earlier reply
+ * without publishing or scheduling another Follow-Up. */
 async function persistSessionExchange(
   sessionId: string,
   workspaceId: string,
@@ -431,6 +466,8 @@ async function persistSessionExchange(
   reply: string,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
+    const active = await tx.session.findFirst({ where: { id: sessionId, status: "ACTIVE" } });
+    if (!active) throw new SessionClosedError();
     const existing = await tx.message.findUnique({
       where: {
         workspaceId_externalMessageId: { externalMessageId: input.idempotencyKey, workspaceId },
@@ -441,10 +478,10 @@ async function persistSessionExchange(
         orderBy: { position: "asc" },
         where: { position: { gt: existing.position }, sessionId },
       });
-      return storedReply?.content ?? reply;
+      return { reply: storedReply?.content ?? reply, messages: null };
     }
 
-    await tx.message.create({
+    const customerMessage = await tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, sessionId, { fromCustomer: true })),
         content: input.content,
@@ -455,7 +492,7 @@ async function persistSessionExchange(
         workspaceId,
       },
     });
-    await tx.message.create({
+    const aiMessage = await tx.message.create({
       data: {
         ...(await claimMessageSlot(tx, sessionId)),
         content: reply,
@@ -479,7 +516,7 @@ async function persistSessionExchange(
         where: { sessionId, ticketId: null },
       });
     }
-    return reply;
+    return { reply, messages: [customerMessage, aiMessage] as const };
   });
 }
 
@@ -493,6 +530,7 @@ async function createTicketAndFirstMessage(
       include: { channel: { select: { aiAgentId: true } } },
       where: { id: sessionId },
     });
+    if (session.status !== "ACTIVE") throw new SessionClosedError();
     const ticketId = randomUUID();
     const ticket = await tx.ticket.create({
       data: {
@@ -590,6 +628,7 @@ export async function getMessagesAfter(accessToken: string, afterPosition: numbe
   });
   return {
     messages,
+    sessionId: session.id,
     sessionStatus: session.status,
     ticketId: session.ticket?.id ?? null,
     ticketStatus: session.ticket?.status ?? null,
