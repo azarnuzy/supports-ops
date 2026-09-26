@@ -12,7 +12,7 @@ import { aiAgentConfig, embeddingConfig, evalConfig } from "../config";
 import { unscopedPrisma } from "../utils/prisma";
 import { withWorkspaceContext } from "../utils/workspace-context";
 import { acknowledgementFor } from "../modules/ai-agent/turn";
-import { resolveAgentModelId } from "../modules/ai-agent/model-catalog";
+import { gatewayModelId, resolveAgentModelId } from "../modules/ai-agent/model-catalog";
 import { spendForTurn } from "../modules/credits/services";
 import { createAssignedToolExecutor, describeAssignedTools } from "../modules/tools/orchestration";
 import { resolveTools } from "../modules/tools/services";
@@ -218,7 +218,7 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
   );
   const modelConfig =
     aiAgentConfig.apiKey && embeddingConfig.apiKey
-      ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey, modelId: agentModelId }
+      ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey, modelId: gatewayModelId(agentModelId) }
       : undefined;
   if (!modelConfig) {
     throw new Error(

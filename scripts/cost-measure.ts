@@ -59,7 +59,7 @@ function providerKind(url: string, model: string): CallKind | null {
   if (url.includes("/embeddings")) return "embedding";
   if (!url.includes("/chat/completions")) return null;
   if (model === mainModelId) return "main";
-  if (model === process.env.LLM_MODEL_FAST) return "fast";
+  if (model === classificationConfig.modelId) return "fast";
   return "other-llm";
 }
 
@@ -179,9 +179,11 @@ const { getAttachmentProcessQueue } = await import(
 const { getTicketKnowledgeIndexQueue } = await import("../apps/api/src/modules/tickets/queue");
 const { cancelFollowUpTimers } = await import("../apps/api/src/modules/follow-up/queue");
 const { claimTicket, completeHandoff } = await import("../apps/api/src/modules/tickets/services");
-const { storageConfig } = await import("../apps/api/src/config");
+const { classificationConfig, storageConfig } = await import("../apps/api/src/config");
 const { createStorage } = await import("../packages/storage/src/index");
-const { resolveAgentModelId } = await import("../apps/api/src/modules/ai-agent/model-catalog");
+const { gatewayModelId, resolveAgentModelId } = await import(
+  "../apps/api/src/modules/ai-agent/model-catalog"
+);
 const worker = await import("../apps/worker/src/index");
 const { processKnowledgeIngestJob } = await import("../apps/worker/src/knowledge-ingest");
 
@@ -189,9 +191,11 @@ if (!process.env.EVAL_WORKSPACE_ID) throw new Error("EVAL_WORKSPACE_ID is requir
 const workspaceId: string = process.env.EVAL_WORKSPACE_ID;
 // The reply model is the eval Workspace's Agent Model (ADR-0022), not an
 // environment variable — resolved once, before any provider call is tapped.
-const mainModelId = resolveAgentModelId(
-  (await prisma.aiAgent.findFirst({ select: { agentModel: true }, where: { workspaceId } }))
-    ?.agentModel,
+const mainModelId = gatewayModelId(
+  resolveAgentModelId(
+    (await prisma.aiAgent.findFirst({ select: { agentModel: true }, where: { workspaceId } }))
+      ?.agentModel,
+  ),
 );
 const queues = [getAttachmentProcessQueue(), getTicketKnowledgeIndexQueue()];
 for (const queue of queues) {
@@ -646,7 +650,7 @@ const wanted = (id: string) => !selected.length || selected.includes(id);
 const runs = Number(process.env.COST_RUNS ?? 3);
 const models = {
   embedding: process.env.EMBEDDING_MODEL,
-  fast: process.env.LLM_MODEL_FAST,
+  fast: classificationConfig.modelId,
   main: mainModelId,
   ocr: "mistral-ocr-latest",
 };

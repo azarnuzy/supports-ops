@@ -27,7 +27,7 @@ import {
   publishWidgetEvent,
   setTicketGenerating,
 } from "../widget/realtime";
-import { resolveAgentModelId } from "./model-catalog";
+import { gatewayModelId, resolveAgentModelId } from "./model-catalog";
 
 // Credit Exhaustion is a pre-flight guard in this module, never a decision
 // the model itself makes, so it lives outside `@repo/ai-agent`'s decision schema.
@@ -64,7 +64,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
     );
     const modelConfig =
       aiAgentConfig.apiKey && embeddingConfig.apiKey
-        ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey, modelId: agentModelId }
+        ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey, modelId: gatewayModelId(agentModelId) }
         : undefined;
     const runtime: AiAgentTurnRuntime = {
       countClarifications: () =>

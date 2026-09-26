@@ -4,6 +4,7 @@ export type ModelCatalogEntry = {
   id: string;
   name: string;
   rate: number;
+  description: string;
 };
 
 export type AiSettings = {

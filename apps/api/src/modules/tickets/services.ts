@@ -16,7 +16,7 @@ import {
 } from "@repo/knowledge";
 import { createBusinessTools } from "@repo/tools";
 import { describeMessageContent } from "../ai-agent/customer-message";
-import { resolveAgentModelId } from "../ai-agent/model-catalog";
+import { gatewayModelId, resolveAgentModelId } from "../ai-agent/model-catalog";
 import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
@@ -529,7 +529,7 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
       model: createReplyModel({
         ...aiAgentConfig,
         apiKey: aiAgentConfig.apiKey,
-        modelId: resolveAgentModelId(ticket.aiAgent.agentModel),
+        modelId: gatewayModelId(resolveAgentModelId(ticket.aiAgent.agentModel)),
       }),
       sessionId: ticket.sessionId,
       ticket: {
@@ -900,7 +900,7 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
     model: createReplyModel({
       ...aiAgentConfig,
       apiKey: aiAgentConfig.apiKey,
-      modelId: resolveAgentModelId(ticket.aiAgent.agentModel),
+      modelId: gatewayModelId(resolveAgentModelId(ticket.aiAgent.agentModel)),
     }),
     sessionId: ticket.sessionId,
     previousTicketContext: previousTickets

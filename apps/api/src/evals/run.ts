@@ -11,7 +11,7 @@ import { createOtelEvalReporter } from "@anvia/otel";
 import { createReplyModel } from "@repo/ai-agent";
 import { shutdownTelemetry, startTelemetry } from "@repo/logger/telemetry";
 import { aiAgentConfig, embeddingConfig, evalConfig, telemetryConfig } from "../config";
-import { resolveAgentModelId } from "../modules/ai-agent/model-catalog";
+import { gatewayModelId, resolveAgentModelId } from "../modules/ai-agent/model-catalog";
 import { unscopedPrisma } from "../utils/prisma";
 import { cases, type MetricName } from "./cases";
 import {
@@ -54,7 +54,7 @@ import {
 const judgeModel = createReplyModel({
   apiKey: aiAgentConfig.apiKey ?? "",
   baseUrl: aiAgentConfig.baseUrl,
-  modelId: evalConfig.judgeModelId,
+  modelId: gatewayModelId(evalConfig.judgeModelId),
 });
 
 const judge = { model: judgeModel, threshold: 0.7 } as const;

@@ -180,7 +180,10 @@ export const embeddingConfig = {
 export const classificationConfig = {
   apiKey: env.COMPLETION_GATEWAY_API_KEY ?? env.OPENROUTER_API_KEY,
   baseUrl: env.COMPLETION_GATEWAY_BASE_URL,
-  modelId: env.LLM_MODEL_FAST,
+  modelId:
+    new URL(env.COMPLETION_GATEWAY_BASE_URL).hostname === "gateway.devscale.id"
+      ? env.LLM_MODEL_FAST.split("/").at(-1)!
+      : env.LLM_MODEL_FAST,
 } as const;
 
 /** `maxOutputTokens` and `reasoningEffort` are the two knobs that move reply
