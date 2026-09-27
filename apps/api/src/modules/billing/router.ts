@@ -13,11 +13,12 @@ import {
 
 export const billingRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/", async (c) => {
-    if (!requireAdmin(c)) return c.json({ error: "forbidden" }, 403);
+    if (!requireAdmin(c)?.isOrganizationAdmin) return c.json({ error: "forbidden" }, 403);
     return c.json({ billing: await getBilling() }, 200);
   })
   .post("/checkout", zValidator("json", z.object({ packId: z.string().min(1) })), async (c) => {
-    const admin = requireAdmin(c);
+    const user = requireAdmin(c);
+    const admin = user?.isOrganizationAdmin ? user : null;
     if (!admin) return c.json({ error: "forbidden" }, 403);
     try {
       const payment = await createTopUpCheckout({

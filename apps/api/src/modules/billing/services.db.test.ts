@@ -155,6 +155,29 @@ describe("Top-Up Payments", () => {
     expect(billing.payments[0].status).toBe("PAID");
   });
 
+  it("shares payment history and Credits inside an Organization without exposing another", async () => {
+    await checkout();
+    mayar.fetchMayarPayment.mockResolvedValue({ amount: 250_000, id: "mayar-1", status: "paid" });
+    const siblingId = randomUUID();
+    const otherId = randomUUID();
+    await prisma.workspace.create({
+      data: { id: siblingId, organizationId: workspaceId, name: "Sibling", slug: siblingId },
+    });
+    await prisma.organization.create({ data: { id: otherId, name: "Other" } });
+    await prisma.workspace.create({
+      data: { id: otherId, organizationId: otherId, name: "Other", slug: otherId },
+    });
+
+    const sibling = await withWorkspaceContext(siblingId, () => services.getBilling());
+    const other = await withWorkspaceContext(otherId, () => services.getBilling());
+
+    expect(sibling.balance).toBe(1_000);
+    expect(sibling.payments).toHaveLength(1);
+    expect(sibling.payments[0].status).toBe("PAID");
+    expect(other.balance).toBe(0);
+    expect(other.payments).toHaveLength(0);
+  });
+
   it("shows an unpaid checkout past its expiry as expired, without a link", async () => {
     const payment = await checkout();
     await prisma.topUpPayment.update({

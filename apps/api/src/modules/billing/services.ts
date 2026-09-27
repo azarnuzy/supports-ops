@@ -98,11 +98,19 @@ function pendingWhere(now = new Date()) {
  * an Admin returning from checkout sees their Credits even if the webhook was lost. */
 export async function getBilling() {
   const workspaceId = requireWorkspaceId();
-  await verifyAll(await prisma.topUpPayment.findMany({ where: pendingWhere() }));
+  const organizationId = await organizationIdForWorkspace(unscopedPrisma, workspaceId);
+  const where = { workspace: { organizationId } };
+  await verifyAll(
+    await unscopedPrisma.topUpPayment.findMany({ where: { ...pendingWhere(), ...where } }),
+  );
 
   const [balance, payments, unlimitedPeriod] = await Promise.all([
     creditBalance(workspaceId),
-    prisma.topUpPayment.findMany({ orderBy: { createdAt: "desc" }, take: paymentHistoryLimit }),
+    unscopedPrisma.topUpPayment.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: paymentHistoryLimit,
+    }),
     currentOrLastUnlimitedPeriod(workspaceId),
   ] as const);
 

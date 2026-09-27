@@ -24,7 +24,7 @@ export const aiUsageRouter = new Hono<{ Variables: AuthVariables }>()
     return c.json({ toolUsage: await getToolUsage(c.req.valid("query")) }, 200);
   })
   .get("/ledger", zValidator("query", ledgerQuerySchema), async (c) => {
-    if (!requireAdmin(c)) return c.json({ error: "forbidden" }, 403);
+    if (!requireAdmin(c)?.isOrganizationAdmin) return c.json({ error: "forbidden" }, 403);
 
     try {
       return c.json(await listCreditLedger(c.req.valid("query")), 200);
