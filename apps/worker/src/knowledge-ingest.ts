@@ -1,5 +1,12 @@
 import { chunkText, createOpenAiEmbeddingClient, replaceChunks } from "@repo/knowledge";
 import { createStorage } from "@repo/storage";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  externalResponseCode,
+  recordExternalError,
+  tagExternalError,
+} from "@repo/api/external-errors";
 import { Queue, type ConnectionOptions } from "bullmq";
 import Redis from "ioredis";
 import { embeddingConfig, ingestionConfig, storageConfig } from "./config";
@@ -123,7 +130,21 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       modelId: embeddingConfig.modelId,
     });
     const vectors = chunks.length
-      ? await embeddingClient.embed(chunks.map((chunk) => chunk.content))
+      ? await embeddingClient
+          .embed(chunks.map((chunk) => chunk.content))
+          .catch(async (error: unknown) => {
+            await recordExternalError(prisma, {
+              provider: "OPENROUTER",
+              operation: "EMBEDDING",
+              modelId: embeddingConfig.modelId,
+              workspaceId,
+              resourceType: "KNOWLEDGE_SOURCE",
+              resourceId: knowledgeSourceId,
+              code: externalErrorCode(error),
+              httpStatus: externalHttpStatus(error),
+            });
+            throw error;
+          })
       : [];
 
     stage = "INDEXING";
@@ -166,6 +187,21 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       await publishStatus(workspaceId, knowledgeSourceId, "PUBLISHED", { stage: "PUBLISHED" });
     }
   } catch (error) {
+    if (
+      error instanceof Error &&
+      "externalProvider" in error &&
+      typeof error.externalProvider === "string"
+    )
+      await recordExternalError(prisma, {
+        provider: error.externalProvider,
+        operation: job.data.kind === "PDF" ? "KNOWLEDGE_OCR" : "KNOWLEDGE_CRAWL",
+        modelId: job.data.kind === "PDF" ? "mistral-ocr-latest" : undefined,
+        workspaceId,
+        resourceType: "KNOWLEDGE_SOURCE",
+        resourceId: knowledgeSourceId,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
     const failureReason = error instanceof Error ? error.message : "Knowledge ingest failed.";
     await prisma.knowledgeSource.update({
       data: { failedStage: stage, failureReason, status: "FAILED" },
@@ -197,9 +233,21 @@ async function extractPdf(id: string) {
       model: "mistral-ocr-latest",
       document: { type: "document_url", document_url: documentUrl },
     }),
+  }).catch((error: unknown) => {
+    throw tagExternalError(error, "MISTRAL");
   });
-  if (!response.ok) throw new Error(`OCR failed: ${await response.text()}`);
-  const body = (await response.json()) as { pages?: Array<{ markdown?: string }> };
+  if (!response.ok) {
+    const body = await response.text();
+    throw tagExternalError(
+      new Error(`OCR failed: ${body}`),
+      "MISTRAL",
+      response.status,
+      externalResponseCode(body),
+    );
+  }
+  const body = (await response.json().catch((error: unknown) => {
+    throw tagExternalError(error, "MISTRAL");
+  })) as { pages?: Array<{ markdown?: string }> };
   return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
 }
 
@@ -298,9 +346,21 @@ async function crawlPages(url: string, maxDepth: number, limit: number) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ url, max_depth: maxDepth, limit }),
+  }).catch((error: unknown) => {
+    throw tagExternalError(error, "TAVILY");
   });
-  if (!response.ok) throw new Error(`Crawl failed: ${await response.text()}`);
-  const body = (await response.json()) as {
+  if (!response.ok) {
+    const body = await response.text();
+    throw tagExternalError(
+      new Error(`Crawl failed: ${body}`),
+      "TAVILY",
+      response.status,
+      externalResponseCode(body),
+    );
+  }
+  const body = (await response.json().catch((error: unknown) => {
+    throw tagExternalError(error, "TAVILY");
+  })) as {
     results?: Array<{ raw_content?: string; title?: string; url: string }>;
   };
   const origin = new URL(url).origin;

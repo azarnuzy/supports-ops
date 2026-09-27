@@ -1,4 +1,11 @@
 import { loggerConfig, redisConfig } from "./config";
+import { setStorageErrorReporter } from "@repo/storage";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "@repo/api/external-errors";
+import { prisma } from "./prisma";
 import { createLogger } from "@repo/logger";
 import { Queue, QueueEvents, Worker, type ConnectionOptions, type Job } from "bullmq";
 import { processKnowledgeIngestJob, type KnowledgeIngestJob } from "./knowledge-ingest";
@@ -144,6 +151,14 @@ export function startWhatsAppTurnWorker() {
 }
 
 export function runWorker() {
+  setStorageErrorReporter((operation, error) =>
+    recordExternalError(prisma, {
+      provider: "OBJECT_STORAGE",
+      operation,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    }),
+  );
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
   const creditAlertEmailWorker = startCreditAlertEmailWorker();

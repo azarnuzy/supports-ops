@@ -1,9 +1,27 @@
 import Redis from "ioredis";
 import { createStorage } from "@repo/storage";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  externalResponseCode,
+  recordExternalError,
+  tagExternalError,
+} from "@repo/api/external-errors";
+import {
+  injectTraceContext,
+  sessionAttributes,
+  withSpan,
+  withTraceContext,
+} from "@repo/logger/telemetry";
 import { apiConfig, ingestionConfig, storageConfig } from "./config";
 import { prisma } from "./prisma";
 
-export type AttachmentProcessJob = { attachmentId: string; ticketId: string; workspaceId: string };
+export type AttachmentProcessJob = {
+  attachmentId: string;
+  ticketId: string;
+  workspaceId: string;
+  traceContext?: Record<string, string>;
+};
 
 let publisher: Redis | undefined;
 
@@ -27,6 +45,7 @@ async function publishStatus(
 
 export async function processAttachmentJob(job: { data: AttachmentProcessJob }) {
   const attachment = await prisma.attachment.findFirst({
+    include: { message: { select: { sessionId: true } } },
     where: {
       deletedAt: null,
       id: job.data.attachmentId,
@@ -36,46 +55,87 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
   });
   if (!attachment) return;
 
-  await prisma.attachment.update({
-    data: { failureReason: null, processingStatus: "PROCESSING" },
-    where: { id: attachment.id },
-  });
-  await publishStatus(job.data.ticketId, attachment.id, "PROCESSING");
+  return withTraceContext(job.data.traceContext, () =>
+    withSpan(
+      "support.attachment_process",
+      {
+        ...sessionAttributes(attachment.message.sessionId),
+        "supportops.workspace_id": attachment.workspaceId,
+        "supportops.ticket_id": job.data.ticketId,
+        "supportops.attachment_id": attachment.id,
+      },
+      async (span) => {
+        await prisma.attachment.update({
+          data: { failureReason: null, processingStatus: "PROCESSING" },
+          where: { id: attachment.id },
+        });
+        await publishStatus(job.data.ticketId, attachment.id, "PROCESSING");
 
-  try {
-    const extractedText = await extractAttachment(attachment.storageKey, attachment.mimeType);
-    if (!extractedText.trim()) throw new Error("The attachment did not contain readable text.");
-    await prisma.attachment.update({
-      data: { extractedText, processingStatus: "READY" },
-      where: { id: attachment.id },
-    });
-    await publishStatus(job.data.ticketId, attachment.id, "READY");
-  } catch (error) {
-    const failureReason = error instanceof Error ? error.message : "Attachment processing failed.";
-    await prisma.attachment.update({
-      data: { failureReason, processingStatus: "FAILED" },
-      where: { id: attachment.id },
-    });
-    await publishStatus(job.data.ticketId, attachment.id, "FAILED", failureReason);
-  }
+        let failed = false;
+        try {
+          const extractedText = await extractAttachment(attachment.storageKey, attachment.mimeType);
+          if (!extractedText.trim())
+            throw new Error("The attachment did not contain readable text.");
+          await prisma.attachment.update({
+            data: { extractedText, processingStatus: "READY" },
+            where: { id: attachment.id },
+          });
+          span.setAttribute("supportops.processing_status", "READY");
+          await publishStatus(job.data.ticketId, attachment.id, "READY");
+        } catch (error) {
+          failed = true;
+          if (
+            error instanceof Error &&
+            "externalProvider" in error &&
+            error.externalProvider === "MISTRAL"
+          )
+            await recordExternalError(prisma, {
+              provider: "MISTRAL",
+              operation: attachment.mimeType.startsWith("audio/")
+                ? "TRANSCRIPTION"
+                : "ATTACHMENT_READ",
+              modelId: attachment.mimeType.startsWith("audio/")
+                ? "voxtral-mini-latest"
+                : "mistral-ocr-latest",
+              workspaceId: attachment.workspaceId,
+              resourceType: "ATTACHMENT",
+              resourceId: attachment.id,
+              code: externalErrorCode(error),
+              httpStatus: externalHttpStatus(error),
+            });
+          const failureReason =
+            error instanceof Error ? error.message : "Attachment processing failed.";
+          await prisma.attachment.update({
+            data: { failureReason, processingStatus: "FAILED" },
+            where: { id: attachment.id },
+          });
+          span.setAttribute("supportops.processing_status", "FAILED");
+          await publishStatus(job.data.ticketId, attachment.id, "FAILED", failureReason);
+        }
 
-  const pending = await prisma.attachment.count({
-    where: { messageId: attachment.messageId, processingStatus: "PROCESSING" },
-  });
-  if (!pending) {
-    publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
-      maxRetriesPerRequest: null,
-    });
-    const replyKey = `supportops:attachment-reply:${attachment.messageId}`;
-    if (await publisher.set(replyKey, "1", "EX", 300, "NX")) {
-      try {
-        await requestReply(job.data.ticketId, attachment.workspaceId);
-      } catch (error) {
-        await publisher.del(replyKey);
-        throw error;
-      }
-    }
-  }
+        const pending = await prisma.attachment.count({
+          where: { messageId: attachment.messageId, processingStatus: "PROCESSING" },
+        });
+        if (!pending) {
+          publisher ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:16379", {
+            maxRetriesPerRequest: null,
+          });
+          const replyKey = `supportops:attachment-reply:${attachment.messageId}`;
+          if (await publisher.set(replyKey, "1", "EX", 300, "NX")) {
+            try {
+              await requestReply(job.data.ticketId, attachment.workspaceId);
+            } catch (error) {
+              await publisher.del(replyKey);
+              throw error;
+            }
+          }
+        }
+        return failed;
+      },
+      false,
+      (failed) => failed,
+    ),
+  );
 }
 
 /** What the OCR model reads. A WhatsApp Document can be anything — a
@@ -104,17 +164,40 @@ export async function extractAttachment(storageKey: string, mimeType: string) {
   const document = mimeType.startsWith("image/")
     ? { image_url: url, type: "image_url" }
     : { document_url: url, type: "document_url" };
-  const response = await fetch("https://api.mistral.ai/v1/ocr", {
-    body: JSON.stringify({ document, model: "mistral-ocr-latest" }),
-    headers: {
-      Authorization: `Bearer ${ingestionConfig.mistralApiKey}`,
-      "Content-Type": "application/json",
+  return withSpan(
+    "external.mistral.ocr",
+    {
+      "external.provider": "MISTRAL",
+      "external.operation": "OCR",
+      "external.model_id": "mistral-ocr-latest",
     },
-    method: "POST",
-  });
-  if (!response.ok) throw new Error(`OCR failed: ${await response.text()}`);
-  const body = (await response.json()) as { pages?: Array<{ markdown?: string }> };
-  return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
+    async () => {
+      const response = await fetch("https://api.mistral.ai/v1/ocr", {
+        body: JSON.stringify({ document, model: "mistral-ocr-latest" }),
+        headers: {
+          Authorization: `Bearer ${ingestionConfig.mistralApiKey}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      }).catch((error: unknown) => {
+        throw tagExternalError(error, "MISTRAL");
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        throw tagExternalError(
+          new Error(`OCR failed: ${body}`),
+          "MISTRAL",
+          response.status,
+          externalResponseCode(body),
+        );
+      }
+      const body = (await response.json().catch((error: unknown) => {
+        throw tagExternalError(error, "MISTRAL");
+      })) as { pages?: Array<{ markdown?: string }> };
+      return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
+    },
+    false,
+  );
 }
 
 async function transcribe(storageKey: string, mimeType: string) {
@@ -127,13 +210,40 @@ async function transcribe(storageKey: string, mimeType: string) {
     new Blob([new Uint8Array(await object.Body.transformToByteArray())], { type: mimeType }),
     `voice-note.${mimeType.split("/")[1]}`,
   );
-  const response = await fetch("https://api.mistral.ai/v1/audio/transcriptions", {
-    body: form,
-    headers: { Authorization: `Bearer ${ingestionConfig.mistralApiKey}` },
-    method: "POST",
-  });
-  if (!response.ok) throw new Error(`Transcription failed: ${await response.text()}`);
-  return ((await response.json()) as { text?: string }).text ?? "";
+  return withSpan(
+    "external.mistral.transcription",
+    {
+      "external.provider": "MISTRAL",
+      "external.operation": "TRANSCRIPTION",
+      "external.model_id": "voxtral-mini-latest",
+    },
+    async () => {
+      const response = await fetch("https://api.mistral.ai/v1/audio/transcriptions", {
+        body: form,
+        headers: { Authorization: `Bearer ${ingestionConfig.mistralApiKey}` },
+        method: "POST",
+      }).catch((error: unknown) => {
+        throw tagExternalError(error, "MISTRAL");
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        throw tagExternalError(
+          new Error(`Transcription failed: ${body}`),
+          "MISTRAL",
+          response.status,
+          externalResponseCode(body),
+        );
+      }
+      return (
+        (
+          (await response.json().catch((error: unknown) => {
+            throw tagExternalError(error, "MISTRAL");
+          })) as { text?: string }
+        ).text ?? ""
+      );
+    },
+    false,
+  );
 }
 
 async function requestReply(ticketId: string, workspaceId: string) {
@@ -146,6 +256,7 @@ async function requestReply(ticketId: string, workspaceId: string) {
       headers: {
         "Content-Type": "application/json",
         "x-supportops-worker-token": apiConfig.workerToken,
+        ...injectTraceContext(),
       },
       method: "POST",
     },

@@ -3,7 +3,14 @@ import { classifyMessage, createClassificationModel } from "@repo/ai-agent";
 import { generateAiReply } from "@repo/api/ai-agent-turn";
 import { describeMessageContent } from "@repo/api/customer-message";
 import { decryptToolSecret } from "@repo/api/secrets";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+  tagExternalError,
+} from "@repo/api/external-errors";
 import { enqueueWhatsAppDelivery, type WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
+import { sessionAttributes, withSpan, withTraceContext } from "@repo/logger/telemetry";
 import { classifyWhatsAppError, renderWhatsAppMessage } from "@repo/channels";
 import { createStorage } from "@repo/storage";
 import { UnrecoverableError } from "bullmq";
@@ -13,7 +20,11 @@ import { classificationConfig, storageConfig } from "./config";
 import { claimMessageSlot } from "./follow-up";
 import { prisma } from "./prisma";
 
-export type WhatsAppTurnJob = { sessionId: string; workspaceId: string };
+export type WhatsAppTurnJob = {
+  sessionId: string;
+  workspaceId: string;
+  traceContext?: Record<string, string>;
+};
 
 let publisher: Redis | undefined;
 
@@ -54,6 +65,20 @@ async function publishAttachmentUpdated(attachment: {
 }
 
 export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
+  return withTraceContext(job.data.traceContext, () =>
+    withSpan(
+      "support.whatsapp_turn",
+      {
+        ...sessionAttributes(job.data.sessionId),
+        "supportops.workspace_id": job.data.workspaceId,
+      },
+      async () => runWhatsAppTurn(job),
+      false,
+    ),
+  );
+}
+
+async function runWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
   const session = await prisma.session.findFirst({
     include: {
       channel: { include: { whatsAppConfig: true } },
@@ -139,6 +164,18 @@ export async function processWhatsAppTurn(job: { data: WhatsAppTurnJob }) {
       }),
       sessionId: session.id,
       userId: session.customerIdentityId,
+    }).catch(async (error: unknown) => {
+      await recordExternalError(prisma, {
+        provider: new URL(classificationConfig.baseUrl).hostname,
+        operation: "TICKET_CLASSIFICATION",
+        workspaceId: session.workspaceId,
+        modelId: classificationConfig.modelId,
+        resourceType: "SESSION",
+        resourceId: session.id,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
+      throw error;
     });
     if (!decision.qualifies) {
       const previous = await prisma.ticket.findFirst({
@@ -248,6 +285,28 @@ async function read(attachment: TurnAttachment) {
     if (!extractedText.trim()) throw new Error("The attachment did not contain readable text.");
     data = { extractedText, failureReason: null, processingStatus: "READY" };
   } catch (error) {
+    if (
+      error instanceof Error &&
+      "externalProvider" in error &&
+      error.externalProvider === "MISTRAL"
+    ) {
+      const owned = await prisma.attachment.findUnique({
+        select: { workspaceId: true },
+        where: { id: attachment.id },
+      });
+      await recordExternalError(prisma, {
+        provider: "MISTRAL",
+        operation: "WHATSAPP_ATTACHMENT_READ",
+        modelId: attachment.mimeType.startsWith("audio/")
+          ? "voxtral-mini-latest"
+          : "mistral-ocr-latest",
+        workspaceId: owned?.workspaceId,
+        resourceType: "ATTACHMENT",
+        resourceId: attachment.id,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
+    }
     data = {
       failureReason: error instanceof Error ? error.message : "Attachment processing failed.",
       processingStatus: "FAILED",
@@ -310,9 +369,63 @@ export async function processWhatsAppDelivery(job: {
   data: WhatsAppDeliveryJob;
   opts: { attempts?: number };
 }) {
+  const message = await prisma.message.findUnique({
+    select: { sessionId: true, workspaceId: true },
+    where: { id: job.data.messageId },
+  });
+  return withTraceContext(job.data.traceContext, () =>
+    withSpan(
+      "support.whatsapp_delivery",
+      {
+        ...(message ? sessionAttributes(message.sessionId) : {}),
+        "anvia.trace.name": "support.whatsapp_delivery",
+        "langfuse.trace.name": "support.whatsapp_delivery",
+        "supportops.message_id": job.data.messageId,
+        ...(message ? { "supportops.workspace_id": message.workspaceId } : {}),
+        "supportops.attempt": job.attemptsMade + 1,
+      },
+      async () => runWhatsAppDelivery(job),
+      false,
+    ),
+  );
+}
+
+async function runWhatsAppDelivery(job: {
+  attemptsMade: number;
+  data: WhatsAppDeliveryJob;
+  opts: { attempts?: number };
+}) {
   try {
-    await deliverMessage(job.data.messageId);
+    await withSpan(
+      "external.meta_whatsapp.message_send",
+      {
+        "external.provider": "META_WHATSAPP",
+        "external.operation": "MESSAGE_DELIVERY",
+        "supportops.message_id": job.data.messageId,
+      },
+      async () => deliverMessage(job.data.messageId),
+      false,
+    );
   } catch (error) {
+    if (
+      error instanceof Error &&
+      "externalProvider" in error &&
+      error.externalProvider === "META_WHATSAPP"
+    ) {
+      const failedMessage = await prisma.message.findUnique({
+        select: { workspaceId: true },
+        where: { id: job.data.messageId },
+      });
+      await recordExternalError(prisma, {
+        provider: "META_WHATSAPP",
+        operation: "MESSAGE_DELIVERY",
+        workspaceId: failedMessage?.workspaceId,
+        resourceType: "MESSAGE",
+        resourceId: job.data.messageId,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
+    }
     // A transient failure that exhausts its retries must still end visibly failed.
     if (
       !(error instanceof UnrecoverableError) &&
@@ -387,7 +500,9 @@ async function deliverMessage(messageId: string) {
         method: "POST",
         signal: AbortSignal.timeout(15_000),
       },
-    );
+    ).catch((error: unknown) => {
+      throw tagExternalError(error, "META_WHATSAPP");
+    });
   } catch (error) {
     // A timeout is ambiguous: the request reached Meta and the outcome is
     // unknown. Meta's /messages takes no idempotency key, so a retry is a
@@ -411,7 +526,10 @@ async function deliverMessage(messageId: string) {
     });
     if (ambiguous) {
       await publishMessageUpdated(updated);
-      throw new UnrecoverableError(updated.deliveryFailureReason ?? "WhatsApp delivery timed out.");
+      throw tagExternalError(
+        new UnrecoverableError(updated.deliveryFailureReason ?? "WhatsApp delivery timed out."),
+        "META_WHATSAPP",
+      );
     }
     throw error;
   }
@@ -441,9 +559,14 @@ async function deliverMessage(messageId: string) {
     }
     if (kind === "permanent") {
       await publishMessageUpdated(updated);
-      throw new UnrecoverableError(reason);
+      throw tagExternalError(
+        new UnrecoverableError(reason),
+        "META_WHATSAPP",
+        response.status,
+        body.error?.code,
+      );
     }
-    throw new Error(reason);
+    throw tagExternalError(new Error(reason), "META_WHATSAPP", response.status, body.error?.code);
   }
 
   const providerMessageId = body.messages?.[0]?.id;
@@ -496,13 +619,20 @@ async function uploadMedia(
       method: "POST",
       signal: AbortSignal.timeout(60_000),
     },
-  );
+  ).catch((error: unknown) => {
+    throw tagExternalError(error, "META_WHATSAPP");
+  });
   const body = (await response.json().catch(() => ({}))) as {
-    error?: { message?: string };
+    error?: { code?: number; message?: string };
     id?: string;
   };
   if (!response.ok || !body.id)
-    throw new Error(body.error?.message ?? `Meta media upload returned HTTP ${response.status}.`);
+    throw tagExternalError(
+      new Error(body.error?.message ?? `Meta media upload returned HTTP ${response.status}.`),
+      "META_WHATSAPP",
+      response.status,
+      body.error?.code,
+    );
   return body.id;
 }
 

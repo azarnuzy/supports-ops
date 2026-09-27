@@ -1,18 +1,31 @@
 import { createConnection } from "node:net";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "@repo/api/external-errors";
 import { emailConfig } from "./config";
+import { prisma } from "./prisma";
 
 export type SessionEmailJob = {
   customerName: string;
   email: string;
   sessionLink: string;
+  workspaceId?: string;
 };
 
-export async function sendSessionLinkEmail({ customerName, email, sessionLink }: SessionEmailJob) {
+export async function sendSessionLinkEmail({
+  customerName,
+  email,
+  sessionLink,
+  workspaceId,
+}: SessionEmailJob) {
   await sendEmail({
     html: `<p>Hi ${escapeHtml(customerName)},</p><p><a href="${escapeHtml(sessionLink)}">Return to your support chat</a></p>`,
     subject: "Return to your SupportOps chat",
     text: `Hi ${customerName},\n\nReturn to your support chat: ${sessionLink}`,
     to: email,
+    workspaceId,
   });
 }
 
@@ -21,34 +34,50 @@ export async function sendEmail({
   subject,
   text,
   to,
+  workspaceId,
 }: {
   html?: string;
   subject: string;
   text: string;
   to: string;
+  workspaceId?: string;
 }) {
-  if (emailConfig.resendApiKey) {
-    const response = await fetch("https://api.resend.com/emails", {
-      body: JSON.stringify({
-        from: emailConfig.from,
-        html: html ?? `<p>${escapeHtml(text)}</p>`,
-        subject,
-        text,
-        to: [to],
-      }),
-      headers: {
-        Authorization: `Bearer ${emailConfig.resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
-    if (!response.ok) throw new Error(`Resend rejected the email (${response.status}).`);
-    return;
-  }
+  try {
+    if (emailConfig.resendApiKey) {
+      const response = await fetch("https://api.resend.com/emails", {
+        body: JSON.stringify({
+          from: emailConfig.from,
+          html: html ?? `<p>${escapeHtml(text)}</p>`,
+          subject,
+          text,
+          to: [to],
+        }),
+        headers: {
+          Authorization: `Bearer ${emailConfig.resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      if (!response.ok)
+        throw Object.assign(new Error(`Resend rejected the email (${response.status}).`), {
+          status: response.status,
+        });
+      return;
+    }
 
-  if (!emailConfig.smtpUrl)
-    throw new Error("Configure RESEND_API_KEY or SMTP_URL to deliver email.");
-  await sendSmtpMessage(emailConfig.smtpUrl, to, subject, text);
+    if (!emailConfig.smtpUrl)
+      throw new Error("Configure RESEND_API_KEY or SMTP_URL to deliver email.");
+    await sendSmtpMessage(emailConfig.smtpUrl, to, subject, text);
+  } catch (error) {
+    await recordExternalError(prisma, {
+      provider: emailConfig.resendApiKey ? "RESEND" : "SMTP",
+      operation: "EMAIL_SEND",
+      workspaceId,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    });
+    throw error;
+  }
 }
 
 async function sendSmtpMessage(smtpUrl: string, recipient: string, subject: string, text: string) {

@@ -25,5 +25,7 @@ export async function sendCreditAlertEmail({ kind, workspaceId }: CreditAlertEma
       ? "Your workspace has run out of AI Credits. New conversations will escalate to a Human Agent until you top up."
       : "Your workspace's AI Credit balance has dropped below 100. Top up soon to avoid an interruption.";
 
-  await Promise.all(admins.map((admin) => sendEmail({ subject, text, to: admin.email })));
+  await Promise.all(
+    admins.map((admin) => sendEmail({ subject, text, to: admin.email, workspaceId })),
+  );
 }

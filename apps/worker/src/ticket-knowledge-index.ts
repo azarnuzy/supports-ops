@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { chunkText, createOpenAiEmbeddingClient, replaceTicketChunks } from "@repo/knowledge";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "@repo/api/external-errors";
 import { embeddingConfig } from "./config";
 import { prisma } from "./prisma";
 
@@ -70,7 +75,21 @@ export async function processTicketKnowledgeIndexJob(job: {
     modelId: embeddingConfig.modelId,
   });
   const vectors = chunks.length
-    ? await embeddingClient.embed(chunks.map((chunk) => chunk.content))
+    ? await embeddingClient
+        .embed(chunks.map((chunk) => chunk.content))
+        .catch(async (error: unknown) => {
+          await recordExternalError(prisma, {
+            provider: "OPENROUTER",
+            operation: "TICKET_EMBEDDING",
+            workspaceId,
+            modelId: embeddingConfig.modelId,
+            resourceType: "TICKET",
+            resourceId: ticketId,
+            code: externalErrorCode(error),
+            httpStatus: externalHttpStatus(error),
+          });
+          throw error;
+        })
     : [];
 
   await prisma.$transaction(async (tx) => {
