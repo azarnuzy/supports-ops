@@ -23,12 +23,7 @@ export const auth = betterAuth({
         input: false,
         required: true,
       },
-      workspaceId: {
-        type: "string",
-        input: false,
-        required: true,
-      },
-      organizationId: { type: "string", input: false, required: false },
+      organizationId: { type: "string", input: false, required: true },
       isOrganizationAdmin: { type: "boolean", input: false, required: true },
     },
   },

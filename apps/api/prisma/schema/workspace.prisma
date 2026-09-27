@@ -6,20 +6,20 @@ model Organization {
   workspaces Workspace[]
   users      User[]
   creditLedgerEntries CreditLedgerEntry[]
+  topUpPayments TopUpPayment[]
+  unlimitedPeriods UnlimitedPeriod[]
 }
 
 model Workspace {
   id                 String             @id
-  // ponytail: nullable for legacy direct creates; require after every writer creates Organizations.
-  organizationId     String?
-  organization       Organization?      @relation(fields: [organizationId], references: [id])
+  organizationId     String
+  organization       Organization       @relation(fields: [organizationId], references: [id])
   name               String
   slug               String             @unique
   closingMessage     String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
-  users              User[]
   memberships        WorkspaceMembership[]
   aiAgents           AiAgent[]
   channels           Channel[]
@@ -39,7 +39,6 @@ model Workspace {
   creditLedgerEntries CreditLedgerEntry[]
   topUpPayments       TopUpPayment[]
   operatorActions     OperatorAction[]
-  unlimitedPeriods    UnlimitedPeriod[]
   externalErrors       ExternalError[]
   @@index([organizationId])
 }
@@ -82,6 +81,7 @@ model CreditLedgerEntry {
 /// reads as expired; nothing sweeps it.
 model TopUpPayment {
   id             String             @id
+  organizationId String
   workspaceId    String
   packId         String
   credits        Int
@@ -94,9 +94,11 @@ model TopUpPayment {
   ledgerEntryId  String?            @unique
   createdAt      DateTime           @default(now())
   workspace      Workspace          @relation(fields: [workspaceId], references: [id])
+  organization   Organization       @relation(fields: [organizationId], references: [id])
   ledgerEntry    CreditLedgerEntry? @relation(fields: [ledgerEntryId], references: [id])
 
   @@index([workspaceId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 /// Ticket categories are per-Workspace so a team can name them after its own product.

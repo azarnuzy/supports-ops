@@ -59,7 +59,7 @@ export async function getOrganizationDetail(id: string) {
       _sum: { credits: true },
     }),
     unscopedPrisma.topUpPayment.findMany({
-      where: { workspace: { organizationId: id } },
+      where: { organizationId: id },
       select: { id: true, credits: true, amountIdr: true, status: true, paidAt: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 50,

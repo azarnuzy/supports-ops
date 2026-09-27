@@ -13,18 +13,17 @@ model OperatorAction {
 }
 
 /// A window in which every Workspace of an Organization spends no Credits.
-/// workspaceId anchors legacy history and Operator Actions to the original Workspace;
-/// eligibility and overlap are determined through its Organization.
+/// An Organization-wide window; Operator Actions separately retain their Workspace anchor.
 model UnlimitedPeriod {
   id           String    @id
-  workspaceId  String
+  organizationId String
   operatorId   String
   startAt      DateTime  @default(now())
   endAt        DateTime?
   endedEarlyAt DateTime?
   createdAt    DateTime  @default(now())
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
   operator     Operator  @relation(fields: [operatorId], references: [id])
 
-  @@index([workspaceId, createdAt])
+  @@index([organizationId, createdAt])
 }

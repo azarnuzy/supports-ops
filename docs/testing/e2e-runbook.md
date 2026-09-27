@@ -216,6 +216,15 @@ Jika email tidak muncul:
 
 Verifikasi browser lokal 27 September 2026: **lulus** (Chrome headless terhadap API dan Platform lokal). Registrasi, tambah staf sebagai Human Agent, penunjukan Organization Admin, pembuatan/pemilihan Workspace kedua, dan penambahan email yang sama sebagai Admin di Workspace kedua berhasil. Setelah hak Organization Admin staf dicabut, sesi staf tetap membaca `HUMAN_AGENT` di Workspace pertama dan `ADMIN` di Workspace kedua; Billing dan header Workspace tebakan ditolak `403`. Pencabutan Organization Admin terakhir dan undangan email milik Organization lain ditolak `409`. Penghapusan membership lewat UI mencabut akses ke Workspace kedua (`403` pada sesi staf yang masih aktif). Pengguna dengan Ticket aktif perlu diuji terpisah sebelum rilis produksi.
 
+### Penghapusan kompatibilitas Workspace tunggal (#279)
+
+Status verifikasi browser manual: **belum dijalankan**. Setelah migrasi dan restart API, gunakan dua Organization (A memiliki dua Workspace; B satu Workspace):
+
+1. Login Admin A pada tab baru tanpa Workspace tersimpan; pastikan Inbox membuka Workspace pertama. Pilih Workspace kedua, refresh, dan pastikan Inbox tetap pada Workspace kedua. Login Human Agent A; pastikan hanya membership miliknya yang dapat dibuka. Coba `X-Workspace-Id` dari B dan pastikan `403`.
+2. Daftarkan Organization baru; pastikan Trial Grant sekali. Buat Workspace kedua; saldo Billing sama, tanpa Trial Grant tambahan. Buka AI Usage Organization dan per Workspace; pastikan spend tiap Workspace terlihat pada asalnya.
+3. Buat Top-Up Mayar dari Workspace kedua, kembali ke Billing, dan pastikan pembayaran serta saldo yang sama terlihat dari Workspace pertama. Di Console, pembayaran dan Unlimited Period harus tercantum pada detail Organization A. Aktifkan Unlimited Period, kirim AI Turn lewat Web Widget dan WhatsApp kedua Workspace, dan pastikan saldo tetap. Akhiri period, kirim Turn lagi, dan pastikan spend mengurangi saldo Organization A saja.
+4. Pastikan Billing dan AI Usage B tidak menampilkan pembayaran, saldo, periode, atau spend A. Periksa log pengiriman kedua Channel setelah Turn.
+
 Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak tercampur. Kolom bukti menyebut permukaan yang harus diperiksa.
 
 | ID | Skenario dan input Customer | Hasil yang diharapkan | Bukti |

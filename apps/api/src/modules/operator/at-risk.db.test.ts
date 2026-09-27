@@ -146,7 +146,7 @@ it("does not flag balance for an Organization on an active Unlimited Period, eve
     },
   });
   await prisma.unlimitedPeriod.create({
-    data: { id: randomUUID(), workspaceId: organizationId, operatorId, endAt: daysAgo(-30) },
+    data: { id: randomUUID(), organizationId, operatorId, endAt: daysAgo(-30) },
   });
   await recordActivity(organizationId, new Date());
 
@@ -167,7 +167,7 @@ it("flags an Organization whose Unlimited Period ends within 7 days", async () =
     },
   });
   await prisma.unlimitedPeriod.create({
-    data: { id: randomUUID(), workspaceId: organizationId, operatorId, endAt: daysAgo(-3) },
+    data: { id: randomUUID(), organizationId, operatorId, endAt: daysAgo(-3) },
   });
   await recordActivity(organizationId, new Date());
 

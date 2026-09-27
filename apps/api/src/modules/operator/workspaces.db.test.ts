@@ -139,7 +139,7 @@ it("surfaces an active Unlimited Period in the Workspace list", async () => {
   });
   const endAt = new Date(Date.now() + 60_000);
   await prisma.unlimitedPeriod.create({
-    data: { id: randomUUID(), workspaceId: firstId, operatorId, endAt },
+    data: { id: randomUUID(), organizationId: firstId, operatorId, endAt },
   });
   sessions.operator = true;
 

@@ -22,7 +22,7 @@ export async function listPayments(query: z.infer<typeof paymentQuerySchema>) {
     Prisma.TopUpPaymentOrderByWithRelationInput
   > = {
     createdAt: { createdAt: query.sortDirection },
-    workspace: { workspace: { organization: { name: query.sortDirection } } },
+    workspace: { organization: { name: query.sortDirection } },
     amountIdr: { amountIdr: query.sortDirection },
     status: { status: query.sortDirection },
     paidAt: { paidAt: query.sortDirection },
@@ -41,9 +41,7 @@ export async function listPayments(query: z.infer<typeof paymentQuerySchema>) {
           ? { status: "PENDING" as const, expiresAt: { gt: now } }
           : {}),
     ...(query.workspace && {
-      workspace: {
-        organization: { name: { contains: query.workspace, mode: "insensitive" as const } },
-      },
+      organization: { name: { contains: query.workspace, mode: "insensitive" as const } },
     }),
   };
   const [total, rows] = await Promise.all([
@@ -55,7 +53,7 @@ export async function listPayments(query: z.infer<typeof paymentQuerySchema>) {
       take: query.sortBy === "status" ? undefined : query.limit,
       select: {
         id: true,
-        workspace: { select: { organization: { select: { id: true, name: true } } } },
+        organization: { select: { id: true, name: true } },
         packId: true,
         amountIdr: true,
         credits: true,
@@ -69,9 +67,8 @@ export async function listPayments(query: z.infer<typeof paymentQuerySchema>) {
     }),
   ]);
   // A Top-Up funds the paying Organization, not the initiating Workspace (ADR-0026).
-  const payments = rows.map(({ expiresAt, ledgerEntryId, workspace, ...payment }) => ({
+  const payments = rows.map(({ expiresAt, ledgerEntryId, ...payment }) => ({
     ...payment,
-    organization: workspace.organization,
     status:
       payment.status === "PAID"
         ? ("PAID" as const)

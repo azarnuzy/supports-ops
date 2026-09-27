@@ -65,7 +65,7 @@ export async function verifyTopUpPayment(payment: TopUpPayment) {
       data: {
         credits: payment.credits,
         id: randomUUID(),
-        organizationId: await organizationIdForWorkspace(tx, payment.workspaceId),
+        organizationId: payment.organizationId,
         note: `Top-Up Pack ${payment.packId} (Mayar ${payment.mayarPaymentId})`,
         type: "TOP_UP",
         workspaceId: payment.workspaceId,
@@ -99,7 +99,7 @@ function pendingWhere(now = new Date()) {
 export async function getBilling() {
   const workspaceId = requireWorkspaceId();
   const organizationId = await organizationIdForWorkspace(unscopedPrisma, workspaceId);
-  const where = { workspace: { organizationId } };
+  const where = { organizationId };
   await verifyAll(
     await unscopedPrisma.topUpPayment.findMany({ where: { ...pendingWhere(), ...where } }),
   );
@@ -155,6 +155,7 @@ export async function createTopUpCheckout(params: {
       expiresAt,
       id: randomUUID(),
       mayarPaymentId: remote.id,
+      organizationId: await organizationIdForWorkspace(unscopedPrisma, workspaceId),
       packId: pack.id,
       workspaceId,
     },

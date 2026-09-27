@@ -21,6 +21,8 @@ Status yang dipakai:
 
 ## Halaman Platform
 
+Slice [#279](https://github.com/azarnuzy/supports-ops/issues/279): identitas User kini milik Organization dan akses Workspace ditentukan melalui WorkspaceMembership; Billing, Top-Up Payment, dan Unlimited Period memakai Organization sebagai pemilik. `workspaceId` pada pembayaran dan Credit Ledger tetap mencatat asal aktivitas. Migrasi mempertahankan Organization dan saldo pelanggan satu Workspace. Verifikasi browser manual slice ini belum dijalankan.
+
 Shell autentik, navigasi berbasis peran, halaman Conversations, resource drawer,
 state data, dan halaman Channel kini memakai sistem desain SupportOps yang sama
 ([#154](https://github.com/azarnuzy/supports-ops/issues/154)).

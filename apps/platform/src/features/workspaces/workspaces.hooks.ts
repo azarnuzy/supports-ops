@@ -1,7 +1,6 @@
 import { toast } from "@repo/ui/components/sonner";
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../../lib/query-keys";
-import { meQueryOptions } from "../auth";
 import {
   createOrganizationWorkspace,
   getActiveWorkspaceId,
@@ -14,13 +13,10 @@ export const workspacesQueryOptions = queryOptions({
   queryFn: getWorkspaces,
 });
 
-/** Falls back to the signed-in user's own Workspace until a switch is made,
- * so a first visit (with nothing in `sessionStorage` yet) still opens the
- * right Inbox. */
+/** Open the first available Workspace on a new tab. */
 export function useActiveWorkspaceId() {
-  const user = useQuery(meQueryOptions);
-
-  return getActiveWorkspaceId() ?? user.data?.workspaceId ?? null;
+  const workspaces = useQuery(workspacesQueryOptions);
+  return getActiveWorkspaceId() ?? workspaces.data?.[0]?.id ?? null;
 }
 
 export function useCreateWorkspaceMutation() {

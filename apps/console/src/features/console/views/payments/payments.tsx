@@ -944,10 +944,10 @@ export default function PaymentsView() {
                               <TableCell>
                                 <Link
                                   to="/organizations/$organizationId"
-                                  params={{ organizationId: row.workspace.organization!.id }}
+                                  params={{ organizationId: row.organization.id }}
                                   className="text-primary hover:underline"
                                 >
-                                  {row.workspace.organization?.name ?? row.workspace.name}
+                                  {row.organization.name}
                                 </Link>
                               </TableCell>
                               <TableCell>{dateTime.format(new Date(row.startAt))}</TableCell>

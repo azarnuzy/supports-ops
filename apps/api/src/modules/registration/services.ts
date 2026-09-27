@@ -52,7 +52,6 @@ export async function registerAdminWorkspace(input: RegisterInput) {
           role: "ADMIN",
           organizationId: organization.id,
           isOrganizationAdmin: true,
-          workspaceId: workspace.id,
         },
       });
 

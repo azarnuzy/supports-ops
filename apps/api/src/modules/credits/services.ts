@@ -17,7 +17,6 @@ export async function organizationIdForWorkspace(
     where: { id: workspaceId },
     select: { organizationId: true },
   });
-  if (!workspace.organizationId) throw new Error(`Workspace ${workspaceId} has no Organization`);
   return workspace.organizationId;
 }
 
@@ -68,7 +67,7 @@ export async function creditBalance(workspaceId: string) {
 export async function hasActiveUnlimitedPeriod(workspaceId: string) {
   return Boolean(await unscopedPrisma.unlimitedPeriod.findFirst({
     where: {
-      workspace: { organizationId: await organizationIdForWorkspace(unscopedPrisma, workspaceId) },
+      organizationId: await organizationIdForWorkspace(unscopedPrisma, workspaceId),
       endedEarlyAt: null,
       OR: [{ endAt: null }, { endAt: { gt: new Date() } }],
     },
@@ -131,7 +130,7 @@ export async function spendForTurn(
   const organizationId = await organizationIdForWorkspace(tx, params.workspaceId);
   const unlimited = await tx.unlimitedPeriod.findFirst({
     where: {
-      workspace: { organizationId },
+      organizationId,
       endedEarlyAt: null,
       OR: [{ endAt: null }, { endAt: { gt: now } }],
     },

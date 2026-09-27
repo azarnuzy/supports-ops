@@ -162,7 +162,6 @@ describe("registerAdminWorkspace", () => {
       role: "ADMIN",
       organizationId: organization.id,
       isOrganizationAdmin: true,
-      workspaceId: workspace.id,
     });
 
     expect(account).toMatchObject({

@@ -11,7 +11,7 @@ vi.mock("../auth/instance", () => ({
   },
 }));
 
-type WorkspaceUser = Pick<User, "id" | "name" | "email" | "workspaceId" | "role">;
+type WorkspaceUser = Pick<User, "id" | "name" | "email" | "role"> & { workspaceId: string };
 
 type Seeded = {
   workspaceId: string;
@@ -74,11 +74,12 @@ async function seedWorkspaces(): Promise<Seeded> {
   const workspaceId = `ws-${run}`;
   const otherWorkspaceId = `ws-other-${run}`;
   const emptyWorkspaceId = `ws-empty-${run}`;
+  await unscopedPrisma.organization.createMany({ data: [workspaceId, otherWorkspaceId, emptyWorkspaceId].map((id) => ({ id, name: id })) });
   await unscopedPrisma.workspace.createMany({
     data: [
-      { id: workspaceId, name: "Analytics Test", slug: `${slugPrefix}${run}` },
-      { id: otherWorkspaceId, name: "Analytics Other", slug: `${slugPrefix}other-${run}` },
-      { id: emptyWorkspaceId, name: "Analytics Empty", slug: `${slugPrefix}empty-${run}` },
+      { id: workspaceId, organizationId: workspaceId, name: "Analytics Test", slug: `${slugPrefix}${run}` },
+      { id: otherWorkspaceId, organizationId: otherWorkspaceId, name: "Analytics Other", slug: `${slugPrefix}other-${run}` },
+      { id: emptyWorkspaceId, organizationId: emptyWorkspaceId, name: "Analytics Empty", slug: `${slugPrefix}empty-${run}` },
     ],
   });
 
@@ -125,12 +126,13 @@ async function seedWorkspaces(): Promise<Seeded> {
     email: "",
   };
   await unscopedPrisma.user.createMany({
-    data: [agent, otherAgent, admin, otherAdmin, humanAgent, emptyAdmin].map((user) => ({
-      ...user,
+    data: [agent, otherAgent, admin, otherAdmin, humanAgent, emptyAdmin].map(({ workspaceId, ...user }) => ({
+      ...user, organizationId: workspaceId,
       email: `${user.id}@analytics.test`,
       emailVerified: true,
     })),
   });
+  await unscopedPrisma.workspaceMembership.createMany({ data: [agent, otherAgent, admin, otherAdmin, humanAgent, emptyAdmin].map(({ id, workspaceId, role }) => ({ userId: id, workspaceId, role })) });
   const webChannel = {
     id: `channel-web-${run}`,
     workspaceId,
@@ -503,8 +505,9 @@ async function deleteSeededWorkspaces() {
   await unscopedPrisma.channel.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
   await unscopedPrisma.aiAgent.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
   await unscopedPrisma.aiSettings.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
-  await unscopedPrisma.user.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.user.deleteMany({ where: { organizationId: { in: workspaceIds } } });
   await unscopedPrisma.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
+  await unscopedPrisma.organization.deleteMany({ where: { id: { in: workspaceIds } } });
 }
 
 function sessionFor(user: WorkspaceUser): { session: Partial<AuthSession>; user: Partial<User> } {
@@ -815,8 +818,9 @@ async function deleteTrafficWorkspaces() {
   });
   await unscopedPrisma.channel.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
   await unscopedPrisma.aiAgent.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
-  await unscopedPrisma.user.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.user.deleteMany({ where: { organizationId: { in: workspaceIds } } });
   await unscopedPrisma.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
+  await unscopedPrisma.organization.deleteMany({ where: { id: { in: workspaceIds } } });
 }
 
 /**
@@ -836,10 +840,11 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
   const run = randomUUID();
   const workspaceId = `ws-traffic-${run}`;
   const otherWorkspaceId = `ws-traffic-other-${run}`;
+  await unscopedPrisma.organization.createMany({ data: [workspaceId, otherWorkspaceId].map((id) => ({ id, name: id })) });
   await unscopedPrisma.workspace.createMany({
     data: [
-      { id: workspaceId, name: "Traffic Test", slug: `${trafficSlugPrefix}${run}` },
-      { id: otherWorkspaceId, name: "Traffic Other", slug: `${trafficSlugPrefix}other-${run}` },
+      { id: workspaceId, organizationId: workspaceId, name: "Traffic Test", slug: `${trafficSlugPrefix}${run}` },
+      { id: otherWorkspaceId, organizationId: otherWorkspaceId, name: "Traffic Other", slug: `${trafficSlugPrefix}other-${run}` },
     ],
   });
 
@@ -858,12 +863,13 @@ async function seedTrafficWorkspace(): Promise<TrafficSeeded> {
     email: "",
   };
   await unscopedPrisma.user.createMany({
-    data: [admin, otherAdmin].map((user) => ({
-      ...user,
+    data: [admin, otherAdmin].map(({ workspaceId, ...user }) => ({
+      ...user, organizationId: workspaceId,
       email: `${user.id}@analytics.test`,
       emailVerified: true,
     })),
   });
+  await unscopedPrisma.workspaceMembership.createMany({ data: [admin, otherAdmin].map(({ id, workspaceId, role }) => ({ userId: id, workspaceId, role })) });
 
   const aiAgentId = `traffic-aiagent-${run}`;
   const otherAiAgentId = `traffic-other-aiagent-${run}`;
@@ -1149,8 +1155,9 @@ async function deleteTrendsWorkspaces() {
   });
   await unscopedPrisma.channel.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
   await unscopedPrisma.aiAgent.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
-  await unscopedPrisma.user.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+  await unscopedPrisma.user.deleteMany({ where: { organizationId: { in: workspaceIds } } });
   await unscopedPrisma.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
+  await unscopedPrisma.organization.deleteMany({ where: { id: { in: workspaceIds } } });
 }
 
 /**
@@ -1171,10 +1178,11 @@ async function seedTrendsWorkspace(): Promise<TrendsSeeded> {
   const run = randomUUID();
   const workspaceId = `ws-trends-${run}`;
   const otherWorkspaceId = `ws-trends-other-${run}`;
+  await unscopedPrisma.organization.createMany({ data: [workspaceId, otherWorkspaceId].map((id) => ({ id, name: id })) });
   await unscopedPrisma.workspace.createMany({
     data: [
-      { id: workspaceId, name: "Trends Test", slug: `${trendsSlugPrefix}${run}` },
-      { id: otherWorkspaceId, name: "Trends Other", slug: `${trendsSlugPrefix}other-${run}` },
+      { id: workspaceId, organizationId: workspaceId, name: "Trends Test", slug: `${trendsSlugPrefix}${run}` },
+      { id: otherWorkspaceId, organizationId: otherWorkspaceId, name: "Trends Other", slug: `${trendsSlugPrefix}other-${run}` },
     ],
   });
 
@@ -1193,12 +1201,13 @@ async function seedTrendsWorkspace(): Promise<TrendsSeeded> {
     email: "",
   };
   await unscopedPrisma.user.createMany({
-    data: [admin, otherAdmin].map((user) => ({
-      ...user,
+    data: [admin, otherAdmin].map(({ workspaceId, ...user }) => ({
+      ...user, organizationId: workspaceId,
       email: `${user.id}@analytics.test`,
       emailVerified: true,
     })),
   });
+  await unscopedPrisma.workspaceMembership.createMany({ data: [admin, otherAdmin].map(({ id, workspaceId, role }) => ({ userId: id, workspaceId, role })) });
 
   const aiAgentId = `trends-aiagent-${run}`;
   const otherAiAgentId = `trends-other-aiagent-${run}`;

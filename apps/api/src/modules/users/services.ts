@@ -59,7 +59,7 @@ export async function createHumanAgent(workspaceId: string, input: Omit<CreateHu
     const user = await unscopedPrisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: { id: userId, email: input.email, name: input.name,
-          role, organizationId: workspace.organizationId, workspaceId },
+          role, organizationId: workspace.organizationId },
       });
       await tx.workspaceMembership.create({ data: { userId, workspaceId, role } });
       await tx.account.create({ data: { id: randomUUID(), accountId: userId,
@@ -100,10 +100,6 @@ export async function removeMembership(workspaceId: string, userId: string) {
         throw new LastOrganizationAdminError();
     }
     await tx.workspaceMembership.delete({ where: { userId_workspaceId: { userId, workspaceId } } });
-    if (membership.user.workspaceId === workspaceId) {
-      const next = await tx.workspaceMembership.findFirst({ where: { userId } });
-      if (next) await tx.user.update({ where: { id: userId }, data: { workspaceId: next.workspaceId, role: next.role } });
-    }
   });
 }
 

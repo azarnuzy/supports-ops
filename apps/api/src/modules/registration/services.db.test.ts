@@ -39,15 +39,14 @@ describe("registerAdminWorkspace", () => {
 
     const stored = await prisma.user.findUniqueOrThrow({
       where: { email: input.email },
-      include: { workspace: true },
+      include: { memberships: true },
     });
 
     expect(stored.id).toBe(user.id);
     expect(stored.role).toBe("ADMIN");
     expect(stored.organizationId).toBe(organization.id);
     expect(stored.isOrganizationAdmin).toBe(true);
-    expect(stored.workspace.id).toBe(workspace.id);
-    expect(stored.workspace.organizationId).toBe(organization.id);
+    expect(stored.memberships).toMatchObject([{ workspaceId: workspace.id, role: "ADMIN" }]);
     expect(await prisma.organization.count()).toBe(1);
     expect(await prisma.aiAgent.count({ where: { workspaceId: workspace.id } })).toBe(1);
     expect(await prisma.webWidgetConfig.count({ where: { workspaceId: workspace.id } })).toBe(1);

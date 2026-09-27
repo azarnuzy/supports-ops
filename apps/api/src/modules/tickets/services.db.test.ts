@@ -69,8 +69,9 @@ beforeEach(async () => {
 
 async function seed() {
   const workspaceId = randomUUID();
+  await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
   await prisma.workspace.create({
-    data: { id: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
+    data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
   });
   const aiAgentId = randomUUID();
   await prisma.aiAgent.create({ data: { id: aiAgentId, name: "Agent", workspaceId } });
@@ -86,9 +87,10 @@ async function seed() {
       id: humanAgentId,
       name: "Human Agent",
       role: "HUMAN_AGENT",
-      workspaceId,
+      organizationId: workspaceId,
     },
   });
+  await prisma.workspaceMembership.create({ data: { userId: humanAgentId, workspaceId, role: "HUMAN_AGENT" } });
   const customerIdentityId = randomUUID();
   await prisma.customerIdentity.create({
     data: {

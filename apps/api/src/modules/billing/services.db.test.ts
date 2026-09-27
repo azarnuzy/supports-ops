@@ -105,6 +105,7 @@ describe("Top-Up Payments", () => {
       data: {
         id: randomUUID(),
         workspaceId: secondWorkspaceId,
+        organizationId: secondWorkspaceId,
         packId: "credits-1000",
         credits: 1000,
         amountIdr: 250_000,
@@ -117,7 +118,7 @@ describe("Top-Up Payments", () => {
     const paid = await listPayments({ ...query, status: "PAID" });
     expect(paid.total).toBe(1);
     expect(paid.payments[0]).toMatchObject({
-      workspace: { id: workspaceId },
+      organization: { id: workspaceId },
       status: "PAID",
       ledgerEntryId: expect.any(String),
     });
@@ -201,7 +202,7 @@ describe("Top-Up Payments", () => {
     });
     const endAt = new Date(Date.now() + 60_000);
     await prisma.unlimitedPeriod.create({
-      data: { id: randomUUID(), workspaceId, operatorId, endAt },
+      data: { id: randomUUID(), organizationId: workspaceId, operatorId, endAt },
     });
 
     const billing = await withWorkspaceContext(workspaceId, () => services.getBilling());

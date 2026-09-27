@@ -130,11 +130,11 @@ export async function listAtRiskOrganizations(): Promise<OrganizationAttention[]
     }),
     unscopedPrisma.unlimitedPeriod.findMany({
       where: {
-        workspace: { organizationId: { in: ids } },
+        organizationId: { in: ids },
         endedEarlyAt: null,
         OR: [{ endAt: null }, { endAt: { gt: now } }],
       },
-      select: { workspace: { select: { organizationId: true } }, endAt: true },
+      select: { organizationId: true, endAt: true },
     }),
   ]);
   const endingSoonBy = new Date(now.getTime() + unlimitedEndingWindowMs);
@@ -144,7 +144,7 @@ export async function listAtRiskOrganizations(): Promise<OrganizationAttention[]
       const balance =
         balances.find((row) => row.organizationId === organization.id)?._sum.credits ?? 0;
       const activePeriod =
-        activePeriods.find((row) => row.workspace.organizationId === organization.id) ?? null;
+        activePeriods.find((row) => row.organizationId === organization.id) ?? null;
       const conditions: FinancialCondition[] = [];
       if (!activePeriod) {
         if (balance <= 0) conditions.push("CREDIT_EXHAUSTED");

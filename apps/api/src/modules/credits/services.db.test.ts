@@ -213,7 +213,7 @@ describe("spendForTurn during an Unlimited Period", () => {
     });
     const operatorId = (await prisma.operator.findFirstOrThrow()).id;
     await prisma.unlimitedPeriod.create({
-      data: { id: randomUUID(), workspaceId, operatorId, endAt },
+      data: { id: randomUUID(), organizationId: workspaceId, operatorId, endAt },
     });
   }
 

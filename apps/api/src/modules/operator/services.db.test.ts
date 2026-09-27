@@ -55,7 +55,7 @@ it("groups two Workspaces under one financial Organization and audits its Top-Up
   await prisma.organization.create({ data: { id: organizationId, name: "Acme" } });
   await prisma.workspace.createMany({ data: workspaceIds.map((id) => ({ id, organizationId, name: id, slug: id })) });
   await prisma.operator.create({ data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` } });
-  await prisma.user.create({ data: { id: randomUUID(), name: "Admin", email: `${randomUUID()}@example.com`, workspaceId: workspaceIds[0], organizationId, role: "ADMIN", isOrganizationAdmin: true } });
+  await prisma.user.create({ data: { id: randomUUID(), name: "Admin", email: `${randomUUID()}@example.com`, organizationId, role: "ADMIN", isOrganizationAdmin: true } });
   const result = await topUpOrganization(operatorId, organizationId, 25, "Invoice 42");
   expect(result?.balance).toBe(25);
   expect((await listOrganizations()).filter((row) => row.id === organizationId)).toMatchObject([{ balance: 25, workspaces: expect.arrayContaining(workspaceIds.map((id) => expect.objectContaining({ id }))) }]);
@@ -238,6 +238,7 @@ it("adds two Workspace figures without exposing customer content", async () => {
     await prisma.topUpPayment.create({
       data: {
         id: randomUUID(),
+        organizationId: workspaceId,
         workspaceId,
         packId: "test",
         credits: 100,

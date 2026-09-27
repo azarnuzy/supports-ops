@@ -67,7 +67,7 @@ export async function getBillingOverview(query: z.infer<typeof analyticsRangeQue
     unscopedPrisma.creditLedgerEntry.groupBy({ by: ["organizationId"], _sum: { credits: true } }),
     unscopedPrisma.unlimitedPeriod.findMany({
       where: { endedEarlyAt: null, OR: [{ endAt: null }, { endAt: { gt: now } }] },
-      select: { workspaceId: true },
+      select: { organizationId: true },
     }),
     unscopedPrisma.topUpPayment.findMany({
       where: { createdAt: { gte: startAt, lt: endAt } },
@@ -210,7 +210,7 @@ export async function listUnlimitedPeriods(query: z.infer<typeof periodQuerySche
     Prisma.UnlimitedPeriodOrderByWithRelationInput
   > = {
     startAt: { startAt: query.sortDirection },
-    workspace: { workspace: { organization: { name: query.sortDirection } } },
+    workspace: { organization: { name: query.sortDirection } },
     endAt: { endAt: query.sortDirection },
     status: { endedEarlyAt: query.sortDirection },
     operator: { operator: { name: query.sortDirection } },
@@ -226,7 +226,7 @@ export async function listUnlimitedPeriods(query: z.infer<typeof periodQuerySche
   const where = {
     ...statusWhere,
     ...(query.workspace && {
-      workspace: { organization: { name: { contains: query.workspace, mode: "insensitive" as const } } },
+      organization: { name: { contains: query.workspace, mode: "insensitive" as const } },
     }),
   };
   const [total, periods] = await Promise.all([
@@ -241,7 +241,7 @@ export async function listUnlimitedPeriods(query: z.infer<typeof periodQuerySche
         startAt: true,
         endAt: true,
         endedEarlyAt: true,
-        workspace: { select: { id: true, name: true, organization: { select: { id: true, name: true } } } },
+        organization: { select: { id: true, name: true } },
         operator: { select: { name: true } },
       },
     }),
