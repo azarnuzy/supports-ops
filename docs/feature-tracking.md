@@ -45,6 +45,8 @@ state data, dan halaman Channel kini memakai sistem desain SupportOps yang sama
 
 ## Operator Console
 
+`/organizations` dan `/organizations/:id` di Console menampilkan satu baris per Organization, satu saldo Credit Ledger bersama, daftar Organization Admin, pembayaran, dan Workspace anak yang tertaut ke detail operasional. Operator dapat mencatat Top-Up manual pada Organization; satu entri ledger dan satu Operator Action dibuat dalam transaksi yang sama ([#274](https://github.com/azarnuzy/supports-ops/issues/274)). Riwayat pembayaran dan ledger pada detail menampilkan 50 entri terbaru. Verifikasi browser untuk alur ini belum tercatat.
+
 | Halaman | Akses | Status | Yang dapat dicoba | Batasan saat ini |
 | --- | --- | --- | --- | --- |
 | `console.support.azarnuzy.com` | Operator | Sebagian siap ([#219](https://github.com/azarnuzy/supports-ops/issues/219), [#220](https://github.com/azarnuzy/supports-ops/issues/220)) | Deployment console terpisah sudah tersedia. Identitas Operator tidak berbagi akun atau sesi pengguna Workspace; Operator dibuat, dinonaktifkan, dan di-reset password-nya lewat `pnpm operator:create`, `pnpm operator:disable`, dan `pnpm operator:reset-password`. API memiliki autentikasi dan endpoint sesi Operator. | UI console masih kosong; belum ada halaman login atau fitur operasional untuk Operator. Perlu `OPERATOR_AUTH_SECRET` terpisah (minimal 32 karakter) dan migrasi database. Perintah pengelolaan akun hanya dapat dijalankan di server. |

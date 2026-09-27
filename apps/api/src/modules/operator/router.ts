@@ -12,6 +12,7 @@ import {
   periodQuerySchema,
 } from "./billing";
 import { currentOperator, loadOperatorSession, requireOperator } from "./middleware";
+import { getOrganizationDetail, listOrganizations, topUpOrganization } from "./organizations";
 import { listPayments, paymentQuerySchema } from "./payments";
 import {
   getModelMargin,
@@ -68,6 +69,20 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .use("*", loadOperatorSession)
   .use("*", requireOperator)
   .get("/session", (c) => c.json({ operator: c.get("operator") }))
+  .get("/organizations", zValidator("query", z.object({ search: z.string().trim().optional() })), async (c) =>
+    c.json({ organizations: await listOrganizations(c.req.valid("query").search) }),
+  )
+  .get("/organizations/:id", async (c) => {
+    const detail = await getOrganizationDetail(c.req.param("id"));
+    return detail ? c.json(detail) : c.json({ error: "not_found" }, 404);
+  })
+  .post("/organizations/:id/top-ups", zValidator("json", topUpSchema, (result, c) => {
+    if (!result.success) return c.json({ error: "invalid_top_up" }, 400);
+  }), async (c) => {
+    const { credits, note } = c.req.valid("json");
+    const result = await topUpOrganization(currentOperator(c).id, c.req.param("id"), credits, note);
+    return result ? c.json(result, 201) : c.json({ error: "organization_not_found" }, 404);
+  })
   .post(
     "/workspaces/:workspaceId/top-ups",
     zValidator("json", topUpSchema, (result, c) => {
