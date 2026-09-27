@@ -66,6 +66,12 @@ Masuk ke Console sebagai Operator. Buka `/organizations` dan pastikan dua Worksp
 
 Hasil #274: belum diverifikasi secara manual di browser.
 
+### Billing & Credits dan Audit Log berlabel Organization (#277)
+
+Masuk ke Console sebagai Operator dengan minimal satu Organization yang punya dua Workspace aktif dan satu Unlimited Period aktif. Buka `Billing & Credits`: panel "Credits balance distribution" dan metrik "Active Unlimited Periods" harus menghitung Organization itu satu kali walau ia punya dua Workspace, sedangkan panel "Top Workspaces by Credits consumed" tetap memecah spend per Workspace. Buka tab Payments dan Credits: baris Top-Up, Trial Grant, dan pembayaran harus menampilkan nama Organization (tertaut ke `/organizations/:id`), bukan salah satu Workspace anaknya; baris Spend harus menampilkan Organization dan Workspace asal spend itu. Buka `Audit Log`: entri `TOP_UP` dan `UNLIMITED_PERIOD_*` harus menampilkan Organization yang sama. Hapus (soft delete) Workspace anchor tempat Unlimited Period pertama kali dibuat, lalu refresh Audit Log dan Billing & Credits: Organization tetap teridentifikasi di baris-baris itu. Catat tanggal, browser, akun, dan hasil tiap langkah.
+
+Hasil: belum diverifikasi secara manual di browser.
+
 ### Shared Credit balance lintas Workspace (#268)
 
 Siapkan dua Workspace dalam satu Organization dan satu Workspace di Organization lain. Masuk sebagai Organization Admin, buka Billing di kedua Workspace, lalu jalankan satu AI Turn dari masing-masing Web Widget. Saldo Billing keduanya harus turun dari satu balance yang sama, sedangkan AI Usage tiap Workspace hanya mencatat spend sendiri. Membuat Workspace atau AI Agent tambahan tidak boleh menambah Trial Grant. Turunkan balance ke 100 lalu kirim Turn hingga melewati batas: Mailpit harus menerima satu alert low-balance untuk Organization Admin, bukan Admin Workspace biasa. Habiskan balance dan kirim Customer Message baru di kedua Workspace: kedua Ticket harus masuk Shared Human Queue dengan alasan `CREDIT_EXHAUSTION`, dan Mailpit menerima satu alert exhaustion. AI Turn yang sudah dimulai sebelum saldo habis boleh selesai. Organization lain tetap memiliki saldo dan AI Agent aktif. Catat tanggal, browser, saldo awal/akhir, Ticket, dan pesan Mailpit.
