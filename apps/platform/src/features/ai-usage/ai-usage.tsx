@@ -34,6 +34,7 @@ import { SettingsHeader } from "../settings/components/settings-header";
 import {
   aiToolUsageQueryOptions,
   aiUsageSummaryQueryOptions,
+  organizationAiUsageSummaryQueryOptions,
   useCreditLedgerQuery,
 } from "./ai-usage.hooks";
 import {
@@ -90,8 +91,8 @@ function EmptyRange({ title, description }: { title: string; description: string
   );
 }
 
-function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiUsageFilters }) {
-  const summary = useQuery(aiUsageSummaryQueryOptions(range, filters));
+function OverviewPanel({ range, filters, organization }: { range: DashboardRange; filters: AiUsageFilters; organization: boolean }) {
+  const summary = useQuery(organization ? organizationAiUsageSummaryQueryOptions(range, filters) : aiUsageSummaryQueryOptions(range, filters));
   if (summary.isPending) return <PanelSkeleton />;
   if (summary.isError) return <LoadState error={summary.error} onRetry={() => summary.refetch()} />;
 
@@ -166,6 +167,15 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
+        {organization ? <UsageBreakdownCard
+          title="Workspace"
+          emptyLabel="No Workspace spend in this range."
+          rows={usage.byWorkspace.map((row) => ({
+            label: `${row.workspaceName} (${row.turnCount} AI Turns)`,
+            creditsSpent: row.creditsSpent,
+            tokens: tokensOf(row),
+          }))}
+        /> : null}
         <UsageBreakdownCard
           title="AI Agent"
           emptyLabel="No AI Agent spend in this range."
@@ -289,6 +299,7 @@ const AiUsageView = () => {
   const [aiAgentId, setAiAgentId] = useState(ALL);
   const [channel, setChannel] = useState<UsageChannel | typeof ALL>(ALL);
   const [tab, setTab] = useState("overview");
+  const [organization, setOrganization] = useState(false);
   const filters: AiUsageFilters = {
     ...(aiAgentId !== ALL ? { aiAgentId } : {}),
     ...(channel !== ALL ? { channel } : {}),
@@ -325,6 +336,15 @@ const AiUsageView = () => {
               </TabsList>
               {tab !== "ledger" ? (
                 <div className="flex flex-wrap items-center gap-2">
+                  {user.data?.isOrganizationAdmin && tab === "overview" ? (
+                    <Select value={organization ? "organization" : "workspace"} onValueChange={(value) => setOrganization(value === "organization")}>
+                      <SelectTrigger aria-label="Usage scope" className="w-44"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="workspace">This Workspace</SelectItem>
+                        <SelectItem value="organization">Organization</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                   <Select value={aiAgentId} onValueChange={setAiAgentId}>
                     <SelectTrigger aria-label="Filter by AI Agent" className="w-44">
                       <SelectValue />
@@ -357,7 +377,7 @@ const AiUsageView = () => {
             </div>
 
             <TabsContent value="overview">
-              <OverviewPanel range={range} filters={filters} />
+              <OverviewPanel range={range} filters={filters} organization={organization && !!user.data?.isOrganizationAdmin} />
             </TabsContent>
             <TabsContent value="tools">
               <ToolsPanel range={range} filters={filters} />

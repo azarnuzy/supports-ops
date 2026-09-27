@@ -34,6 +34,11 @@ describe("AI Usage is Admin-only", () => {
     expect(res.status).toBe(403);
   });
 
+  it("forbids a Human Agent from Organization AI Usage", async () => {
+    const res = await app.request("/ai-usage/organization-summary");
+    expect(res.status).toBe(403);
+  });
+
   it("forbids a signed-out request", async () => {
     mocks.getSession.mockResolvedValue(null);
     expect((await app.request("/ai-usage/summary")).status).toBe(403);

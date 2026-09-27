@@ -3,6 +3,7 @@ import {
   createTopUpCheckout,
   fetchAiToolUsage,
   fetchAiUsageSummary,
+  fetchOrganizationAiUsageSummary,
   fetchBilling,
   fetchCreditLedger,
   type AiUsageFilters,
@@ -15,6 +16,10 @@ const apiClient = createApiClient(apiBaseUrl);
 
 export function getAiUsageSummary(range: DashboardRange, filters?: AiUsageFilters) {
   return fetchAiUsageSummary(apiClient, range, filters);
+}
+
+export function getOrganizationAiUsageSummary(range: DashboardRange, filters?: AiUsageFilters) {
+  return fetchOrganizationAiUsageSummary(apiClient, range, filters);
 }
 
 export function getAiToolUsage(range: DashboardRange, filters?: AiUsageFilters) {

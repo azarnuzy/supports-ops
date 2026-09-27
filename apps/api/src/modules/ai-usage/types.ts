@@ -28,6 +28,7 @@ export type AiUsageSummary = {
   byAgent: AiUsageAgentBreakdown[];
   byModel: AiUsageModelBreakdown[];
   byChannel: AiUsageChannelBreakdown[];
+  byWorkspace: (UsageTotals & { workspaceId: string; workspaceName: string })[];
 };
 
 export type ToolLatency = { avgLatencyMs: number; p95LatencyMs: number };

@@ -24,6 +24,7 @@ export type AiUsageSummary = {
   byAgent: AiUsageAgentBreakdown[];
   byModel: AiUsageModelBreakdown[];
   byChannel: AiUsageChannelBreakdown[];
+  byWorkspace: (UsageTotals & { workspaceId: string; workspaceName: string })[];
 };
 
 export type AiUsageFilters = { aiAgentId?: string; channel?: UsageChannel };
@@ -45,6 +46,17 @@ export async function fetchAiUsageSummary(
   const response = await client["ai-usage"].summary.$get({ query: aiUsageQuery(range, filters) });
   if (response.status === 403) throw new Error("Only an Admin can view AI Usage.");
   if (!response.ok) throw new Error("Failed to load AI Usage.");
+  return (await response.json()) as { aiUsage: AiUsageSummary };
+}
+
+export async function fetchOrganizationAiUsageSummary(
+  client: ApiClient,
+  range?: AnalyticsRange,
+  filters?: AiUsageFilters,
+) {
+  const response = await client["ai-usage"]["organization-summary"].$get({ query: aiUsageQuery(range, filters) });
+  if (response.status === 403) throw new Error("Only an Organization Admin can view Organization AI Usage.");
+  if (!response.ok) throw new Error("Failed to load Organization AI Usage.");
   return (await response.json()) as { aiUsage: AiUsageSummary };
 }
 

@@ -66,6 +66,25 @@ async function seedSpend(params: {
 }
 
 describe("getAiUsageSummary", () => {
+  it("attributes Organization spend across Workspaces, including zero-Credit Turns", async () => {
+    const siblingId = randomUUID();
+    await prisma.workspace.create({
+      data: { id: siblingId, organizationId: workspaceId, name: "Sibling", slug: `sibling-${siblingId.slice(0, 8)}` },
+    });
+    await prisma.creditLedgerEntry.createMany({ data: [
+      { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "SPEND", credits: -2 },
+      { id: randomUUID(), organizationId: workspaceId, workspaceId: siblingId, type: "SPEND", credits: 0 },
+      { id: randomUUID(), organizationId: otherWorkspaceId, workspaceId: otherWorkspaceId, type: "SPEND", credits: -9 },
+    ] });
+
+    const summary = await withWorkspaceContext(workspaceId, () => services.getAiUsageSummary({}, true));
+    expect(summary.totals).toMatchObject({ creditsSpent: 2, turnCount: 2 });
+    expect(summary.byWorkspace).toEqual(expect.arrayContaining([
+      expect.objectContaining({ workspaceId, creditsSpent: 2, turnCount: 1 }),
+      expect.objectContaining({ workspaceId: siblingId, workspaceName: "Sibling", creditsSpent: 0, turnCount: 1 }),
+    ]));
+  });
+
   it("sums balance from the ledger and buckets spend by day, AI Agent, and Agent Model", async () => {
     await prisma.creditLedgerEntry.create({
       data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
