@@ -15,7 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CoinsIcon, CreditCardIcon, UsersIcon, WalletIcon, ZapIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { Area, Bar, CartesianGrid, ComposedChart, XAxis, YAxis } from "recharts";
 import { api } from "../../../../lib/api";
 import {
   ConsoleDataTable,
@@ -384,6 +384,16 @@ export default function PaymentsView() {
                   className="h-44 w-full"
                 >
                   <ComposedChart data={data.daily}>
+                    <defs>
+                      <linearGradient id="fillPaymentsAdded" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.25} />
+                        <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="fillPaymentsSpent" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.25} />
+                        <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid vertical={false} />
                     <XAxis
                       dataKey="date"
@@ -398,20 +408,22 @@ export default function PaymentsView() {
                     <YAxis yAxisId="credits" orientation="right" width={35} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar yAxisId="revenue" dataKey="revenueIdr" fill="var(--chart-1)" />
-                    <Line
+                    <Area
                       yAxisId="credits"
                       type="monotone"
                       dataKey="added"
                       stroke="var(--chart-2)"
                       strokeWidth={2}
+                      fill="url(#fillPaymentsAdded)"
                       dot={false}
                     />
-                    <Line
+                    <Area
                       yAxisId="credits"
                       type="monotone"
                       dataKey="spent"
                       stroke="var(--chart-3)"
                       strokeWidth={2}
+                      fill="url(#fillPaymentsSpent)"
                       dot={false}
                     />
                   </ComposedChart>

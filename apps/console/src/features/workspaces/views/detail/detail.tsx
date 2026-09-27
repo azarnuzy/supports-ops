@@ -51,7 +51,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Area, AreaChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ConsoleDataTable,
   ConsolePageHeader,
@@ -370,6 +370,16 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                     className="h-48 w-full"
                   >
                     <AreaChart data={trend}>
+                      <defs>
+                        <linearGradient id="fillDetailSessions" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="fillDetailCredits" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid vertical={false} />
                       <XAxis
                         dataKey="date"
@@ -389,17 +399,17 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                         yAxisId="sessions"
                         type="monotone"
                         dataKey="count"
-                        fill="var(--primary)"
-                        fillOpacity={0.16}
+                        fill="url(#fillDetailSessions)"
                         stroke="var(--primary)"
                         strokeWidth={2}
                       />
-                      <Line
+                      <Area
                         yAxisId="credits"
                         type="monotone"
                         dataKey="credits"
                         stroke="var(--chart-2)"
                         strokeWidth={2}
+                        fill="url(#fillDetailCredits)"
                         dot={false}
                       />
                     </AreaChart>

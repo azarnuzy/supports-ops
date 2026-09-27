@@ -1,4 +1,4 @@
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@repo/ui/components/chart";
@@ -23,26 +23,38 @@ export default function TrendChart({
       </CardHeader>
       <CardContent>
         <ChartContainer config={config} className="h-72 w-full">
-          <LineChart data={data} margin={{ left: 8, right: 8 }}>
+          <AreaChart data={data} margin={{ left: 8, right: 8 }}>
+            <defs>
+              <linearGradient id="fillAnalyticsSessions" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-sessions)" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="var(--color-sessions)" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="fillAnalyticsTickets" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-ticketsCreated)" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="var(--color-ticketsCreated)" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="date" tickLine={false} axisLine={false} minTickGap={24} />
             <YAxis tickLine={false} axisLine={false} width={40} allowDecimals={false} />
             <ChartTooltip content={<ChartTooltipContent />} />
-            <Line
+            <Area
               type="monotone"
               dataKey="sessions"
               stroke="var(--color-sessions)"
               strokeWidth={2}
+              fill="url(#fillAnalyticsSessions)"
               dot={false}
             />
-            <Line
+            <Area
               type="monotone"
               dataKey="ticketsCreated"
               stroke="var(--color-ticketsCreated)"
               strokeWidth={2}
+              fill="url(#fillAnalyticsTickets)"
               dot={false}
             />
-          </LineChart>
+          </AreaChart>
         </ChartContainer>
       </CardContent>
     </Card>
