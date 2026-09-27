@@ -73,21 +73,105 @@ const LANGFUSE_INPUT_SOURCES = [
 ];
 const LANGFUSE_OUTPUT_SOURCES = [
   "anvia.generation.output",
+  "anvia.generation.output_text",
   "anvia.run.output",
+  "anvia.run.text",
   "anvia.pipeline.output",
   "anvia.pipeline.stage.output",
   "anvia.tool.result",
   "anvia.child_agent.output",
+  "anvia.child_agent.text",
 ];
 
-function addLangfuseIoAttributes(attributes: Record<string, unknown>) {
-  if (attributes["langfuse.observation.input"] === undefined) {
-    const key = LANGFUSE_INPUT_SOURCES.find((source) => attributes[source] !== undefined);
+function carriesTraceIdentity(key: string) {
+  return (
+    key.startsWith("anvia.trace.") ||
+    key === "langfuse.session.id" ||
+    key === "langfuse.user.id" ||
+    key.startsWith("langfuse.trace.")
+  );
+}
+
+function present(value: unknown) {
+  return value !== undefined && value !== "" && value !== "undefined";
+}
+
+/** Summaries contain only allowlisted operational fields, never message bodies. */
+export function addLangfuseIoAttributes(span: {
+  name: string;
+  status: { code: SpanStatusCode };
+  attributes: Record<string, unknown>;
+}) {
+  const attributes = span.attributes;
+  if (!present(attributes["langfuse.observation.input"])) {
+    const key = LANGFUSE_INPUT_SOURCES.find((source) => present(attributes[source]));
     if (key) attributes["langfuse.observation.input"] = attributes[key];
   }
-  if (attributes["langfuse.observation.output"] === undefined) {
-    const key = LANGFUSE_OUTPUT_SOURCES.find((source) => attributes[source] !== undefined);
+  if (!present(attributes["langfuse.observation.output"])) {
+    const key = LANGFUSE_OUTPUT_SOURCES.find((source) => present(attributes[source]));
     if (key) attributes["langfuse.observation.output"] = attributes[key];
+  }
+
+  const safeFields = (fields: Record<string, string>) =>
+    Object.fromEntries(
+      Object.entries(fields).flatMap(([label, key]) => {
+        const value = attributes[key];
+        return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+          ? [[label, value]]
+          : [];
+      }),
+    );
+  if (!present(attributes["langfuse.observation.input"])) {
+    const summary = JSON.stringify({
+      operation: span.name,
+      ...safeFields({
+        provider: "external.provider",
+        action: "external.operation",
+        model: "anvia.generation.model_id",
+        externalModel: "external.model_id",
+        agent: "anvia.agent.name",
+        tool: "anvia.tool.name",
+        ticketId: "supportops.ticket_id",
+        messageId: "supportops.message_id",
+        providerMessageId: "supportops.provider_message_id",
+        attachmentId: "supportops.attachment_id",
+        mediaId: "supportops.media_id",
+        attempt: "supportops.attempt",
+        toolCount: "anvia.generation.tool_count",
+      }),
+    });
+    attributes["langfuse.observation.input"] = summary;
+    attributes["supportops.span.input_summary"] = summary;
+  }
+  if (!present(attributes["langfuse.observation.output"])) {
+    const summary = JSON.stringify({
+      status:
+        span.status.code === SpanStatusCode.ERROR
+          ? "error"
+          : span.status.code === SpanStatusCode.OK
+            ? "ok"
+            : "unset",
+      ...safeFields({
+        outcome: "supportops.outcome",
+        decision: "ai_agent.decision",
+        escalationReason: "ai_agent.escalation_reason",
+        category: "ai_agent.category",
+        priority: "ai_agent.priority",
+        qualifies: "ai_agent.qualifies",
+        deliveryStatus: "supportops.delivery_status",
+        readReceiptSent: "supportops.read_receipt_sent",
+        processingStatus: "supportops.processing_status",
+        runStatus: "anvia.run.status",
+        toolSkipped: "anvia.tool.skipped",
+        attachments: "ai_agent.attachments",
+        httpStatus: "http.response.status_code",
+        errorCode: "error.type",
+        inputTokens: "anvia.usage.input_tokens",
+        outputTokens: "anvia.usage.output_tokens",
+      }),
+    });
+    attributes["langfuse.observation.output"] = summary;
+    attributes["supportops.span.output_summary"] = summary;
   }
 }
 
@@ -97,7 +181,7 @@ class AgentScopeSpanProcessor implements SpanProcessor {
 
   onStart(span: SdkSpan, parentContext: Context) {
     for (const [key, entry] of propagation.getBaggage(parentContext)?.getAllEntries() ?? []) {
-      if (key.startsWith("anvia.trace.") || key.startsWith("langfuse.")) {
+      if (carriesTraceIdentity(key)) {
         span.setAttribute(key, entry.value);
       }
     }
@@ -106,7 +190,7 @@ class AgentScopeSpanProcessor implements SpanProcessor {
 
   onEnd(span: ReadableSpan) {
     if (exportedTracerScopes.has(span.instrumentationScope.name)) {
-      addLangfuseIoAttributes(span.attributes as Record<string, unknown>);
+      addLangfuseIoAttributes(span);
       this.inner.onEnd(span);
     }
   }
@@ -137,6 +221,25 @@ export function sessionAttributes(sessionId: string, userId?: string): Attribute
         }
       : {}),
   };
+}
+
+/** Carry the current trace through a queue without copying prompts or customer data. */
+export function injectTraceContext(): Record<string, string> {
+  const carrier: Record<string, string> = {};
+  propagation.inject(context.active(), carrier);
+  delete carrier.baggage;
+  return carrier;
+}
+
+export function withTraceContext<T>(carrier: Record<string, string> | undefined, fn: () => T): T {
+  return context.with(
+    carrier ? propagation.extract(context.active(), carrier) : context.active(),
+    fn,
+  );
+}
+
+export function recordExternalFailure(attributes: Attributes) {
+  trace.getSpan(context.active())?.addEvent("external.service.error", attributes);
 }
 
 let sdk: NodeSDK | null = null;
@@ -203,21 +306,20 @@ const tracer = trace.getTracer("@repo/logger");
 
 /** Runs `fn` inside a span of the host process's trace, so nested work and
  * agent observers land under it. Without a started SDK this is a no-op
- * wrapper that simply runs `fn`. Ends with an error status and the recorded
- * exception when `fn` throws. */
+ * wrapper that simply runs `fn`. Ends with an error status when `fn` throws;
+ * sensitive provider exceptions may omit their raw details. */
 export async function withSpan<T>(
   name: string,
   attributes: Attributes,
   fn: (span: Span) => Promise<T>,
+  recordException = true,
+  isFailure?: (result: T) => boolean,
 ): Promise<T> {
   const baggageEntries = Object.fromEntries(
     propagation.getBaggage(context.active())?.getAllEntries() ?? [],
   );
   for (const [key, value] of Object.entries(attributes)) {
-    if (
-      (key.startsWith("anvia.trace.") || key.startsWith("langfuse.")) &&
-      typeof value === "string"
-    ) {
+    if (carriesTraceIdentity(key) && typeof value === "string") {
       baggageEntries[key] = { value };
     }
   }
@@ -231,10 +333,25 @@ export async function withSpan<T>(
       // root of every AI Agent trace, so without this every successful turn
       // reports as "unset" in the telemetry backend and cannot be told apart
       // from one that never finished.
-      span.setStatus({ code: SpanStatusCode.OK });
+      span.setStatus({ code: isFailure?.(result) ? SpanStatusCode.ERROR : SpanStatusCode.OK });
       return result;
     } catch (error) {
-      span.recordException(error as Exception);
+      if (recordException) span.recordException(error as Exception);
+      if (error && typeof error === "object") {
+        if (
+          "status" in error &&
+          typeof error.status === "number" &&
+          error.status >= 100 &&
+          error.status <= 599
+        )
+          span.setAttribute("http.response.status_code", error.status);
+        if (
+          "code" in error &&
+          (typeof error.code === "string" || typeof error.code === "number") &&
+          /^[A-Za-z0-9_:-]{1,64}$/.test(String(error.code))
+        )
+          span.setAttribute("error.type", String(error.code));
+      }
       span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
     } finally {

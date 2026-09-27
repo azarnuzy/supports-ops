@@ -1,6 +1,6 @@
 # Observability
 
-The AI Agent's Telemetry — spans, token counts, latency — is exported over OpenTelemetry to an OTLP endpoint (`ENABLE_TELEMETRY` and the `TELEMETRY_*` variables configure it). Only explicit AI Agent, model, retrieval, and Tool spans are exported: automatic instrumentation is disabled, and because a library can instrument itself against the global tracer once the SDK starts (better-auth emits HTTP, handler, and database spans of its own), the exporter takes spans from two tracers only — `@repo/logger` and `@anvia/otel`. Anything else is dropped in `startTelemetry`. See [ADR-0010](../adr/0010-otlp-observability-and-manual-evals.md) for why the backend is configuration, not architecture.
+The AI Agent's Telemetry — spans, token counts, latency — is exported over OpenTelemetry to an OTLP endpoint (`ENABLE_TELEMETRY` and the `TELEMETRY_*` variables configure it). Only explicit AI Agent, model, retrieval, Tool, and conversation service spans are exported: automatic instrumentation is disabled, and because a library can instrument itself against the global tracer once the SDK starts (better-auth emits HTTP, handler, and database spans of its own), the exporter takes spans from two tracers only — `@repo/logger` and `@anvia/otel`. Anything else is dropped in `startTelemetry`. See [ADR-0010](../adr/0010-otlp-observability-and-manual-evals.md) for why the backend is configuration, not architecture.
 
 Token counts are exported under Anvia's own attribute names (`anvia.usage.input_tokens`, `anvia.generation.model_id`). A backend that reads those — Anvia Lens — reports tokens per run; one that expects the OpenTelemetry GenAI convention (`gen_ai.usage.*`), as Langfuse does, will show the spans without token or cost figures.
 
@@ -35,7 +35,7 @@ Both `apps/api` (classification, reply generation, Business Tool calls) and `app
 
 ## Seeing prompts and answers (`TELEMETRY_CAPTURE_MODE`)
 
-`safe` (the default, and the only value production may use) exports the shape of a run — spans, durations, token counts, decisions — but no prompt or response bodies. A trace then reads as "No data captured" where the content would be.
+`safe` (the default, and the only value production may use) exports the shape of a run — spans, durations, token counts, decisions — but no prompt or response bodies. Missing Input/Output fields in Langfuse are filled with JSON summaries of the span's operation, outcome, and allowlisted error metadata. Lens shows the same fallback under `supportops.span.input_summary` and `supportops.span.output_summary`. These summaries never contain message text or provider response bodies.
 
 `TELEMETRY_CAPTURE_MODE="full"` exports those bodies, which is how a development run shows what the AI Agent was actually asked, what each Tool returned, and what it answered. A prompt or Tool result can contain Internal-Only Knowledge and Customer data; `full` sends both verbatim to the configured telemetry backend.
 
@@ -69,3 +69,10 @@ For local debugging without any account, `TELEMETRY_EXPORTER="console"` prints e
 ## What a trace looks like
 
 Each Web Widget message produces one `support.customer_turn` trace. Its children show classification when there is no Ticket yet, then `ai_agent.turn` with knowledge retrieval, model generations, and each Tool call when the AI Agent handles the message. A greeting or direct request for a Human Agent has no `ai_agent.turn`; the root records its reply or escalation outcome instead. All turns in a Session share the Session id. In `full` mode, the root shows the Customer message and final outcome, while child spans show the model and Tool input/output. Other AI Agent runs, including Copilot, continue to have their own traces.
+
+Attachment jobs and WhatsApp turns carry trace context through the queue. Their
+Mistral OCR/transcription and Meta send spans show failed attempts even when a
+later step succeeds. Meta delivery callbacks arrive independently, so each has
+its own trace under the same Session and Message IDs. External error events
+contain provider, operation, status/code, and resource IDs, never raw provider
+responses. Queue context carries trace IDs only, without baggage or message text.
