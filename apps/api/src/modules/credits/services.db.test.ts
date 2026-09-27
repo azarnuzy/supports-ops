@@ -39,14 +39,14 @@ beforeEach(async () => {
 });
 
 /** The only catalog Model Rate is 1 Credit per Turn, so each call spends exactly 1. */
-async function spendOnce() {
+async function spendOnce(fromWorkspaceId = workspaceId) {
   await prisma.$transaction((tx) =>
     services.spendForTurn(tx, {
       agentModel: null,
       aiAgentId: randomUUID(),
       sessionId: randomUUID(),
       ticketId: randomUUID(),
-      workspaceId,
+      workspaceId: fromWorkspaceId,
     }),
   );
 }
@@ -138,12 +138,39 @@ describe("credit balance", () => {
 });
 
 describe("spendForTurn balance-crossing emails", () => {
+  it("alerts once across Workspaces and keeps another Organization separate", async () => {
+    const secondWorkspaceId = randomUUID();
+    const otherOrganizationId = randomUUID();
+    await prisma.workspace.create({
+      data: { id: secondWorkspaceId, organizationId: workspaceId, name: "Second", slug: secondWorkspaceId },
+    });
+    await prisma.organization.create({ data: { id: otherOrganizationId, name: "Other" } });
+    await prisma.workspace.create({
+      data: { id: otherOrganizationId, organizationId: otherOrganizationId, name: "Other", slug: otherOrganizationId },
+    });
+    await grantBalance(100);
+    await prisma.creditLedgerEntry.create({
+      data: { credits: 100, id: randomUUID(), type: "TOP_UP", organizationId: otherOrganizationId, workspaceId: otherOrganizationId },
+    });
+
+    await Promise.all([spendOnce(secondWorkspaceId), spendOnce()]);
+
+    expect(await services.creditBalance(workspaceId)).toBe(98);
+    expect(await services.creditBalance(secondWorkspaceId)).toBe(98);
+    expect(await services.creditBalance(otherOrganizationId)).toBe(100);
+    expect(mocks.enqueueCreditAlertEmail).toHaveBeenCalledExactlyOnceWith({
+      kind: "LOW_BALANCE", organizationId: workspaceId,
+      workspaceId: expect.stringMatching(new RegExp(`^(${workspaceId}|${secondWorkspaceId})$`)),
+    });
+  });
+
   it("emails once when a spend crosses below the low-balance threshold", async () => {
     await grantBalance(100);
 
     await spendOnce();
     expect(mocks.enqueueCreditAlertEmail).toHaveBeenCalledExactlyOnceWith({
       kind: "LOW_BALANCE",
+      organizationId: workspaceId,
       workspaceId,
     });
 
@@ -157,6 +184,7 @@ describe("spendForTurn balance-crossing emails", () => {
     await spendOnce();
     expect(mocks.enqueueCreditAlertEmail).toHaveBeenCalledExactlyOnceWith({
       kind: "CREDIT_EXHAUSTED",
+      organizationId: workspaceId,
       workspaceId,
     });
   });

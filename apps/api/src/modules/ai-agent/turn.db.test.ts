@@ -204,14 +204,18 @@ describe("generateAiReply spend", () => {
   });
 
   it("escalates with CREDIT_EXHAUSTION and never calls the model when the balance is zero or below", async () => {
+    const otherWorkspaceId = randomUUID();
+    await prisma.workspace.create({
+      data: { id: otherWorkspaceId, organizationId: ids.workspaceId, name: "Second", slug: otherWorkspaceId },
+    });
     await prisma.creditLedgerEntry.create({
-      data: { credits: -500, id: randomUUID(), type: "SPEND", organizationId: ids.workspaceId, workspaceId: ids.workspaceId },
+      data: { credits: -500, id: randomUUID(), type: "SPEND", organizationId: ids.workspaceId, workspaceId: otherWorkspaceId },
     });
 
     await turn.generateAiReply(ids.ticketId, ids.workspaceId, "Help me");
 
     expect(mocks.runAiAgentTurn).not.toHaveBeenCalled();
-    expect(await ledgerEntries()).toHaveLength(1);
+    expect(await ledgerEntries()).toHaveLength(0);
     const ticket = await prisma.ticket.findUniqueOrThrow({
       select: { escalationReason: true, status: true },
       where: { id: ids.ticketId },

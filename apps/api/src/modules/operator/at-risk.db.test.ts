@@ -86,14 +86,22 @@ async function recordActivity(workspaceId: string, customerLastMessageAt: Date) 
 
 it("flags a Workspace below the low-balance threshold", async () => {
   const workspaceId = await createWorkspace("Low");
+  const secondWorkspaceId = randomUUID();
+  await prisma.workspace.create({
+    data: { id: secondWorkspaceId, organizationId: workspaceId, name: "Second", slug: secondWorkspaceId },
+  });
   await prisma.creditLedgerEntry.create({
     data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 50 },
   });
   await recordActivity(workspaceId, new Date());
+  await recordActivity(secondWorkspaceId, new Date());
 
   const workspaces = await fetchAtRisk();
 
-  expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["LOW_BALANCE"] }]);
+  expect(workspaces).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: workspaceId, conditions: ["LOW_BALANCE"] }),
+    expect.objectContaining({ id: secondWorkspaceId, conditions: ["LOW_BALANCE"] }),
+  ]));
 });
 
 it("flags a Workspace at Credit Exhaustion", async () => {
