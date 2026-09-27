@@ -26,6 +26,7 @@ import { mcpRouter } from "./modules/mcp/router";
 import { whatsAppConfigRouter } from "./modules/whatsapp-config/router";
 import { whatsAppWebhookRouter } from "./modules/whatsapp-config/webhook";
 import { operatorRouter } from "./modules/operator/router";
+import { workspacesRouter } from "./modules/workspaces/router";
 
 export const app = new Hono<{ Variables: AuthVariables }>()
   /** Registered before every route so it covers the Channel endpoints too.
@@ -89,7 +90,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .use(
     "*",
     cors({
-      allowHeaders: ["Content-Type", "Authorization"],
+      allowHeaders: ["Content-Type", "Authorization", "X-Workspace-Id"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
       origin: (origin) => (apiConfig.clientOrigins.includes(origin) ? origin : null),
@@ -129,6 +130,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/ai-usage", aiUsageRouter)
   .route("/billing", billingRouter)
   .route("/mcp-servers", mcpRouter)
-  .route("/tools", toolsRouter);
+  .route("/tools", toolsRouter)
+  .route("/workspaces", workspacesRouter);
 
 export type AppType = typeof app;
