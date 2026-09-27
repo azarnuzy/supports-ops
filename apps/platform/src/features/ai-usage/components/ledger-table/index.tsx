@@ -47,7 +47,7 @@ export default function LedgerTable({ query }: LedgerTableProps) {
       <CardHeader>
         <CardTitle className="text-sm">Credit Ledger</CardTitle>
         <CardDescription className="text-xs">
-          Every Trial Grant, Top-Up, and spend this Workspace has ever recorded.
+          Every Trial Grant, Top-Up, and spend across this Organization's Workspaces.
         </CardDescription>
       </CardHeader>
       <CardContent>

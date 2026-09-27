@@ -36,8 +36,10 @@ import { cn } from "@repo/ui/lib/utils";
 import {
   aiUsageSummaryQueryOptions,
   billingQueryOptions,
+  useCreditLedgerQuery,
   useTopUpCheckout,
 } from "../ai-usage/ai-usage.hooks";
+import { LedgerTable } from "../ai-usage/components";
 import {
   formatCredits,
   formatIdr,
@@ -90,7 +92,7 @@ function UnlimitedPeriodBanner({ unlimitedPeriod }: { unlimitedPeriod: Unlimited
     <Alert>
       <InfoIcon />
       <AlertTitle>Your Unlimited Period has ended</AlertTitle>
-      <AlertDescription>This Workspace is back on its own Credits.</AlertDescription>
+      <AlertDescription>Your Organization is spending Credits again.</AlertDescription>
     </Alert>
   );
 }
@@ -282,6 +284,7 @@ function PaymentHistory({ payments }: { payments: readonly TopUpPayment[] }) {
 
 const BillingView = () => {
   const billing = useQuery(billingQueryOptions);
+  const ledger = useCreditLedgerQuery(true);
   const checkout = useTopUpCheckout();
 
   // The tab opens inside the click so popup blockers allow it; checkout fills it in.
@@ -405,6 +408,7 @@ const BillingView = () => {
             </p>
 
             <PaymentHistory payments={data.payments} />
+            <LedgerTable query={ledger} />
           </>
         ) : null}
       </section>

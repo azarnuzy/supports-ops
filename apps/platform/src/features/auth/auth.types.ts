@@ -4,6 +4,7 @@ export type AuthUser = {
   email: string;
   emailVerified?: boolean;
   id: string;
+  isOrganizationAdmin: boolean;
   image?: string | null;
   name: string;
   role: Role;

@@ -29,7 +29,7 @@ export type Billing = {
 
 export async function fetchBilling(client: ApiClient) {
   const response = await client.billing.$get();
-  if (response.status === 403) throw new Error("Only an Admin can manage billing.");
+  if (response.status === 403) throw new Error("Only an Organization Admin can manage Billing.");
   if (!response.ok) throw new Error("Failed to load billing.");
   return (await response.json()) as { billing: Billing };
 }

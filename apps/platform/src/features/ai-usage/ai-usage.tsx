@@ -25,6 +25,7 @@ import { Skeleton } from "@repo/ui/components/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { TooltipProvider } from "@repo/ui/components/tooltip";
 
+import { meQueryOptions } from "../auth";
 import { PlatformAppShell } from "../app-shell";
 import { DateRangePicker, TrendCard } from "../dashboard/views/dashboard/components";
 import { trailingRange } from "../dashboard/views/dashboard/dashboard.utils";
@@ -283,6 +284,7 @@ function ToolsPanel({ range, filters }: { range: DashboardRange; filters: AiUsag
 }
 
 const AiUsageView = () => {
+  const user = useQuery(meQueryOptions);
   const [range, setRange] = useState<DashboardRange>(() => trailingRange(30));
   const [aiAgentId, setAiAgentId] = useState(ALL);
   const [channel, setChannel] = useState<UsageChannel | typeof ALL>(ALL);
@@ -302,14 +304,14 @@ const AiUsageView = () => {
           <SettingsHeader
             title="AI Usage"
             description="Credits spent, conversations handled, Tokens, and Tool calls for your AI Agents."
-            action={
+            action={user.data?.isOrganizationAdmin ? (
               <Button asChild size="sm" variant="outline">
                 <Link to="/workspace/billing">
                   <CoinsIcon className="size-4" />
                   Buy Credits
                 </Link>
               </Button>
-            }
+            ) : undefined}
           />
 
           <Tabs value={tab} onValueChange={setTab} className="gap-4">
@@ -317,7 +319,9 @@ const AiUsageView = () => {
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="tools">Tools</TabsTrigger>
-                <TabsTrigger value="ledger">Credit Ledger</TabsTrigger>
+                {user.data?.isOrganizationAdmin ? (
+                  <TabsTrigger value="ledger">Credit Ledger</TabsTrigger>
+                ) : null}
               </TabsList>
               {tab !== "ledger" ? (
                 <div className="flex flex-wrap items-center gap-2">

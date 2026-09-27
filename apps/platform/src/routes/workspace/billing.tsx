@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { requireAdmin } from "../../features/auth";
+import { requireOrganizationAdmin } from "../../features/auth";
 import { BillingView } from "../../features/billing";
 import { pageMetadata } from "../../lib/seo";
 
 export const Route = createFileRoute("/workspace/billing")({
-  beforeLoad: requireAdmin,
+  beforeLoad: requireOrganizationAdmin,
   head: () =>
     pageMetadata({
       title: "Billing",

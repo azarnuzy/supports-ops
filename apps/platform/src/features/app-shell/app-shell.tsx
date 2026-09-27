@@ -129,7 +129,9 @@ export function PlatformAppShell({
               { icon: UsersRoundIcon, label: "Users", to: "/workspace/users" },
               { icon: TagsIcon, label: "Ticket categories", to: "/workspace/categories" },
               { icon: ChartColumnIcon, label: "AI Usage", to: "/workspace/ai-usage" },
-              { icon: CoinsIcon, label: "Billing", to: "/workspace/billing" },
+              ...(user.data.isOrganizationAdmin
+                ? [{ icon: CoinsIcon, label: "Billing", to: "/workspace/billing" }]
+                : []),
             ],
             label: "Workspace",
           },

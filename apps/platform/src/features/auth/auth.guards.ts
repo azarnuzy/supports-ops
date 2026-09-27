@@ -23,3 +23,13 @@ export async function requireAdmin({ context }: { context: { queryClient: QueryC
     throw error;
   }
 }
+
+export async function requireOrganizationAdmin({
+  context,
+}: {
+  context: { queryClient: QueryClient };
+}) {
+  await requireAdmin({ context });
+  const user = await context.queryClient.ensureQueryData(meQueryOptions);
+  if (!user.isOrganizationAdmin) throw redirect({ to: "/workspace/ai-usage" });
+}
