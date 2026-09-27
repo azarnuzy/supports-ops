@@ -94,7 +94,7 @@ describe("provisionWorkspaceDefaults", () => {
       },
     };
 
-    await provisionWorkspaceDefaults(tx, "workspace-1");
+    await provisionWorkspaceDefaults(tx as unknown as Parameters<typeof provisionWorkspaceDefaults>[0], "workspace-1");
 
     const aiAgent = created.aiAgent as Record<string, unknown>;
     const channel = created.channel as Record<string, unknown>;

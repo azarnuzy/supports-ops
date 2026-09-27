@@ -56,6 +56,10 @@ export async function registerAdminWorkspace(input: RegisterInput) {
         },
       });
 
+      await tx.workspaceMembership.create({
+        data: { userId, workspaceId: workspace.id, role: "ADMIN" },
+      });
+
       await tx.account.create({
         data: {
           id: randomUUID(),

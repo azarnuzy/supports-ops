@@ -9,12 +9,20 @@ vi.mock("../auth/instance", () => ({
     handler: vi.fn(),
   },
 }));
+vi.mock("../../utils/prisma", () => ({
+  unscopedPrisma: {
+    user: { findUnique: vi.fn(async () => ({ deletedAt: null, isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "ws-1" })) },
+    workspace: { findUnique: vi.fn(async () => ({ deletedAt: null, organizationId: "org-1" })) },
+    workspaceMembership: { findUnique: vi.fn(async () => ({ role: "HUMAN_AGENT" })) },
+  },
+}));
 
 const humanAgent = {
   email: "agent@demo.supportops.dev",
   id: "user-1",
   name: "Rian Wibowo",
   role: "HUMAN_AGENT",
+  organizationId: "org-1",
   workspaceId: "ws-1",
 };
 

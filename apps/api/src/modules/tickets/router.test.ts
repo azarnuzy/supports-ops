@@ -28,6 +28,11 @@ vi.mock("../../modules/widget/realtime", () => ({
 
 vi.mock("../../utils/prisma", () => ({
   prisma: new Proxy({}, { get: () => ({ findFirst: vi.fn(), findUnique: vi.fn() }) }),
+  unscopedPrisma: {
+    user: { findUnique: vi.fn(async () => ({ deletedAt: null, isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "ws-1" })) },
+    workspace: { findUnique: vi.fn(async () => ({ deletedAt: null, organizationId: "org-1" })) },
+    workspaceMembership: { findUnique: vi.fn(async () => ({ role: "HUMAN_AGENT" })) },
+  },
 }));
 
 const sessionUser = {
@@ -35,6 +40,7 @@ const sessionUser = {
   id: "user-1",
   name: "Rian Wibowo",
   role: "HUMAN_AGENT",
+  organizationId: "org-1",
   workspaceId: "ws-1",
 };
 

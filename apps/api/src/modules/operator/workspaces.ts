@@ -77,10 +77,10 @@ export async function listWorkspaces({
 
   const [details, users, sessions, previousSessions, spend, previousSpend] = await Promise.all([
     getAttentionDetails(ids),
-    unscopedPrisma.user.findMany({
-      where: { workspaceId: { in: ids }, deletedAt: null },
-      select: { workspaceId: true, role: true, name: true, createdAt: true },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    unscopedPrisma.workspaceMembership.findMany({
+      where: { workspaceId: { in: ids }, user: { deletedAt: null } },
+      select: { workspaceId: true, role: true, user: { select: { name: true } } },
+      orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
     }),
     unscopedPrisma.session.groupBy({
       by: ["workspaceId"],
@@ -114,7 +114,7 @@ export async function listWorkspaces({
       return {
         ...workspace,
         userCount: users.filter((user) => user.workspaceId === workspace.id).length,
-        adminName: admins[0]?.name ?? null,
+        adminName: admins[0]?.user.name ?? null,
         adminCount: admins.length,
         balance: info.balance,
         activeUnlimitedPeriod: info.activeUnlimitedPeriod,
@@ -211,16 +211,14 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
       monthCredits,
       lastPayment,
     ] = await Promise.all([
-      prisma.user.findMany({
-        where: { deletedAt: null },
+      prisma.workspaceMembership.findMany({
+        where: { workspaceId: id, user: { deletedAt: null } },
         select: {
-          id: true,
-          name: true,
-          email: true,
           role: true,
-          authSessions: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+          user: { select: { id: true, name: true, email: true,
+            authSessions: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } } },
         },
-        orderBy: { email: "asc" },
+        orderBy: { user: { email: "asc" } },
       }),
       prisma.channel.findMany({
         where: { deletedAt: null },
@@ -300,9 +298,9 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
       unlimitedPeriod: unlimitedPeriod
         ? { endAt: unlimitedPeriod.endAt, endedEarlyAt: unlimitedPeriod.endedEarlyAt }
         : null,
-      users: users.map(({ authSessions, ...user }) => ({
-        ...user,
-        lastSignInAt: authSessions[0]?.createdAt ?? null,
+      users: users.map(({ role, user }) => ({
+        id: user.id, name: user.name, email: user.email, role,
+        lastSignInAt: user.authSessions[0]?.createdAt ?? null,
       })),
       channels: {
         webWidgetActive: channels.some(

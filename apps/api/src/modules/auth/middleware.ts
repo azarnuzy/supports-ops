@@ -10,7 +10,13 @@ export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, 
   });
 
   c.set("authSession", session?.session ?? null);
-  c.set("user", session?.user ?? null);
+  const storedUser = session?.user
+    ? await unscopedPrisma.user.findUnique({ where: { id: session.user.id }, select: { deletedAt: true, isOrganizationAdmin: true, organizationId: true, workspaceId: true } })
+    : null;
+  c.set("user", storedUser && !storedUser.deletedAt && session?.user
+    ? { ...session.user, isOrganizationAdmin: storedUser.isOrganizationAdmin,
+        organizationId: storedUser.organizationId, workspaceId: storedUser.workspaceId }
+    : null);
   c.set("session", null);
 
   await next();
@@ -31,34 +37,28 @@ export async function loadWorkspaceContext(c: Context<{ Variables: AuthVariables
   const requestedWorkspaceId =
     c.req?.header?.("x-workspace-id") ??
     (c.req?.path?.endsWith("/events") ? c.req.query("workspaceId") : undefined);
+  const workspaceId = requestedWorkspaceId ?? homeWorkspaceId;
+  if (!workspaceId) return next();
 
-  if (!requestedWorkspaceId || requestedWorkspaceId === homeWorkspaceId) {
-    if (!homeWorkspaceId) {
-      await next();
-      return;
-    }
+  if (user) {
+    const workspace = await unscopedPrisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { deletedAt: true, organizationId: true },
+    });
+    if (!workspace || workspace.deletedAt || workspace.organizationId !== user.organizationId)
+      return c.json({ error: "forbidden" }, 403);
 
-    await withWorkspaceContext(homeWorkspaceId, next);
-    return;
+    const membership = await unscopedPrisma.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId: user.id, workspaceId } },
+      select: { role: true },
+    });
+    if (!membership && !user.isOrganizationAdmin) return c.json({ error: "forbidden" }, 403);
+    c.set("user", {
+      ...user,
+      workspaceId,
+      role: user.isOrganizationAdmin ? "ADMIN" : membership!.role,
+    });
   }
 
-  if (!user?.isOrganizationAdmin || !user.organizationId) {
-    return c.json({ error: "forbidden" }, 403);
-  }
-
-  const requestedWorkspace = await unscopedPrisma.workspace.findUnique({
-    where: { id: requestedWorkspaceId },
-    select: { deletedAt: true, organizationId: true },
-  });
-
-  if (
-    !requestedWorkspace ||
-    requestedWorkspace.deletedAt ||
-    requestedWorkspace.organizationId !== user.organizationId
-  ) {
-    return c.json({ error: "forbidden" }, 403);
-  }
-
-  c.set("user", { ...user, role: "ADMIN", workspaceId: requestedWorkspaceId });
-  await withWorkspaceContext(requestedWorkspaceId, next);
+  await withWorkspaceContext(workspaceId, next);
 }

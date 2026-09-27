@@ -9,13 +9,14 @@ export function useHumanAgentsForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const humanAgents = users.data?.users.filter((user) => user.role === "HUMAN_AGENT") ?? [];
+  const [role, setRole] = useState<"ADMIN" | "HUMAN_AGENT">("HUMAN_AGENT");
+  const humanAgents = users.data?.users ?? [];
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     createHumanAgent.mutate(
-      { email: email.trim(), name: name.trim(), password },
+      { email: email.trim(), name: name.trim(), password, role },
       {
         onError: (error) => {
           toast.error(error instanceof Error ? error.message : "Failed to create Human Agent.");
@@ -24,7 +25,7 @@ export function useHumanAgentsForm() {
           setName("");
           setEmail("");
           setPassword("");
-          toast.success("Human Agent created.");
+          toast.success("Workspace member added.");
         },
       },
     );
@@ -37,9 +38,11 @@ export function useHumanAgentsForm() {
     humanAgents,
     name,
     password,
+    role,
     setEmail,
     setName,
     setPassword,
+    setRole,
     users,
   };
 }

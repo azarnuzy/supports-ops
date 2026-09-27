@@ -90,6 +90,7 @@ describe("registerAdminWorkspace", () => {
             return data;
           }),
         },
+        workspaceMembership: { create: vi.fn(async ({ data }: { data: unknown }) => data) },
         workspace: {
           create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
             created.workspace = data;

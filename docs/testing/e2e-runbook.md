@@ -195,6 +195,15 @@ Jika email tidak muncul:
 
 ## 4. Skenario produk end-to-end
 
+### Workspace staff dan peran (#271)
+
+1. Daftar sebagai Organization Admin, buka `/workspace/users`, tambah satu Human Agent, lalu tunjuk ia sebagai Organization Admin. Ia tetap memakai login yang sama.
+2. Buat Workspace kedua dari switcher. Di `/workspace/users` Workspace kedua, tambah email yang sama dengan peran Admin; daftar harus menampilkan peran Workspace kedua. Pindah balik dan pastikan peran Workspace pertama tetap Human Agent.
+3. Sebagai Workspace Admin biasa, pastikan hanya Workspace miliknya yang bisa dibuka dan ia tidak dapat menunjuk Organization Admin atau membuka Billing. Coba header `X-Workspace-Id` milik Organization lain: server harus menjawab `403`.
+4. Cabut Organization Admin lain, lalu coba cabut Organization Admin terakhir: server harus menjawab `409`. Pengguna dengan Ticket `HUMAN_HANDLING` harus ditugaskan ulang sebelum membership-nya dicabut.
+
+Verifikasi browser lokal 27 September 2026: **lulus** (Chrome headless terhadap API dan Platform lokal). Registrasi, tambah staf sebagai Human Agent, penunjukan Organization Admin, pembuatan/pemilihan Workspace kedua, dan penambahan email yang sama sebagai Admin di Workspace kedua berhasil. Setelah hak Organization Admin staf dicabut, sesi staf tetap membaca `HUMAN_AGENT` di Workspace pertama dan `ADMIN` di Workspace kedua; Billing dan header Workspace tebakan ditolak `403`. Pencabutan Organization Admin terakhir dan undangan email milik Organization lain ditolak `409`. Penghapusan membership lewat UI mencabut akses ke Workspace kedua (`403` pada sesi staf yang masih aktif). Pengguna dengan Ticket aktif perlu diuji terpisah sebelum rilis produksi.
+
 Gunakan email Customer baru untuk setiap baris agar Web Session dan Ticket tidak tercampur. Kolom bukti menyebut permukaan yang harus diperiksa.
 
 | ID | Skenario dan input Customer | Hasil yang diharapkan | Bukti |

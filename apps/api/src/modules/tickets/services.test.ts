@@ -37,7 +37,7 @@ vi.mock("../../utils/prisma", async () => {
       },
       user: { findFirst: mocks.userFindFirst },
     },
-    unscopedPrisma: {},
+    unscopedPrisma: { workspaceMembership: { findFirst: mocks.userFindFirst } },
   };
 });
 
@@ -101,7 +101,7 @@ function resetMocks() {
   mocks.messageFindMany.mockReset().mockResolvedValue([]);
   mocks.ticketFindUniqueOrThrow.mockReset();
   mocks.ticketUpdateMany.mockReset();
-  mocks.userFindFirst.mockReset().mockResolvedValue({ id: "agent-2" });
+  mocks.userFindFirst.mockReset().mockResolvedValue({ userId: "agent-2" });
 }
 
 function conversationRow(overrides: { id: string; ticket?: unknown }) {

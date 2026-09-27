@@ -18,9 +18,22 @@ model User {
   authSessions  AuthSession[]
   accounts      Account[]
   ticketReadStates TicketReadState[]
+  memberships WorkspaceMembership[]
 
   @@index([workspaceId])
   @@index([organizationId])
+}
+
+model WorkspaceMembership {
+  userId String
+  workspaceId String
+  role Role
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workspaceId])
+  @@index([workspaceId, role])
 }
 
 /** Better Auth's sign-in session for a Workspace user. Named apart from the

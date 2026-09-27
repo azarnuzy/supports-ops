@@ -17,10 +17,8 @@ export function createApiClient(baseUrl: string) {
   const workspaceId = activeWorkspaceId();
 
   return hc<AppType>(baseUrl, {
-    init: {
-      credentials: "include",
-      headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
-    },
+    init: { credentials: "include" },
+    ...(workspaceId ? { headers: { "X-Workspace-Id": workspaceId } } : {}),
   });
 }
 

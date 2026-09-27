@@ -33,14 +33,14 @@ export function WorkspaceSwitcher() {
   const user = useQuery(meQueryOptions);
   const workspaces = useQuery({
     ...workspacesQueryOptions,
-    enabled: !!user.data?.isOrganizationAdmin,
+    enabled: !!user.data,
   });
   const activeWorkspaceId = useActiveWorkspaceId();
   const createWorkspaceMutation = useCreateWorkspaceMutation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
 
-  if (!user.data?.isOrganizationAdmin || !workspaces.data) return null;
+  if (!user.data || !workspaces.data || workspaces.data.length < 2 && !user.data.isOrganizationAdmin) return null;
 
   function handleValueChange(value: string) {
     if (value === createWorkspaceValue) {
@@ -75,10 +75,10 @@ export function WorkspaceSwitcher() {
               {workspace.name}
             </SelectItem>
           ))}
-          <SelectItem className="text-xs font-medium" value={createWorkspaceValue}>
+          {user.data.isOrganizationAdmin ? <SelectItem className="text-xs font-medium" value={createWorkspaceValue}>
             <PlusIcon className="size-3.5" />
             Create Workspace
-          </SelectItem>
+          </SelectItem> : null}
         </SelectContent>
       </Select>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
