@@ -1,3 +1,4 @@
+import { activeWorkspaceStorageKey } from "@repo/api-client";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { queryKeys } from "../../lib/query-keys";
@@ -25,6 +26,9 @@ export function useLoginMutation() {
   return useMutation({
     mutationFn: login,
     onSuccess: async () => {
+      // A Workspace switch (#270) belongs to whoever picked it — never carry
+      // it over to whichever account signs in next on this tab.
+      sessionStorage.removeItem(activeWorkspaceStorageKey);
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.all });
       await navigate({ to: "/" });
     },
@@ -47,6 +51,7 @@ export function useLogoutMutation() {
   return useMutation({
     mutationFn: logout,
     onSuccess: async () => {
+      sessionStorage.removeItem(activeWorkspaceStorageKey);
       queryClient.removeQueries({ queryKey: queryKeys.auth.all });
       await navigate({ to: "/login" });
     },
