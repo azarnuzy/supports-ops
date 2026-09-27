@@ -4,6 +4,9 @@ import {
   EmailAlreadyInUseApiError,
   fetchSessionUser,
   listWorkspaceUsers,
+  updateWorkspaceUser,
+  removeWorkspaceUser,
+  updateOrganizationAdmin,
   registerWorkspaceAdmin,
   UnauthorizedApiError,
   updateCurrentUserProfile,
@@ -28,6 +31,15 @@ export async function updateProfile(input: UpdateProfileInput) {
 }
 export async function getWorkspaceUsers() {
   return listWorkspaceUsers(apiClient);
+}
+export async function setWorkspaceUserRole(userId: string, role: "ADMIN" | "HUMAN_AGENT") {
+  return updateWorkspaceUser(apiClient, userId, role);
+}
+export async function deleteWorkspaceUser(userId: string) {
+  return removeWorkspaceUser(apiClient, userId);
+}
+export async function setOrganizationAdminRole(userId: string, enabled: boolean) {
+  return updateOrganizationAdmin(apiClient, userId, enabled);
 }
 export async function createHumanAgent(input: CreateHumanAgentInput) {
   try {

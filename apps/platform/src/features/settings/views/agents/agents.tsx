@@ -12,6 +12,10 @@ import {
 } from "@repo/ui/components/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { setWorkspaceUserRole, deleteWorkspaceUser, setOrganizationAdminRole } from "../../../auth/auth.services";
+import { meQueryOptions } from "../../../auth";
+import { queryKeys } from "../../../../lib/query-keys";
 import { toast } from "@repo/ui/components/sonner";
 import { CopyIcon, RefreshCwIcon, UserPlusIcon, UsersRoundIcon } from "lucide-react";
 import { PlatformAppShell } from "../../../app-shell";
@@ -39,11 +43,24 @@ const UsersView = () => {
     humanAgents,
     name,
     password,
+    role,
     setEmail,
     setName,
     setPassword,
+    setRole,
     users,
   } = useHumanAgentsForm();
+  const currentUser = useQuery(meQueryOptions).data;
+  const queryClient = useQueryClient();
+  const manage = useMutation({
+    mutationFn: async (action: { id: string; role?: "ADMIN" | "HUMAN_AGENT"; organizationAdmin?: boolean; remove?: boolean }) => {
+      if (action.role) return setWorkspaceUserRole(action.id, action.role);
+      if (action.organizationAdmin !== undefined) return setOrganizationAdminRole(action.id, action.organizationAdmin);
+      if (action.remove) return deleteWorkspaceUser(action.id);
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.users }),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update user."),
+  });
 
   const passwordTooShort = password.length > 0 && password.length < 8;
   const isEmpty = !users.isPending && !users.isError && humanAgents.length === 0;
@@ -54,7 +71,7 @@ const UsersView = () => {
         <SettingsHeader
           eyebrow="Workspace"
           title="Users"
-          description="Invite teammates who handle escalated Tickets, and manage the people who already have access to this Workspace."
+          description="Manage Workspace roles and add people from your Organization with one login."
         />
 
         <div className="grid items-start gap-5 lg:grid-cols-[24rem_1fr]">
@@ -62,7 +79,7 @@ const UsersView = () => {
             <CardHeader>
               <CardTitle className="text-base">Invite a user</CardTitle>
               <CardDescription>
-                They can sign in right away with the temporary password you set here.
+                New users sign in with the temporary password. Existing Organization users keep theirs.
               </CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>
@@ -114,10 +131,16 @@ const UsersView = () => {
                     <FieldError>Use at least 8 characters.</FieldError>
                   ) : (
                     <FieldDescription>
-                      Share it over a secure channel and ask them to change it after the first sign
-                      in.
+                      For a new user, share it securely and ask them to change it. Existing users keep their password.
                     </FieldDescription>
                   )}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="workspace-role">Workspace role</FieldLabel>
+                  <select id="workspace-role" className="h-9 rounded-md border bg-background px-3" value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "HUMAN_AGENT")}>
+                    <option value="HUMAN_AGENT">Human Agent</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
                 </Field>
               </CardContent>
               <CardFooter className="mt-5 border-t pt-5">
@@ -127,7 +150,7 @@ const UsersView = () => {
                   disabled={createHumanAgent.isPending || password.length < 8}
                 >
                   <UserPlusIcon className="size-4" />
-                  {createHumanAgent.isPending ? "Creating…" : "Create Human Agent"}
+                  {createHumanAgent.isPending ? "Creating…" : "Add to Workspace"}
                 </Button>
               </CardFooter>
             </form>
@@ -138,8 +161,8 @@ const UsersView = () => {
               <CardTitle className="text-base">Team</CardTitle>
               <CardDescription>
                 {isEmpty
-                  ? "Human Agents who can claim Tickets in this Workspace."
-                  : `${humanAgents.length} Human Agent${humanAgents.length === 1 ? "" : "s"} can claim Tickets in this Workspace.`}
+                  ? "People with access to this Workspace."
+                  : `${humanAgents.length} Workspace member${humanAgents.length === 1 ? "" : "s"}.`}
               </CardDescription>
               <CardAction>
                 <Button
@@ -159,12 +182,12 @@ const UsersView = () => {
                 isPending={users.isPending}
                 skeletonCount={3}
                 isError={users.isError}
-                errorLabel="Unable to load Human Agents."
+                errorLabel="Unable to load Workspace members."
                 onRetry={() => void users.refetch()}
                 isEmpty={isEmpty}
                 emptyIcon={<UsersRoundIcon className="size-5 text-muted-foreground" />}
-                emptyTitle="No Human Agents yet"
-                emptyDescription="Until someone is added, every Ticket stays with the AI Agent. Create the first account with the form on the left."
+                emptyTitle="No members yet"
+                emptyDescription="Add a member with the form on the left."
               />
 
               {humanAgents.length > 0 ? (
@@ -186,7 +209,8 @@ const UsersView = () => {
                         </p>
                       </div>
                       <div className="hidden shrink-0 text-right sm:block">
-                        <Badge variant="secondary">Human Agent</Badge>
+                        <Badge variant="secondary">{humanAgent.role === "ADMIN" ? "Admin" : "Human Agent"}</Badge>
+                        {humanAgent.isOrganizationAdmin ? <Badge variant="secondary">Organization Admin</Badge> : null}
                         <p className="mt-1 text-[11px] text-muted-foreground">
                           Added {dateFormatter.format(new Date(humanAgent.createdAt))}
                         </p>
@@ -201,6 +225,11 @@ const UsersView = () => {
                       >
                         <CopyIcon className="size-4" />
                       </Button>
+                      <select aria-label={`Role for ${humanAgent.name}`} className="rounded-md border bg-background p-1 text-xs" value={humanAgent.role} disabled={manage.isPending} onChange={(event) => manage.mutate({ id: humanAgent.id, role: event.target.value as "ADMIN" | "HUMAN_AGENT" })}>
+                        <option value="HUMAN_AGENT">Human Agent</option><option value="ADMIN">Admin</option>
+                      </select>
+                      {currentUser?.isOrganizationAdmin ? <Button size="sm" variant="outline" disabled={manage.isPending} onClick={() => manage.mutate({ id: humanAgent.id, organizationAdmin: !humanAgent.isOrganizationAdmin })}>{humanAgent.isOrganizationAdmin ? "Revoke Org Admin" : "Make Org Admin"}</Button> : null}
+                      <Button size="sm" variant="outline" disabled={manage.isPending} onClick={() => manage.mutate({ id: humanAgent.id, remove: true })}>Remove</Button>
                     </li>
                   ))}
                 </ul>
