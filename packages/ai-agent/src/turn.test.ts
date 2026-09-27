@@ -22,6 +22,7 @@ function baseRuntime(overrides: Partial<AiAgentTurnRuntime> = {}): AiAgentTurnRu
     loadMemory: vi.fn(async () => []),
     loadTicket: vi.fn(async () => ({ sessionId: "session-1", userId: "customer-1" })),
     publishDelta: vi.fn(),
+    reportModelFailure: vi.fn(async () => undefined),
     reply: vi.fn(async () => undefined),
     resolve: vi.fn(async () => undefined),
     retrieve: vi.fn(async () => ({ attachments: [] })),
@@ -250,6 +251,7 @@ describe("runAiAgentTurn", () => {
     });
 
     expect(streamReplyMock).toHaveBeenCalledTimes(2);
+    expect(runtime.reportModelFailure).toHaveBeenCalledTimes(2);
     expect(runtime.escalate).toHaveBeenCalledWith("AI_GENERATION_FAILED");
   });
 

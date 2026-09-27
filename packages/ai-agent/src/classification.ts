@@ -113,7 +113,8 @@ export async function classifyMessage(params: {
   const attributes = params.sessionId ? sessionAttributes(params.sessionId, params.userId) : {};
   const instructions = describeCategories(params.categories);
   const text = describeMessage(params.content, params.history);
-  return withSpan("ai_agent.classify", attributes, async (span) => {
+  return withSpan("platform.classify_message", attributes, async (span) => {
+    span.setAttribute("supportops.model_role", "platform_classification");
     // `extract()` is a raw completion call, not an `Agent`: no observer is
     // attached, so — unlike the reply and Copilot Agents — nothing here
     // records a generation automatically. Recording it by hand on this span

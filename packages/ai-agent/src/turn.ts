@@ -54,6 +54,7 @@ type Source = { content: string; id: string };
 
 export type AiAgentTurnRuntime = {
   countClarifications(): Promise<number>;
+  reportModelFailure?(error: unknown): Promise<void>;
   escalate(reason: EscalationReason, content?: string): Promise<void>;
   finish(): Promise<void>;
   isActive(): boolean;
@@ -103,6 +104,7 @@ export async function runAiAgentTurn(params: {
       "langfuse.trace.metadata.workspace_id": params.workspaceId,
       "supportops.ticket_id": params.ticketId,
       "supportops.workspace_id": params.workspaceId,
+      "supportops.model_role": "agent_model",
     },
     async (run) => {
       if (captureMode === "full") {
@@ -188,6 +190,7 @@ export async function runAiAgentTurn(params: {
             break;
           } catch (error) {
             lastError = error;
+            await params.runtime.reportModelFailure?.(error);
             // A retry restarts the reply from scratch. Once the Customer has
             // already seen part of it stream in, restarting would replace a
             // reply they are mid-way through reading — worse than escalating
@@ -264,11 +267,9 @@ export async function runAiAgentTurn(params: {
         }
         return decision;
       } catch (error) {
-        run.recordException(error instanceof Error ? error : new Error(String(error)));
         run.setAttributes({
           "ai_agent.decision": "ESCALATE",
           "ai_agent.escalation_reason": "AI_GENERATION_FAILED",
-          "ai_agent.error": error instanceof Error ? error.message : String(error),
         });
         if (captureMode === "full") {
           run.setAttribute(
@@ -282,5 +283,9 @@ export async function runAiAgentTurn(params: {
         await params.runtime.finish();
       }
     },
+    false,
+    (result) =>
+      result.escalationReason === "AI_GENERATION_FAILED" ||
+      result.escalationReason === "AI_TIMEOUT",
   );
 }
