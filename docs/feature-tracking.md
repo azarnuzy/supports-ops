@@ -45,7 +45,7 @@ state data, dan halaman Channel kini memakai sistem desain SupportOps yang sama
 
 ## Operator Console
 
-`/organizations` dan `/organizations/:id` di Console menampilkan satu baris per Organization, satu saldo Credit Ledger bersama, daftar Organization Admin, pembayaran, dan Workspace anak yang tertaut ke detail operasional. Operator dapat mencatat Top-Up manual pada Organization; satu entri ledger dan satu Operator Action dibuat dalam transaksi yang sama ([#274](https://github.com/azarnuzy/supports-ops/issues/274)). Riwayat pembayaran dan ledger pada detail menampilkan 50 entri terbaru. Verifikasi browser untuk alur ini belum tercatat.
+`/organizations` dan `/organizations/:id` di Console menampilkan satu baris per Organization, satu saldo Credit Ledger bersama, daftar Organization Admin, pembayaran, dan Workspace anak yang tertaut ke detail operasional. Operator dapat mencatat Top-Up manual pada Organization; satu entri ledger dan satu Operator Action dibuat dalam transaksi yang sama ([#274](https://github.com/azarnuzy/supports-ops/issues/274)). Di detail Organization, Operator juga dapat grant, extend, atau mengakhiri Unlimited Period untuk seluruh Workspace sekarang dan yang dibuat kemudian ([#275](https://github.com/azarnuzy/supports-ops/issues/275)). AI Usage tetap mencatat Model Rate, sedangkan Credit Ledger mencatat nol spend selama period aktif. Riwayat pembayaran dan ledger pada detail menampilkan 50 entri terbaru. Verifikasi browser untuk alur ini belum tercatat.
 
 | Halaman | Akses | Status | Yang dapat dicoba | Batasan saat ini |
 | --- | --- | --- | --- | --- |

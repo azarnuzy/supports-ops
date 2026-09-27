@@ -927,11 +927,11 @@ export default function PaymentsView() {
                             <TableRow key={row.id}>
                               <TableCell>
                                 <Link
-                                  to="/workspaces/$workspaceId"
-                                  params={{ workspaceId: row.workspace.id }}
+                                  to="/organizations/$organizationId"
+                                  params={{ organizationId: row.workspace.organization!.id }}
                                   className="text-primary hover:underline"
                                 >
-                                  {row.workspace.name}
+                                  {row.workspace.organization?.name ?? row.workspace.name}
                                 </Link>
                               </TableCell>
                               <TableCell>{dateTime.format(new Date(row.startAt))}</TableCell>

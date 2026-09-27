@@ -273,6 +273,17 @@ memiliki halaman login atau fitur operasional, sehingga autentikasi diuji melalu
 
 ## 6. Test case AI yang wajib dijalankan
 
+### Unlimited Period Organization (#275)
+
+Verifikasi browser belum dijalankan di sesi implementasi ini (tidak ada browser lokal yang tersedia). Saat lingkungan browser siap:
+
+1. Login sebagai Operator di Console, buka detail Organization yang memiliki dua Workspace, lalu grant Unlimited Period tanpa end date. Coba grant kedua: API harus menolak dengan `409`.
+2. Kirim satu AI Turn pada masing-masing Workspace. Di AI Usage, pastikan Model Rate tetap tercatat dan Credits spent nol; saldo Organization tidak berubah.
+3. Buat Workspace ketiga saat period aktif, lalu kirim AI Turn di sana. Hasil spend dan saldo harus sama.
+4. Tetapkan end date, lalu akhiri period lebih awal. Kirim AI Turn di ketiga Workspace: semuanya kembali mengurangi saldo. Riwayat tiga Turn sebelumnya tetap nol spend.
+5. Grant period berakhir singkat, tunggu expiry, lalu ulangi satu Turn. Periksa saldo berkurang dan detail Organization tidak lagi menunjukkan period aktif.
+
+
 Eval dijalankan terhadap Workspace live yang ditunjuk `EVAL_WORKSPACE_ID` (bukan corpus
 in-memory), memakai Knowledge Source, instructions, dan Tool Assignment Workspace tersebut.
 Butuh `COMPLETION_GATEWAY_API_KEY` (atau `OPENROUTER_API_KEY`).
