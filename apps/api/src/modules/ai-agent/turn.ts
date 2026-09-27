@@ -17,7 +17,7 @@ import {
 } from "../../utils/external-errors";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { withWorkspaceContext } from "../../utils/workspace-context";
-import { creditBalance, spendForTurn } from "../credits/services";
+import { creditBalance, hasActiveUnlimitedPeriod, spendForTurn } from "../credits/services";
 import {
   cancelFollowUpTimers,
   scheduleFollowUp,
@@ -52,7 +52,7 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
   return withWorkspaceContext(workspaceId, async () => {
     // Zero or below escalates before the model is ever called; a Turn already
     // running is unaffected since this only gates a Turn's start.
-    if ((await creditBalance(workspaceId)) <= 0) {
+    if ((await creditBalance(workspaceId)) <= 0 && !(await hasActiveUnlimitedPeriod(workspaceId))) {
       await escalate(ticketId, workspaceId, "CREDIT_EXHAUSTION", customerMessage);
       return;
     }

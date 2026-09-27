@@ -197,7 +197,7 @@ export async function listUnlimitedPeriods(query: z.infer<typeof periodQuerySche
     Prisma.UnlimitedPeriodOrderByWithRelationInput
   > = {
     startAt: { startAt: query.sortDirection },
-    workspace: { workspace: { name: query.sortDirection } },
+    workspace: { workspace: { organization: { name: query.sortDirection } } },
     endAt: { endAt: query.sortDirection },
     status: { endedEarlyAt: query.sortDirection },
     operator: { operator: { name: query.sortDirection } },
@@ -213,7 +213,7 @@ export async function listUnlimitedPeriods(query: z.infer<typeof periodQuerySche
   const where = {
     ...statusWhere,
     ...(query.workspace && {
-      workspace: { name: { contains: query.workspace, mode: "insensitive" as const } },
+      workspace: { organization: { name: { contains: query.workspace, mode: "insensitive" as const } } },
     }),
   };
   const [total, periods] = await Promise.all([
@@ -228,7 +228,7 @@ export async function listUnlimitedPeriods(query: z.infer<typeof periodQuerySche
         startAt: true,
         endAt: true,
         endedEarlyAt: true,
-        workspace: { select: { id: true, name: true } },
+        workspace: { select: { id: true, name: true, organization: { select: { id: true, name: true } } } },
         operator: { select: { name: true } },
       },
     }),

@@ -184,7 +184,7 @@ export async function listWorkspaces({
 export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery) {
   const workspace = await unscopedPrisma.workspace.findFirst({
     where: { id, deletedAt: null },
-    select: { id: true, name: true, slug: true, createdAt: true },
+    select: { id: true, organizationId: true, name: true, slug: true, createdAt: true },
   });
   if (!workspace) return null;
 
@@ -241,7 +241,7 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
       getAnalyticsTraffic(range),
       getAiUsageSummary(range),
       getToolUsage(range),
-      currentOrLastUnlimitedPeriod(id),
+      workspace.organizationId ? currentOrLastUnlimitedPeriod(workspace.organizationId) : null,
       getAttentionDetails([id]),
       prisma.session.findMany({
         where: { createdAt: { gte: startAt, lt: endAt } },

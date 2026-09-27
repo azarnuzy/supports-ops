@@ -65,6 +65,17 @@ export async function creditBalance(workspaceId: string) {
   );
 }
 
+export async function hasActiveUnlimitedPeriod(workspaceId: string) {
+  return Boolean(await unscopedPrisma.unlimitedPeriod.findFirst({
+    where: {
+      workspace: { organizationId: await organizationIdForWorkspace(unscopedPrisma, workspaceId) },
+      endedEarlyAt: null,
+      OR: [{ endAt: null }, { endAt: { gt: new Date() } }],
+    },
+    select: { id: true },
+  }));
+}
+
 async function balanceWithin(
   tx: Pick<typeof unscopedPrisma, "creditLedgerEntry">,
   organizationId: string,
@@ -117,16 +128,16 @@ export async function spendForTurn(
   const agentModel = resolveAgentModelId(params.agentModel);
   const rate = modelRateFor(agentModel);
   const now = new Date();
+  const organizationId = await organizationIdForWorkspace(tx, params.workspaceId);
   const unlimited = await tx.unlimitedPeriod.findFirst({
     where: {
-      workspaceId: params.workspaceId,
+      workspace: { organizationId },
       endedEarlyAt: null,
       OR: [{ endAt: null }, { endAt: { gt: now } }],
     },
     select: { id: true },
   });
   const credits = unlimited ? 0 : rate;
-  const organizationId = await organizationIdForWorkspace(tx, params.workspaceId);
   // Serialize spends across Workspaces before reading the shared balance.
   if (!unlimited) {
     await tx.organization.update({

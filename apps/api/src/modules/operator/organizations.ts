@@ -1,5 +1,6 @@
 import { unscopedPrisma } from "../../utils/prisma";
 import { topUpWorkspace } from "./services";
+import { currentOrLastUnlimitedPeriod } from "./unlimited-periods";
 
 export async function listOrganizations(search?: string) {
   const organizations = await unscopedPrisma.organization.findMany({
@@ -41,7 +42,7 @@ export async function getOrganizationDetail(id: string) {
     },
   });
   if (!organization) return null;
-  const [balance, payments, ledger] = await Promise.all([
+  const [balance, payments, ledger, unlimitedPeriod] = await Promise.all([
     unscopedPrisma.creditLedgerEntry.aggregate({
       where: { organizationId: id },
       _sum: { credits: true },
@@ -58,8 +59,10 @@ export async function getOrganizationDetail(id: string) {
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
+    currentOrLastUnlimitedPeriod(id),
   ]);
-  return { ...organization, balance: balance._sum.credits ?? 0, payments, ledger };
+  return { ...organization, balance: balance._sum.credits ?? 0, payments, ledger,
+    unlimitedPeriod: unlimitedPeriod ? { endAt: unlimitedPeriod.endAt, endedEarlyAt: unlimitedPeriod.endedEarlyAt } : null };
 }
 
 export async function topUpOrganization(operatorId: string, organizationId: string, credits: number, note: string) {

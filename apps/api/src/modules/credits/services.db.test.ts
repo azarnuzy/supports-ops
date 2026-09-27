@@ -230,6 +230,26 @@ describe("spendForTurn during an Unlimited Period", () => {
     expect(mocks.enqueueCreditAlertEmail).not.toHaveBeenCalled();
   });
 
+  it("waives spend in existing and newly created Workspaces of the Organization", async () => {
+    const secondId = randomUUID();
+    await prisma.workspace.create({ data: { id: secondId, organizationId: workspaceId, name: "Second", slug: secondId } });
+    await grantUnlimitedPeriod(new Date(Date.now() + 60_000));
+    await spendOnce();
+    await spendOnce(secondId);
+    const thirdId = randomUUID();
+    await prisma.workspace.create({ data: { id: thirdId, organizationId: workspaceId, name: "Third", slug: thirdId } });
+    await spendOnce(thirdId);
+    const spends = await prisma.creditLedgerEntry.findMany({ where: { type: "SPEND" }, select: { credits: true, modelRate: true } });
+    expect(spends).toHaveLength(3);
+    expect(spends.every((entry) => entry.credits === 0 && entry.modelRate === 1)).toBe(true);
+    expect(await services.creditBalance(workspaceId)).toBe(0);
+    await prisma.unlimitedPeriod.updateMany({ where: { workspaceId }, data: { endedEarlyAt: new Date() } });
+    await grantBalance(3);
+    await spendOnce(secondId);
+    expect(await services.creditBalance(workspaceId)).toBe(2);
+    expect(await prisma.creditLedgerEntry.count({ where: { type: "SPEND", credits: 0 } })).toBe(3);
+  });
+
   it("still records Model Rate, Tokens, and provider cost", async () => {
     await grantUnlimitedPeriod(new Date(Date.now() + 60_000));
     await prisma.$transaction((tx) =>

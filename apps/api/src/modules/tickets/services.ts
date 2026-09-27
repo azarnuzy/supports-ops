@@ -37,7 +37,7 @@ import { enqueueTicketKnowledgeIndex } from "./queue";
 import { enqueueWhatsAppDelivery } from "../whatsapp-config/queue";
 import { resolveTools } from "../tools/services";
 import { executeReadOnlyAssignedTools } from "../tools/orchestration";
-import { creditBalance } from "../credits/services";
+import { creditBalance, hasActiveUnlimitedPeriod } from "../credits/services";
 
 const ticketSelect = {
   assignedHumanAgent: { select: { id: true, name: true } },
@@ -820,7 +820,7 @@ export async function retryHumanReply(ticketId: string, humanAgentId: string, me
 export async function suggestReply(ticketId: string, humanAgentId: string, workspaceId: string) {
   if (!aiAgentConfig.apiKey || !embeddingConfig.apiKey)
     throw new SuggestedReplyNotConfiguredError();
-  if ((await creditBalance(workspaceId)) <= 0) throw new SuggestedReplyCreditsExhaustedError();
+  if ((await creditBalance(workspaceId)) <= 0 && !(await hasActiveUnlimitedPeriod(workspaceId))) throw new SuggestedReplyCreditsExhaustedError();
   const ticket = await unscopedPrisma.ticket.findFirst({
     select: {
       aiAgent: { select: { agentModel: true } },

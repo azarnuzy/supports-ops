@@ -12,11 +12,11 @@ export function endOfDayJakarta(date: string) {
 
 async function findActivePeriod(
   tx: Pick<typeof unscopedPrisma, "unlimitedPeriod">,
-  workspaceId: string,
+  organizationId: string,
 ) {
   return tx.unlimitedPeriod.findFirst({
     where: {
-      workspaceId,
+      workspace: { organizationId },
       endedEarlyAt: null,
       OR: [{ endAt: null }, { endAt: { gt: new Date() } }],
     },
@@ -25,28 +25,34 @@ async function findActivePeriod(
 
 export async function grantUnlimitedPeriod(
   operatorId: string,
-  workspaceId: string,
+  organizationId: string,
   endDate: string | null,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
+    // Serialize grants for the Organization before checking for an active period.
+    const organization = await tx.organization.updateMany({
+      where: { id: organizationId }, data: { updatedAt: new Date() },
+    });
+    if (!organization.count) throw new WorkspaceNotFoundError();
     const workspace = await tx.workspace.findFirst({
-      where: { id: workspaceId, deletedAt: null },
+      where: { organizationId, deletedAt: null },
       select: { id: true },
+      orderBy: { createdAt: "asc" },
     });
     if (!workspace) throw new WorkspaceNotFoundError();
-    if (await findActivePeriod(tx, workspaceId)) throw new OverlappingUnlimitedPeriodError();
+    if (await findActivePeriod(tx, organizationId)) throw new OverlappingUnlimitedPeriodError();
 
     const endAt = endDate ? endOfDayJakarta(endDate) : null;
     const period = await tx.unlimitedPeriod.create({
-      data: { id: randomUUID(), workspaceId, operatorId, endAt },
+      data: { id: randomUUID(), workspaceId: workspace.id, operatorId, endAt },
     });
     await tx.operatorAction.create({
       data: {
         id: randomUUID(),
         operatorId,
-        workspaceId,
+        workspaceId: workspace.id,
         type: "UNLIMITED_PERIOD_GRANTED",
-        payload: { unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
+        payload: { organizationId, unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
       },
     });
     return period;
@@ -55,11 +61,11 @@ export async function grantUnlimitedPeriod(
 
 export async function extendUnlimitedPeriod(
   operatorId: string,
-  workspaceId: string,
+  organizationId: string,
   endDate: string | null,
 ) {
   return unscopedPrisma.$transaction(async (tx) => {
-    const active = await findActivePeriod(tx, workspaceId);
+    const active = await findActivePeriod(tx, organizationId);
     if (!active) throw new NoActiveUnlimitedPeriodError();
 
     const endAt = endDate ? endOfDayJakarta(endDate) : null;
@@ -68,18 +74,18 @@ export async function extendUnlimitedPeriod(
       data: {
         id: randomUUID(),
         operatorId,
-        workspaceId,
+        workspaceId: active.workspaceId,
         type: "UNLIMITED_PERIOD_EXTENDED",
-        payload: { unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
+        payload: { organizationId, unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
       },
     });
     return period;
   });
 }
 
-export async function endUnlimitedPeriodEarly(operatorId: string, workspaceId: string) {
+export async function endUnlimitedPeriodEarly(operatorId: string, organizationId: string) {
   return unscopedPrisma.$transaction(async (tx) => {
-    const active = await findActivePeriod(tx, workspaceId);
+    const active = await findActivePeriod(tx, organizationId);
     if (!active) throw new NoActiveUnlimitedPeriodError();
 
     const now = new Date();
@@ -91,20 +97,20 @@ export async function endUnlimitedPeriodEarly(operatorId: string, workspaceId: s
       data: {
         id: randomUUID(),
         operatorId,
-        workspaceId,
+        workspaceId: active.workspaceId,
         type: "UNLIMITED_PERIOD_ENDED",
-        payload: { unlimitedPeriodId: period.id },
+        payload: { organizationId, unlimitedPeriodId: period.id },
       },
     });
     return period;
   });
 }
 
-/** The Workspace's current or most recently ended period — periods never overlap,
+/** The Organization's current or most recently ended period — periods never overlap,
  * so the latest by `createdAt` is always the right one. */
-export async function currentOrLastUnlimitedPeriod(workspaceId: string) {
+export async function currentOrLastUnlimitedPeriod(organizationId: string) {
   return unscopedPrisma.unlimitedPeriod.findFirst({
-    where: { workspaceId },
+    where: { workspace: { organizationId } },
     orderBy: { createdAt: "desc" },
   });
 }

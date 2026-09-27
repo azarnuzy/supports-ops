@@ -111,7 +111,7 @@ export async function getBilling() {
       orderBy: { createdAt: "desc" },
       take: paymentHistoryLimit,
     }),
-    currentOrLastUnlimitedPeriod(workspaceId),
+    currentOrLastUnlimitedPeriod(organizationId),
   ] as const);
 
   return {

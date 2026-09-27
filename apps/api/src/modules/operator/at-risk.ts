@@ -36,11 +36,11 @@ export async function getAttentionDetails(ids: string[]): Promise<Map<string, At
     }),
     unscopedPrisma.unlimitedPeriod.findMany({
       where: {
-        workspaceId: { in: ids },
+        workspace: { organization: { workspaces: { some: { id: { in: ids } } } } },
         endedEarlyAt: null,
         OR: [{ endAt: null }, { endAt: { gt: now } }],
       },
-      select: { workspaceId: true, endAt: true },
+      select: { workspace: { select: { organizationId: true } }, endAt: true },
     }),
     unscopedPrisma.session.groupBy({
       by: ["workspaceId"],
@@ -56,7 +56,7 @@ export async function getAttentionDetails(ids: string[]): Promise<Map<string, At
   for (const id of ids) {
     const organizationId = workspaces.find((workspace) => workspace.id === id)?.organizationId;
     const balance = balances.find((row) => row.organizationId === organizationId)?._sum.credits ?? 0;
-    const activePeriod = activePeriods.find((row) => row.workspaceId === id) ?? null;
+    const activePeriod = activePeriods.find((row) => row.workspace.organizationId === organizationId) ?? null;
     const lastCustomerActivityAt =
       activity.find((row) => row.workspaceId === id)?._max.customerLastMessageAt ?? null;
 
