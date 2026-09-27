@@ -21,6 +21,7 @@ export type ListCreditLedgerInput = { cursor?: string; limit?: number };
 export class InvalidLedgerCursorError extends Error {}
 
 type SpendRow = {
+  workspaceId: string;
   aiAgentId: string | null;
   agentModel: string | null;
   channel: ChannelType | null;
@@ -73,16 +74,26 @@ function spendWhere(filters: AiUsageFilters, startAt: Date, endAt: Date) {
  * Credit Ledger's SPEND entries, never Telemetry. Everything but the balance
  * is scoped to the requested range and filters.
  */
-export async function getAiUsageSummary(query: AiUsageQuery = {}): Promise<AiUsageSummary> {
+export async function getAiUsageSummary(
+  query: AiUsageQuery = {},
+  organization = false,
+): Promise<AiUsageSummary> {
   const workspaceId = requireWorkspaceId();
+  const organizationId = organization
+    ? await organizationIdForWorkspace(unscopedPrisma, workspaceId)
+    : null;
   const { from, to, startAt, endAt } = resolveRange(query);
   const previousStartAt = new Date(startAt.getTime() - (endAt.getTime() - startAt.getTime()));
 
   const [balance, spendRows, previousRows] = await Promise.all([
     creditBalance(workspaceId),
-    prisma.creditLedgerEntry.findMany({
-      where: spendWhere(query, startAt, endAt),
+    unscopedPrisma.creditLedgerEntry.findMany({
+      where: {
+        ...spendWhere(query, startAt, endAt),
+        ...(organizationId ? { organizationId } : { workspaceId }),
+      },
       select: {
+        workspaceId: true,
         aiAgentId: true,
         agentModel: true,
         cachedInputTokens: true,
@@ -94,8 +105,11 @@ export async function getAiUsageSummary(query: AiUsageQuery = {}): Promise<AiUsa
         sessionId: true,
       },
     }),
-    prisma.creditLedgerEntry.findMany({
-      where: spendWhere(query, previousStartAt, startAt),
+    unscopedPrisma.creditLedgerEntry.findMany({
+      where: {
+        ...spendWhere(query, previousStartAt, startAt),
+        ...(organizationId ? { organizationId } : { workspaceId }),
+      },
       select: { credits: true },
     }),
   ]);
@@ -125,7 +139,8 @@ export async function getAiUsageSummary(query: AiUsageQuery = {}): Promise<AiUsa
 
   const byAgentTotals = groupBy(spendRows, (row) => row.aiAgentId);
   // Every AI Agent, not only those that spent: it also feeds the AI Agent filter.
-  const agents = await prisma.aiAgent.findMany({
+  const agents = await unscopedPrisma.aiAgent.findMany({
+    where: organizationId ? { workspace: { organizationId } } : { workspaceId },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
@@ -145,6 +160,19 @@ export async function getAiUsageSummary(query: AiUsageQuery = {}): Promise<AiUsa
     ([channel, channelTotals]) => ({ channel: channel as ChannelType, ...channelTotals }),
   );
 
+  const workspaces = organizationId
+    ? await unscopedPrisma.workspace.findMany({
+        where: { organizationId },
+        select: { id: true, name: true },
+      })
+    : [];
+  const workspaceNames = new Map(workspaces.map((workspace) => [workspace.id, workspace.name]));
+  const byWorkspace = [...groupBy(spendRows, (row) => row.workspaceId)].map(([id, usage]) => ({
+    workspaceId: id,
+    workspaceName: workspaceNames.get(id) ?? `Deleted Workspace (${id})`,
+    ...usage,
+  }));
+
   return {
     aiAgents: agents,
     balance,
@@ -158,6 +186,7 @@ export async function getAiUsageSummary(query: AiUsageQuery = {}): Promise<AiUsa
     byAgent,
     byModel,
     byChannel,
+    byWorkspace,
   };
 }
 

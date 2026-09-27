@@ -6,6 +6,7 @@ import type { DashboardRange } from "../dashboard/views/dashboard/dashboard.util
 import {
   getAiToolUsage,
   getAiUsageSummary,
+  getOrganizationAiUsageSummary,
   getBilling,
   getCreditLedgerPage,
   startTopUpCheckout,
@@ -15,6 +16,13 @@ export function aiUsageSummaryQueryOptions(range: DashboardRange, filters: AiUsa
   return queryOptions({
     queryFn: () => getAiUsageSummary(range, filters),
     queryKey: queryKeys.workspace.aiUsageSummary(range, filters),
+  });
+}
+
+export function organizationAiUsageSummaryQueryOptions(range: DashboardRange, filters: AiUsageFilters = {}) {
+  return queryOptions({
+    queryFn: () => getOrganizationAiUsageSummary(range, filters),
+    queryKey: ["organization", "ai-usage-summary", range, filters],
   });
 }
 

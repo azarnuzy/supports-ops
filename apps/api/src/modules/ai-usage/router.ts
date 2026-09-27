@@ -19,6 +19,10 @@ export const aiUsageRouter = new Hono<{ Variables: AuthVariables }>()
     if (!requireAdmin(c)) return c.json({ error: "forbidden" }, 403);
     return c.json({ aiUsage: await getAiUsageSummary(c.req.valid("query")) }, 200);
   })
+  .get("/organization-summary", withRangeQuery, async (c) => {
+    if (!requireAdmin(c)?.isOrganizationAdmin) return c.json({ error: "forbidden" }, 403);
+    return c.json({ aiUsage: await getAiUsageSummary(c.req.valid("query"), true) }, 200);
+  })
   .get("/tools", withRangeQuery, async (c) => {
     if (!requireAdmin(c)) return c.json({ error: "forbidden" }, 403);
     return c.json({ toolUsage: await getToolUsage(c.req.valid("query")) }, 200);
