@@ -4,6 +4,7 @@ export type SessionEmailJob = {
   customerName: string;
   email: string;
   sessionLink: string;
+  workspaceId?: string;
 };
 
 const connection: ConnectionOptions = {

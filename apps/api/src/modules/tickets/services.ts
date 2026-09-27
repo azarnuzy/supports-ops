@@ -20,6 +20,11 @@ import { gatewayModelId, resolveAgentModelId } from "../ai-agent/model-catalog";
 import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import { aiAgentConfig, apiConfig, embeddingConfig, storageConfig } from "../../config";
 import { Prisma, prisma, unscopedPrisma } from "../../utils/prisma";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "../../utils/external-errors";
 import { claimMessageSlot } from "../../utils/session-messages";
 import type { ListTicketsQuery } from "./schema";
 import {
@@ -540,6 +545,18 @@ export async function completeHandoff(ticketId: string, humanAgentId: string, wo
           .join("\n"),
         title: ticket.title,
       },
+    }).catch(async (error: unknown) => {
+      await recordExternalError(unscopedPrisma, {
+        provider: new URL(aiAgentConfig.baseUrl).hostname,
+        operation: "ESCALATION_SUMMARY",
+        workspaceId,
+        modelId: gatewayModelId(resolveAgentModelId(ticket.aiAgent.agentModel)),
+        resourceType: "TICKET",
+        resourceId: ticketId,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
+      throw error;
     });
     await unscopedPrisma.$transaction(async (tx) => {
       await tx.ticket.update({
@@ -857,7 +874,21 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
     ...embeddingConfig,
     apiKey: embeddingConfig.apiKey,
   });
-  const [embedding] = await embeddingClient.embed([customerMessage]);
+  const [embedding] = await embeddingClient
+    .embed([customerMessage])
+    .catch(async (error: unknown) => {
+      await recordExternalError(unscopedPrisma, {
+        provider: "OPENROUTER",
+        operation: "COPILOT_EMBEDDING",
+        workspaceId,
+        modelId: embeddingConfig.modelId,
+        resourceType: "TICKET",
+        resourceId: ticketId,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
+      throw error;
+    });
   const sources = embedding
     ? await findKnowledgeChunks(unscopedPrisma, {
         embedding,
@@ -909,6 +940,18 @@ export async function suggestReply(ticketId: string, humanAgentId: string, works
           `${previous.title}\n${previous.messages.map((message) => `${message.senderType}: ${message.content}`).join("\n")}`,
       )
       .join("\n\n"),
+  }).catch(async (error: unknown) => {
+    await recordExternalError(unscopedPrisma, {
+      provider: new URL(aiAgentConfig.baseUrl).hostname,
+      operation: "COPILOT_REPLY",
+      workspaceId,
+      modelId: gatewayModelId(resolveAgentModelId(ticket.aiAgent.agentModel)),
+      resourceType: "TICKET",
+      resourceId: ticketId,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    });
+    throw error;
   });
   await unscopedPrisma.aiActivity.createMany({
     data: [

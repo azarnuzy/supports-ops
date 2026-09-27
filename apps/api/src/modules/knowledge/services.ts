@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { createOpenAiEmbeddingClient, searchChunks } from "@repo/knowledge";
 import { createStorage } from "@repo/storage";
 import { embeddingConfig, storageConfig } from "../../config";
-import { prisma } from "../../utils/prisma";
+import { prisma, unscopedPrisma } from "../../utils/prisma";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "../../utils/external-errors";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { publishKnowledgeSourceEvent } from "../widget/realtime";
 import { enqueueKnowledgeIngest } from "./queue";
@@ -381,7 +386,17 @@ export async function testRetrieval(query: string): Promise<RetrievalTestRespons
 
   const workspaceId = requireWorkspaceId();
   const embeddingClient = createOpenAiEmbeddingClient({ ...embeddingConfig, apiKey });
-  const [embedding] = await embeddingClient.embed([query]);
+  const [embedding] = await embeddingClient.embed([query]).catch(async (error: unknown) => {
+    await recordExternalError(unscopedPrisma, {
+      provider: "OPENROUTER",
+      operation: "RETRIEVAL_EMBEDDING",
+      workspaceId,
+      modelId: embeddingConfig.modelId,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    });
+    throw error;
+  });
 
   if (!embedding) {
     return { results: [] };

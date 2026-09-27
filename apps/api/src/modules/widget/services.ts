@@ -7,8 +7,14 @@ import {
 } from "@repo/ai-agent";
 import { createBusinessTools } from "@repo/tools";
 import { createStorage } from "@repo/storage";
+import { sessionAttributes, withSpan } from "@repo/logger/telemetry";
 import { apiConfig, classificationConfig, storageConfig } from "../../config";
 import { isUniqueConstraintError, type Message, unscopedPrisma } from "../../utils/prisma";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "../../utils/external-errors";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { generateAiReply } from "../ai-agent/turn";
 import { enqueueSessionEmail } from "./session-email";
@@ -162,6 +168,7 @@ export async function createSession(input: PreChatInput, origin: string) {
     customerName: input.name,
     email: input.email,
     sessionLink: sessionLink.toString(),
+    workspaceId: config.workspaceId,
   });
 
   return session;
@@ -218,6 +225,18 @@ export async function createCustomerMessage(
     model,
     sessionId: session.id,
     userId: session.customerIdentityId,
+  }).catch(async (error: unknown) => {
+    await recordExternalError(unscopedPrisma, {
+      provider: new URL(classificationConfig.baseUrl).hostname,
+      operation: "TICKET_CLASSIFICATION",
+      workspaceId: session.workspaceId,
+      modelId: classificationConfig.modelId,
+      resourceType: "SESSION",
+      resourceId: session.id,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    });
+    throw error;
   });
 
   if (!decision.qualifies) {
@@ -373,11 +392,24 @@ export async function createCustomerAttachments(
   );
   await Promise.all(
     attachments.map((attachment) =>
-      enqueueAttachmentProcess({
-        attachmentId: attachment.id,
-        ticketId,
-        workspaceId: attachment.workspaceId,
-      }),
+      withSpan(
+        "support.attachment_enqueue",
+        {
+          ...sessionAttributes(result.message.sessionId),
+          "anvia.trace.name": "support.attachment_process",
+          "langfuse.trace.name": "support.attachment_process",
+          "supportops.workspace_id": attachment.workspaceId,
+          "supportops.ticket_id": ticketId,
+          "supportops.attachment_id": attachment.id,
+        },
+        async () =>
+          enqueueAttachmentProcess({
+            attachmentId: attachment.id,
+            ticketId,
+            workspaceId: attachment.workspaceId,
+          }),
+        false,
+      ),
     ),
   );
   return { attachments, message: result.message };
@@ -424,6 +456,16 @@ export async function generateAttachmentReply(ticketId: string, workspaceId: str
           });
         }
       } catch (error) {
+        await recordExternalError(unscopedPrisma, {
+          provider: new URL(classificationConfig.baseUrl).hostname,
+          operation: "TICKET_CLASSIFICATION",
+          workspaceId,
+          modelId: classificationConfig.modelId,
+          resourceType: "TICKET",
+          resourceId: ticketId,
+          code: externalErrorCode(error),
+          httpStatus: externalHttpStatus(error),
+        });
         if (!(error instanceof ClassificationFailedError)) throw error;
       }
     }

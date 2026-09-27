@@ -58,6 +58,7 @@ describe("Top-Up Payments", () => {
     expect(payment).toMatchObject({ amountIdr: 250_000, credits: 1_000, status: "PENDING" });
     expect(mayar.createMayarPayment).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 250_000, email: "admin@example.com" }),
+      workspaceId,
     );
     expect(await balance()).toBe(0);
   });

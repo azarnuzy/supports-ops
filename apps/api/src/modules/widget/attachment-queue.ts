@@ -1,6 +1,12 @@
 import { Queue, type ConnectionOptions } from "bullmq";
+import { injectTraceContext } from "@repo/logger/telemetry";
 
-export type AttachmentProcessJob = { attachmentId: string; ticketId: string; workspaceId: string };
+export type AttachmentProcessJob = {
+  attachmentId: string;
+  ticketId: string;
+  workspaceId: string;
+  traceContext?: Record<string, string>;
+};
 
 const connection: ConnectionOptions = {
   maxRetriesPerRequest: null,
@@ -14,10 +20,14 @@ export function getAttachmentProcessQueue() {
 }
 
 export async function enqueueAttachmentProcess(job: AttachmentProcessJob) {
-  await getAttachmentProcessQueue().add("process", job, {
-    attempts: 3,
-    backoff: { delay: 2_000, type: "exponential" },
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  });
+  await getAttachmentProcessQueue().add(
+    "process",
+    { ...job, traceContext: injectTraceContext() },
+    {
+      attempts: 3,
+      backoff: { delay: 2_000, type: "exponential" },
+      removeOnComplete: 100,
+      removeOnFail: 500,
+    },
+  );
 }

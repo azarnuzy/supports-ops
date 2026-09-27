@@ -10,6 +10,11 @@ import {
 } from "@repo/ai-agent";
 import { aiAgentConfig, embeddingConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "../../utils/external-errors";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { withWorkspaceContext } from "../../utils/workspace-context";
 import { creditBalance, spendForTurn } from "../credits/services";
@@ -67,6 +72,17 @@ export function generateAiReply(ticketId: string, workspaceId: string, customerM
         ? { ...aiAgentConfig, apiKey: aiAgentConfig.apiKey, modelId: gatewayModelId(agentModelId) }
         : undefined;
     const runtime: AiAgentTurnRuntime = {
+      reportModelFailure: (error) =>
+        recordExternalError(unscopedPrisma, {
+          provider: new URL(aiAgentConfig.baseUrl).hostname,
+          operation: "AI_REPLY",
+          modelId: modelConfig?.modelId,
+          workspaceId,
+          resourceType: "TICKET",
+          resourceId: ticketId,
+          code: externalErrorCode(error),
+          httpStatus: externalHttpStatus(error),
+        }),
       countClarifications: () =>
         unscopedPrisma.aiActivity.count({
           where: { eventType: "CLARIFICATION_ASKED", ticketId },

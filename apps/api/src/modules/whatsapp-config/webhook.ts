@@ -8,9 +8,20 @@ import {
   type WhatsAppInboundEvent,
 } from "@repo/channels";
 import { createStorage } from "@repo/storage";
+import {
+  injectTraceContext,
+  sessionAttributes,
+  withSpan,
+  withTraceContext,
+} from "@repo/logger/telemetry";
 import { Hono } from "hono";
 import { storageConfig, toolEncryptionConfig } from "../../config";
 import { unscopedPrisma } from "../../utils/prisma";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "../../utils/external-errors";
 import { claimMessageSlot } from "../../utils/session-messages";
 import { decryptToolSecret } from "../tools/secrets";
 import { publishTicketQueueEvent, publishWidgetEvent } from "../widget/realtime";
@@ -63,7 +74,10 @@ export const whatsAppWebhookRouter = new Hono()
       config.accessTokenEncrypted,
       toolEncryptionConfig.masterKey,
     );
-    const sessions = new Map<string, { sessionId: string; workspaceId: string }>();
+    const sessions = new Map<
+      string,
+      { sessionId: string; workspaceId: string; traceContext?: Record<string, string> }
+    >();
     for (const event of parseWhatsAppWebhook(payload)) {
       if (event.kind === "delivery") {
         // A delivery callback names the id Meta gave the Message it carried,
@@ -74,15 +88,43 @@ export const whatsAppWebhookRouter = new Hono()
           where: { providerMessageId: event.messageId, workspaceId: config.workspaceId },
         });
         if (!message) continue;
-        const updated = await unscopedPrisma.message.update({
-          data: {
-            deliveryFailureReason: event.failureReason ?? null,
-            deliveryStatus: event.deliveryStatus,
+        await withSpan(
+          "support.whatsapp_delivery_callback",
+          {
+            ...sessionAttributes(message.sessionId),
+            "anvia.trace.name": "support.whatsapp_delivery_callback",
+            "langfuse.trace.name": "support.whatsapp_delivery_callback",
+            "supportops.workspace_id": config.workspaceId,
+            "supportops.message_id": message.id,
           },
-          where: { id: message.id },
-        });
-        if (updated.ticketId)
-          await publishWidgetEvent(updated.ticketId, { type: "message.updated", data: updated });
+          async (span) => {
+            const updated = await unscopedPrisma.message.update({
+              data: {
+                deliveryFailureReason: event.failureReason ?? null,
+                deliveryStatus: event.deliveryStatus,
+              },
+              where: { id: message.id },
+            });
+            if (event.deliveryStatus === "FAILED")
+              await recordExternalError(unscopedPrisma, {
+                provider: "META_WHATSAPP",
+                operation: "DELIVERY_CALLBACK",
+                workspaceId: config.workspaceId,
+                resourceType: "MESSAGE",
+                resourceId: message.id,
+                code: "DELIVERY_FAILED",
+              });
+            span.setAttribute("supportops.delivery_status", event.deliveryStatus);
+            if (updated.ticketId)
+              await publishWidgetEvent(updated.ticketId, {
+                type: "message.updated",
+                data: updated,
+              });
+            return event.deliveryStatus;
+          },
+          false,
+          (status) => status === "FAILED",
+        );
         continue;
       }
       if (event.phoneNumberId !== config.phoneNumberId) continue;
@@ -108,57 +150,146 @@ export const whatsAppWebhookRouter = new Hono()
         continue;
       }
 
-      // Meta's media URLs expire and need the access token, so the file is
-      // copied into our own storage now, while it can still be fetched.
-      const attachment = event.attachment
-        ? await receiveMedia(event.attachment, accessToken)
-        : undefined;
-      const stored = await persistInboundMessage({
-        attachment,
-        channelId: config.channelId,
-        customerMessageAt: timestampFromMeta(event.timestamp),
-        customerName: event.customerName,
-        externalMessageId: event.messageId,
-        phoneE164: event.from.startsWith("+") ? event.from : `+${event.from}`,
-        text: event.text ?? "",
-        workspaceId: config.workspaceId,
-      });
-      if (stored.created && stored.ticketId) {
-        await publishWidgetEvent(stored.ticketId, {
-          type: "message.created",
-          data: stored.message,
-        });
-        await publishTicketQueueEvent(stored.workspaceId);
-        await resetTimersAfterCustomerMessage(stored.ticketId, stored.workspaceId);
-      }
+      const stored = await withSpan(
+        "support.whatsapp_inbound",
+        {
+          "anvia.trace.name": "support.whatsapp_inbound",
+          "langfuse.trace.name": "support.whatsapp_inbound",
+          "supportops.workspace_id": config.workspaceId,
+          "supportops.provider_message_id": event.messageId,
+        },
+        async (span) => {
+          // Meta's media URLs expire, so copy the file while it can still be fetched.
+          const media = event.attachment;
+          const attachment = media
+            ? await withSpan(
+                "external.meta_whatsapp.media_receive",
+                {
+                  "external.provider": "META_WHATSAPP",
+                  "external.operation": "MEDIA_RECEIVE",
+                  "supportops.media_id": media.id,
+                },
+                async () => receiveMedia(media, accessToken, config.workspaceId),
+                false,
+              )
+            : undefined;
+          const stored = await persistInboundMessage({
+            attachment,
+            channelId: config.channelId,
+            customerMessageAt: timestampFromMeta(event.timestamp),
+            customerName: event.customerName,
+            externalMessageId: event.messageId,
+            phoneE164: event.from.startsWith("+") ? event.from : `+${event.from}`,
+            text: event.text ?? "",
+            workspaceId: config.workspaceId,
+          });
+          span.setAttributes(sessionAttributes(stored.sessionId));
+          if (stored.created && stored.ticketId) {
+            await publishWidgetEvent(stored.ticketId, {
+              type: "message.created",
+              data: stored.message,
+            });
+            await publishTicketQueueEvent(stored.workspaceId);
+            await resetTimersAfterCustomerMessage(stored.ticketId, stored.workspaceId);
+          }
+          await markRead(
+            config.phoneNumberId,
+            accessToken,
+            event.messageId,
+            config.workspaceId,
+            stored.sessionId,
+          );
+          return { ...stored, traceContext: injectTraceContext() };
+        },
+        false,
+      );
       sessions.set(stored.sessionId, stored);
-      await markRead(config.phoneNumberId, accessToken, event.messageId);
     }
-    await Promise.all([...sessions.values()].map(enqueueWhatsAppTurn));
+    await Promise.all(
+      [...sessions.values()].map((session) =>
+        withTraceContext(session.traceContext, () =>
+          withSpan(
+            "support.whatsapp_enqueue",
+            {
+              ...sessionAttributes(session.sessionId),
+              "anvia.trace.name": "support.whatsapp_turn",
+              "langfuse.trace.name": "support.whatsapp_turn",
+              "supportops.workspace_id": session.workspaceId,
+            },
+            async () => enqueueWhatsAppTurn(session),
+            false,
+          ),
+        ),
+      ),
+    );
     return c.body(null, 200);
   });
 
 /** The Customer's blue ticks. Meta only shows them when we ask, and a failure
  * here must not fail the webhook, or Meta retries the whole delivery. */
-async function markRead(phoneNumberId: string, accessToken: string, messageId: string) {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v23.0/${encodeURIComponent(phoneNumberId)}/messages`,
-      {
-        body: JSON.stringify({
-          message_id: messageId,
-          messaging_product: "whatsapp",
-          status: "read",
-        }),
-        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-        method: "POST",
-        signal: AbortSignal.timeout(10_000),
-      },
-    );
-    if (!response.ok) console.warn(`WhatsApp read receipt returned HTTP ${response.status}.`);
-  } catch (error) {
-    console.warn("WhatsApp read receipt failed.", error);
-  }
+async function markRead(
+  phoneNumberId: string,
+  accessToken: string,
+  messageId: string,
+  workspaceId: string,
+  sessionId: string,
+) {
+  return withSpan(
+    "external.meta_whatsapp.read_receipt",
+    {
+      ...sessionAttributes(sessionId),
+      "external.provider": "META_WHATSAPP",
+      "external.operation": "READ_RECEIPT",
+      "supportops.workspace_id": workspaceId,
+      "supportops.provider_message_id": messageId,
+    },
+    async (span) => {
+      try {
+        const response = await fetch(
+          `https://graph.facebook.com/v23.0/${encodeURIComponent(phoneNumberId)}/messages`,
+          {
+            body: JSON.stringify({
+              message_id: messageId,
+              messaging_product: "whatsapp",
+              status: "read",
+            }),
+            headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+            method: "POST",
+            signal: AbortSignal.timeout(10_000),
+          },
+        );
+        span.setAttribute("http.response.status_code", response.status);
+        span.setAttribute("supportops.read_receipt_sent", response.ok);
+        if (!response.ok)
+          await recordExternalError(unscopedPrisma, {
+            provider: "META_WHATSAPP",
+            operation: "READ_RECEIPT",
+            workspaceId,
+            resourceType: "MESSAGE",
+            resourceId: messageId,
+            httpStatus: response.status,
+          });
+        return response.ok;
+      } catch (error) {
+        span.setAttribute("supportops.read_receipt_sent", false);
+        const httpStatus = externalHttpStatus(error);
+        if (httpStatus) span.setAttribute("http.response.status_code", httpStatus);
+        await recordExternalError(unscopedPrisma, {
+          provider: "META_WHATSAPP",
+          operation: "READ_RECEIPT",
+          workspaceId,
+          resourceType: "MESSAGE",
+          resourceId: messageId,
+          code: externalErrorCode(error),
+          httpStatus: externalHttpStatus(error),
+        });
+        console.warn("WhatsApp read receipt failed.", error);
+        return false;
+      }
+    },
+    false,
+    (ok) => !ok,
+  );
 }
 
 function findPhoneNumberId(payload: unknown) {
@@ -188,44 +319,63 @@ type ReceivedMedia = Awaited<ReturnType<typeof receiveMedia>>;
 async function receiveMedia(
   media: NonNullable<Extract<WhatsAppInboundEvent, { kind: "message" }>["attachment"]>,
   accessToken: string,
+  workspaceId: string,
 ) {
-  const mimeType = baseMimeType(media.mimeType);
-  const fileName =
-    media.fileName ??
-    `${media.type === "audio" ? "voice-note" : media.type}.${mimeType.split("/")[1]}`;
-  const headers = { authorization: `Bearer ${accessToken}` };
-  const infoResponse = await fetch(
-    `https://graph.facebook.com/v23.0/${encodeURIComponent(media.id)}`,
-    { headers, signal: AbortSignal.timeout(15_000) },
-  );
-  if (!infoResponse.ok) throw new Error(`Meta media lookup returned HTTP ${infoResponse.status}.`);
-  const info = (await infoResponse.json()) as { file_size?: number; url?: string };
-  const sizeBytes = Number(info.file_size ?? 0);
-  const refusal = refuseWhatsAppAttachment(mimeType, sizeBytes);
-  if (refusal || !info.url) {
+  let receivingFromMeta = true;
+  try {
+    const mimeType = baseMimeType(media.mimeType);
+    const fileName =
+      media.fileName ??
+      `${media.type === "audio" ? "voice-note" : media.type}.${mimeType.split("/")[1]}`;
+    const headers = { authorization: `Bearer ${accessToken}` };
+    const infoResponse = await fetch(
+      `https://graph.facebook.com/v23.0/${encodeURIComponent(media.id)}`,
+      { headers, signal: AbortSignal.timeout(15_000) },
+    );
+    if (!infoResponse.ok)
+      throw Object.assign(new Error("Meta media lookup failed."), { status: infoResponse.status });
+    const info = (await infoResponse.json()) as { file_size?: number; url?: string };
+    const sizeBytes = Number(info.file_size ?? 0);
+    const refusal = refuseWhatsAppAttachment(mimeType, sizeBytes);
+    if (refusal || !info.url) {
+      return {
+        failureReason: refusal ?? "Meta did not provide the file.",
+        fileName,
+        mimeType,
+        processingStatus: "FAILED" as const,
+        sizeBytes,
+        storageKey: "",
+      };
+    }
+
+    const file = await fetch(info.url, { headers, signal: AbortSignal.timeout(60_000) });
+    if (!file.ok)
+      throw Object.assign(new Error("Meta media download failed."), { status: file.status });
+    const body = new Uint8Array(await file.arrayBuffer());
+    const storageKey = `attachments/inbound/${randomUUID()}`;
+    receivingFromMeta = false;
+    await createStorage(storageConfig).putObject({ body, contentType: mimeType, key: storageKey });
     return {
-      failureReason: refusal ?? "Meta did not provide the file.",
+      failureReason: null,
       fileName,
       mimeType,
-      processingStatus: "FAILED" as const,
-      sizeBytes,
-      storageKey: "",
+      processingStatus: "PROCESSING" as const,
+      sizeBytes: body.byteLength,
+      storageKey,
     };
+  } catch (error) {
+    if (receivingFromMeta)
+      await recordExternalError(unscopedPrisma, {
+        provider: "META_WHATSAPP",
+        operation: "MEDIA_RECEIVE",
+        workspaceId,
+        resourceType: "META_MEDIA",
+        resourceId: media.id,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
+    throw error;
   }
-
-  const file = await fetch(info.url, { headers, signal: AbortSignal.timeout(60_000) });
-  if (!file.ok) throw new Error(`Meta media download returned HTTP ${file.status}.`);
-  const body = new Uint8Array(await file.arrayBuffer());
-  const storageKey = `attachments/inbound/${randomUUID()}`;
-  await createStorage(storageConfig).putObject({ body, contentType: mimeType, key: storageKey });
-  return {
-    failureReason: null,
-    fileName,
-    mimeType,
-    processingStatus: "PROCESSING" as const,
-    sizeBytes: body.byteLength,
-    storageKey,
-  };
 }
 
 async function persistInboundMessage(input: {

@@ -52,7 +52,7 @@ function toView(payment: TopUpPayment, now = new Date()): TopUpPaymentView {
  */
 export async function verifyTopUpPayment(payment: TopUpPayment) {
   if (payment.status === "PAID") return false;
-  const remote = await fetchMayarPayment(payment.mayarPaymentId);
+  const remote = await fetchMayarPayment(payment.mayarPaymentId, payment.workspaceId);
   if (remote.status !== "paid" || remote.amount !== payment.amountIdr) return false;
 
   return unscopedPrisma.$transaction(async (tx) => {
@@ -127,13 +127,16 @@ export async function createTopUpCheckout(params: {
 
   const expiresAt = new Date(Date.now() + checkoutLifetimeMs);
   const credits = new Intl.NumberFormat("en-US").format(pack.credits);
-  const remote = await createMayarPayment({
-    amount: pack.priceIdr,
-    description: `${credits} SupportOps AI Credits`,
-    email: params.adminEmail,
-    expiredAt: expiresAt,
-    name: `SupportOps Top-Up — ${credits} Credits`,
-  });
+  const remote = await createMayarPayment(
+    {
+      amount: pack.priceIdr,
+      description: `${credits} SupportOps AI Credits`,
+      email: params.adminEmail,
+      expiredAt: expiresAt,
+      name: `SupportOps Top-Up — ${credits} Credits`,
+    },
+    workspaceId,
+  );
 
   const payment = await prisma.topUpPayment.create({
     data: {

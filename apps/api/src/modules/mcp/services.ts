@@ -3,6 +3,12 @@ import { isDeepStrictEqual } from "node:util";
 import type { Prisma } from "@prisma/client";
 import { httpToolConfig, toolEncryptionConfig } from "../../config";
 import { prisma } from "../../utils/prisma";
+import { unscopedPrisma } from "../../utils/prisma";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "../../utils/external-errors";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { decryptToolSecret } from "../tools/secrets";
 import { encryptToolSecret } from "../tools/secrets";
@@ -79,7 +85,16 @@ export async function testMcpConnection(id: string) {
       async (client) => ({ ok: true as const, server: client.getServerVersion() ?? null }),
       { allowPrivateNetwork: httpToolConfig.allowLocalHttp },
     );
-  } catch {
+  } catch (error) {
+    await recordExternalError(unscopedPrisma, {
+      provider: "MCP",
+      operation: "CONNECTION_TEST",
+      workspaceId: server.workspaceId,
+      resourceType: "MCP_SERVER",
+      resourceId: id,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    });
     return { error: "MCP connection failed.", ok: false as const };
   }
 }
@@ -94,7 +109,18 @@ export async function discoverMcpTools(id: string) {
     {
       allowPrivateNetwork: httpToolConfig.allowLocalHttp,
     },
-  );
+  ).catch(async (error: unknown) => {
+    await recordExternalError(unscopedPrisma, {
+      provider: "MCP",
+      operation: "TOOL_DISCOVERY",
+      workspaceId,
+      resourceType: "MCP_SERVER",
+      resourceId: id,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    });
+    throw error;
+  });
   const seen: string[] = [];
 
   for (const discovered of remote.tools) {
@@ -209,7 +235,18 @@ export async function executeMcpTool(
     secrets,
     (client) => client.callTool({ arguments: mergedArgs, name: record.remoteName }),
     { allowPrivateNetwork: httpToolConfig.allowLocalHttp },
-  );
+  ).catch(async (error: unknown) => {
+    await recordExternalError(unscopedPrisma, {
+      provider: "MCP",
+      operation: "TOOL_CALL",
+      workspaceId: record.mcpServer.workspaceId,
+      resourceType: "TOOL",
+      resourceId: toolId,
+      code: externalErrorCode(error),
+      httpStatus: externalHttpStatus(error),
+    });
+    throw error;
+  });
   const serialized = JSON.stringify(result);
   if (Buffer.byteLength(serialized) > maxResultBytes) {
     throw new McpToolDeniedError("MCP result exceeds 64 KB.");

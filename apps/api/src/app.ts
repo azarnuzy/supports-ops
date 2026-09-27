@@ -1,6 +1,7 @@
 import { apiConfig, loggerConfig } from "./config";
 import type { HttpBindings } from "@hono/node-server";
 import { Hono } from "hono";
+import { withTraceContext } from "@repo/logger/telemetry";
 import { cors } from "hono/cors";
 import { logger } from "./utils/logger";
 import { auth, operatorAuth } from "./modules/auth/instance";
@@ -70,8 +71,16 @@ export const app = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "unauthorized" }, 401);
     }
     const body = await c.req.json<{ workspaceId?: string }>();
-    if (!body.workspaceId) return c.json({ error: "invalid_request" }, 422);
-    void generateAttachmentReply(c.req.param("ticketId"), body.workspaceId);
+    const workspaceId = body.workspaceId;
+    if (!workspaceId) return c.json({ error: "invalid_request" }, 422);
+    void withTraceContext(
+      {
+        traceparent: c.req.header("traceparent") ?? "",
+        tracestate: c.req.header("tracestate") ?? "",
+        baggage: c.req.header("baggage") ?? "",
+      },
+      () => generateAttachmentReply(c.req.param("ticketId"), workspaceId),
+    );
     return c.body(null, 202);
   })
   .route("/widget", widgetRouter)

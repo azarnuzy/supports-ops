@@ -3,6 +3,8 @@ import { isIP } from "node:net";
 import Ajv from "ajv";
 import { httpToolConfig, toolEncryptionConfig } from "../../config";
 import { prisma } from "../../utils/prisma";
+import { recordExternalError } from "../../utils/external-errors";
+import { unscopedPrisma } from "../../utils/prisma";
 import { decryptToolSecret } from "./secrets";
 
 export type HttpToolFailureCode =
@@ -14,7 +16,10 @@ export type HttpToolFailureCode =
   | "VALIDATION";
 
 export class HttpToolFailure extends Error {
-  constructor(readonly code: HttpToolFailureCode) {
+  constructor(
+    readonly code: HttpToolFailureCode,
+    readonly status?: number,
+  ) {
     super("HTTP Tool failed.");
     this.name = "HttpToolFailure";
   }
@@ -32,7 +37,7 @@ export async function executeHttpTool(
   dependencies: ExecutionDependencies = {},
 ) {
   const ticket = await prisma.ticket.findFirst({
-    select: { aiAgentId: true },
+    select: { aiAgentId: true, workspaceId: true },
     where: { id: input.ticketId },
   });
   if (!ticket?.aiAgentId) throw new HttpToolFailure("DENIED");
@@ -71,20 +76,53 @@ export async function executeHttpTool(
       try {
         const response = await safeFetch(request, controller.signal, dependencies);
         if (!response.ok) {
-          if (attempt + 1 < attempts && response.status >= 500) continue;
-          throw new HttpToolFailure("HTTP");
+          if (attempt + 1 < attempts && response.status >= 500) {
+            await recordExternalError(unscopedPrisma, {
+              provider: "HTTP_TOOL",
+              operation: "EXECUTE",
+              workspaceId: ticket.workspaceId,
+              resourceType: "TOOL",
+              resourceId: input.toolId,
+              code: "HTTP",
+              httpStatus: response.status,
+            });
+            continue;
+          }
+          throw new HttpToolFailure("HTTP", response.status);
         }
         return await readLimited(response);
       } catch (error) {
         if (error instanceof HttpToolFailure) throw error;
         if (controller.signal.aborted) throw new HttpToolFailure("TIMEOUT");
+        if (attempt + 1 < attempts)
+          await recordExternalError(unscopedPrisma, {
+            provider: "HTTP_TOOL",
+            operation: "EXECUTE",
+            workspaceId: ticket.workspaceId,
+            resourceType: "TOOL",
+            resourceId: input.toolId,
+            code: "NETWORK",
+          });
         if (attempt + 1 === attempts) throw new HttpToolFailure("NETWORK");
       }
     }
     throw new HttpToolFailure("NETWORK");
   } catch (error) {
-    if (controller.signal.aborted) throw new HttpToolFailure("TIMEOUT");
-    throw error instanceof HttpToolFailure ? error : new HttpToolFailure("NETWORK");
+    const failure = controller.signal.aborted
+      ? new HttpToolFailure("TIMEOUT")
+      : error instanceof HttpToolFailure
+        ? error
+        : new HttpToolFailure("NETWORK");
+    await recordExternalError(unscopedPrisma, {
+      provider: "HTTP_TOOL",
+      operation: "EXECUTE",
+      workspaceId: ticket.workspaceId,
+      resourceType: "TOOL",
+      resourceId: input.toolId,
+      code: failure.code,
+      httpStatus: failure.status,
+    });
+    throw failure;
   } finally {
     clearTimeout(timeout);
   }
@@ -266,12 +304,35 @@ export async function testHttpTool(
   const startedAt = Date.now();
   try {
     const response = await safeFetch(request, controller.signal, dependencies);
+    const body = await readLimited(response);
+    if (!response.ok)
+      await recordExternalError(unscopedPrisma, {
+        provider: "HTTP_TOOL",
+        operation: "CONNECTION_TEST",
+        workspaceId: tool.workspaceId,
+        resourceType: "TOOL",
+        resourceId: input.toolId,
+        code: "HTTP",
+        httpStatus: response.status,
+      });
     return {
-      body: await readLimited(response),
+      body,
       latencyMs: Date.now() - startedAt,
       status: response.status,
     };
   } catch (error) {
+    await recordExternalError(unscopedPrisma, {
+      provider: "HTTP_TOOL",
+      operation: "CONNECTION_TEST",
+      workspaceId: tool.workspaceId,
+      resourceType: "TOOL",
+      resourceId: input.toolId,
+      code: controller.signal.aborted
+        ? "TIMEOUT"
+        : error instanceof HttpToolFailure
+          ? error.code
+          : "NETWORK",
+    });
     if (controller.signal.aborted) throw new HttpToolFailure("TIMEOUT");
     throw error instanceof HttpToolFailure ? error : new HttpToolFailure("NETWORK");
   } finally {

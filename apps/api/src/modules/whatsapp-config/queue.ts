@@ -1,12 +1,17 @@
 import { Queue, type ConnectionOptions } from "bullmq";
+import { injectTraceContext } from "@repo/logger/telemetry";
 
-export type WhatsAppTurnJob = { sessionId: string; workspaceId: string };
+export type WhatsAppTurnJob = {
+  sessionId: string;
+  workspaceId: string;
+  traceContext?: Record<string, string>;
+};
 
 const connection: ConnectionOptions = {
   maxRetriesPerRequest: null,
   url: process.env.REDIS_URL ?? "redis://localhost:16379",
 };
-export type WhatsAppDeliveryJob = { messageId: string };
+export type WhatsAppDeliveryJob = { messageId: string; traceContext?: Record<string, string> };
 let queue: Queue<WhatsAppTurnJob | WhatsAppDeliveryJob> | undefined;
 
 function getQueue() {
@@ -23,7 +28,7 @@ export async function enqueueWhatsAppDelivery(messageId: string) {
   await queue.remove(jobId).catch(() => undefined);
   await queue.add(
     "deliver",
-    { messageId },
+    { messageId, traceContext: injectTraceContext() },
     {
       attempts: 6,
       backoff: { delay: 2_000, type: "exponential" },
@@ -38,12 +43,16 @@ export async function enqueueWhatsAppTurn(job: WhatsAppTurnJob) {
   const queue = getQueue();
   const jobId = `whatsapp-${job.sessionId}`;
   await queue.remove(jobId).catch(() => undefined);
-  await queue.add("reply", job, {
-    attempts: 5,
-    backoff: { delay: 1_000, type: "exponential" },
-    delay: 3_000,
-    jobId,
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  });
+  await queue.add(
+    "reply",
+    { ...job, traceContext: injectTraceContext() },
+    {
+      attempts: 5,
+      backoff: { delay: 1_000, type: "exponential" },
+      delay: 3_000,
+      jobId,
+      removeOnComplete: 100,
+      removeOnFail: 500,
+    },
+  );
 }

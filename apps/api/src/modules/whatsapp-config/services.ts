@@ -1,6 +1,8 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { betterAuthConfig, toolEncryptionConfig } from "../../config";
 import { isUniqueConstraintError, prisma } from "../../utils/prisma";
+import { unscopedPrisma } from "../../utils/prisma";
+import { recordExternalError } from "../../utils/external-errors";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { decryptToolSecret, encryptToolSecret } from "../tools/secrets";
 import type { ReplaceWhatsAppCredentialsInput, VerifyWhatsAppConfigInput } from "./schema";
@@ -15,6 +17,7 @@ type MetaPhoneNumber = { id: string; display_phone_number?: string; verified_nam
 export async function verifyMetaCredentials(
   input: VerifyWhatsAppConfigInput,
   request: typeof fetch = fetch,
+  workspaceId?: string,
 ): Promise<MetaPhoneNumber> {
   const url = new URL(
     `https://graph.facebook.com/v23.0/${encodeURIComponent(input.businessAccountId)}/phone_numbers`,
@@ -33,12 +36,24 @@ export async function verifyMetaCredentials(
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
+    await recordExternalError(unscopedPrisma, {
+      provider: "META_WHATSAPP",
+      operation: "VERIFY_CREDENTIALS",
+      code: "NETWORK",
+      workspaceId,
+    });
     throw new InvalidWhatsAppCredentialsError(
       "Meta could not be reached. Check your connection and try again.",
     );
   }
 
   if (!response.ok) {
+    await recordExternalError(unscopedPrisma, {
+      provider: "META_WHATSAPP",
+      operation: "VERIFY_CREDENTIALS",
+      httpStatus: response.status,
+      workspaceId,
+    });
     throw new InvalidWhatsAppCredentialsError(
       "Meta rejected these credentials. Check the access token, App Secret, and WhatsApp Business Account ID.",
     );
@@ -66,11 +81,11 @@ export async function connectWhatsApp(input: VerifyWhatsAppConfigInput) {
     throw new WhatsAppAlreadyConnectedError("This Workspace already has a WhatsApp Channel.");
   }
 
-  const phone = await verifyMetaCredentials(input);
+  const workspaceId = requireWorkspaceId();
+  const phone = await verifyMetaCredentials(input, fetch, workspaceId);
   const aiAgent = await prisma.aiAgent.findFirst({ select: { id: true } });
   if (!aiAgent) throw new Error("This Workspace has no AI Agent.");
 
-  const workspaceId = requireWorkspaceId();
   const channelId = randomUUID();
   try {
     const [, config] = await prisma.$transaction([
@@ -135,6 +150,7 @@ export async function replaceWhatsAppCredentials(input: ReplaceWhatsAppCredentia
       businessAccountId: true,
       id: true,
       phoneNumberId: true,
+      workspaceId: true,
     },
   });
   if (!current) throw new WhatsAppConfigNotFoundError();
@@ -142,12 +158,16 @@ export async function replaceWhatsAppCredentials(input: ReplaceWhatsAppCredentia
   const appSecret =
     input.appSecret ??
     decryptToolSecret(current.appSecretEncrypted, toolEncryptionConfig.masterKey);
-  const phone = await verifyMetaCredentials({
-    accessToken: input.accessToken,
-    appSecret,
-    businessAccountId: current.businessAccountId,
-    phoneNumberId: current.phoneNumberId,
-  });
+  const phone = await verifyMetaCredentials(
+    {
+      accessToken: input.accessToken,
+      appSecret,
+      businessAccountId: current.businessAccountId,
+      phoneNumberId: current.phoneNumberId,
+    },
+    fetch,
+    current.workspaceId,
+  );
 
   const config = await prisma.whatsAppConfig.update({
     data: {

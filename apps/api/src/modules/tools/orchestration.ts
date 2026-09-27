@@ -5,6 +5,11 @@ import { createOpenAiEmbeddingClient } from "@repo/knowledge";
 import { embeddingConfig } from "../../config";
 import { executeMcpTool } from "../mcp/services";
 import { unscopedPrisma } from "../../utils/prisma";
+import {
+  externalErrorCode,
+  externalHttpStatus,
+  recordExternalError,
+} from "../../utils/external-errors";
 import { executeHttpTool } from "./execution";
 import { executeBuiltInTool, resolveTools } from "./services";
 
@@ -107,6 +112,17 @@ async function dispatchTool(params: {
       requireConfirmation,
       toolDescription: tool.description,
       toolName: tool.name,
+    }).catch(async (error: unknown) => {
+      await recordExternalError(unscopedPrisma, {
+        provider: "AI_GATEWAY",
+        operation: "MUTATION_INTENT",
+        workspaceId: tool.workspaceId,
+        resourceType: "TICKET",
+        resourceId: params.ticketId,
+        code: externalErrorCode(error),
+        httpStatus: externalHttpStatus(error),
+      });
+      throw error;
     });
     if (!explicit) {
       throw new Error(
@@ -131,7 +147,21 @@ async function dispatchTool(params: {
     const [embedding] = await createOpenAiEmbeddingClient({
       ...embeddingConfig,
       apiKey: embeddingConfig.apiKey,
-    }).embed([query]);
+    })
+      .embed([query])
+      .catch(async (error: unknown) => {
+        await recordExternalError(unscopedPrisma, {
+          provider: "OPENROUTER",
+          operation: "TOOL_EMBEDDING",
+          workspaceId: tool.workspaceId,
+          modelId: embeddingConfig.modelId,
+          resourceType: "TICKET",
+          resourceId: params.ticketId,
+          code: externalErrorCode(error),
+          httpStatus: externalHttpStatus(error),
+        });
+        throw error;
+      });
     const result = await executeBuiltInTool({
       aiAgentId: params.aiAgentId,
       embedding: embedding ?? [],
