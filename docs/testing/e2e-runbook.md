@@ -54,6 +54,14 @@ Siapkan dua Workspace dalam satu Organization dan satu Workspace di Organization
 
 Hasil 2026-09-27 (Chromium headless, Platform lokal dan Mailpit): Organization uji baru menampilkan Trial Grant 500 Credits. Setelah Workspace kedua dan AI Agent tambahan dibuat, Trial Grant tetap satu. Spend dari Workspace kedua menurunkan Billing di kedua Workspace menjadi 499; AI Usage Workspace kedua menunjukkan 1 Credit spent. Saldo uji kemudian disiapkan pada 100 dan 1 Credit; satu spend pada masing-masing ambang menurunkannya ke 99 dan 0. Mailpit menerima tepat satu email low-balance dan satu email exhaustion untuk Organization Admin. Customer Message dari Web Widget masing-masing Workspace saat saldo 0 membuat dua Ticket berstatus `ESCALATED` dengan alasan `CREDIT_EXHAUSTION`; Organization uji lain tetap menampilkan 500 Credits. Persiapan saldo ambang dan spend awal dilakukan melalui service/ledger lokal, bukan dengan ratusan AI Turn di browser. AI Turn yang sudah berjalan ketika saldo habis belum diuji secara manual.
 
+### Workspace switcher (#270)
+
+Masuk sebagai Organization Admin dan buka switcher Workspace di header. Buat Workspace baru lewat dialog "Create Workspace"; halaman langsung berpindah ke Inbox (`/chat`) Workspace baru itu, dan `/agent` serta `/channels/web-widget` menampilkan AI Agent serta Web Widget default milik Workspace itu, terpisah dari Workspace pertama. Di database, pastikan Workspace baru menunjuk `organizationId` yang sama dengan Workspace pertama, dan Trial Grant Organization tidak bertambah (satu `CreditLedgerEntry` bertipe `TRIAL_GRANT` saja). Pilih kembali Workspace pertama dari switcher: switcher hanya menampilkan Workspace milik Organization yang sama (bukan milik Organization lain), dan Ticket/Customer/Knowledge di dua Workspace tidak saling terlihat.
+
+Muat ulang browser (refresh) setelah memilih Workspace baru: Workspace yang sama tetap terbuka. Buka tab kedua dan pilih Workspace pertama di sana; kedua tab harus tetap menampilkan Workspace masing-masing tanpa saling memengaruhi permintaan API. Sebagai pemeriksaan server-side, kirim request langsung ke API dengan header `X-Workspace-Id` berisi id Workspace tebakan atau id Workspace milik Organization lain: server harus menolak dengan `403`, sebelum permintaan itu menyentuh data Workspace manapun. Masuk sebagai Admin biasa (bukan Organization Admin) dan pastikan switcher tidak tampil serta header `X-Workspace-Id` ke Workspace lain juga ditolak `403`. Catat tanggal, browser, akun/peran, dan hasil tiap langkah.
+
+Hasil: belum diverifikasi secara manual di browser.
+
 Jalankan perintah ini dari root repository:
 
 ```sh
