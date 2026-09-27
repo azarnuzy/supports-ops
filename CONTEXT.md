@@ -6,12 +6,20 @@ An AI-first, multi-tenant customer support platform. An AI Agent handles incomin
 
 ### Workspace and people
 
+**Organization**:
+The owner of one or more Workspaces and their shared Credits and Billing. A user belongs to one Organization but may belong to several of its Workspaces; a business's operational data stays in its own Workspace.
+_Avoid_: Account, Tenant, Team
+
 **Workspace**:
-One organization's isolated tenant. Every piece of data in the platform belongs to exactly one Workspace, and nothing is ever visible across them. A user belongs to exactly one Workspace.
-_Avoid_: Tenant, Organization, Team, Account
+One business's isolated tenant within an Organization. Its Customer, Ticket, Knowledge, AI Agent, and Channel data belongs to that Workspace and is not visible to members of other Workspaces. A user may belong to several Workspaces with a separate role in each.
+_Avoid_: Tenant, Team, Account, Organization
+
+**Organization Admin**:
+The Organization role that creates Workspaces, manages their shared Credits and Billing, and has Admin access to every Workspace in the Organization, including handling Customer Tickets. An Organization always has at least one; one person can operate it and all its Workspaces alone.
+_Avoid_: Operator, Superadmin, Account Owner
 
 **Admin**:
-The Workspace role that configures the platform — creates Human Agents, configures the Web Widget, manages Knowledge Sources, tunes AI settings — and can see and act on every Ticket in the Workspace.
+The Workspace role that configures the platform — invites its staff, configures the Web Widget, manages Knowledge Sources, tunes AI settings — and can see and act on every Ticket in the Workspace. It grants no Organization Billing access.
 _Avoid_: Owner, Manager, Supervisor
 
 **Human Agent**:
@@ -253,7 +261,7 @@ The short, curated list of models SupportOps offers as Agent Models. A model joi
 _Avoid_: Model list, Providers, Model marketplace
 
 **Credit**:
-The prepaid unit a Workspace spends on AI. Always bought before it is spent, never billed after the fact. Belongs to the Workspace, shared by all its AI Agents. Only AI Turns and Follow-Ups after a Ticket exists spend Credits; pre-Ticket Follow-Ups and everything else the AI does — classification, Escalation Summaries, Suggested Replies, reading Attachments, ingesting Knowledge Sources — are absorbed by the platform.
+The prepaid unit an Organization spends on AI. Always bought before it is spent, never billed after the fact. Shared by all AI Agents in its Workspaces. Only AI Turns and Follow-Ups after a Ticket exists spend Credits; pre-Ticket Follow-Ups and everything else the AI does — classification, Escalation Summaries, Suggested Replies, reading Attachments, ingesting Knowledge Sources — are absorbed by the platform.
 _Avoid_: Token (the provider's unit, not the product's), Quota, Balance, Subscription
 
 **Model Rate**:
@@ -261,41 +269,41 @@ How many Credits one AI Turn costs on a given Agent Model. Fixed per model, howe
 _Avoid_: Multiplier, Price, Cost
 
 **Credit Ledger**:
-The append-only record of every change to a Workspace's Credits — Trial Grant, Top-Up, and spend. A Workspace's balance is whatever its Credit Ledger adds up to. Its entries outlive the Tickets they were spent on, so deleting a Ticket never changes the balance.
+The append-only record of every change to an Organization's Credits — Trial Grant, Top-Up, and spend. The Organization's balance is whatever its Credit Ledger adds up to; spend retains its originating Workspace even after that Workspace is deleted. Entries outlive the Tickets they were spent on, so deleting a Ticket never changes the balance.
 _Avoid_: Transactions, Wallet, Billing history
 
 **Trial Grant**:
-The one-time Credits a Workspace receives when it registers.
+The one-time Credits an Organization receives when it registers; creating another Workspace does not grant more.
 _Avoid_: Free credits, Bonus, Starter pack
 
 **Top-Up**:
-Credits added to a Workspace after it has paid for them — bought by an Admin as a Top-Up Pack, or recorded by SupportOps for a payment made outside the platform.
+Credits added to an Organization after it has paid for them — bought by an Organization Admin as a Top-Up Pack, or recorded by SupportOps for a payment made outside the platform.
 _Avoid_: Recharge, Purchase, Deposit
 
 **Top-Up Pack**:
-One of a few fixed Credit amounts, each with a fixed Rupiah price, that an Admin can buy. There is no arbitrary amount, because each payment carries a flat fee that would eat a small one. A Workspace buys Packs one at a time; nothing renews on its own.
+One of a few fixed Credit amounts, each with a fixed Rupiah price, that an Organization Admin can buy. There is no arbitrary amount, because each payment carries a flat fee that would eat a small one. An Organization buys Packs one at a time; nothing renews on its own.
 _Avoid_: Plan, Subscription, Tier, Package, Bundle
 
 **Credit Exhaustion**:
-A Workspace's balance reaching zero. The AI Turn already running is allowed to finish, so the balance may dip slightly below zero; after that the AI Agent stops answering, the next Customer Message escalates with its own Escalation Reason, and the AI Copilot is unavailable. Counted apart from every other Escalation Reason so it never reads as the AI Agent failing.
+An Organization's balance reaching zero. AI Turns already running may finish, so the balance may dip below zero; after that its AI Agents stop answering, the next Customer Message in any Workspace escalates with its own Escalation Reason, and the AI Copilot is unavailable. Counted apart from every other Escalation Reason so it never reads as the AI Agent failing.
 _Avoid_: Out of credits, Suspension, Paywall
 
 **AI Usage**:
-A Workspace's record of what its AI Agents consumed and did — AI Turns, the Credits and Tokens they spent, and the Tool calls they made — visible to its Admin and to no other Workspace. Never read from Telemetry, which is allowed to expire.
+The record of what AI Agents consumed and did — AI Turns, the Credits and Tokens they spent, and the Tool calls they made. An Admin sees their Workspace's usage; an Organization Admin sees usage across its Workspaces and can identify each Workspace's share. Never read from Telemetry, which is allowed to expire.
 _Avoid_: Billing, Consumption, AI analysis, Analytics (Analytics reports Ticket outcomes)
 
 **Token**:
-The model provider's unit of text an AI Turn reads and writes, shown to an Admin for insight only. A Workspace is never charged by Token — a Credit is spent per AI Turn however many Tokens it used.
-_Avoid_: Credit (Credits are what a Workspace pays), Usage unit
+The model provider's unit of text an AI Turn reads and writes, shown for insight only. An Organization is never charged by Token — a Credit is spent per AI Turn however many Tokens it used.
+_Avoid_: Credit (Credits are what an Organization pays), Usage unit
 
 ### Operating the platform
 
 **Operator**:
-A member of SupportOps staff who oversees every Workspace from outside them — watching usage, recording Top-Ups, and granting Unlimited Periods. Has their own sign-in, separate from every Workspace user, and belongs to no Workspace: an Operator is never a Workspace user, and a Workspace user can never become an Operator. Sees Workspace totals, never a Customer's Messages. Workspaces and their Admins are created by registering, never by an Operator.
+A member of SupportOps staff who oversees Organizations and Workspaces from outside them — watching usage, recording Top-Ups, and granting Unlimited Periods. Has their own sign-in, separate from every Workspace user, and belongs to no Workspace: an Operator is never a Workspace user, and a Workspace user can never become an Operator. Sees usage totals, never a Customer's Messages. Organizations register themselves; their Organization Admins create additional Workspaces.
 _Avoid_: Superadmin, Root, Staff Admin (Admin is a Workspace role)
 
 **Unlimited Period**:
-A window, granted by an Operator, during which a Workspace's AI Agents keep answering without spending its Credits — typically a proof of concept. It can end on a chosen date or remain active until an Operator ends it. Its AI Turns are still recorded as AI Usage, so what it would have cost stays visible, but the balance is left exactly as it was. When the window ends the Workspace is back on its own Credits. A Workspace has at most one active at a time.
+A window, granted by an Operator, during which every AI Agent in an Organization's Workspaces keeps answering without spending its Credits — including Workspaces created while the window is active. It can end on a chosen date or remain active until an Operator ends it. AI Turns are still recorded as AI Usage, so what they would have cost stays visible, but the shared balance is left exactly as it was. An Organization has at most one active at a time.
 _Avoid_: Unmetered, Free plan, Trial (the Trial Grant is something else)
 
 ### Dashboard and reporting
