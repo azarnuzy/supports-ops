@@ -55,9 +55,9 @@ export async function provisionWorkspaceDefaults(tx: ProvisioningClient, workspa
   });
 }
 
-export function listOrganizationWorkspaces(organizationId: string) {
+export function listOrganizationWorkspaces(organizationId: string, userId?: string, isOrganizationAdmin = true) {
   return unscopedPrisma.workspace.findMany({
-    where: { organizationId, deletedAt: null },
+    where: { organizationId, deletedAt: null, ...(isOrganizationAdmin ? {} : { memberships: { some: { userId } } }) },
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true, slug: true },
   });

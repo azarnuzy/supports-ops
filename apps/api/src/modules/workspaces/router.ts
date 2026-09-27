@@ -7,12 +7,12 @@ import { createOrganizationWorkspace, listOrganizationWorkspaces } from "./servi
 
 export const workspacesRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/", async (c) => {
-    const admin = requireAdmin(c);
-    if (!admin?.isOrganizationAdmin || !admin.organizationId) {
+    const admin = c.get("user");
+    if (!admin?.organizationId) {
       return c.json({ error: "forbidden" }, 403);
     }
 
-    const workspaces = await listOrganizationWorkspaces(admin.organizationId);
+    const workspaces = await listOrganizationWorkspaces(admin.organizationId, admin.id, admin.isOrganizationAdmin);
 
     return c.json({ workspaces }, 200);
   })

@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { executeWorkspaceQuery } from "../../utils/workspace-isolation";
 
-const mocks = vi.hoisted(() => ({ findUnique: vi.fn() }));
+const mocks = vi.hoisted(() => ({ findUnique: vi.fn(), membership: vi.fn() }));
 
 vi.mock("../../utils/prisma", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../utils/prisma")>()),
-  unscopedPrisma: { workspace: { findUnique: mocks.findUnique } },
+  unscopedPrisma: { workspace: { findUnique: mocks.findUnique }, workspaceMembership: { findUnique: mocks.membership } },
 }));
 
 const { loadWorkspaceContext } = await import("./middleware");
@@ -16,7 +16,7 @@ function fakeContext({
   user,
 }: {
   header?: string;
-  user: { isOrganizationAdmin?: boolean; organizationId?: string; workspaceId: string } | null;
+  user: { id?: string; isOrganizationAdmin?: boolean; organizationId?: string; workspaceId: string } | null;
 }) {
   const json = vi.fn((body: unknown, status: number) => ({ body, status }));
   let currentUser = user;
@@ -32,9 +32,11 @@ function fakeContext({
 
 describe("loadWorkspaceContext", () => {
   it("filters another Workspace's records when context comes from the authenticated user", async () => {
-    const get = vi.fn((key: string) => (key === "user" ? { workspaceId: "workspace-user" } : null));
+    mocks.findUnique.mockResolvedValue({ deletedAt: null, organizationId: "org-1" });
+    mocks.membership.mockResolvedValue({ role: "ADMIN" });
+    const get = vi.fn((key: string) => (key === "user" ? { id: "user-1", organizationId: "org-1", workspaceId: "workspace-user" } : null));
 
-    await loadWorkspaceContext({ get } as never, async () => {
+    await loadWorkspaceContext({ get, set: vi.fn(), req: { header: vi.fn() } } as never, async () => {
       expect(requireWorkspaceId()).toBe("workspace-user");
 
       for (const model of ["Ticket", "Message", "KnowledgeSource", "CustomerIdentity"]) {
@@ -64,6 +66,7 @@ describe("loadWorkspaceContext", () => {
 
   beforeEach(() => {
     mocks.findUnique.mockReset();
+    mocks.membership.mockReset();
   });
 
   it("switches an Organization Admin into a sibling Workspace of the same Organization", async () => {
@@ -82,18 +85,30 @@ describe("loadWorkspaceContext", () => {
     });
   });
 
-  it("rejects a switch requested by a user who is not an Organization Admin", async () => {
+  it("allows a member to switch into their other Workspace", async () => {
+    mocks.findUnique.mockResolvedValue({ deletedAt: null, organizationId: "org-1" });
+    mocks.membership.mockResolvedValue({ role: "ADMIN" });
     const c = fakeContext({
       header: "workspace-sibling",
-      user: { isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "workspace-home" },
+      user: { id: "user-1", isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "workspace-home" },
     });
+    await loadWorkspaceContext(c, async () => {
+      expect(requireWorkspaceId()).toBe("workspace-sibling");
+    });
+    expect(mocks.membership).toHaveBeenCalled();
+  });
 
+  it("rejects a switch without membership", async () => {
+    mocks.findUnique.mockResolvedValue({ deletedAt: null, organizationId: "org-1" });
+    const c = fakeContext({
+      header: "workspace-sibling",
+      user: { id: "user-1", isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "workspace-home" },
+    });
     const result = await loadWorkspaceContext(c, async () => {
       throw new Error("must not run the handler");
     });
 
     expect(result).toEqual({ body: { error: "forbidden" }, status: 403 });
-    expect(mocks.findUnique).not.toHaveBeenCalled();
   });
 
   it("rejects a guessed or cross-Organization Workspace id", async () => {
