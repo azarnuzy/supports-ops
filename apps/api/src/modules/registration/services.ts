@@ -33,9 +33,13 @@ export async function registerAdminWorkspace(input: RegisterInput) {
 
   try {
     return await unscopedPrisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({
+        data: { id: randomUUID(), name: `${input.name}'s Organization` },
+      });
       const workspace = await tx.workspace.create({
         data: {
           id: randomUUID(),
+          organizationId: organization.id,
           name: workspaceNameFor(input.name),
           slug: workspaceSlugFor(input.name),
         },
@@ -56,6 +60,8 @@ export async function registerAdminWorkspace(input: RegisterInput) {
           name: input.name,
           email: input.email,
           role: "ADMIN",
+          organizationId: organization.id,
+          isOrganizationAdmin: true,
           workspaceId: workspace.id,
         },
       });
@@ -105,7 +111,7 @@ export async function registerAdminWorkspace(input: RegisterInput) {
         },
       });
 
-      return { user, workspace };
+      return { organization, user, workspace };
     });
   } catch (error) {
     if (isUniqueConstraintError(error, "email")) {

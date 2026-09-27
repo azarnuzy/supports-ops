@@ -7,15 +7,20 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   workspaceId   String
+  // ponytail: nullable for legacy direct creates; require after every writer creates Organizations.
+  organizationId String?
+  isOrganizationAdmin Boolean @default(false)
   role          Role
   deletedAt     DateTime?
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  organization  Organization? @relation(fields: [organizationId], references: [id])
   assignedTickets Ticket[] @relation("TicketAssignee")
   authSessions  AuthSession[]
   accounts      Account[]
   ticketReadStates TicketReadState[]
 
   @@index([workspaceId])
+  @@index([organizationId])
 }
 
 /** Better Auth's sign-in session for a Workspace user. Named apart from the

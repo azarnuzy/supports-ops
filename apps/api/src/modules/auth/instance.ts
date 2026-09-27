@@ -28,6 +28,8 @@ export const auth = betterAuth({
         input: false,
         required: true,
       },
+      organizationId: { type: "string", input: false, required: false },
+      isOrganizationAdmin: { type: "boolean", input: false, required: true },
     },
   },
   // The domain's Session is a Customer's conversation on a Channel, so Better

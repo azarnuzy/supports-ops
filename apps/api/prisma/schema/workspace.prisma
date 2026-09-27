@@ -1,5 +1,17 @@
+model Organization {
+  id         String      @id
+  name       String
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  workspaces Workspace[]
+  users      User[]
+}
+
 model Workspace {
   id                 String             @id
+  // ponytail: nullable for legacy direct creates; require after every writer creates Organizations.
+  organizationId     String?
+  organization       Organization?      @relation(fields: [organizationId], references: [id])
   name               String
   slug               String             @unique
   closingMessage     String?
@@ -27,6 +39,7 @@ model Workspace {
   operatorActions     OperatorAction[]
   unlimitedPeriods    UnlimitedPeriod[]
   externalErrors       ExternalError[]
+  @@index([organizationId])
 }
 
 /// The Credit Ledger: an append-only record of every change to a Workspace's Credits

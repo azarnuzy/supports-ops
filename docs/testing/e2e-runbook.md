@@ -28,6 +28,14 @@ Untuk Telemetry Langfuse, tambahkan juga konfigurasi pada bagian [Telemetry](#6-
 
 ## 2. Menyalakan stack dan demo Workspace
 
+### Organization identity (#266)
+
+Setelah `pnpm db:migrate`, buka `/register` di browser baru. Daftar dengan email baru, lalu pastikan browser masuk ke Workspace pertama dan halaman `/agent` serta `/channels/web-widget` masih dapat dibuka. Keluar, masuk lagi melalui `/login`, dan pastikan Workspace yang sama terbuka. Di database, periksa satu `Organization`, satu `Workspace` yang menunjuknya, dan satu `User` dengan `role = ADMIN`, `isOrganizationAdmin = true`, serta `organizationId` yang sama. Pastikan satu AI Agent dan satu Web Widget tersedia.
+
+Untuk data sebelum migrasi, masuk sebagai Admin lama lalu sebagai Human Agent lama. Keduanya harus tetap dapat membuka Ticket dan Session dalam Workspace semula; hanya Admin yang memiliki `isOrganizationAdmin = true`. Tiap Workspace lama harus menunjuk Organization yang berbeda. Catat tanggal, browser, dan hasil pemeriksaan manual sebelum menandai skenario ini selesai.
+
+Hasil 2026-09-27: pengguna mengonfirmasi lewat browser (nama browser tidak dicatat) bahwa registrasi berhasil, halaman AI Agent dan Web Widget terbuka, lalu logout dan login kembali membawa ke Workspace yang sama. Dengan Chromium headless, Admin demo lama berhasil masuk dan melihat Conversations lama, termasuk Session tanpa Ticket; Human Agent demo lama berhasil masuk dan membuka Ticket lama beserta transkripnya. Tes database registrasi lulus (3/3). Pemeriksaan database lokal menemukan 12 Workspace menunjuk 12 Organization berbeda, tanpa Workspace atau user yang kehilangan Organization; Admin terbaru terhubung ke Organization dengan satu AI Agent dan satu Web Widget, dan tidak ada Admin tanpa peran Organization Admin atau Human Agent yang memilikinya.
+
 Jalankan perintah ini dari root repository:
 
 ```sh

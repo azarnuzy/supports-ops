@@ -61,6 +61,7 @@ describe("registerAdminWorkspace", () => {
       account?: unknown;
       user?: unknown;
       workspace?: unknown;
+      organization?: unknown;
       aiAgent?: unknown;
       aiSettings?: unknown;
       channel?: unknown;
@@ -92,6 +93,12 @@ describe("registerAdminWorkspace", () => {
         workspace: {
           create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
             created.workspace = data;
+            return data;
+          }),
+        },
+        organization: {
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            created.organization = data;
             return data;
           }),
         },
@@ -139,16 +146,21 @@ describe("registerAdminWorkspace", () => {
     expect(mocks.hashPassword).toHaveBeenCalledWith("password123");
 
     const workspace = created.workspace as { id: string; name: string; slug: string };
+    const organization = created.organization as { id: string; name: string };
     const user = created.user as Record<string, unknown>;
     const account = created.account as Record<string, unknown>;
 
     expect(workspace.name).toBe("Ada Lovelace's Workspace");
+    expect(organization.name).toBe("Ada Lovelace's Organization");
+    expect(workspace).toMatchObject({ organizationId: organization.id });
     expect(workspace.slug.startsWith("ada-lovelace-")).toBe(true);
 
     expect(user).toMatchObject({
       email: "ada@example.com",
       name: "Ada Lovelace",
       role: "ADMIN",
+      organizationId: organization.id,
+      isOrganizationAdmin: true,
       workspaceId: workspace.id,
     });
 
@@ -160,6 +172,7 @@ describe("registerAdminWorkspace", () => {
     });
 
     expect(result.workspace).toEqual(workspace);
+    expect(result.organization).toEqual(organization);
     expect(result.user).toEqual(user);
 
     const aiAgent = created.aiAgent as Record<string, unknown>;

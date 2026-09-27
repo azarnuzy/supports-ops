@@ -40,6 +40,10 @@ export async function createHumanAgent(
   const passwordHash = await hashPassword(input.password);
   const now = new Date();
   const userId = randomUUID();
+  const workspace = await unscopedPrisma.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { organizationId: true },
+  });
 
   try {
     const user = await unscopedPrisma.$transaction(async (tx) => {
@@ -49,6 +53,7 @@ export async function createHumanAgent(
           id: userId,
           name: input.name,
           role: "HUMAN_AGENT",
+          organizationId: workspace.organizationId,
           workspaceId,
         },
       });
