@@ -262,7 +262,7 @@ export type OperatorAction = {
   id: string;
   type: OperatorActionType;
   workspaceId: string;
-  workspace: { id: string; name: string } | null;
+  workspace: { id: string; name: string; organization: { id: string; name: string } | null } | null;
   payload: Record<string, unknown>;
   createdAt: string;
   operator: { id: string; name: string; email: string };
