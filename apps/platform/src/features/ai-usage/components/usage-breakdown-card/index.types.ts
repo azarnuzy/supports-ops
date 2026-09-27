@@ -1,7 +1,6 @@
 export type UsageBreakdownRow = {
   label: string;
   creditsSpent: number;
-  turnCount: number;
   /** Input plus output Tokens. */
   tokens: number;
 };

@@ -167,6 +167,8 @@ describe("getAiUsageSummary Tokens, Channels, and comparison", () => {
       sessionCount: 1,
       turnCount: 3,
     });
+    expect(all.daily.at(-1)).toMatchObject({ creditsSpent: 2, sessionCount: 1 });
+    expect(all.daily.at(-2)).toMatchObject({ creditsSpent: 1, sessionCount: 1 });
     expect(all.previousTotals).toEqual({ creditsSpent: 1, turnCount: 1 });
     expect(all.byChannel.map((row) => [row.channel, row.turnCount]).sort()).toEqual([
       ["WEB", 2],

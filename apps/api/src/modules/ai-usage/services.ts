@@ -104,16 +104,24 @@ export async function getAiUsageSummary(query: AiUsageQuery = {}): Promise<AiUsa
   const daily = Array.from({ length: days }, (_, index) => ({
     date: new Date(startAt.getTime() + index * DAY_MS).toISOString().slice(0, 10),
     ...emptyTotals(),
+    sessionCount: 0,
   }));
   const totals = emptyTotals();
   const sessionIds = new Set<string>();
+  const dailySessionIds = daily.map(() => new Set<string>());
 
   for (const row of spendRows) {
     addRow(totals, row);
     if (row.sessionId) sessionIds.add(row.sessionId);
     const dayIndex = Math.floor((row.createdAt.getTime() - startAt.getTime()) / DAY_MS);
-    if (dayIndex >= 0 && dayIndex < days) addRow(daily[dayIndex], row);
+    if (dayIndex >= 0 && dayIndex < days) {
+      addRow(daily[dayIndex], row);
+      if (row.sessionId) dailySessionIds[dayIndex].add(row.sessionId);
+    }
   }
+  daily.forEach((day, index) => {
+    day.sessionCount = dailySessionIds[index].size;
+  });
 
   const byAgentTotals = groupBy(spendRows, (row) => row.aiAgentId);
   // Every AI Agent, not only those that spent: it also feeds the AI Agent filter.

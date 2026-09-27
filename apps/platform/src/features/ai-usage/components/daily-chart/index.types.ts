@@ -1,6 +1,6 @@
 import type { AiUsageDailyPoint } from "@repo/api-client";
 
 export type DailyChartProps = {
-  /** Daily Credits-spent and AI Turn counts across the selected range, oldest first. */
+  /** Daily Credits spent and distinct conversation counts, oldest first. */
   daily: AiUsageDailyPoint[];
 };

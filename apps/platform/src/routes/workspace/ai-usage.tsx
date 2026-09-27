@@ -8,7 +8,7 @@ export const Route = createFileRoute("/workspace/ai-usage")({
   head: () =>
     pageMetadata({
       title: "AI Usage",
-      description: "Credits, AI Turns, Tokens, and Tool calls for this Workspace's AI Agents.",
+      description: "Credits, conversations, Tokens, and Tool calls for this Workspace's AI Agents.",
       path: "/workspace/ai-usage",
       noIndex: true,
     }),

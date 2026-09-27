@@ -9,7 +9,7 @@ export type UsageTotals = {
   outputTokens: number;
 };
 export type UsageChannel = "WEB" | "WHATSAPP";
-export type AiUsageDailyPoint = UsageTotals & { date: string };
+export type AiUsageDailyPoint = UsageTotals & { date: string; sessionCount: number };
 export type AiUsageAgentBreakdown = UsageTotals & { aiAgentId: string; aiAgentName: string };
 export type AiUsageModelBreakdown = UsageTotals & { agentModel: string };
 export type AiUsageChannelBreakdown = UsageTotals & { channel: UsageChannel };

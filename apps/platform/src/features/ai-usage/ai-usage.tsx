@@ -2,7 +2,6 @@ import type { AiUsageFilters, UsageChannel } from "@repo/api-client";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
-  ActivityIcon,
   AlertTriangleIcon,
   CoinsIcon,
   GaugeIcon,
@@ -108,20 +107,20 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
     return (
       <EmptyRange
         title="No AI Usage in this range"
-        description="Once your AI Agent replies to a Customer, Credits, AI Turns, and Tokens will show up here."
+        description="Once your AI Agent handles a Customer message, Credit usage and conversations will show up here."
       />
     );
   }
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <TrendCard
           icon={CoinsIcon}
           title="Credits spent"
           accent="primary"
           deltaTone="up-is-bad"
-          info="Credits spent on AI Turns and Follow-Ups in the selected range. Each reply costs its Agent Model's Model Rate, however many Tokens it used."
+          info="Credits spent when AI handles Customer messages or sends Follow-Ups after a Ticket opens. Each use costs its Agent Model's rate, however many Tokens it used."
           value={formatCredits(totals.creditsSpent)}
           subtext={`${formatCredits(usage.balance)} Credits left`}
           series={usage.daily.map((day) => day.creditsSpent)}
@@ -129,24 +128,13 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
         />
         <TrendCard
           icon={MessagesSquareIcon}
-          title="AI Turns"
+          title="Conversations"
           accent="resolved"
           deltaTone="up-is-good"
-          info="Customer messages the AI Agent answered, plus Follow-Ups it sent."
-          value={formatCredits(totals.turnCount)}
-          subtext={`${(totals.turnCount / Math.max(usage.daily.length, 1)).toFixed(1)} per day on average`}
-          series={usage.daily.map((day) => day.turnCount)}
-          delta={percentChange(totals.turnCount, previousTotals.turnCount)}
-        />
-        <TrendCard
-          icon={ActivityIcon}
-          title="Sessions with AI"
-          accent="primary"
-          deltaTone="up-is-good"
-          info="Distinct Sessions in which the AI Agent spent at least one Credit."
+          info="Distinct conversations with recorded AI usage during the selected range. One conversation may use several Credits."
           value={formatCredits(totals.sessionCount)}
-          subtext={`${(totals.creditsSpent / Math.max(totals.sessionCount, 1)).toFixed(1)} Credits per Session`}
-          series={usage.daily.map((day) => day.turnCount)}
+          subtext={`${(totals.creditsSpent / Math.max(totals.sessionCount, 1)).toFixed(1)} Credits per conversation`}
+          series={usage.daily.map((day) => day.sessionCount)}
           delta={null}
         />
         <TrendCard
@@ -154,9 +142,9 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
           title="Tokens"
           accent="escalated"
           deltaTone="up-is-bad"
-          info="Input plus output Tokens the Agent Model processed, for insight only — you are charged per AI reply, never per Token. Turns from before Tokens were recorded count as zero."
+          info="Input plus output Tokens the Agent Model processed, for insight only — Credits are charged per use, never per Token. Older usage without Token records counts as zero."
           value={formatTokens(tokens)}
-          subtext={`${formatTokens(tokens / Math.max(totals.turnCount, 1))} per Turn · ${Math.round(cachedShare)}% input cached`}
+          subtext={`${Math.round(cachedShare)}% input cached`}
           series={usage.daily.map((day) => day.inputTokens + day.outputTokens)}
           delta={null}
         />
@@ -166,7 +154,7 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
         <DailyChart daily={usage.daily} />
         <StackedDailyChart
           title="Tokens"
-          description="Input and output Tokens per day. Informational — Credits are charged per reply."
+          description="Input and output Tokens per day. Informational — Credits are charged when AI handles a message or sends a Follow-Up."
           data={usage.daily}
           formatValue={formatTokens}
           series={[
@@ -183,7 +171,6 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
           rows={usage.byAgent.map((row) => ({
             label: row.aiAgentName,
             creditsSpent: row.creditsSpent,
-            turnCount: row.turnCount,
             tokens: tokensOf(row),
           }))}
         />
@@ -193,7 +180,6 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
           rows={usage.byModel.map((row) => ({
             label: row.agentModel,
             creditsSpent: row.creditsSpent,
-            turnCount: row.turnCount,
             tokens: tokensOf(row),
           }))}
         />
@@ -203,7 +189,6 @@ function OverviewPanel({ range, filters }: { range: DashboardRange; filters: AiU
           rows={usage.byChannel.map((row) => ({
             label: channelLabels[row.channel],
             creditsSpent: row.creditsSpent,
-            turnCount: row.turnCount,
             tokens: tokensOf(row),
           }))}
         />
@@ -311,12 +296,12 @@ const AiUsageView = () => {
   const ledger = useCreditLedgerQuery(tab === "ledger");
 
   return (
-    <PlatformAppShell>
+    <PlatformAppShell fullWidth>
       <TooltipProvider delayDuration={0}>
         <section className="grid gap-6">
           <SettingsHeader
             title="AI Usage"
-            description="What your AI Agents spent and did: Credits, AI Turns, Tokens, and Tool calls."
+            description="Credits spent, conversations handled, Tokens, and Tool calls for your AI Agents."
             action={
               <Button asChild size="sm" variant="outline">
                 <Link to="/workspace/billing">

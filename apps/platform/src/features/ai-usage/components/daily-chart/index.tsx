@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
   Card,
@@ -22,7 +22,7 @@ import type { DailyChartProps } from "./index.types";
 
 const config = {
   creditsSpent: { label: "Credits spent", color: "var(--primary)" },
-  turnCount: { label: "AI Turns", color: "var(--chart-2)" },
+  sessionCount: { label: "Conversations", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
 function fullDayLabel(date: string) {
@@ -43,12 +43,24 @@ export default function DailyChart({ daily }: DailyChartProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Credits spent and AI Turns</CardTitle>
-        <CardDescription className="text-xs">Per day over the selected range.</CardDescription>
+        <CardTitle className="text-sm">Credits spent and conversations</CardTitle>
+        <CardDescription className="text-xs">
+          Daily Credit usage and conversations with AI activity.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={config} className="h-64 w-full">
-          <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="fillUsageCredits" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-creditsSpent)" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="var(--color-creditsSpent)" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="fillUsageConversations" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-sessionCount)" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="var(--color-sessionCount)" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis
               dataKey="label"
@@ -65,7 +77,7 @@ export default function DailyChart({ daily }: DailyChartProps) {
               tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
             />
             <ChartTooltip
-              cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+              cursor={{ stroke: "var(--border)" }}
               content={
                 <ChartTooltipContent
                   indicator="dot"
@@ -74,15 +86,23 @@ export default function DailyChart({ daily }: DailyChartProps) {
               }
             />
             <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="creditsSpent" fill="var(--color-creditsSpent)" radius={[3, 3, 0, 0]} />
-            <Line
-              dataKey="turnCount"
+            <Area
+              dataKey="creditsSpent"
               type="monotone"
-              stroke="var(--color-turnCount)"
+              stroke="var(--color-creditsSpent)"
               strokeWidth={2}
+              fill="url(#fillUsageCredits)"
               dot={false}
             />
-          </ComposedChart>
+            <Area
+              dataKey="sessionCount"
+              type="monotone"
+              stroke="var(--color-sessionCount)"
+              strokeWidth={2}
+              fill="url(#fillUsageConversations)"
+              dot={false}
+            />
+          </AreaChart>
         </ChartContainer>
       </CardContent>
     </Card>

@@ -51,7 +51,7 @@ import { SettingsHeader } from "../settings/components/settings-header";
 
 const paymentPageSize = 10;
 
-const runwayRange = trailingRange(30);
+const recentUsageRange = trailingRange(30);
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 const paymentStatusStyles: Record<TopUpPayment["status"], { label: string; className: string }> = {
@@ -96,9 +96,7 @@ function UnlimitedPeriodBanner({ unlimitedPeriod }: { unlimitedPeriod: Unlimited
 }
 
 function BalanceCard({ balance }: { balance: number }) {
-  const usage = useQuery(aiUsageSummaryQueryOptions(runwayRange));
-  const dailyAverage = (usage.data?.aiUsage.totals.creditsSpent ?? 0) / 30;
-  const runwayDays = dailyAverage > 0 ? Math.floor(Math.max(balance, 0) / dailyAverage) : null;
+  const usage = useQuery(aiUsageSummaryQueryOptions(recentUsageRange));
   const state = balance <= 0 ? "exhausted" : balance < lowBalanceThreshold ? "warning" : "normal";
 
   return (
@@ -128,9 +126,11 @@ function BalanceCard({ balance }: { balance: number }) {
           <p>Below {lowBalanceThreshold} Credits. Top up soon to avoid Credit Exhaustion.</p>
         ) : null}
         <p>
-          {runwayDays === null
-            ? "No Credits spent in the last 30 days."
-            : `About ${formatCredits(runwayDays)} days left at your 30-day average of ${dailyAverage.toFixed(1)} Credits per day.`}
+          {usage.isPending
+            ? "Loading recent usage…"
+            : usage.isError
+              ? "Recent usage unavailable."
+              : `${formatCredits(usage.data.aiUsage.totals.creditsSpent)} Credits spent in the last 30 days.`}
         </p>
       </CardContent>
     </Card>
@@ -181,7 +181,7 @@ function PackCard({
         <ul className="grid gap-1.5 text-sm text-muted-foreground">
           <li className="flex items-center gap-2">
             <CheckIcon className="size-3.5 text-primary" />
-            About {formatCredits(pack.credits)} AI replies at Model Rate 1
+            About {formatCredits(pack.credits)} AI uses at 1 Credit each
           </li>
           <li className="flex items-center gap-2">
             <CheckIcon className="size-3.5 text-primary" />
@@ -312,7 +312,7 @@ const BillingView = () => {
     : null;
 
   return (
-    <PlatformAppShell>
+    <PlatformAppShell fullWidth>
       <section className="grid gap-6">
         <SettingsHeader
           title="Billing"
@@ -349,8 +349,10 @@ const BillingView = () => {
                 <CardHeader>
                   <CardTitle className="text-sm">How Credits are spent</CardTitle>
                   <CardDescription className="text-xs">
-                    Each AI reply or Follow-Up costs its Agent Model's Model Rate — however many
-                    Tool calls or Tokens it used. Everything else is included.
+                    A chargeable AI use is a completed handling of a Customer message, or a
+                    Follow-Up sent after a Ticket opens. Replies, resolutions, and escalations
+                    count. Each use costs the selected Agent Model's rate, so one conversation may
+                    use several Credits. Tool calls and Tokens add no Credits.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -358,7 +360,7 @@ const BillingView = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Agent Model</TableHead>
-                        <TableHead className="text-right">Credits per reply</TableHead>
+                        <TableHead className="text-right">Credits per AI use</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

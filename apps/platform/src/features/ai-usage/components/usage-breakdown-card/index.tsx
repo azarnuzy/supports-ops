@@ -34,7 +34,6 @@ export default function UsageBreakdownCard({ title, emptyLabel, rows }: UsageBre
             <TableHeader>
               <TableRow>
                 <TableHead>{title}</TableHead>
-                <TableHead className="text-right">AI Turns</TableHead>
                 <TableHead className="text-right">Tokens</TableHead>
                 <TableHead className="text-right">Credits</TableHead>
               </TableRow>
@@ -43,7 +42,6 @@ export default function UsageBreakdownCard({ title, emptyLabel, rows }: UsageBre
               {sorted.map((row) => (
                 <TableRow key={row.label}>
                   <TableCell className="truncate font-medium">{row.label}</TableCell>
-                  <TableCell className="text-right tabular-nums">{row.turnCount}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {formatTokens(row.tokens)}
                   </TableCell>
