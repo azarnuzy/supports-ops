@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ ticketFindFirst: vi.fn(), toolFindFirst: vi.fn() }));
 
 vi.mock("../../utils/prisma", () => ({
+  unscopedPrisma: { $executeRaw: vi.fn(async () => 1) },
   prisma: {
     ticket: { findFirst: mocks.ticketFindFirst },
     tool: { findFirst: mocks.toolFindFirst },

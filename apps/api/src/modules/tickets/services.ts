@@ -633,13 +633,13 @@ async function appendHandoffMessage(input: {
 }
 
 export async function reassignTicket(ticketId: string, humanAgentId: string, workspaceId: string) {
-  const humanAgent = await prisma.user.findFirst({
-    select: { id: true },
-    where: { id: humanAgentId, role: "HUMAN_AGENT" },
+  const humanAgent = await unscopedPrisma.workspaceMembership.findFirst({
+    select: { userId: true },
+    where: { userId: humanAgentId, workspaceId, role: "HUMAN_AGENT" },
   });
   if (!humanAgent) throw new HumanAgentNotFoundError();
   const transition = await prisma.ticket.updateMany({
-    data: { assignedHumanAgentId: humanAgent.id, status: "HUMAN_HANDLING" },
+    data: { assignedHumanAgentId: humanAgent.userId, status: "HUMAN_HANDLING" },
     where: {
       id: ticketId,
       OR: [{ assignedHumanAgentId: null, status: "ESCALATED" }, { status: "HUMAN_HANDLING" }],

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   operatorAuthHandler: vi.fn(),
   listPayments: vi.fn(),
+  membershipFindUnique: vi.fn(),
 }));
 
 vi.mock("./modules/operator/payments", async () => {
@@ -54,6 +55,11 @@ vi.mock("./utils/prisma", () => ({
       update: mocks.update,
     },
   },
+  unscopedPrisma: {
+    user: { findUnique: vi.fn(async () => ({ deletedAt: null, isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "workspace-1" })) },
+    workspace: { findUnique: vi.fn(async () => ({ deletedAt: null, organizationId: "org-1" })) },
+    workspaceMembership: { findUnique: mocks.membershipFindUnique, findMany: mocks.findMany },
+  },
 }));
 
 const baseDate = new Date("2026-07-03T00:00:00.000Z");
@@ -75,6 +81,8 @@ describe("api app", () => {
     mocks.getOperatorSession.mockResolvedValue(null);
     mocks.operatorAuthHandler.mockResolvedValue(new Response(null, { status: 404 }));
     mocks.findMany.mockResolvedValue([]);
+    mocks.membershipFindUnique.mockImplementation(async ({ where }) =>
+      where.userId_workspaceId.userId === "missing" ? null : { role: (await mocks.getSession())?.user?.role ?? "ADMIN" });
     mocks.findUnique.mockResolvedValue(null);
     mocks.getSession.mockResolvedValue(null);
     mocks.signInEmail.mockResolvedValue(
@@ -179,8 +187,8 @@ describe("api app", () => {
   it("returns paginated users for admins", async () => {
     mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
     mocks.findMany.mockResolvedValue([
-      createUser({ id: "user-2", role: "HUMAN_AGENT" }),
-      createUser({ id: "user-1", role: "ADMIN" }),
+      { userId: "user-2", role: "HUMAN_AGENT", createdAt: baseDate, user: createUser({ id: "user-2", role: "HUMAN_AGENT" }) },
+      { userId: "user-1", role: "ADMIN", createdAt: baseDate, user: createUser({ id: "user-1", role: "ADMIN" }) },
     ]);
 
     const response = await app.request("/users?limit=1");
@@ -194,6 +202,7 @@ describe("api app", () => {
           id: "user-2",
           name: "User user-2",
           role: "HUMAN_AGENT",
+          isOrganizationAdmin: undefined,
           updatedAt: baseDate.toISOString(),
         },
       ],
@@ -202,7 +211,7 @@ describe("api app", () => {
 
     const query = mocks.findMany.mock.calls[0]?.[0];
     expect(query.take).toBe(2);
-    expect(query.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
+    expect(query.orderBy).toEqual([{ createdAt: "desc" }, { userId: "desc" }]);
   });
 
   it("returns invalid_cursor for missing user cursors", async () => {
