@@ -354,6 +354,18 @@ export default function OverviewView() {
   });
   const data = overview.data?.overview;
   const workspaces = atRisk.data?.workspaces ?? [];
+  const externalErrors = atRisk.data?.externalErrors ?? [];
+  const externalErrorGroups = new Set(
+    externalErrors.map((error) =>
+      JSON.stringify([
+        error.provider,
+        error.operation,
+        error.modelId,
+        error.code,
+        error.httpStatus,
+      ]),
+    ),
+  ).size;
   const sessions = data ? Object.values(data.sessions).reduce((sum, count) => sum + count, 0) : 0;
   const fetching =
     overview.isFetching || trends.isFetching || atRisk.isFetching || actions.isFetching;
@@ -501,14 +513,23 @@ export default function OverviewView() {
                     View all →
                   </Link>
                 </div>
+                {externalErrorGroups > 0 && (
+                  <Link
+                    to="/$section"
+                    params={{ section: "needs-attention" }}
+                    className="block border-b px-4 py-3 text-sm text-destructive hover:underline"
+                  >
+                    {externalErrorGroups} external service error groups need review →
+                  </Link>
+                )}
                 {atRisk.isPending || atRisk.isError || workspaces.length === 0 ? (
                   <ConsoleQueryState
                     isPending={atRisk.isPending}
                     isError={atRisk.isError}
                     error={atRisk.error}
                     isEmpty={!atRisk.isPending && !atRisk.isError && workspaces.length === 0}
-                    emptyTitle="All clear"
-                    emptyDescription="No Workspaces need attention right now."
+                    emptyTitle="No Workspace issues"
+                    emptyDescription="No Workspace operations need attention right now."
                     onRetry={() => void atRisk.refetch()}
                   />
                 ) : (

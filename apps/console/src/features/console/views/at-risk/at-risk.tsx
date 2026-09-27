@@ -97,6 +97,16 @@ const cards = [
 ] as const;
 const high = (issue: Issue) => issue === "CREDIT_EXHAUSTED" || issue === "CHANNEL_ISSUE";
 const date = (value: string | null) => (value ? dateFormat.format(new Date(value)) : "Never");
+const externalStatus = (status: number | null) =>
+  status === 429
+    ? "Rate limited"
+    : status === 401
+      ? "Unauthorized"
+      : status === 403
+        ? "Forbidden"
+        : status && status >= 500
+          ? "Provider error"
+          : "Request failed";
 
 async function fetchAtRisk(query?: ConsoleDateRange) {
   const response = await api.operator["at-risk"].$get({ query: query ?? {} });
@@ -107,6 +117,7 @@ async function fetchAtRisk(query?: ConsoleDateRange) {
 export const operatorAtRiskQueryOptions = queryOptions({
   queryKey: ["operator", "at-risk"] as const,
   queryFn: () => fetchAtRisk(),
+  refetchInterval: 60_000,
 });
 export const conditionLabel: Record<string, string> = {
   CREDIT_EXHAUSTED: "Credits exhausted",
@@ -191,10 +202,22 @@ export default function AtRiskView() {
   const query = useQuery({
     queryKey: ["operator", "at-risk", range],
     queryFn: () => fetchAtRisk(range),
+    refetchInterval: 60_000,
   });
   const rows: Row[] = (query.data?.workspaces ?? []).flatMap((workspace) =>
     workspace.conditions.map((issue) => ({ workspace, issue: issue as Issue })),
   );
+  const externalGroups = new Map<string, NonNullable<typeof query.data>["externalErrors"]>();
+  for (const error of query.data?.externalErrors ?? []) {
+    const key = JSON.stringify([
+      error.provider,
+      error.operation,
+      error.modelId,
+      error.code,
+      error.httpStatus,
+    ]);
+    externalGroups.set(key, [...(externalGroups.get(key) ?? []), error]);
+  }
   const count = (issues: readonly string[]) =>
     new Set(rows.filter((row) => issues.includes(row.issue)).map((row) => row.workspace.id)).size;
   const filtered = rows.filter(
@@ -290,6 +313,157 @@ export default function AtRiskView() {
           />
         }
       />
+      <section aria-label="External service errors" className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">External service errors</h2>
+          <p className="text-sm text-muted-foreground">
+            All-time failures remain here until a recovery rule is defined. This error log stores
+            metadata only.
+          </p>
+        </div>
+        <ConsoleDataTable>
+          {query.isPending || query.isError || !externalGroups.size ? (
+            <ConsoleQueryState
+              isPending={query.isPending}
+              isError={query.isError}
+              error={query.error}
+              isEmpty={!query.isPending && !query.isError && !externalGroups.size}
+              emptyTitle="No external errors recorded"
+              onRetry={() => void query.refetch()}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[850px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Provider / operation</TableHead>
+                    <TableHead>Error</TableHead>
+                    <TableHead>Occurrences</TableHead>
+                    <TableHead>Workspaces</TableHead>
+                    <TableHead>Last seen</TableHead>
+                    <TableHead>Trace</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...externalGroups.entries()].map(([key, group]) => (
+                    <TableRow key={key}>
+                      <TableCell>
+                        {group[0]!.provider}
+                        <p className="text-xs text-muted-foreground">
+                          {group[0]!.operation}
+                          {group[0]!.modelId ? ` · ${group[0]!.modelId}` : ""}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">{externalStatus(group[0]!.httpStatus)}</span>
+                        <br />
+                        {group[0]!.httpStatus
+                          ? `HTTP ${group[0]!.httpStatus}`
+                          : (group[0]!.code ?? "Unknown")}
+                        {group[0]!.httpStatus && group[0]!.code && group[0]!.code !== "Error"
+                          ? ` · ${group[0]!.code}`
+                          : ""}
+                      </TableCell>
+                      <TableCell>
+                        {numberFormat.format(group.reduce((sum, item) => sum + item.count, 0))}
+                      </TableCell>
+                      <TableCell>
+                        {new Set(group.map((item) => item.workspaceId).filter(Boolean)).size ||
+                          "Platform"}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(
+                          Math.max(...group.map((item) => new Date(String(item.lastAt)).getTime())),
+                        ).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <details>
+                          <summary className="cursor-pointer">Details</summary>
+                          <div className="mt-2 space-y-1 text-xs">
+                            {group.map((item) => (
+                              <p key={`${item.workspaceId}-${item.resourceId}`}>
+                                {item.workspaceId ? (
+                                  <Link
+                                    to="/workspaces/$workspaceId"
+                                    params={{ workspaceId: item.workspaceId }}
+                                    className="underline"
+                                  >
+                                    Workspace {item.workspaceId}
+                                  </Link>
+                                ) : (
+                                  "Platform"
+                                )}
+                                {` · ${item.count} times · first ${new Date(String(item.firstAt)).toLocaleString()} · last ${new Date(String(item.lastAt)).toLocaleString()}`}
+                                {item.resourceType && item.resourceId
+                                  ? ` · ${item.resourceType} ${item.resourceId}`
+                                  : ""}
+                              </p>
+                            ))}
+                          </div>
+                        </details>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </ConsoleDataTable>
+        {(query.data?.externalEvents.length ?? 0) > 0 && (
+          <details className="rounded-lg border p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Latest 100 error occurrences
+            </summary>
+            <div className="mt-3 max-h-96 overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Provider / operation</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Workspace / resource</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {query.data?.externalEvents.map((event) => (
+                    <TableRow key={event.id}>
+                      <TableCell>{new Date(String(event.createdAt)).toLocaleString()}</TableCell>
+                      <TableCell>
+                        {event.provider} · {event.operation}
+                        {event.modelId ? ` · ${event.modelId}` : ""}
+                      </TableCell>
+                      <TableCell>
+                        {externalStatus(event.httpStatus)} ·{" "}
+                        {event.httpStatus ? `HTTP ${event.httpStatus}` : (event.code ?? "Unknown")}
+                        {event.httpStatus && event.code && event.code !== "Error"
+                          ? ` · ${event.code}`
+                          : ""}
+                      </TableCell>
+                      <TableCell>
+                        {event.workspaceId ? (
+                          <Link
+                            to="/workspaces/$workspaceId"
+                            params={{ workspaceId: event.workspaceId }}
+                            className="underline"
+                          >
+                            {event.workspaceId}
+                          </Link>
+                        ) : (
+                          "Platform"
+                        )}
+                        {event.resourceType && event.resourceId
+                          ? ` · ${event.resourceType} ${event.resourceId}`
+                          : ""}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </details>
+        )}
+      </section>
+      <h2 className="text-lg font-semibold">Workspace operations</h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map((card) => (
           <Card key={card.key} className="gap-0 py-0">

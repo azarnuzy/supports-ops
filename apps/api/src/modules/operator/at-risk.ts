@@ -20,7 +20,7 @@ export type AttentionDetail = {
   conditions: AtRiskCondition[];
 };
 
-/** Computes the four attention conditions for a set of Workspace ids, keyed by id. */
+/** Computes Workspace-level attention conditions for a set of ids. */
 export async function getAttentionDetails(ids: string[]): Promise<Map<string, AttentionDetail>> {
   if (!ids.length) return new Map();
   const now = new Date();
@@ -83,28 +83,71 @@ export async function listAtRiskWorkspaces(range: { from?: string; to?: string }
     select: { id: true, name: true, slug: true },
   });
   const ids = workspaces.map((workspace) => workspace.id);
-  const [details, channels, failedSources, sessions] = await Promise.all([
-    getAttentionDetails(ids),
-    unscopedPrisma.channel.findMany({
-      where: { workspaceId: { in: ids }, deletedAt: null },
-      select: {
-        workspaceId: true,
-        type: true,
-        status: true,
-        whatsAppConfig: { select: { accessTokenFailedAt: true } },
-      },
-    }),
-    unscopedPrisma.knowledgeSource.groupBy({
-      by: ["workspaceId"],
-      where: { workspaceId: { in: ids }, deletedAt: null, status: "FAILED" },
-      _count: { _all: true },
-    }),
-    unscopedPrisma.session.groupBy({
-      by: ["workspaceId"],
-      where: { workspaceId: { in: ids }, createdAt: { gte: startAt, lt: endAt } },
-      _count: { _all: true },
-    }),
-  ]);
+  const [details, channels, failedSources, sessions, externalErrors, externalEvents] =
+    await Promise.all([
+      getAttentionDetails(ids),
+      unscopedPrisma.channel.findMany({
+        where: { workspaceId: { in: ids }, deletedAt: null },
+        select: {
+          workspaceId: true,
+          type: true,
+          status: true,
+          whatsAppConfig: { select: { accessTokenFailedAt: true } },
+        },
+      }),
+      unscopedPrisma.knowledgeSource.groupBy({
+        by: ["workspaceId"],
+        where: { workspaceId: { in: ids }, deletedAt: null, status: "FAILED" },
+        _count: { _all: true },
+      }),
+      unscopedPrisma.session.groupBy({
+        by: ["workspaceId"],
+        where: { workspaceId: { in: ids }, createdAt: { gte: startAt, lt: endAt } },
+        _count: { _all: true },
+      }),
+      // ponytail: group the event table directly; add rollups if error volume makes this query slow.
+      unscopedPrisma.$queryRaw<
+        {
+          provider: string;
+          operation: string;
+          modelId: string | null;
+          code: string | null;
+          httpStatus: number | null;
+          workspaceId: string | null;
+          count: number;
+          firstAt: Date;
+          lastAt: Date;
+          resourceType: string | null;
+          resourceId: string | null;
+        }[]
+      >`
+      SELECT "provider", "operation", "modelId", "code", "httpStatus", "workspaceId",
+        COUNT(*)::int AS "count", MIN("createdAt") AS "firstAt", MAX("createdAt") AS "lastAt",
+        (ARRAY_AGG("resourceType" ORDER BY "createdAt" DESC))[1] AS "resourceType",
+        (ARRAY_AGG("resourceId" ORDER BY "createdAt" DESC))[1] AS "resourceId"
+      FROM "ExternalError"
+      GROUP BY "provider", "operation", "modelId", "code", "httpStatus", "workspaceId"
+      ORDER BY MAX("createdAt") DESC
+    `,
+      unscopedPrisma.$queryRaw<
+        {
+          id: string;
+          workspaceId: string | null;
+          provider: string;
+          operation: string;
+          modelId: string | null;
+          code: string | null;
+          httpStatus: number | null;
+          resourceType: string | null;
+          resourceId: string | null;
+          createdAt: Date;
+        }[]
+      >`
+      SELECT "id", "workspaceId", "provider", "operation", "modelId", "code", "httpStatus",
+        "resourceType", "resourceId", "createdAt"
+      FROM "ExternalError" ORDER BY "createdAt" DESC LIMIT 100
+    `,
+    ]);
 
   const rows = workspaces.map((workspace) => {
     const info = details.get(workspace.id);
@@ -135,5 +178,9 @@ export async function listAtRiskWorkspaces(range: { from?: string; to?: string }
       sessionCount: sessions.find((row) => row.workspaceId === workspace.id)?._count._all ?? 0,
     };
   });
-  return { workspaces: rows.filter((row) => row.conditions.length > 0) };
+  return {
+    externalErrors,
+    externalEvents,
+    workspaces: rows.filter((row) => row.conditions.length > 0),
+  };
 }

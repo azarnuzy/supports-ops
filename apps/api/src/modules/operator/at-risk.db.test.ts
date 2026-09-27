@@ -1,6 +1,7 @@
 import { createTestDatabase, type TestDatabase, truncateAll } from "@repo/test-db";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { recordExternalError } from "../../utils/external-errors";
 
 const sessions = vi.hoisted(() => ({ operator: false }));
 vi.mock("../auth/instance", () => ({
@@ -207,4 +208,32 @@ it("reports configured channel failures and failed Knowledge Sources", async () 
   expect(workspaces).toMatchObject([
     { id: workspaceId, conditions: ["CHANNEL_ISSUE", "KNOWLEDGE_INGESTION_ISSUE"] },
   ]);
+});
+
+it("groups external failures across Workspaces and retains each occurrence", async () => {
+  const first = await createWorkspace("First");
+  const second = await createWorkspace("Second");
+  for (const workspaceId of [first, first, second])
+    await recordExternalError(prisma, {
+      provider: "MISTRAL",
+      operation: "ATTACHMENT_READ",
+      modelId: "mistral-ocr-latest",
+      httpStatus: 429,
+      workspaceId,
+      resourceType: "ATTACHMENT",
+      resourceId: randomUUID(),
+    });
+
+  const response = await app.request("/operator/at-risk");
+  const result = (await response.json()) as {
+    externalErrors: { workspaceId: string; count: number; httpStatus: number }[];
+    externalEvents: { workspaceId: string; httpStatus: number }[];
+  };
+  expect(result.externalErrors).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ workspaceId: first, count: 2, httpStatus: 429 }),
+      expect.objectContaining({ workspaceId: second, count: 1, httpStatus: 429 }),
+    ]),
+  );
+  expect(result.externalEvents).toHaveLength(3);
 });
