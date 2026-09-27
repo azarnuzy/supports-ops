@@ -2,6 +2,17 @@ import { unscopedPrisma } from "../../utils/prisma";
 import { topUpWorkspace } from "./services";
 import { currentOrLastUnlimitedPeriod } from "./unlimited-periods";
 
+/** Batches an Organization name lookup for a set of ids, some possibly null. */
+export async function getOrganizationNames(ids: (string | null)[]) {
+  const uniqueIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  if (!uniqueIds.length) return new Map<string, string>();
+  const organizations = await unscopedPrisma.organization.findMany({
+    where: { id: { in: uniqueIds } },
+    select: { id: true, name: true },
+  });
+  return new Map(organizations.map((organization) => [organization.id, organization.name]));
+}
+
 export async function listOrganizations(search?: string) {
   const organizations = await unscopedPrisma.organization.findMany({
     where: search ? { name: { contains: search, mode: "insensitive" } } : undefined,

@@ -1,36 +1,11 @@
 import {
-  endUnlimitedPeriodEarly,
-  extendUnlimitedPeriod,
   fetchOperatorActions,
   fetchOperatorWorkspaceDetail,
-  grantUnlimitedPeriod,
   type OperatorAction,
-  type UnlimitedPeriod,
 } from "@repo/api-client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@repo/ui/components/alert-dialog";
 import { Button } from "@repo/ui/components/button";
-import { Calendar } from "@repo/ui/components/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@repo/ui/components/chart";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/components/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@repo/ui/components/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@repo/ui/components/popover";
-import { Switch } from "@repo/ui/components/switch";
 import {
   Table,
   TableBody,
@@ -39,18 +14,17 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ActivityIcon,
   ArrowLeftIcon,
-  CalendarIcon,
   CoinsIcon,
   MessageSquareIcon,
   RefreshCwIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ConsoleDataTable,
@@ -64,7 +38,6 @@ import DateRangePicker, {
 import { conditionLabel } from "../../../console/views/at-risk/at-risk";
 import { ConsoleShell } from "../../../console/shell";
 import { api } from "../../../../lib/api";
-import { TopUpDialog } from "./components/top-up-dialog";
 
 const numberFormat = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
@@ -197,8 +170,6 @@ function SortButton({
 }
 export default function WorkspaceDetailView({ workspaceId }: { workspaceId: string }) {
   const [range, setRange] = useState<ConsoleDateRange>(() => trailingRange(7));
-  const [topUpOpen, setTopUpOpen] = useState(false);
-  const [unlimitedOpen, setUnlimitedOpen] = useState(false);
   const [sort, setSort] = useState({ column: "count", descending: true });
   const changeSort = (column: string) =>
     setSort((old) => ({
@@ -248,7 +219,23 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
               <div className="min-w-0 flex-1">
                 <ConsolePageHeader
                   title={data.workspace.name}
-                  description={`${data.workspace.slug} · Created ${formatDate(data.workspace.createdAt)}`}
+                  description={
+                    <>
+                      {data.workspace.slug} · Created {formatDate(data.workspace.createdAt)}
+                      {" · "}
+                      {data.workspace.organizationId ? (
+                        <Link
+                          to="/organizations/$organizationId"
+                          params={{ organizationId: data.workspace.organizationId }}
+                          className="text-primary hover:underline"
+                        >
+                          {data.workspace.organizationName ?? "View Organization"} →
+                        </Link>
+                      ) : (
+                        "No Organization"
+                      )}
+                    </>
+                  }
                   actions={
                     <div className="flex flex-wrap items-center gap-2">
                       <DateRangePicker range={range} onChange={setRange} />
@@ -263,38 +250,11 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                       <span className="text-xs text-muted-foreground">
                         Updated {formatDateTime(new Date(detail.dataUpdatedAt).toISOString())}
                       </span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm">Manage credits</Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => setTopUpOpen(true)}>
-                            Top up credits
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setUnlimitedOpen(true)}>
-                            {isActive(data.unlimitedPeriod)
-                              ? "Update unlimited period"
-                              : "Grant unlimited period"}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   }
                 />
               </div>
             </div>
-            <TopUpDialog
-              workspaceId={workspaceId}
-              balance={data.aiUsage.summary.balance}
-              open={topUpOpen}
-              onOpenChange={setTopUpOpen}
-            />
-            <UnlimitedPeriodDialog
-              workspaceId={workspaceId}
-              unlimitedPeriod={data.unlimitedPeriod}
-              open={unlimitedOpen}
-              onOpenChange={setUnlimitedOpen}
-            />
             <section
               aria-label="Workspace summary"
               className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5"
@@ -310,9 +270,13 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
               />
               <Metric
                 icon={<CoinsIcon />}
-                label="Balance"
+                label="Organization balance"
                 value={`${numberFormat.format(data.aiUsage.summary.balance)} credits`}
-                hint={data.attention.conditions.includes("LOW_BALANCE") ? "Low balance" : undefined}
+                hint={
+                  data.attention.conditions.includes("LOW_BALANCE")
+                    ? "Low balance"
+                    : "Shared with the Organization"
+                }
               />
               <Metric
                 icon={<MessageSquareIcon />}
@@ -542,9 +506,15 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                         className="flex items-center justify-between gap-2 border-b py-2 last:border-0"
                       >
                         <span className="text-sm">{conditionLabel[condition]}</span>
-                        {condition === "LOW_BALANCE" || condition === "CREDIT_EXHAUSTED" ? (
-                          <Button size="sm" variant="outline" onClick={() => setTopUpOpen(true)}>
-                            Top up
+                        {(condition === "LOW_BALANCE" || condition === "CREDIT_EXHAUSTED") &&
+                        data.workspace.organizationId ? (
+                          <Button size="sm" variant="outline" asChild>
+                            <Link
+                              to="/organizations/$organizationId"
+                              params={{ organizationId: data.workspace.organizationId }}
+                            >
+                              Manage in Organization
+                            </Link>
                           </Button>
                         ) : (
                           <span className="text-xs text-muted-foreground">
@@ -560,20 +530,35 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                   )}
                 </Panel>
                 <Panel
-                  title="Billing & credits"
+                  title="Organization credits"
                   action={
-                    <Link
-                      to="/$section"
-                      params={{ section: "ai-usage-economics" }}
-                      className="text-xs text-primary"
-                    >
-                      View usage →
-                    </Link>
+                    <div className="flex items-center gap-3 text-xs">
+                      {data.workspace.organizationId ? (
+                        <Link
+                          to="/organizations/$organizationId"
+                          params={{ organizationId: data.workspace.organizationId }}
+                          className="text-primary"
+                        >
+                          Manage in Organization →
+                        </Link>
+                      ) : null}
+                      <Link
+                        to="/$section"
+                        params={{ section: "ai-usage-economics" }}
+                        className="text-primary"
+                      >
+                        View usage →
+                      </Link>
+                    </div>
                   }
                 >
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Credits and Unlimited Period are shared with every Workspace in this
+                    Organization. Top-Up and Unlimited Period are managed on the Organization page.
+                  </p>
                   <dl className="divide-y text-sm">
                     <div className="flex justify-between py-2">
-                      <dt>Current balance</dt>
+                      <dt>Organization balance</dt>
                       <dd>{numberFormat.format(data.aiUsage.summary.balance)} credits</dd>
                     </div>
                     <div className="flex justify-between py-2">
@@ -581,7 +566,7 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
                       <dd>{numberFormat.format(data.billing.toppedUpThisMonth)}</dd>
                     </div>
                     <div className="flex justify-between py-2">
-                      <dt>Credits consumed this month</dt>
+                      <dt>Credits consumed this month (this Workspace)</dt>
                       <dd>{numberFormat.format(data.billing.spentThisMonth)}</dd>
                     </div>
                     <div className="flex justify-between py-2">
@@ -639,173 +624,5 @@ export default function WorkspaceDetailView({ workspaceId }: { workspaceId: stri
         )}
       </div>
     </ConsoleShell>
-  );
-}
-
-function isActive(period: UnlimitedPeriod | null): period is UnlimitedPeriod {
-  return (
-    Boolean(period) &&
-    !period?.endedEarlyAt &&
-    (!period?.endAt || new Date(period.endAt) > new Date())
-  );
-}
-
-function UnlimitedPeriodDialog({
-  workspaceId,
-  unlimitedPeriod,
-  open,
-  onOpenChange,
-}: {
-  workspaceId: string;
-  unlimitedPeriod: UnlimitedPeriod | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const queryClient = useQueryClient();
-  const active = isActive(unlimitedPeriod);
-  const [endDate, setEndDate] = useState("");
-  const [indefinite, setIndefinite] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      const periodEnd = unlimitedPeriod?.endAt;
-      setIndefinite(active && !periodEnd);
-      setEndDate(
-        active && periodEnd
-          ? new Date(periodEnd).toLocaleDateString("en-CA", {
-              timeZone: "Asia/Jakarta",
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            })
-          : "",
-      );
-    }
-  }, [open, active, unlimitedPeriod?.endAt]);
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["operator", "workspace", workspaceId] });
-
-  const grant = useMutation({
-    mutationFn: (date: string | null) => grantUnlimitedPeriod(api, workspaceId, date),
-    onSuccess: () => {
-      setEndDate("");
-      invalidate();
-      onOpenChange(false);
-    },
-  });
-  const extend = useMutation({
-    mutationFn: (date: string | null) => extendUnlimitedPeriod(api, workspaceId, date),
-    onSuccess: () => {
-      setEndDate("");
-      invalidate();
-      onOpenChange(false);
-    },
-  });
-  const endEarly = useMutation({
-    mutationFn: () => endUnlimitedPeriodEarly(api, workspaceId),
-    onSuccess: () => {
-      invalidate();
-      onOpenChange(false);
-    },
-  });
-
-  const mutation = active ? extend : grant;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Unlimited Period</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm">
-          {active ? (
-            unlimitedPeriod?.endAt ? (
-              <>
-                Active until{" "}
-                <span className="font-medium">{formatDate(unlimitedPeriod.endAt)}</span>
-              </>
-            ) : (
-              "Active without an end date"
-            )
-          ) : (
-            "No active Unlimited Period."
-          )}
-        </p>
-        <div className="flex items-center gap-2">
-          <Switch id="indefinite-unlimited" checked={indefinite} onCheckedChange={setIndefinite} />
-          <label htmlFor="indefinite-unlimited" className="text-sm">
-            No end date
-          </label>
-        </div>
-        {!indefinite && (
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-fit justify-start">
-                <CalendarIcon className="size-4" />
-                {endDate ? dateFormat.format(new Date(`${endDate}T00:00:00`)) : "Choose end date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={endDate ? new Date(`${endDate}T00:00:00`) : undefined}
-                disabled={{ before: new Date() }}
-                onSelect={(date) => {
-                  if (date) {
-                    setEndDate(
-                      new Intl.DateTimeFormat("en-CA", {
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                      }).format(date),
-                    );
-                    setCalendarOpen(false);
-                  }
-                }}
-              />
-            </PopoverContent>
-          </Popover>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            disabled={(!indefinite && !endDate) || mutation.isPending}
-            onClick={() => mutation.mutate(indefinite ? null : endDate)}
-          >
-            {active ? "Update" : "Grant"}
-          </Button>
-          {active && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="sm" variant="outline" disabled={endEarly.isPending}>
-                  End early
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>End this Unlimited Period now?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    The Workspace goes back to spending its own Credits immediately.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => endEarly.mutate()}>End early</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-        </div>
-        {(grant.isError || extend.isError || endEarly.isError) && (
-          <p className="text-sm text-destructive">
-            {(grant.error ?? extend.error ?? endEarly.error) instanceof Error
-              ? ((grant.error ?? extend.error ?? endEarly.error) as Error).message
-              : "Something went wrong."}
-          </p>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }

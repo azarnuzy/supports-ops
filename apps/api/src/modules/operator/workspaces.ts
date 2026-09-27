@@ -4,7 +4,12 @@ import type { AnalyticsRangeQuery } from "../analytics/schema";
 import { getAnalyticsOverview, getAnalyticsTraffic, resolveRange } from "../analytics/services";
 import { getAiUsageSummary, getToolUsage } from "../ai-usage/services";
 import { currentOrLastUnlimitedPeriod } from "./unlimited-periods";
-import { type AtRiskCondition, getAttentionDetails } from "./at-risk";
+import {
+  type AtRiskCondition,
+  getAttentionDetails,
+  getAttentionDetailsWithOrganization,
+} from "./at-risk";
+import { getOrganizationNames } from "./organizations";
 
 export async function listWorkspaces({
   search,
@@ -76,7 +81,7 @@ export async function listWorkspaces({
   if (!ids.length) return { workspaces: [], total: 0, page, limit, channelCounts };
 
   const [details, users, sessions, previousSessions, spend, previousSpend] = await Promise.all([
-    getAttentionDetails(ids),
+    getAttentionDetailsWithOrganization(ids),
     unscopedPrisma.workspaceMembership.findMany({
       where: { workspaceId: { in: ids }, user: { deletedAt: null } },
       select: { workspaceId: true, role: true, user: { select: { name: true } } },
@@ -116,6 +121,8 @@ export async function listWorkspaces({
         userCount: users.filter((user) => user.workspaceId === workspace.id).length,
         adminName: admins[0]?.user.name ?? null,
         adminCount: admins.length,
+        organizationId: info.organizationId,
+        organizationName: info.organizationName,
         balance: info.balance,
         activeUnlimitedPeriod: info.activeUnlimitedPeriod,
         lastCustomerActivityAt: info.lastCustomerActivityAt,
@@ -187,6 +194,10 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
     select: { id: true, organizationId: true, name: true, slug: true, createdAt: true },
   });
   if (!workspace) return null;
+  const organizationNames = await getOrganizationNames([workspace.organizationId]);
+  const organizationName = workspace.organizationId
+    ? (organizationNames.get(workspace.organizationId) ?? null)
+    : null;
 
   return withWorkspaceContext(id, async () => {
     const { startAt, endAt } = resolveRange(range);
@@ -276,7 +287,7 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
     const workspaceAttention = attention.get(id);
     if (!workspaceAttention) throw new Error(`missing attention details for workspace ${id}`);
     return {
-      workspace,
+      workspace: { ...workspace, organizationName },
       attention: workspaceAttention,
       sessions: {
         count: sessions.length,
