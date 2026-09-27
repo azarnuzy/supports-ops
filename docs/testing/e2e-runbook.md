@@ -40,6 +40,12 @@ Hasil 2026-09-27: pengguna mengonfirmasi lewat browser (nama browser tidak dicat
 
 Setelah migrasi, masuk sebagai Organization Admin lama dan buka Billing serta AI Usage. Catat saldo sebelum dan sesudah migrasi; nilainya harus sama, riwayat Trial Grant, Top-Up, pembayaran, dan spend tetap terlihat. Daftar Organization baru lewat `/register`, lalu pastikan Billing menampilkan satu Trial Grant 500 Credits. Buat Ticket dan biarkan AI Agent menjawab satu Turn: saldo turun sesuai Model Rate, dan AI Usage Workspace menampilkan spend tersebut. Hapus Ticket; entri spend dan saldo tidak boleh berubah. Jika Organization memiliki dua Workspace, keduanya harus membaca saldo yang sama, sementara AI Usage masing-masing hanya menampilkan spend Workspace sendiri. Catat tanggal, browser, saldo awal/akhir, dan hasil tiap langkah sebelum menandai skenario selesai.
 
+### Organization Billing (#269)
+
+Masuk sebagai Organization Admin dan buka `/workspace/billing`: saldo, Top-Up Packs, riwayat pembayaran, dan Credit Ledger harus terlihat. Dengan `MAYAR_API_KEY` sandbox, mulai checkout, selesaikan pembayaran, lalu kembali ke Billing; saldo naik sesuai Pack dan pembayaran berubah menjadi Paid. Kirim ulang webhook atau muat ulang Billing: saldo tidak bertambah lagi. Pada dua Workspace dalam Organization yang sama, Billing memperlihatkan pembayaran dan saldo yang sama; Organization lain tidak melihatnya. Masuk sebagai Workspace Admin: halaman operasional dan AI Usage tetap terbuka, tetapi menu Billing tidak tampil, akses langsung `/workspace/billing` dialihkan, dan `GET /billing`, `POST /billing/checkout`, serta `GET /ai-usage/ledger` menghasilkan 403. Catat tanggal, browser, akun/peran, saldo sebelum/sesudah, dan hasil tiap langkah.
+
+Hasil 2026-09-27: verifikasi browser belum dilakukan; tidak ada sesi browser dan kredensial Mayar sandbox yang tersedia pada lingkungan implementasi ini. Status skenario: menunggu verifikasi manual.
+
 Hasil: belum diverifikasi secara manual di browser.
 
 Jalankan perintah ini dari root repository:
