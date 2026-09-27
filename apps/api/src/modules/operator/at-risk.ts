@@ -24,10 +24,14 @@ export type AttentionDetail = {
 export async function getAttentionDetails(ids: string[]): Promise<Map<string, AttentionDetail>> {
   if (!ids.length) return new Map();
   const now = new Date();
-  const [balances, activePeriods, activity] = await Promise.all([
+  const [workspaces, balances, activePeriods, activity] = await Promise.all([
+    unscopedPrisma.workspace.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, organizationId: true },
+    }),
     unscopedPrisma.creditLedgerEntry.groupBy({
-      by: ["workspaceId"],
-      where: { workspaceId: { in: ids } },
+      by: ["organizationId"],
+      where: { organization: { workspaces: { some: { id: { in: ids } } } } },
       _sum: { credits: true },
     }),
     unscopedPrisma.unlimitedPeriod.findMany({
@@ -50,7 +54,8 @@ export async function getAttentionDetails(ids: string[]): Promise<Map<string, At
 
   const map = new Map<string, AttentionDetail>();
   for (const id of ids) {
-    const balance = balances.find((row) => row.workspaceId === id)?._sum.credits ?? 0;
+    const organizationId = workspaces.find((workspace) => workspace.id === id)?.organizationId;
+    const balance = balances.find((row) => row.organizationId === organizationId)?._sum.credits ?? 0;
     const activePeriod = activePeriods.find((row) => row.workspaceId === id) ?? null;
     const lastCustomerActivityAt =
       activity.find((row) => row.workspaceId === id)?._max.customerLastMessageAt ?? null;

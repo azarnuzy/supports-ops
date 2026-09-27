@@ -2,6 +2,7 @@ import { Queue, type ConnectionOptions } from "bullmq";
 
 export type CreditAlertEmailJob = {
   kind: "LOW_BALANCE" | "CREDIT_EXHAUSTED";
+  organizationId: string;
   workspaceId: string;
 };
 

@@ -82,16 +82,17 @@ async function balanceWithin(
  * fires, so it never repeats until a Top-Up lifts the balance back up and a
  * later spend crosses it again. */
 async function notifyBalanceCrossing(
+  organizationId: string,
   workspaceId: string,
   balanceBefore: number,
   balanceAfter: number,
 ) {
   if (balanceBefore > 0 && balanceAfter <= 0) {
-    await enqueueCreditAlertEmail({ kind: "CREDIT_EXHAUSTED", workspaceId });
+    await enqueueCreditAlertEmail({ kind: "CREDIT_EXHAUSTED", organizationId, workspaceId });
     return;
   }
   if (balanceBefore >= lowBalanceThreshold && balanceAfter < lowBalanceThreshold) {
-    await enqueueCreditAlertEmail({ kind: "LOW_BALANCE", workspaceId });
+    await enqueueCreditAlertEmail({ kind: "LOW_BALANCE", organizationId, workspaceId });
   }
 }
 
@@ -100,7 +101,7 @@ async function notifyBalanceCrossing(
  * only invoke this for a genuine decision — a Turn aborted by Takeover or
  * failed by a provider error must never reach it. */
 export async function spendForTurn(
-  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry" | "unlimitedPeriod" | "workspace">,
+  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry" | "organization" | "unlimitedPeriod" | "workspace">,
   params: {
     aiAgentId: string;
     agentModel: string | null;
@@ -126,6 +127,13 @@ export async function spendForTurn(
   });
   const credits = unlimited ? 0 : rate;
   const organizationId = await organizationIdForWorkspace(tx, params.workspaceId);
+  // Serialize spends across Workspaces before reading the shared balance.
+  if (!unlimited) {
+    await tx.organization.update({
+      where: { id: organizationId },
+      data: { updatedAt: new Date() },
+    });
+  }
   const balanceBefore = unlimited ? 0 : await balanceWithin(tx, organizationId);
   await tx.creditLedgerEntry.create({
     data: {
@@ -147,7 +155,7 @@ export async function spendForTurn(
     },
   });
   if (unlimited) return;
-  await notifyBalanceCrossing(params.workspaceId, balanceBefore, balanceBefore - rate);
+  await notifyBalanceCrossing(organizationId, params.workspaceId, balanceBefore, balanceBefore - rate);
 }
 
 /** The operator Top-Up path (`pnpm credits:top-up`). Runs outside any Workspace

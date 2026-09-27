@@ -62,9 +62,9 @@ export async function getBillingOverview(query: z.infer<typeof analyticsRangeQue
     }),
     unscopedPrisma.workspace.findMany({
       where: { deletedAt: null },
-      select: { id: true, name: true },
+      select: { id: true, name: true, organizationId: true },
     }),
-    unscopedPrisma.creditLedgerEntry.groupBy({ by: ["workspaceId"], _sum: { credits: true } }),
+    unscopedPrisma.creditLedgerEntry.groupBy({ by: ["organizationId"], _sum: { credits: true } }),
     unscopedPrisma.unlimitedPeriod.findMany({
       where: { endedEarlyAt: null, OR: [{ endAt: null }, { endAt: { gt: now } }] },
       select: { workspaceId: true },
@@ -98,12 +98,12 @@ export async function getBillingOverview(query: z.infer<typeof analyticsRangeQue
       );
     }
   }
-  const balanceByWorkspace = new Map(
-    balances.map((row) => [row.workspaceId, row._sum.credits ?? 0]),
+  const balanceByOrganization = new Map(
+    balances.map((row) => [row.organizationId, row._sum.credits ?? 0]),
   );
   const distribution = { over1000: 0, from100To1000: 0, from1To100: 0, zeroOrLess: 0 };
   for (const workspace of workspaces) {
-    const balance = balanceByWorkspace.get(workspace.id) ?? 0;
+    const balance = balanceByOrganization.get(workspace.organizationId ?? "") ?? 0;
     if (balance > 1000) distribution.over1000++;
     else if (balance >= 100) distribution.from100To1000++;
     else if (balance > 0) distribution.from1To100++;

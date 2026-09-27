@@ -476,8 +476,8 @@ export function acknowledgementFor(customerMessage: string, reason: ApiEscalatio
     );
   const explanations: Record<ApiEscalationReason, [string, string]> = {
     CREDIT_EXHAUSTION: [
-      "Kredit AI untuk workspace ini telah habis, jadi percakapan ini akan dilanjutkan oleh Human Agent.",
-      "This workspace's AI Credits are exhausted, so this conversation will continue with a Human Agent.",
+      "Kredit AI untuk organisasi ini telah habis, jadi percakapan ini akan dilanjutkan oleh Human Agent.",
+      "This organization's AI Credits are exhausted, so this conversation will continue with a Human Agent.",
     ],
     AI_FAILED_ATTEMPTS: [
       "Saya belum mendapat informasi yang cukup untuk melanjutkan dengan aman.",

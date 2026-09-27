@@ -255,13 +255,15 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
         // AI_GENERATION_FAILED and AI_TIMEOUT are the Turn giving up before a
         // decision existed — a provider failure, not a spend-eligible outcome.
         if (reason !== "AI_GENERATION_FAILED" && reason !== "AI_TIMEOUT") {
-          await spendForTurn(unscopedPrisma, {
-            agentModel: agentModelId,
-            aiAgentId: ticket.aiAgentId,
-            sessionId: ticket.sessionId,
-            ticketId: ticket.ticketId,
-            workspaceId: ticket.workspaceId,
-          });
+          await unscopedPrisma.$transaction((tx) =>
+            spendForTurn(tx, {
+              agentModel: agentModelId,
+              aiAgentId: ticket.aiAgentId,
+              sessionId: ticket.sessionId,
+              ticketId: ticket.ticketId,
+              workspaceId: ticket.workspaceId,
+            }),
+          );
         }
       },
       finish: async () => {},
@@ -289,24 +291,28 @@ export async function runEvalTurn(input: EvalTurnInput): Promise<EvalTurnOutput>
       reply: async (replyDecision, content) => {
         decision = replyDecision;
         text = content;
-        await spendForTurn(unscopedPrisma, {
-          agentModel: agentModelId,
-          aiAgentId: ticket.aiAgentId,
-          sessionId: ticket.sessionId,
-          ticketId: ticket.ticketId,
-          workspaceId: ticket.workspaceId,
-        });
+        await unscopedPrisma.$transaction((tx) =>
+          spendForTurn(tx, {
+            agentModel: agentModelId,
+            aiAgentId: ticket.aiAgentId,
+            sessionId: ticket.sessionId,
+            ticketId: ticket.ticketId,
+            workspaceId: ticket.workspaceId,
+          }),
+        );
       },
       resolve: async (content) => {
         decision = "RESOLVE";
         text = content;
-        await spendForTurn(unscopedPrisma, {
-          agentModel: agentModelId,
-          aiAgentId: ticket.aiAgentId,
-          sessionId: ticket.sessionId,
-          ticketId: ticket.ticketId,
-          workspaceId: ticket.workspaceId,
-        });
+        await unscopedPrisma.$transaction((tx) =>
+          spendForTurn(tx, {
+            agentModel: agentModelId,
+            aiAgentId: ticket.aiAgentId,
+            sessionId: ticket.sessionId,
+            ticketId: ticket.ticketId,
+            workspaceId: ticket.workspaceId,
+          }),
+        );
       },
       // Ticket Attachments only; Knowledge is retrieved agentically via the
       // searchKnowledge Tool, exactly as it is in production.
