@@ -289,6 +289,15 @@ Verifikasi browser belum dijalankan di sesi implementasi ini (tidak ada browser 
 4. Tetapkan end date, lalu akhiri period lebih awal. Kirim AI Turn di ketiga Workspace: semuanya kembali mengurangi saldo. Riwayat tiga Turn sebelumnya tetap nol spend.
 5. Grant period berakhir singkat, tunggu expiry, lalu ulangi satu Turn. Periksa saldo berkurang dan detail Organization tidak lagi menunjukkan period aktif.
 
+### Overview and Needs Attention scope (#278)
+
+Verifikasi browser belum dijalankan di sesi implementasi ini (tidak ada browser lokal yang tersedia). Saat lingkungan browser siap:
+
+1. Login sebagai Operator, buka Overview: pastikan kartu jumlah Organization tampil terpisah dari jumlah Workspace.
+2. Buat satu Organization dengan dua Workspace lalu turunkan saldonya di bawah ambang rendah. Buka Needs Attention: pastikan hanya satu baris risiko finansial muncul di bagian "Organization financial risk" (bukan satu per Workspace), dan aksi Top-Up/Extend Period pada baris itu membuka detail Organization yang benar.
+3. Pada salah satu Workspace milik Organization tersebut, buat kondisi operasional (tidak ada aktivitas Customer 14+ hari, Channel nonaktif, atau Knowledge Source gagal). Pastikan baris itu muncul di bagian "Workspace operations" dan aksinya membuka detail Workspace, bukan Organization.
+4. Di widget "Needs review" pada Overview, pastikan item finansial Organization dan item operasional Workspace tampil bersisian dengan tautan yang benar ke masing-masing detail.
+
 
 Eval dijalankan terhadap Workspace live yang ditunjuk `EVAL_WORKSPACE_ID` (bukan corpus
 in-memory), memakai Knowledge Source, instructions, dan Tool Assignment Workspace tersebut.
