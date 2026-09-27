@@ -66,9 +66,15 @@ Masuk ke Console sebagai Operator. Buka `/organizations` dan pastikan dua Worksp
 
 Hasil #274: belum diverifikasi secara manual di browser.
 
+### Billing & Credits dan Audit Log berlabel Organization (#277)
+
+Masuk ke Console sebagai Operator dengan minimal satu Organization yang punya dua Workspace aktif dan satu Unlimited Period aktif. Buka `Billing & Credits`: panel "Credits balance distribution" dan metrik "Active Unlimited Periods" harus menghitung Organization itu satu kali walau ia punya dua Workspace, sedangkan panel "Top Workspaces by Credits consumed" tetap memecah spend per Workspace. Buka tab Payments dan Credits: baris Top-Up, Trial Grant, dan pembayaran harus menampilkan nama Organization (tertaut ke `/organizations/:id`), bukan salah satu Workspace anaknya; baris Spend harus menampilkan Organization dan Workspace asal spend itu. Buka `Audit Log`: entri `TOP_UP` dan `UNLIMITED_PERIOD_*` harus menampilkan Organization yang sama. Hapus (soft delete) Workspace anchor tempat Unlimited Period pertama kali dibuat, lalu refresh Audit Log dan Billing & Credits: Organization tetap teridentifikasi di baris-baris itu. Catat tanggal, browser, akun, dan hasil tiap langkah.
+
+Hasil: belum diverifikasi secara manual di browser.
+
 ### Workspace detail operasional tertaut ke Organization (#276)
 
-Masuk ke Console sebagai Operator. Buka `/workspaces`: setiap baris menampilkan kolom Organization yang tertaut ke `/organizations/:id` milik Workspace itu, sementara Health, Users, Channels, Sessions, Ticket outcomes, dan AI Usage tetap milik Workspace itu sendiri. Buka detail satu Workspace: judul halaman menautkan ke Organization pemiliknya, panel "Organization credits" menampilkan saldo dan Unlimited Period Organization sebagai info baca-saja dengan tautan "Manage in Organization", dan tombol Top-Up/Grant/Extend langsung tidak lagi ada di halaman ini. Buka panel Needs attention (`/needs-attention`): Workspace dengan saldo rendah/habis atau Unlimited Period yang akan berakhir menampilkan tautan "Manage in Organization" alih-alih dialog Top-Up/Extend. Verifikasi bahwa mengubah Top-Up atau Unlimited Period tetap hanya bisa dilakukan dari detail Organization, dan tampilan Operator tidak mengungkap isi Customer Message. Catat tanggal, browser, akun, dan hasil tiap langkah.
+Masuk ke Console sebagai Operator. Buka `/workspaces`: setiap baris menampilkan kolom Organization yang tertaut ke `/organizations/:id` milik Workspace itu, sementara Health, Users, Channels, Sessions, Ticket outcomes, dan AI Usage tetap milik Workspace itu sendiri. Buka detail satu Workspace: judul halaman menautkan ke Organization pemiliknya, panel "Organization credits" menampilkan saldo dan Unlimited Period Organization sebagai info baca-saja dengan tautan "Manage in Organization", dan tombol Top-Up/Grant/Extend langsung tidak lagi ada di halaman ini. Buka panel Needs attention (`/needs-attention`): risiko finansial (saldo rendah/habis, Unlimited Period berakhir) kini dilaporkan per Organization ([#278](https://github.com/azarnuzy/supports-ops/issues/278)) dengan aksi Top-Up/Extend di sana; baris operasional per Workspace hanya menyisakan tautan "View workspace". Verifikasi bahwa mengubah Top-Up atau Unlimited Period tetap hanya bisa dilakukan dari detail Organization, dan tampilan Operator tidak mengungkap isi Customer Message. Catat tanggal, browser, akun, dan hasil tiap langkah.
 
 Hasil #276: belum diverifikasi secara manual di browser pada lingkungan implementasi ini (tidak ada stack lokal Postgres/Console yang berjalan). Diverifikasi lewat test otomatis: `apps/api` (`pnpm --filter @repo/api vitest run`, termasuk `operator/workspaces.db.test.ts` dan `operator/at-risk.db.test.ts`) dan `pnpm --filter @repo/console typecheck` lulus tanpa regresi baru.
 
@@ -288,6 +294,15 @@ Verifikasi browser belum dijalankan di sesi implementasi ini (tidak ada browser 
 3. Buat Workspace ketiga saat period aktif, lalu kirim AI Turn di sana. Hasil spend dan saldo harus sama.
 4. Tetapkan end date, lalu akhiri period lebih awal. Kirim AI Turn di ketiga Workspace: semuanya kembali mengurangi saldo. Riwayat tiga Turn sebelumnya tetap nol spend.
 5. Grant period berakhir singkat, tunggu expiry, lalu ulangi satu Turn. Periksa saldo berkurang dan detail Organization tidak lagi menunjukkan period aktif.
+
+### Overview and Needs Attention scope (#278)
+
+Verifikasi browser belum dijalankan di sesi implementasi ini (tidak ada browser lokal yang tersedia). Saat lingkungan browser siap:
+
+1. Login sebagai Operator, buka Overview: pastikan kartu jumlah Organization tampil terpisah dari jumlah Workspace.
+2. Buat satu Organization dengan dua Workspace lalu turunkan saldonya di bawah ambang rendah. Buka Needs Attention: pastikan hanya satu baris risiko finansial muncul di bagian "Organization financial risk" (bukan satu per Workspace), dan aksi Top-Up/Extend Period pada baris itu membuka detail Organization yang benar.
+3. Pada salah satu Workspace milik Organization tersebut, buat kondisi operasional (tidak ada aktivitas Customer 14+ hari, Channel nonaktif, atau Knowledge Source gagal). Pastikan baris itu muncul di bagian "Workspace operations" dan aksinya membuka detail Workspace, bukan Organization.
+4. Di widget "Needs review" pada Overview, pastikan item finansial Organization dan item operasional Workspace tampil bersisian dengan tautan yang benar ke masing-masing detail.
 
 
 Eval dijalankan terhadap Workspace live yang ditunjuk `EVAL_WORKSPACE_ID` (bukan corpus

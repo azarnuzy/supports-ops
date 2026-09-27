@@ -436,8 +436,8 @@ export default function PaymentsView() {
               </Panel>
               <Panel title="Credits balance distribution" centered>
                 <Donut
-                  center={formatCount(data.workspaceCount)}
-                  caption="Workspaces"
+                  center={formatCount(data.organizationCount)}
+                  caption="Organizations"
                   rows={[
                     {
                       label: "> 1,000",
@@ -461,21 +461,21 @@ export default function PaymentsView() {
               <Panel title="Quick actions" centered>
                 <div className="space-y-2">
                   <Link
-                    to="/workspaces"
+                    to="/organizations"
                     className="block rounded-lg border p-3 text-sm hover:bg-muted"
                   >
                     <strong>Top up Credits →</strong>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Choose a Workspace to add Credits.
+                      Choose an Organization to add Credits.
                     </p>
                   </Link>
                   <Link
-                    to="/workspaces"
+                    to="/organizations"
                     className="block rounded-lg border p-3 text-sm hover:bg-muted"
                   >
                     <strong>Manage Unlimited Period →</strong>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Choose a Workspace to grant or update.
+                      Choose an Organization to grant or update.
                     </p>
                   </Link>
                 </div>
@@ -495,7 +495,7 @@ export default function PaymentsView() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Workspace</TableHead>
+                        <TableHead>Organization</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Credits added</TableHead>
@@ -508,7 +508,7 @@ export default function PaymentsView() {
                           <TableCell>
                             {dateTime.format(new Date(row.paidAt ?? row.createdAt))}
                           </TableCell>
-                          <TableCell>{row.workspace.name}</TableCell>
+                          <TableCell>{row.organization?.name ?? "—"}</TableCell>
                           <TableCell className="text-right">{formatIdr(row.amountIdr)}</TableCell>
                           <TableCell>
                             <ConsoleStatusBadge
@@ -550,7 +550,7 @@ export default function PaymentsView() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Workspace</TableHead>
+                        <TableHead>Organization</TableHead>
                         <TableHead>Ends at</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Added by</TableHead>
@@ -559,7 +559,7 @@ export default function PaymentsView() {
                     <TableBody>
                       {activeRows.slice(0, 5).map((row) => (
                         <TableRow key={row.id}>
-                          <TableCell>{row.workspace.name}</TableCell>
+                          <TableCell>{row.workspace.organization?.name ?? row.workspace.name}</TableCell>
                           <TableCell>
                             {row.endAt ? date.format(new Date(row.endAt)) : "No end date"}
                           </TableCell>
@@ -646,7 +646,7 @@ export default function PaymentsView() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Workspace</TableHead>
+                        <TableHead>Organization</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
                       </TableRow>
@@ -655,7 +655,10 @@ export default function PaymentsView() {
                       {creditRows.slice(0, 3).map((row) => (
                         <TableRow key={row.id}>
                           <TableCell>{dateTime.format(new Date(row.createdAt))}</TableCell>
-                          <TableCell>{row.workspace.name}</TableCell>
+                          <TableCell>
+                            {row.organization?.name ?? "—"}
+                            {row.workspace ? ` · ${row.workspace.name}` : ""}
+                          </TableCell>
                           <TableCell>{creditLabels[row.type]}</TableCell>
                           <TableCell className="text-right tabular-nums">
                             {row.credits > 0 ? "+" : ""}
@@ -681,8 +684,8 @@ export default function PaymentsView() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Input
-              aria-label="Filter by Workspace"
-              placeholder="Search Workspace"
+              aria-label="Filter by Organization"
+              placeholder="Search Organization"
               value={workspace}
               onChange={(event) => {
                 setWorkspace(event.target.value);
@@ -746,7 +749,7 @@ export default function PaymentsView() {
                       {tab === "payments" ? (
                         <>
                           <SortHead
-                            label="Workspace"
+                            label="Organization"
                             column="workspace"
                             sortBy={sortBy}
                             direction={direction}
@@ -801,7 +804,7 @@ export default function PaymentsView() {
                             onSort={sort}
                           />
                           <SortHead
-                            label="Workspace"
+                            label="Organization"
                             column="workspace"
                             sortBy={sortBy}
                             direction={direction}
@@ -827,7 +830,7 @@ export default function PaymentsView() {
                       ) : (
                         <>
                           <SortHead
-                            label="Workspace"
+                            label="Organization"
                             column="workspace"
                             sortBy={sortBy}
                             direction={direction}
@@ -870,13 +873,17 @@ export default function PaymentsView() {
                       ? paymentRows.map((row) => (
                           <TableRow key={row.id}>
                             <TableCell>
-                              <Link
-                                to="/workspaces/$workspaceId"
-                                params={{ workspaceId: row.workspace.id }}
-                                className="text-primary hover:underline"
-                              >
-                                {row.workspace.name}
-                              </Link>
+                              {row.organization ? (
+                                <Link
+                                  to="/organizations/$organizationId"
+                                  params={{ organizationId: row.organization.id }}
+                                  className="text-primary hover:underline"
+                                >
+                                  {row.organization.name}
+                                </Link>
+                              ) : (
+                                "—"
+                              )}
                             </TableCell>
                             <TableCell className="text-right">{formatIdr(row.amountIdr)}</TableCell>
                             <TableCell className="text-right">
@@ -907,13 +914,22 @@ export default function PaymentsView() {
                             <TableRow key={row.id}>
                               <TableCell>{dateTime.format(new Date(row.createdAt))}</TableCell>
                               <TableCell>
-                                <Link
-                                  to="/workspaces/$workspaceId"
-                                  params={{ workspaceId: row.workspace.id }}
-                                  className="text-primary hover:underline"
-                                >
-                                  {row.workspace.name}
-                                </Link>
+                                {row.organization ? (
+                                  <Link
+                                    to="/organizations/$organizationId"
+                                    params={{ organizationId: row.organization.id }}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {row.organization.name}
+                                  </Link>
+                                ) : (
+                                  "—"
+                                )}
+                                {row.workspace ? (
+                                  <span className="ml-1 text-xs text-muted-foreground">
+                                    ({row.workspace.name})
+                                  </span>
+                                ) : null}
                               </TableCell>
                               <TableCell>{creditLabels[row.type]}</TableCell>
                               <TableCell className="text-right tabular-nums">

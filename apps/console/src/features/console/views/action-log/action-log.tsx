@@ -109,7 +109,7 @@ export default function ActionLogView() {
               <TableRow>
                 <TableHead>When</TableHead>
                 <TableHead>Operator</TableHead>
-                <TableHead>Workspace</TableHead>
+                <TableHead>Organization</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Detail</TableHead>
               </TableRow>
@@ -122,13 +122,13 @@ export default function ActionLogView() {
                   </TableCell>
                   <TableCell>{action.operator.name}</TableCell>
                   <TableCell>
-                    {action.workspace ? (
+                    {action.workspace?.organization ? (
                       <Link
-                        to="/workspaces/$workspaceId"
-                        params={{ workspaceId: action.workspace.id }}
+                        to="/organizations/$organizationId"
+                        params={{ organizationId: action.workspace.organization.id }}
                         className="text-primary hover:underline"
                       >
-                        {action.workspace.name}
+                        {action.workspace.organization.name}
                       </Link>
                     ) : (
                       "—"

@@ -17,16 +17,23 @@ vi.mock("../auth/instance", () => ({
 }));
 
 type AtRiskWorkspace = { id: string; conditions: string[] };
+type AtRiskOrganization = { id: string; conditions: string[] };
 
 let database: TestDatabase;
 let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let app: typeof import("../../app").app;
 let operatorId: string;
 
-async function fetchAtRisk() {
+async function fetchAtRiskWorkspaces() {
   const response = await app.request("/operator/at-risk");
   const { workspaces } = (await response.json()) as { workspaces: AtRiskWorkspace[] };
   return workspaces;
+}
+
+async function fetchAtRiskOrganizations() {
+  const response = await app.request("/operator/at-risk");
+  const { organizations } = (await response.json()) as { organizations: AtRiskOrganization[] };
+  return organizations;
 }
 
 beforeAll(async () => {
@@ -84,81 +91,118 @@ async function recordActivity(workspaceId: string, customerLastMessageAt: Date) 
   });
 }
 
-it("flags a Workspace below the low-balance threshold", async () => {
-  const workspaceId = await createWorkspace("Low");
+it("flags an Organization below the low-balance threshold once, not once per Workspace", async () => {
+  const organizationId = await createWorkspace("Low");
   const secondWorkspaceId = randomUUID();
   await prisma.workspace.create({
-    data: { id: secondWorkspaceId, organizationId: workspaceId, name: "Second", slug: secondWorkspaceId },
+    data: { id: secondWorkspaceId, organizationId, name: "Second", slug: secondWorkspaceId },
   });
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 50 },
+    data: {
+      id: randomUUID(),
+      organizationId,
+      workspaceId: organizationId,
+      type: "TRIAL_GRANT",
+      credits: 50,
+    },
   });
-  await recordActivity(workspaceId, new Date());
+  await recordActivity(organizationId, new Date());
   await recordActivity(secondWorkspaceId, new Date());
 
-  const workspaces = await fetchAtRisk();
+  const organizations = await fetchAtRiskOrganizations();
+  const workspaces = await fetchAtRiskWorkspaces();
 
-  expect(workspaces).toEqual(expect.arrayContaining([
-    expect.objectContaining({ id: workspaceId, conditions: ["LOW_BALANCE"] }),
-    expect.objectContaining({ id: secondWorkspaceId, conditions: ["LOW_BALANCE"] }),
-  ]));
-});
-
-it("flags a Workspace at Credit Exhaustion", async () => {
-  const workspaceId = await createWorkspace("Exhausted");
-  await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "SPEND", credits: 0 },
-  });
-  await recordActivity(workspaceId, new Date());
-
-  const workspaces = await fetchAtRisk();
-
-  expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["CREDIT_EXHAUSTED"] }]);
-});
-
-it("does not flag balance for a Workspace on an active Unlimited Period, even at zero balance", async () => {
-  const workspaceId = await createWorkspace("Unlimited");
-  await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "SPEND", credits: 0 },
-  });
-  await prisma.unlimitedPeriod.create({
-    data: { id: randomUUID(), workspaceId, operatorId, endAt: daysAgo(-30) },
-  });
-  await recordActivity(workspaceId, new Date());
-
-  const workspaces = await fetchAtRisk();
-
+  expect(organizations).toMatchObject([{ id: organizationId, conditions: ["LOW_BALANCE"] }]);
   expect(workspaces).toEqual([]);
 });
 
-it("flags a Workspace whose Unlimited Period ends within 7 days", async () => {
-  const workspaceId = await createWorkspace("Ending soon");
+it("flags an Organization at Credit Exhaustion", async () => {
+  const organizationId = await createWorkspace("Exhausted");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
+    data: {
+      id: randomUUID(),
+      organizationId,
+      workspaceId: organizationId,
+      type: "SPEND",
+      credits: 0,
+    },
+  });
+  await recordActivity(organizationId, new Date());
+
+  const organizations = await fetchAtRiskOrganizations();
+
+  expect(organizations).toMatchObject([{ id: organizationId, conditions: ["CREDIT_EXHAUSTED"] }]);
+});
+
+it("does not flag balance for an Organization on an active Unlimited Period, even at zero balance", async () => {
+  const organizationId = await createWorkspace("Unlimited");
+  await prisma.creditLedgerEntry.create({
+    data: {
+      id: randomUUID(),
+      organizationId,
+      workspaceId: organizationId,
+      type: "SPEND",
+      credits: 0,
+    },
   });
   await prisma.unlimitedPeriod.create({
-    data: { id: randomUUID(), workspaceId, operatorId, endAt: daysAgo(-3) },
+    data: { id: randomUUID(), workspaceId: organizationId, operatorId, endAt: daysAgo(-30) },
   });
-  await recordActivity(workspaceId, new Date());
+  await recordActivity(organizationId, new Date());
 
-  const workspaces = await fetchAtRisk();
+  const organizations = await fetchAtRiskOrganizations();
 
-  expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["UNLIMITED_ENDING_SOON"] }]);
+  expect(organizations).toEqual([]);
+});
+
+it("flags an Organization whose Unlimited Period ends within 7 days", async () => {
+  const organizationId = await createWorkspace("Ending soon");
+  await prisma.creditLedgerEntry.create({
+    data: {
+      id: randomUUID(),
+      organizationId,
+      workspaceId: organizationId,
+      type: "TRIAL_GRANT",
+      credits: 500,
+    },
+  });
+  await prisma.unlimitedPeriod.create({
+    data: { id: randomUUID(), workspaceId: organizationId, operatorId, endAt: daysAgo(-3) },
+  });
+  await recordActivity(organizationId, new Date());
+
+  const organizations = await fetchAtRiskOrganizations();
+
+  expect(organizations).toMatchObject([
+    { id: organizationId, conditions: ["UNLIMITED_ENDING_SOON"] },
+  ]);
 });
 
 it("flags a Workspace with no Customer activity for 14 days, including no activity at all", async () => {
   const stale = await createWorkspace("Stale");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: stale, workspaceId: stale, type: "TRIAL_GRANT", credits: 500 },
+    data: {
+      id: randomUUID(),
+      organizationId: stale,
+      workspaceId: stale,
+      type: "TRIAL_GRANT",
+      credits: 500,
+    },
   });
   await recordActivity(stale, daysAgo(15));
 
   const never = await createWorkspace("Never active");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: never, workspaceId: never, type: "TRIAL_GRANT", credits: 500 },
+    data: {
+      id: randomUUID(),
+      organizationId: never,
+      workspaceId: never,
+      type: "TRIAL_GRANT",
+      credits: 500,
+    },
   });
 
-  const workspaces = await fetchAtRisk();
+  const workspaces = await fetchAtRiskWorkspaces();
 
   expect(workspaces.map((w) => [w.id, w.conditions]).sort()).toEqual(
     [
@@ -168,36 +212,50 @@ it("flags a Workspace with no Customer activity for 14 days, including no activi
   );
 });
 
-it("lists a Workspace matching several conditions once, with every condition", async () => {
+it("keeps an Organization's financial risk and a Workspace's operational risk separate", async () => {
   const workspaceId = await createWorkspace("Multi");
   await prisma.creditLedgerEntry.create({
     data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "SPEND", credits: 0 },
   });
   await recordActivity(workspaceId, daysAgo(20));
 
-  const workspaces = await fetchAtRisk();
+  const organizations = await fetchAtRiskOrganizations();
+  const workspaces = await fetchAtRiskWorkspaces();
 
-  expect(workspaces).toMatchObject([
-    { id: workspaceId, conditions: ["CREDIT_EXHAUSTED", "INACTIVE"] },
-  ]);
+  expect(organizations).toMatchObject([{ id: workspaceId, conditions: ["CREDIT_EXHAUSTED"] }]);
+  expect(workspaces).toMatchObject([{ id: workspaceId, conditions: ["INACTIVE"] }]);
 });
 
-it("leaves a healthy Workspace out", async () => {
+it("leaves a healthy Organization and Workspace out", async () => {
   const workspaceId = await createWorkspace("Healthy");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
+    data: {
+      id: randomUUID(),
+      organizationId: workspaceId,
+      workspaceId,
+      type: "TRIAL_GRANT",
+      credits: 500,
+    },
   });
   await recordActivity(workspaceId, new Date());
 
-  const workspaces = await fetchAtRisk();
+  const organizations = await fetchAtRiskOrganizations();
+  const workspaces = await fetchAtRiskWorkspaces();
 
+  expect(organizations).toEqual([]);
   expect(workspaces).toEqual([]);
 });
 
 it("reports configured channel failures and failed Knowledge Sources", async () => {
   const workspaceId = await createWorkspace("Needs repair");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
+    data: {
+      id: randomUUID(),
+      organizationId: workspaceId,
+      workspaceId,
+      type: "TRIAL_GRANT",
+      credits: 500,
+    },
   });
   await recordActivity(workspaceId, new Date());
   await prisma.channel.updateMany({ where: { workspaceId }, data: { status: "INACTIVE" } });
@@ -212,7 +270,7 @@ it("reports configured channel failures and failed Knowledge Sources", async () 
     },
   });
 
-  const workspaces = await fetchAtRisk();
+  const workspaces = await fetchAtRiskWorkspaces();
 
   expect(workspaces).toMatchObject([
     { id: workspaceId, conditions: ["CHANNEL_ISSUE", "KNOWLEDGE_INGESTION_ISSUE"] },

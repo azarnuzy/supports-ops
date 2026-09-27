@@ -72,6 +72,7 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
     session: { workspace: { deletedAt: null } },
   };
   const [
+    organizations,
     workspaces,
     newWorkspaces,
     sessions,
@@ -89,6 +90,7 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
     workspaceSessions,
     previousWorkspaceSessions,
   ] = await Promise.all([
+    unscopedPrisma.organization.count(),
     unscopedPrisma.workspace.count({ where: { ...workspaceScope, deletedAt: null } }),
     unscopedPrisma.workspace.count({ where: { ...workspaceScope, deletedAt: null, createdAt } }),
     unscopedPrisma.session.groupBy({
@@ -177,6 +179,7 @@ export async function getOperatorOverview(query: AnalyticsRangeQuery = {}, works
 
   return {
     range: { from, to },
+    organizations: { total: organizations },
     workspaces: { total: workspaces, active: active.length, new: newWorkspaces },
     previous: {
       activeWorkspaces: previousActive.length,

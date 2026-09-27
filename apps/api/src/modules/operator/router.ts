@@ -194,7 +194,9 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
         where: workspaceId ? { workspaceId } : undefined,
         include: {
           operator: { select: { id: true, name: true, email: true } },
-          workspace: { select: { id: true, name: true } },
+          workspace: {
+            select: { id: true, name: true, organization: { select: { id: true, name: true } } },
+          },
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 100,

@@ -353,7 +353,42 @@ export default function OverviewView() {
     queryFn: () => fetchOperatorActions(api),
   });
   const data = overview.data?.overview;
+  const organizations = atRisk.data?.organizations ?? [];
   const workspaces = atRisk.data?.workspaces ?? [];
+  const priorityItems = [
+    ...organizations.map((organization) => ({
+      key: `org-${organization.id}`,
+      name: organization.name,
+      issue: organization.conditions.includes("CREDIT_EXHAUSTED")
+        ? ("CREDIT_EXHAUSTED" as const)
+        : organization.conditions.includes("LOW_BALANCE")
+          ? ("LOW_BALANCE" as const)
+          : ("UNLIMITED_ENDING_SOON" as const),
+      detail: `${formatCount(organization.balance)} credits`,
+      high: organization.conditions.includes("CREDIT_EXHAUSTED"),
+      to: "/organizations/$organizationId" as const,
+      params: { organizationId: organization.id },
+      actionLabel: organization.conditions.includes("UNLIMITED_ENDING_SOON")
+        ? "Extend period"
+        : "Top up",
+    })),
+    ...workspaces.map((workspace) => ({
+      key: `workspace-${workspace.id}`,
+      name: workspace.name,
+      issue: workspace.conditions.includes("CHANNEL_ISSUE")
+        ? ("CHANNEL_ISSUE" as const)
+        : workspace.conditions.includes("KNOWLEDGE_INGESTION_ISSUE")
+          ? ("KNOWLEDGE_INGESTION_ISSUE" as const)
+          : ("INACTIVE" as const),
+      detail: workspace.lastCustomerActivityAt
+        ? dateTimeFormat.format(new Date(workspace.lastCustomerActivityAt))
+        : "No activity",
+      high: workspace.conditions.includes("CHANNEL_ISSUE"),
+      to: "/workspaces/$workspaceId" as const,
+      params: { workspaceId: workspace.id },
+      actionLabel: "Review",
+    })),
+  ].sort((a, b) => Number(b.high) - Number(a.high));
   const externalErrors = atRisk.data?.externalErrors ?? [];
   const externalErrorGroups = new Set(
     externalErrors.map((error) =>
@@ -416,8 +451,17 @@ export default function OverviewView() {
         <div className="flex flex-col gap-4">
           <section
             aria-label="Platform summary"
-            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"
+            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
           >
+            <Metric
+              icon={<Building2Icon />}
+              label="Organizations"
+              hint="Paying customers, shared balance each"
+              value={formatCount(data.organizations.total)}
+              current={data.organizations.total}
+              previous={data.organizations.total}
+              tone="bg-primary/10 text-primary"
+            />
             <Metric
               icon={<Building2Icon />}
               label="Active workspaces"
@@ -499,9 +543,9 @@ export default function OverviewView() {
                       <TriangleAlertIcon className="size-4" />
                     </span>
                     <div>
-                      <h2 className="text-sm font-semibold">Workspaces requiring review</h2>
+                      <h2 className="text-sm font-semibold">Needs review</h2>
                       <p className="text-xs text-muted-foreground">
-                        Highest-priority workspace issues
+                        Highest-priority Organization and Workspace issues
                       </p>
                     </div>
                   </div>
@@ -522,14 +566,14 @@ export default function OverviewView() {
                     {externalErrorGroups} external service error groups need review →
                   </Link>
                 )}
-                {atRisk.isPending || atRisk.isError || workspaces.length === 0 ? (
+                {atRisk.isPending || atRisk.isError || priorityItems.length === 0 ? (
                   <ConsoleQueryState
                     isPending={atRisk.isPending}
                     isError={atRisk.isError}
                     error={atRisk.error}
-                    isEmpty={!atRisk.isPending && !atRisk.isError && workspaces.length === 0}
-                    emptyTitle="No Workspace issues"
-                    emptyDescription="No Workspace operations need attention right now."
+                    isEmpty={!atRisk.isPending && !atRisk.isError && priorityItems.length === 0}
+                    emptyTitle="Nothing needs review"
+                    emptyDescription="No Organization or Workspace issues right now."
                     onRetry={() => void atRisk.refetch()}
                   />
                 ) : (
@@ -537,70 +581,45 @@ export default function OverviewView() {
                     <table className="w-full min-w-[570px] text-left text-xs">
                       <thead className="border-b bg-muted/30 text-muted-foreground">
                         <tr>
-                          <th className="px-3 py-2 font-medium">Workspace</th>
+                          <th className="px-3 py-2 font-medium">Name</th>
                           <th className="px-2 py-2 font-medium">Issue</th>
-                          <th className="px-2 py-2 text-right font-medium">Balance</th>
-                          <th className="px-2 py-2 font-medium">Last customer activity</th>
+                          <th className="px-2 py-2 font-medium">Detail</th>
                           <th className="px-3 py-2 font-medium">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {[...workspaces]
-                          .sort(
-                            (a, b) =>
-                              Number(b.conditions.includes("CREDIT_EXHAUSTED")) -
-                              Number(a.conditions.includes("CREDIT_EXHAUSTED")),
-                          )
-                          .slice(0, 5)
-                          .map((workspace) => {
-                            const high = workspace.conditions.includes("CREDIT_EXHAUSTED");
-                            const issue = high
-                              ? "CREDIT_EXHAUSTED"
-                              : workspace.conditions.includes("LOW_BALANCE")
-                                ? "LOW_BALANCE"
-                                : workspace.conditions.includes("UNLIMITED_ENDING_SOON")
-                                  ? "UNLIMITED_ENDING_SOON"
-                                  : "INACTIVE";
-                            return (
-                              <tr key={workspace.id}>
-                                <td className="max-w-32 truncate px-3 py-2 font-medium">
-                                  <Link
-                                    to="/workspaces/$workspaceId"
-                                    params={{ workspaceId: workspace.id }}
-                                    className="text-primary hover:underline"
-                                  >
-                                    {workspace.name}
-                                  </Link>
-                                </td>
-                                <td className="px-2 py-2 text-muted-foreground">
-                                  {conditionLabel[issue]}
-                                </td>
-                                <td className="px-2 py-2 text-right tabular-nums">
-                                  {formatCount(workspace.balance)}
-                                </td>
-                                <td className="whitespace-nowrap px-2 py-2 text-muted-foreground">
-                                  {workspace.lastCustomerActivityAt
-                                    ? dateTimeFormat.format(
-                                        new Date(workspace.lastCustomerActivityAt),
-                                      )
-                                    : "—"}
-                                </td>
-                                <td className="px-3 py-2">
-                                  <Link
-                                    to="/workspaces/$workspaceId"
-                                    params={{ workspaceId: workspace.id }}
-                                    className="text-primary hover:underline"
-                                  >
-                                    {issue === "LOW_BALANCE" || high ? "Top up" : "Review"}
-                                  </Link>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                        {priorityItems.slice(0, 5).map((item) => (
+                          <tr key={item.key}>
+                            <td className="max-w-32 truncate px-3 py-2 font-medium">
+                              <Link
+                                to={item.to}
+                                params={item.params}
+                                className="text-primary hover:underline"
+                              >
+                                {item.name}
+                              </Link>
+                            </td>
+                            <td className="px-2 py-2 text-muted-foreground">
+                              {conditionLabel[item.issue]}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2 text-muted-foreground">
+                              {item.detail}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Link
+                                to={item.to}
+                                params={item.params}
+                                className="text-primary hover:underline"
+                              >
+                                {item.actionLabel}
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                     <div className="border-t px-4 py-2 text-xs text-muted-foreground">
-                      Showing {Math.min(5, workspaces.length)} of {workspaces.length} Workspaces
+                      Showing {Math.min(5, priorityItems.length)} of {priorityItems.length} issues
                     </div>
                   </div>
                 )}

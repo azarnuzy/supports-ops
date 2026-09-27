@@ -101,9 +101,11 @@ export async function getBillingOverview(query: z.infer<typeof analyticsRangeQue
   const balanceByOrganization = new Map(
     balances.map((row) => [row.organizationId, row._sum.credits ?? 0]),
   );
+  // Count each Organization once, not once per child Workspace.
+  const organizationIds = new Set(workspaces.map((row) => row.organizationId).filter(Boolean));
   const distribution = { over1000: 0, from100To1000: 0, from1To100: 0, zeroOrLess: 0 };
-  for (const workspace of workspaces) {
-    const balance = balanceByOrganization.get(workspace.organizationId ?? "") ?? 0;
+  for (const organizationId of organizationIds) {
+    const balance = balanceByOrganization.get(organizationId ?? "") ?? 0;
     if (balance > 1000) distribution.over1000++;
     else if (balance >= 100) distribution.from100To1000++;
     else if (balance > 0) distribution.from1To100++;
@@ -132,7 +134,7 @@ export async function getBillingOverview(query: z.infer<typeof analyticsRangeQue
     },
     daily,
     distribution,
-    workspaceCount: workspaces.length,
+    organizationCount: organizationIds.size,
     paymentStatuses: {
       paid: paymentStatuses.filter((row) => row.status === "PAID").length,
       pending: paymentStatuses.filter((row) => row.status === "PENDING" && row.expiresAt > now)
@@ -156,14 +158,14 @@ export async function listCreditOperations(query: z.infer<typeof creditQuerySche
     Prisma.CreditLedgerEntryOrderByWithRelationInput
   > = {
     createdAt: { createdAt: query.sortDirection },
-    workspace: { workspace: { name: query.sortDirection } },
+    workspace: { organization: { name: query.sortDirection } },
     type: { type: query.sortDirection },
     credits: { credits: query.sortDirection },
   };
   const where = {
     ...(query.type && { type: query.type }),
     ...(query.workspace && {
-      workspace: { name: { contains: query.workspace, mode: "insensitive" as const } },
+      organization: { name: { contains: query.workspace, mode: "insensitive" as const } },
     }),
     createdAt: {
       ...(query.from && { gte: new Date(query.from) }),
@@ -183,11 +185,22 @@ export async function listCreditOperations(query: z.infer<typeof creditQuerySche
         type: true,
         credits: true,
         note: true,
+        organization: { select: { id: true, name: true } },
         workspace: { select: { id: true, name: true } },
       },
     }),
   ]);
-  return { operations: rows, total, page: query.page, limit: query.limit };
+  return {
+    // A Trial Grant or Top-Up funds the Organization, not any one Workspace; only Spend
+    // keeps its originating Workspace (ADR-0026).
+    operations: rows.map(({ workspace, ...row }) => ({
+      ...row,
+      workspace: row.type === "SPEND" ? workspace : null,
+    })),
+    total,
+    page: query.page,
+    limit: query.limit,
+  };
 }
 
 export async function listUnlimitedPeriods(query: z.infer<typeof periodQuerySchema>) {
