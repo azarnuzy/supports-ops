@@ -1,5 +1,6 @@
 import { UnauthorizedApiError } from "./auth";
 import type { ApiClient } from "./client";
+import { activeWorkspaceId } from "./client";
 
 export type TicketPriority = "LOW" | "NORMAL" | "HIGH";
 export type TicketStatus = "AI_HANDLING" | "ESCALATED" | "HUMAN_HANDLING" | "RESOLVED";
@@ -115,7 +116,10 @@ export async function markTicketRead(client: ApiClient, id: string, position: nu
  * `message.created`. Token-by-token rendering belongs to the Web Widget,
  * which consumes the delta payload directly. */
 export function subscribeToTicketEvents(baseUrl: string, ticketId: string, onEvent: () => void) {
-  const events = new EventSource(`${baseUrl}/tickets/${ticketId}/events`, {
+  const workspaceId = activeWorkspaceId();
+  const url = new URL(`${baseUrl}/tickets/${ticketId}/events`);
+  if (workspaceId) url.searchParams.set("workspaceId", workspaceId);
+  const events = new EventSource(url, {
     withCredentials: true,
   });
   for (const type of ["message.created", "message.updated", "ticket.status", "attachment.updated"])

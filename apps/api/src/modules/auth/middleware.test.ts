@@ -19,10 +19,14 @@ function fakeContext({
   user: { isOrganizationAdmin?: boolean; organizationId?: string; workspaceId: string } | null;
 }) {
   const json = vi.fn((body: unknown, status: number) => ({ body, status }));
+  let currentUser = user;
   return {
-    get: (key: string) => (key === "user" ? user : null),
+    get: (key: string) => (key === "user" ? currentUser : null),
     json,
     req: { header: (name: string) => (name === "x-workspace-id" ? header : undefined) },
+    set: (key: string, value: typeof user) => {
+      if (key === "user") currentUser = value;
+    },
   } as never;
 }
 
@@ -71,6 +75,10 @@ describe("loadWorkspaceContext", () => {
 
     await loadWorkspaceContext(c, async () => {
       expect(requireWorkspaceId()).toBe("workspace-sibling");
+      expect((c as { get: (key: string) => unknown }).get("user")).toMatchObject({
+        role: "ADMIN",
+        workspaceId: "workspace-sibling",
+      });
     });
   });
 

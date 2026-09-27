@@ -8,7 +8,7 @@ import type { AppType } from "@repo/api";
  * selection without threading it through by hand. */
 export const activeWorkspaceStorageKey = "supportops:active-workspace-id";
 
-function activeWorkspaceId() {
+export function activeWorkspaceId() {
   if (typeof sessionStorage === "undefined") return null;
   return sessionStorage.getItem(activeWorkspaceStorageKey);
 }

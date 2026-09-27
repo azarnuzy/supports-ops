@@ -1,5 +1,6 @@
 import type { ListConversationsFilters } from "@repo/api-client";
 import {
+  activeWorkspaceId,
   claimTicket as claimTicketRequest,
   createApiClient,
   generateSuggestedReply as generateSuggestedReplyRequest,
@@ -102,7 +103,10 @@ export function resolveHumanTicket(id: string) {
 }
 
 export function subscribeToSharedHumanQueue(onChange: () => void) {
-  const events = new EventSource(`${apiBaseUrl}/tickets/queue/events`, { withCredentials: true });
+  const url = new URL(`${apiBaseUrl}/tickets/queue/events`);
+  const workspaceId = activeWorkspaceId();
+  if (workspaceId) url.searchParams.set("workspaceId", workspaceId);
+  const events = new EventSource(url, { withCredentials: true });
   events.addEventListener("ticket.queue.changed", onChange);
   return () => events.close();
 }

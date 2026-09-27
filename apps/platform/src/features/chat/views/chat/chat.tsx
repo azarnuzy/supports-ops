@@ -257,7 +257,7 @@ const ChatView = ({
     detail?.status === "HUMAN_HANDLING" &&
     detail?.assignedHumanAgent?.id === me.data?.id;
   const canClaim =
-    scope === "unassigned" && detail?.status === "ESCALATED" && me.data?.role === "HUMAN_AGENT";
+    scope === "unassigned" && detail?.status === "ESCALATED" && Boolean(me.data);
   const canTakeover = scope === "ai-live" && detail?.status === "AI_HANDLING" && isAdmin;
   const canAssign = scope === "unassigned" && detail?.status === "ESCALATED" && isAdmin;
   const availableHumanAgents =

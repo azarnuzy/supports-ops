@@ -48,6 +48,12 @@ Hasil 2026-09-27: verifikasi browser belum dilakukan; tidak ada sesi browser dan
 
 Hasil: belum diverifikasi secara manual di browser.
 
+### Organization Admin menangani Ticket lintas Workspace (#272)
+
+Masuk sebagai satu Organization Admin tanpa akun Human Agent kedua. Siapkan dua Workspace dalam Organization yang sama dan satu Workspace milik Organization lain; buat Session Web Widget dan WhatsApp serta Ticket eskalasi di kedua Workspace sendiri. Pilih Workspace kedua: `/chat/all` harus menggabungkan kedua Channel hanya dari Workspace itu, `/chat/unassigned` harus memuat eskalasinya, dan Ticket Workspace pertama maupun Organization lain tidak boleh terlihat. Claim satu Ticket, periksa bahwa ia pindah ke My Tickets atas nama Admin, kirim balasan teks dan Attachment, lalu Resolve. Pada Ticket AI yang lain, lakukan Takeover, balas, lalu Resolve. Kembali ke Workspace pertama dan pastikan Ticket Workspace kedua tidak tampil. Masuk sebagai Human Agent: Shared Human Queue dan My Tickets hanya memuat Ticket yang sesuai hak akses di Workspace asal; request dengan `X-Workspace-Id` menuju Workspace saudara harus mendapat `403`. Periksa event realtime pada Queue dan Ticket setelah switch Workspace. Catat tanggal, browser, akun/peran, ID Workspace dan Ticket, serta hasil tiap langkah.
+
+Hasil: belum diverifikasi secara manual di browser.
+
 ### Shared Credit balance lintas Workspace (#268)
 
 Siapkan dua Workspace dalam satu Organization dan satu Workspace di Organization lain. Masuk sebagai Organization Admin, buka Billing di kedua Workspace, lalu jalankan satu AI Turn dari masing-masing Web Widget. Saldo Billing keduanya harus turun dari satu balance yang sama, sedangkan AI Usage tiap Workspace hanya mencatat spend sendiri. Membuat Workspace atau AI Agent tambahan tidak boleh menambah Trial Grant. Turunkan balance ke 100 lalu kirim Turn hingga melewati batas: Mailpit harus menerima satu alert low-balance untuk Organization Admin, bukan Admin Workspace biasa. Habiskan balance dan kirim Customer Message baru di kedua Workspace: kedua Ticket harus masuk Shared Human Queue dengan alasan `CREDIT_EXHAUSTION`, dan Mailpit menerima satu alert exhaustion. AI Turn yang sudah dimulai sebelum saldo habis boleh selesai. Organization lain tetap memiliki saldo dan AI Agent aktif. Catat tanggal, browser, saldo awal/akhir, Ticket, dan pesan Mailpit.

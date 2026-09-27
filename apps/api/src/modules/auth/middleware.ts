@@ -28,7 +28,9 @@ export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, 
 export async function loadWorkspaceContext(c: Context<{ Variables: AuthVariables }>, next: Next) {
   const user = c.get("user");
   const homeWorkspaceId = user?.workspaceId ?? c.get("session")?.workspaceId;
-  const requestedWorkspaceId = c.req?.header?.("x-workspace-id");
+  const requestedWorkspaceId =
+    c.req?.header?.("x-workspace-id") ??
+    (c.req?.path?.endsWith("/events") ? c.req.query("workspaceId") : undefined);
 
   if (!requestedWorkspaceId || requestedWorkspaceId === homeWorkspaceId) {
     if (!homeWorkspaceId) {
@@ -57,5 +59,6 @@ export async function loadWorkspaceContext(c: Context<{ Variables: AuthVariables
     return c.json({ error: "forbidden" }, 403);
   }
 
+  c.set("user", { ...user, role: "ADMIN", workspaceId: requestedWorkspaceId });
   await withWorkspaceContext(requestedWorkspaceId, next);
 }
