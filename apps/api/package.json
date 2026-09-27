@@ -10,7 +10,8 @@
     "./customer-message": "./src/modules/ai-agent/customer-message.ts",
     "./secrets": "./src/modules/tools/secrets.ts",
     "./ticket-queue": "./src/modules/tickets/queue.ts",
-    "./whatsapp-queue": "./src/modules/whatsapp-config/queue.ts"
+    "./whatsapp-queue": "./src/modules/whatsapp-config/queue.ts",
+    "./external-errors": "./src/utils/external-errors.ts"
   },
   "scripts": {
     "with-env": "dotenv -e ../../.env.local --",

@@ -16,6 +16,20 @@ import type {
 } from "./types";
 
 const defaultSignedUrlExpiresIn = 60 * 5;
+let errorReporter: ((operation: string, error: unknown) => Promise<void>) | undefined;
+
+export function setStorageErrorReporter(reporter: typeof errorReporter) {
+  errorReporter = reporter;
+}
+
+async function observe<T>(operation: string, call: () => Promise<T>) {
+  try {
+    return await call();
+  } catch (error) {
+    await errorReporter?.(operation, error).catch(() => undefined);
+    throw error;
+  }
+}
 
 export function createStorageClient(config: StorageConfig) {
   return new S3Client({
@@ -35,15 +49,18 @@ export function createStorage(config: StorageConfig) {
   return {
     bucket: config.bucket,
     client,
-    deleteObject: (key: string) => deleteObject(client, config.bucket, key),
-    getObject: (key: string) => getObject(client, config.bucket, key),
+    deleteObject: (key: string) =>
+      observe("DELETE_OBJECT", () => deleteObject(client, config.bucket, key)),
+    getObject: (key: string) => observe("GET_OBJECT", () => getObject(client, config.bucket, key)),
     getObjectUrl: (key: string) => getObjectUrl(config, key),
     getSignedGetObjectUrl: (input: GetSignedObjectUrlInput) =>
-      getSignedGetObjectUrl(client, config.bucket, input),
+      observe("SIGN_GET_OBJECT", () => getSignedGetObjectUrl(client, config.bucket, input)),
     getSignedPutObjectUrl: (input: PutSignedObjectUrlInput) =>
-      getSignedPutObjectUrl(client, config.bucket, input),
-    headObject: (key: string) => headObject(client, config.bucket, key),
-    putObject: (input: PutObjectInput) => putObject(client, config.bucket, input),
+      observe("SIGN_PUT_OBJECT", () => getSignedPutObjectUrl(client, config.bucket, input)),
+    headObject: (key: string) =>
+      observe("HEAD_OBJECT", () => headObject(client, config.bucket, key)),
+    putObject: (input: PutObjectInput) =>
+      observe("PUT_OBJECT", () => putObject(client, config.bucket, input)),
   };
 }
 

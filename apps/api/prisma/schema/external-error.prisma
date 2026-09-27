@@ -1,0 +1,18 @@
+/// One failed call to a service outside SupportOps. Never contains request or response bodies.
+model ExternalError {
+  id          String    @id
+  workspaceId String?
+  provider    String
+  operation   String
+  modelId     String?
+  code        String?
+  httpStatus  Int?
+  resourceType String?
+  resourceId  String?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([provider, operation, modelId, code])
+}
