@@ -103,6 +103,8 @@ export type OperatorWorkspace = {
   userCount: number;
   adminName: string | null;
   adminCount: number;
+  organizationId: string | null;
+  organizationName: string | null;
   balance: number;
   activeUnlimitedPeriod: { endAt: string | null } | null;
   lastCustomerActivityAt: string | null;
@@ -170,7 +172,14 @@ export type OperatorWorkspaceUser = {
 };
 
 export type OperatorWorkspaceDetail = {
-  workspace: { id: string; name: string; slug: string; createdAt: string };
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    createdAt: string;
+    organizationId: string | null;
+    organizationName: string | null;
+  };
   attention: {
     balance: number;
     activeUnlimitedPeriod: { endAt: string | null } | null;

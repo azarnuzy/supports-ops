@@ -1,6 +1,7 @@
 import { unscopedPrisma } from "../../utils/prisma";
 import { lowBalanceThreshold } from "../credits/services";
 import { resolveRange } from "../analytics/services";
+import { getOrganizationNames } from "./organizations";
 
 const unlimitedEndingWindowMs = 7 * 24 * 60 * 60 * 1000;
 const inactivityWindowMs = 14 * 24 * 60 * 60 * 1000;
@@ -18,6 +19,7 @@ export type AttentionDetail = {
   activeUnlimitedPeriod: { endAt: Date | null } | null;
   lastCustomerActivityAt: Date | null;
   conditions: AtRiskCondition[];
+  organizationId: string | null;
 };
 
 /** Computes Workspace-level attention conditions for a set of ids. */
@@ -75,9 +77,23 @@ export async function getAttentionDetails(ids: string[]): Promise<Map<string, At
       activeUnlimitedPeriod: activePeriod ? { endAt: activePeriod.endAt } : null,
       lastCustomerActivityAt,
       conditions,
+      organizationId: organizationId ?? null,
     });
   }
   return map;
+}
+
+/** getAttentionDetails plus each Workspace's Organization name, for surfaces
+ * that must link a Workspace back to the Organization it belongs to. */
+export async function getAttentionDetailsWithOrganization(ids: string[]) {
+  const details = await getAttentionDetails(ids);
+  const names = await getOrganizationNames([...details.values()].map((info) => info.organizationId));
+  return new Map(
+    [...details.entries()].map(([id, info]) => [
+      id,
+      { ...info, organizationName: names.get(info.organizationId ?? "") ?? null },
+    ]),
+  );
 }
 
 /** A Workspace matching several conditions appears once, listing all of them. */
@@ -90,7 +106,7 @@ export async function listAtRiskWorkspaces(range: { from?: string; to?: string }
   const ids = workspaces.map((workspace) => workspace.id);
   const [details, channels, failedSources, sessions, externalErrors, externalEvents] =
     await Promise.all([
-      getAttentionDetails(ids),
+      getAttentionDetailsWithOrganization(ids),
       unscopedPrisma.channel.findMany({
         where: { workspaceId: { in: ids }, deletedAt: null },
         select: {
