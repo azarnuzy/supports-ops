@@ -53,10 +53,12 @@ async function seedTicket(status: "ESCALATED" | "HUMAN_HANDLING", channelType: "
   const humanAgentId = status === "HUMAN_HANDLING" ? `human-${suffix}` : null;
   const customerLastMessageAt = new Date(Date.now() - 9 * 60 * 60 * 1_000);
 
+  await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
   await prisma.workspace.create({
     data: {
       closingMessage: "We’re closing this Ticket for now.",
       id: workspaceId,
+      organizationId: workspaceId,
       name: "Demo",
       slug: suffix,
     },
@@ -338,8 +340,9 @@ describe("Follow-Up worker", () => {
     const memoryId = `memory-${suffix}`;
     const aiMessageId = `message-${suffix}`;
 
+    await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
     await prisma.workspace.create({
-      data: { id: workspaceId, name: "Demo", slug: suffix },
+      data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug: suffix },
     });
     await prisma.aiAgent.create({ data: { id: aiAgentId, name: "AI Agent", workspaceId } });
     await prisma.channel.create({

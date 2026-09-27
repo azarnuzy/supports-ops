@@ -27,10 +27,14 @@ beforeEach(async () => {
   workspaceId = randomUUID();
   otherWorkspaceId = randomUUID();
   aiAgentId = randomUUID();
+  await prisma.organization.createMany({ data: [
+    { id: workspaceId, name: "Demo" },
+    { id: otherWorkspaceId, name: "Other" },
+  ] });
   await prisma.workspace.createMany({
     data: [
-      { id: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
-      { id: otherWorkspaceId, name: "Other", slug: `other-${otherWorkspaceId.slice(0, 8)}` },
+      { id: workspaceId, organizationId: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
+      { id: otherWorkspaceId, organizationId: otherWorkspaceId, name: "Other", slug: `other-${otherWorkspaceId.slice(0, 8)}` },
     ],
   });
   await prisma.aiAgent.create({ data: { id: aiAgentId, name: "AI Agent", workspaceId } });
@@ -50,6 +54,7 @@ async function seedSpend(params: {
   await prisma.creditLedgerEntry.create({
     data: {
       id: randomUUID(),
+      organizationId: params.workspaceId,
       workspaceId: params.workspaceId,
       type: "SPEND",
       credits: -1,
@@ -63,10 +68,10 @@ async function seedSpend(params: {
 describe("getAiUsageSummary", () => {
   it("sums balance from the ledger and buckets spend by day, AI Agent, and Agent Model", async () => {
     await prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500 },
+      data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
     });
     await prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId, type: "TOP_UP", credits: 200 },
+      data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TOP_UP", credits: 200 },
     });
     for (let i = 0; i < 3; i++) {
       await seedSpend({
@@ -121,13 +126,13 @@ describe("getAiUsageSummary", () => {
 
   it("never counts another Workspace's Credits toward the balance", async () => {
     await prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500 },
+      data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
     });
     await prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId: otherWorkspaceId, type: "TRIAL_GRANT", credits: 500 },
+      data: { id: randomUUID(), organizationId: otherWorkspaceId, workspaceId: otherWorkspaceId, type: "TRIAL_GRANT", credits: 500 },
     });
     await prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId: otherWorkspaceId, type: "TOP_UP", credits: 9000 },
+      data: { id: randomUUID(), organizationId: otherWorkspaceId, workspaceId: otherWorkspaceId, type: "TOP_UP", credits: 9000 },
     });
 
     const summary = await withWorkspaceContext(workspaceId, () => services.getAiUsageSummary());
@@ -149,6 +154,7 @@ describe("getAiUsageSummary Tokens, Channels, and comparison", () => {
           id: randomUUID(),
           sessionId: "session-1",
           type: "SPEND",
+          organizationId: workspaceId,
           workspaceId,
           ...(tokens ? { cachedInputTokens: 40, inputTokens: 100, outputTokens: 20 } : {}),
         },
@@ -257,6 +263,7 @@ describe("listCreditLedger", () => {
     await prisma.creditLedgerEntry.create({
       data: {
         id: randomUUID(),
+        organizationId: workspaceId,
         workspaceId,
         type: "TRIAL_GRANT",
         credits: 500,
@@ -266,6 +273,7 @@ describe("listCreditLedger", () => {
     await prisma.creditLedgerEntry.create({
       data: {
         id: randomUUID(),
+        organizationId: workspaceId,
         workspaceId,
         type: "SPEND",
         credits: -1,
@@ -277,10 +285,10 @@ describe("listCreditLedger", () => {
       },
     });
     await prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId, type: "TOP_UP", credits: 100, createdAt: daysAgo(0) },
+      data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TOP_UP", credits: 100, createdAt: daysAgo(0) },
     });
     await prisma.creditLedgerEntry.create({
-      data: { id: randomUUID(), workspaceId: otherWorkspaceId, type: "TRIAL_GRANT", credits: 500 },
+      data: { id: randomUUID(), organizationId: otherWorkspaceId, workspaceId: otherWorkspaceId, type: "TRIAL_GRANT", credits: 500 },
     });
 
     const firstPage = await withWorkspaceContext(workspaceId, () =>

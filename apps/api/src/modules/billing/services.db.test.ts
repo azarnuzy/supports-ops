@@ -32,8 +32,9 @@ beforeEach(async () => {
   await truncateAll(prisma);
   vi.clearAllMocks();
   workspaceId = randomUUID();
+  await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
   await prisma.workspace.create({
-    data: { id: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
+    data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
   });
 });
 
@@ -91,9 +92,11 @@ describe("Top-Up Payments", () => {
     mayar.fetchMayarPayment.mockResolvedValue({ amount: 250_000, id: "mayar-1", status: "paid" });
     await services.handleMayarWebhook({ data: { productId: "mayar-1" } });
     const secondWorkspaceId = randomUUID();
+    await prisma.organization.create({ data: { id: secondWorkspaceId, name: "Other" } });
     await prisma.workspace.create({
       data: {
         id: secondWorkspaceId,
+        organizationId: secondWorkspaceId,
         name: "Other",
         slug: `other-${secondWorkspaceId.slice(0, 8)}`,
       },

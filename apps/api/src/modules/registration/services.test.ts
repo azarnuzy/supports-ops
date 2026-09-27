@@ -200,6 +200,7 @@ describe("registerAdminWorkspace", () => {
     expect(created.creditLedgerEntry).toMatchObject({
       type: "TRIAL_GRANT",
       credits: 500,
+      organizationId: organization.id,
       workspaceId: workspace.id,
     });
   });

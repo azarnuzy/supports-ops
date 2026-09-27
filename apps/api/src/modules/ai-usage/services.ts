@@ -1,5 +1,5 @@
-import { creditBalance } from "../credits/services";
-import { prisma } from "../../utils/prisma";
+import { creditBalance, organizationIdForWorkspace } from "../credits/services";
+import { prisma, unscopedPrisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { resolveRange } from "../analytics/services";
 import type { ChannelType } from "@prisma/client";
@@ -254,15 +254,15 @@ export async function getToolUsage(query: AiUsageQuery = {}): Promise<AiUsageToo
   };
 }
 
-/** Newest-first, cursor-paginated Credit Ledger — every Trial Grant, Top-Up,
- * and spend the Workspace has ever recorded. */
+/** Newest-first, cursor-paginated Credit Ledger for the Organization. */
 export async function listCreditLedger({
   cursor,
   limit = ledgerListDefaultLimit,
 }: ListCreditLedgerInput = {}): Promise<CreditLedgerPage> {
+  const organizationId = await organizationIdForWorkspace(unscopedPrisma, requireWorkspaceId());
   const cursorEntry = cursor
-    ? await prisma.creditLedgerEntry.findUnique({
-        where: { id: cursor },
+    ? await unscopedPrisma.creditLedgerEntry.findFirst({
+        where: { id: cursor, organizationId },
         select: { createdAt: true, id: true },
       })
     : null;
@@ -281,10 +281,10 @@ export async function listCreditLedger({
     : undefined;
 
   const [entries, total] = await Promise.all([
-    prisma.creditLedgerEntry.findMany({
+    unscopedPrisma.creditLedgerEntry.findMany({
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
-      where,
+      where: { ...where, organizationId },
       select: {
         id: true,
         type: true,
@@ -300,7 +300,7 @@ export async function listCreditLedger({
         createdAt: true,
       },
     }),
-    prisma.creditLedgerEntry.count(),
+    unscopedPrisma.creditLedgerEntry.count({ where: { organizationId } }),
   ]);
 
   const visible = entries.slice(0, limit);

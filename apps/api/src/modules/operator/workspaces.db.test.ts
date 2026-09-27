@@ -49,18 +49,22 @@ beforeEach(async () => {
   sessions.workspaceId = "";
   firstId = randomUUID();
   secondId = randomUUID();
+  await prisma.organization.createMany({ data: [
+    { id: firstId, name: "Alpha" },
+    { id: secondId, name: "Beta" },
+  ] });
   await prisma.workspace.createMany({
     data: [
-      { id: firstId, name: "Alpha", slug: "alpha" },
-      { id: secondId, name: "Beta", slug: "beta" },
+      { id: firstId, organizationId: firstId, name: "Alpha", slug: "alpha" },
+      { id: secondId, organizationId: secondId, name: "Beta", slug: "beta" },
       { id: randomUUID(), name: "Deleted", slug: "deleted", deletedAt: new Date() },
     ],
   });
   await prisma.creditLedgerEntry.createMany({
     data: [
-      { id: randomUUID(), workspaceId: firstId, type: "TRIAL_GRANT", credits: 500 },
-      { id: randomUUID(), workspaceId: firstId, type: "SPEND", credits: -3 },
-      { id: randomUUID(), workspaceId: secondId, type: "TRIAL_GRANT", credits: 500 },
+      { id: randomUUID(), organizationId: firstId, workspaceId: firstId, type: "TRIAL_GRANT", credits: 500 },
+      { id: randomUUID(), organizationId: firstId, workspaceId: firstId, type: "SPEND", credits: -3 },
+      { id: randomUUID(), organizationId: secondId, workspaceId: secondId, type: "TRIAL_GRANT", credits: 500 },
     ],
   });
 });
@@ -97,9 +101,10 @@ it("sorts by name and filters to a single attention condition before paginating"
   expect(byName.workspaces.map((workspace) => workspace.name)).toEqual(["Alpha", "Beta"]);
 
   const lowBalanceId = randomUUID();
-  await prisma.workspace.create({ data: { id: lowBalanceId, name: "Gamma", slug: "gamma" } });
+  await prisma.organization.create({ data: { id: lowBalanceId, name: "Gamma" } });
+  await prisma.workspace.create({ data: { id: lowBalanceId, organizationId: lowBalanceId, name: "Gamma", slug: "gamma" } });
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId: lowBalanceId, type: "TRIAL_GRANT", credits: 10 },
+    data: { id: randomUUID(), organizationId: lowBalanceId, workspaceId: lowBalanceId, type: "TRIAL_GRANT", credits: 10 },
   });
 
   const filtered = (await (

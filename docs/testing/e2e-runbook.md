@@ -36,6 +36,12 @@ Untuk data sebelum migrasi, masuk sebagai Admin lama lalu sebagai Human Agent la
 
 Hasil 2026-09-27: pengguna mengonfirmasi lewat browser (nama browser tidak dicatat) bahwa registrasi berhasil, halaman AI Agent dan Web Widget terbuka, lalu logout dan login kembali membawa ke Workspace yang sama. Dengan Chromium headless, Admin demo lama berhasil masuk dan melihat Conversations lama, termasuk Session tanpa Ticket; Human Agent demo lama berhasil masuk dan membuka Ticket lama beserta transkripnya. Tes database registrasi lulus (3/3). Pemeriksaan database lokal menemukan 12 Workspace menunjuk 12 Organization berbeda, tanpa Workspace atau user yang kehilangan Organization; Admin terbaru terhubung ke Organization dengan satu AI Agent dan satu Web Widget, dan tidak ada Admin tanpa peran Organization Admin atau Human Agent yang memilikinya.
 
+### Credit Ledger milik Organization (#267)
+
+Setelah migrasi, masuk sebagai Organization Admin lama dan buka Billing serta AI Usage. Catat saldo sebelum dan sesudah migrasi; nilainya harus sama, riwayat Trial Grant, Top-Up, pembayaran, dan spend tetap terlihat. Daftar Organization baru lewat `/register`, lalu pastikan Billing menampilkan satu Trial Grant 500 Credits. Buat Ticket dan biarkan AI Agent menjawab satu Turn: saldo turun sesuai Model Rate, dan AI Usage Workspace menampilkan spend tersebut. Hapus Ticket; entri spend dan saldo tidak boleh berubah. Jika Organization memiliki dua Workspace, keduanya harus membaca saldo yang sama, sementara AI Usage masing-masing hanya menampilkan spend Workspace sendiri. Catat tanggal, browser, saldo awal/akhir, dan hasil tiap langkah sebelum menandai skenario selesai.
+
+Hasil: belum diverifikasi secara manual di browser.
+
 Jalankan perintah ini dari root repository:
 
 ```sh

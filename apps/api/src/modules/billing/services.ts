@@ -5,7 +5,7 @@ import { logger } from "../../utils/logger";
 import { prisma, unscopedPrisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { modelCatalog } from "../ai-agent/model-catalog";
-import { creditBalance } from "../credits/services";
+import { creditBalance, organizationIdForWorkspace } from "../credits/services";
 import { currentOrLastUnlimitedPeriod } from "../operator/unlimited-periods";
 import { createMayarPayment, fetchMayarPayment } from "./mayar";
 import { findTopUpPack, topUpPacks } from "./packs";
@@ -65,6 +65,7 @@ export async function verifyTopUpPayment(payment: TopUpPayment) {
       data: {
         credits: payment.credits,
         id: randomUUID(),
+        organizationId: await organizationIdForWorkspace(tx, payment.workspaceId),
         note: `Top-Up Pack ${payment.packId} (Mayar ${payment.mayarPaymentId})`,
         type: "TOP_UP",
         workspaceId: payment.workspaceId,

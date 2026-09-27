@@ -5,6 +5,7 @@ model Organization {
   updatedAt  DateTime    @updatedAt
   workspaces Workspace[]
   users      User[]
+  creditLedgerEntries CreditLedgerEntry[]
 }
 
 model Workspace {
@@ -42,13 +43,14 @@ model Workspace {
   @@index([organizationId])
 }
 
-/// The Credit Ledger: an append-only record of every change to a Workspace's Credits
-/// (Trial Grant, Top-Up, spend). Balance is the sum of `credits` across a Workspace's
+/// The Credit Ledger: an append-only record of every change to an Organization's Credits
+/// (Trial Grant, Top-Up, spend). Balance is the sum of `credits` across an Organization's
 /// entries, never a separately stored number.
 /// `sessionId`/`ticketId` are plain columns, not relations, so deleting a Ticket or
 /// Session never cascades into the ledger.
 model CreditLedgerEntry {
   id              String                @id
+  organizationId  String
   workspaceId     String
   type            CreditLedgerEntryType
   credits         Int
@@ -67,9 +69,11 @@ model CreditLedgerEntry {
   outputTokens      Int?
   createdAt       DateTime              @default(now())
   workspace       Workspace             @relation(fields: [workspaceId], references: [id])
+  organization    Organization          @relation(fields: [organizationId], references: [id])
   topUpPayment    TopUpPayment?
 
   @@index([workspaceId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 /// One checkout for a Top-Up Pack (ADR-0023). Its Credits reach the ledger only

@@ -25,7 +25,8 @@ afterAll(async () => {
 it("records one Operator Action and one Top-Up in the same transaction", async () => {
   const workspaceId = randomUUID();
   const operatorId = randomUUID();
-  await prisma.workspace.create({ data: { id: workspaceId, name: "Acme", slug: workspaceId } });
+  await prisma.organization.create({ data: { id: workspaceId, name: "Acme" } });
+  await prisma.workspace.create({ data: { id: workspaceId, organizationId: workspaceId, name: "Acme", slug: workspaceId } });
   await prisma.operator.create({
     data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` },
   });
@@ -49,8 +50,9 @@ beforeEach(async () => {
 
 it("reconciles charged Credits across Workspaces and excludes unlimited turns from USD per Credit", async () => {
   const workspaces = [randomUUID(), randomUUID()];
+  await prisma.organization.createMany({ data: workspaces.map((id) => ({ id, name: id })) });
   await prisma.workspace.createMany({
-    data: workspaces.map((id, index) => ({ id, name: `Workspace ${index}`, slug: id })),
+    data: workspaces.map((id, index) => ({ id, organizationId: id, name: `Workspace ${index}`, slug: id })),
   });
   const spend = (
     workspaceId: string,
@@ -62,6 +64,7 @@ it("reconciles charged Credits across Workspaces and excludes unlimited turns fr
     prisma.creditLedgerEntry.create({
       data: {
         id: randomUUID(),
+        organizationId: workspaceId,
         workspaceId,
         type: "SPEND",
         agentModel,
@@ -112,9 +115,11 @@ it("adds two Workspace figures without exposing customer content", async () => {
   const now = new Date("2026-09-23T12:00:00.000Z");
   const previousDay = new Date("2026-09-22T12:00:00.000Z");
   for (const [index, workspaceId] of workspaceIds.entries()) {
+    await prisma.organization.create({ data: { id: workspaceId, name: `Workspace ${index}` } });
     await prisma.workspace.create({
       data: {
         id: workspaceId,
+        organizationId: workspaceId,
         name: `Workspace ${index}`,
         slug: `workspace-${workspaceId}`,
         createdAt: now,
@@ -197,10 +202,11 @@ it("adds two Workspace figures without exposing customer content", async () => {
     });
     await prisma.creditLedgerEntry.createMany({
       data: [
-        { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500, createdAt: now },
-        { id: randomUUID(), workspaceId, type: "TOP_UP", credits: 100, createdAt: now },
+        { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500, createdAt: now },
+        { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TOP_UP", credits: 100, createdAt: now },
         {
           id: randomUUID(),
+          organizationId: workspaceId,
           workspaceId,
           type: "SPEND",
           credits: -(index + 1),

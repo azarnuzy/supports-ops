@@ -48,7 +48,7 @@ export async function registerAdminWorkspace(input: RegisterInput) {
       const userId = randomUUID();
 
       await seedDefaultTicketCategories(tx, workspace.id);
-      await grantTrialCredits(tx, workspace.id);
+      await grantTrialCredits(tx, organization.id, workspace.id);
 
       await tx.aiSettings.create({
         data: { id: randomUUID(), workspaceId: workspace.id },

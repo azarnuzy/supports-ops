@@ -56,7 +56,8 @@ function daysAgo(days: number): Date {
 
 async function createWorkspace(name: string) {
   const id = randomUUID();
-  await prisma.workspace.create({ data: { id, name, slug: id } });
+  await prisma.organization.create({ data: { id, name } });
+  await prisma.workspace.create({ data: { id, organizationId: id, name, slug: id } });
   return id;
 }
 
@@ -86,7 +87,7 @@ async function recordActivity(workspaceId: string, customerLastMessageAt: Date) 
 it("flags a Workspace below the low-balance threshold", async () => {
   const workspaceId = await createWorkspace("Low");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 50 },
+    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 50 },
   });
   await recordActivity(workspaceId, new Date());
 
@@ -98,7 +99,7 @@ it("flags a Workspace below the low-balance threshold", async () => {
 it("flags a Workspace at Credit Exhaustion", async () => {
   const workspaceId = await createWorkspace("Exhausted");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "SPEND", credits: 0 },
+    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "SPEND", credits: 0 },
   });
   await recordActivity(workspaceId, new Date());
 
@@ -110,7 +111,7 @@ it("flags a Workspace at Credit Exhaustion", async () => {
 it("does not flag balance for a Workspace on an active Unlimited Period, even at zero balance", async () => {
   const workspaceId = await createWorkspace("Unlimited");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "SPEND", credits: 0 },
+    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "SPEND", credits: 0 },
   });
   await prisma.unlimitedPeriod.create({
     data: { id: randomUUID(), workspaceId, operatorId, endAt: daysAgo(-30) },
@@ -125,7 +126,7 @@ it("does not flag balance for a Workspace on an active Unlimited Period, even at
 it("flags a Workspace whose Unlimited Period ends within 7 days", async () => {
   const workspaceId = await createWorkspace("Ending soon");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500 },
+    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
   });
   await prisma.unlimitedPeriod.create({
     data: { id: randomUUID(), workspaceId, operatorId, endAt: daysAgo(-3) },
@@ -140,13 +141,13 @@ it("flags a Workspace whose Unlimited Period ends within 7 days", async () => {
 it("flags a Workspace with no Customer activity for 14 days, including no activity at all", async () => {
   const stale = await createWorkspace("Stale");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId: stale, type: "TRIAL_GRANT", credits: 500 },
+    data: { id: randomUUID(), organizationId: stale, workspaceId: stale, type: "TRIAL_GRANT", credits: 500 },
   });
   await recordActivity(stale, daysAgo(15));
 
   const never = await createWorkspace("Never active");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId: never, type: "TRIAL_GRANT", credits: 500 },
+    data: { id: randomUUID(), organizationId: never, workspaceId: never, type: "TRIAL_GRANT", credits: 500 },
   });
 
   const workspaces = await fetchAtRisk();
@@ -162,7 +163,7 @@ it("flags a Workspace with no Customer activity for 14 days, including no activi
 it("lists a Workspace matching several conditions once, with every condition", async () => {
   const workspaceId = await createWorkspace("Multi");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "SPEND", credits: 0 },
+    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "SPEND", credits: 0 },
   });
   await recordActivity(workspaceId, daysAgo(20));
 
@@ -176,7 +177,7 @@ it("lists a Workspace matching several conditions once, with every condition", a
 it("leaves a healthy Workspace out", async () => {
   const workspaceId = await createWorkspace("Healthy");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500 },
+    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
   });
   await recordActivity(workspaceId, new Date());
 
@@ -188,7 +189,7 @@ it("leaves a healthy Workspace out", async () => {
 it("reports configured channel failures and failed Knowledge Sources", async () => {
   const workspaceId = await createWorkspace("Needs repair");
   await prisma.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "TRIAL_GRANT", credits: 500 },
+    data: { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500 },
   });
   await recordActivity(workspaceId, new Date());
   await prisma.channel.updateMany({ where: { workspaceId }, data: { status: "INACTIVE" } });

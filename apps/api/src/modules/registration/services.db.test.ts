@@ -59,6 +59,8 @@ describe("registerAdminWorkspace", () => {
     });
     expect(trialGrant.type).toBe("TRIAL_GRANT");
     expect(trialGrant.credits).toBe(500);
+    expect(trialGrant.organizationId).toBe(organization.id);
+    expect(await prisma.creditLedgerEntry.count({ where: { organizationId: organization.id, type: "TRIAL_GRANT" } })).toBe(1);
   });
 
   it("rejects a second registration for the same email", async () => {

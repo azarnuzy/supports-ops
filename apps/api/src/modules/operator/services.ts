@@ -319,9 +319,10 @@ export async function topUpWorkspace(
   return unscopedPrisma.$transaction(async (tx) => {
     const workspace = await tx.workspace.findFirst({
       where: { id: workspaceId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, organizationId: true },
     });
     if (!workspace) return null;
+    if (!workspace.organizationId) throw new Error(`Workspace ${workspaceId} has no Organization`);
     const entry = await recordTopUp(tx, workspaceId, credits, note);
     const action = await tx.operatorAction.create({
       data: {
@@ -333,7 +334,7 @@ export async function topUpWorkspace(
       },
     });
     const balance = await tx.creditLedgerEntry.aggregate({
-      where: { workspaceId },
+      where: { organizationId: workspace.organizationId },
       _sum: { credits: true },
     });
     return { action, balance: balance._sum.credits ?? 0 };

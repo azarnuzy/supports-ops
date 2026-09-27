@@ -71,7 +71,8 @@ async function seedSession(
   const sessionId = `session-${suffix}`;
   const memorySessionId = `memory-${suffix}`;
 
-  await prisma.workspace.create({ data: { id: workspaceId, name: "Demo", slug: suffix } });
+  await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
+  await prisma.workspace.create({ data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug: suffix } });
   await prisma.aiAgent.create({ data: { id: aiAgentId, name: "AI Agent", workspaceId } });
   await prisma.channel.create({
     data: {

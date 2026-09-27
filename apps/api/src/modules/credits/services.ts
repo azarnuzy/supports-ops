@@ -9,27 +9,47 @@ export const lowBalanceThreshold = 100;
 export class WorkspaceNotFoundError extends Error {}
 export class InvalidTopUpAmountError extends Error {}
 
+export async function organizationIdForWorkspace(
+  tx: Pick<typeof unscopedPrisma, "workspace">,
+  workspaceId: string,
+) {
+  const workspace = await tx.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { organizationId: true },
+  });
+  if (!workspace.organizationId) throw new Error(`Workspace ${workspaceId} has no Organization`);
+  return workspace.organizationId;
+}
+
 export async function recordTopUp(
-  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry">,
+  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry" | "workspace">,
   workspaceId: string,
   credits: number,
   note: string,
 ) {
   if (!Number.isInteger(credits) || credits <= 0) throw new InvalidTopUpAmountError();
   return tx.creditLedgerEntry.create({
-    data: { id: randomUUID(), workspaceId, type: "TOP_UP", credits, note },
+    data: {
+      id: randomUUID(),
+      organizationId: await organizationIdForWorkspace(tx, workspaceId),
+      workspaceId,
+      type: "TOP_UP",
+      credits,
+      note,
+    },
   });
 }
 
-/** Written in the same transaction that creates the Workspace, so a Workspace never
- * exists without its balance. */
+/** Written in the registration transaction, once per Organization. */
 export async function grantTrialCredits(
   tx: Pick<typeof unscopedPrisma, "creditLedgerEntry">,
+  organizationId: string,
   workspaceId: string,
 ) {
   await tx.creditLedgerEntry.create({
     data: {
       id: randomUUID(),
+      organizationId,
       workspaceId,
       type: "TRIAL_GRANT",
       credits: trialGrantCredits,
@@ -39,15 +59,18 @@ export async function grantTrialCredits(
 
 /** The balance is always the ledger sum, never a separately stored number. */
 export async function creditBalance(workspaceId: string) {
-  return balanceWithin(unscopedPrisma, workspaceId);
+  return balanceWithin(
+    unscopedPrisma,
+    await organizationIdForWorkspace(unscopedPrisma, workspaceId),
+  );
 }
 
 async function balanceWithin(
   tx: Pick<typeof unscopedPrisma, "creditLedgerEntry">,
-  workspaceId: string,
+  organizationId: string,
 ) {
   const { _sum } = await tx.creditLedgerEntry.aggregate({
-    where: { workspaceId },
+    where: { organizationId },
     _sum: { credits: true },
   });
 
@@ -77,7 +100,7 @@ async function notifyBalanceCrossing(
  * only invoke this for a genuine decision — a Turn aborted by Takeover or
  * failed by a provider error must never reach it. */
 export async function spendForTurn(
-  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry" | "unlimitedPeriod">,
+  tx: Pick<typeof unscopedPrisma, "creditLedgerEntry" | "unlimitedPeriod" | "workspace">,
   params: {
     aiAgentId: string;
     agentModel: string | null;
@@ -102,7 +125,8 @@ export async function spendForTurn(
     select: { id: true },
   });
   const credits = unlimited ? 0 : rate;
-  const balanceBefore = unlimited ? 0 : await balanceWithin(tx, params.workspaceId);
+  const organizationId = await organizationIdForWorkspace(tx, params.workspaceId);
+  const balanceBefore = unlimited ? 0 : await balanceWithin(tx, organizationId);
   await tx.creditLedgerEntry.create({
     data: {
       agentModel,
@@ -111,6 +135,7 @@ export async function spendForTurn(
       channel: params.channel ?? null,
       credits: -credits,
       id: randomUUID(),
+      organizationId,
       inputTokens: params.usage?.inputTokens ?? null,
       modelRate: rate,
       outputTokens: params.usage?.outputTokens ?? null,

@@ -34,7 +34,8 @@ beforeEach(async () => {
   mocks.enqueueCreditAlertEmail.mockClear();
   workspaceId = randomUUID();
   slug = `demo-${workspaceId.slice(0, 8)}`;
-  await prisma.workspace.create({ data: { id: workspaceId, name: "Demo", slug } });
+  await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
+  await prisma.workspace.create({ data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug } });
 });
 
 /** The only catalog Model Rate is 1 Credit per Turn, so each call spends exactly 1. */
@@ -52,7 +53,7 @@ async function spendOnce() {
 
 async function grantBalance(credits: number) {
   await prisma.creditLedgerEntry.create({
-    data: { credits, id: randomUUID(), type: "TOP_UP", workspaceId },
+    data: { credits, id: randomUUID(), type: "TOP_UP", organizationId: workspaceId, workspaceId },
   });
 }
 
@@ -95,7 +96,7 @@ async function seedTicket() {
 
 describe("credit balance", () => {
   it("is the sum of the ledger, across Trial Grant and Top-Up", async () => {
-    await prisma.$transaction((tx) => services.grantTrialCredits(tx, workspaceId));
+    await prisma.$transaction((tx) => services.grantTrialCredits(tx, workspaceId, workspaceId));
     expect(await services.creditBalance(workspaceId)).toBe(services.trialGrantCredits);
 
     await services.topUpBySlug(slug, 100, "manual payment");
@@ -105,7 +106,7 @@ describe("credit balance", () => {
   it("survives the deletion of a Ticket a spend entry referenced", async () => {
     const ticketId = await seedTicket();
     await prisma.creditLedgerEntry.create({
-      data: { credits: -1, id: randomUUID(), ticketId, type: "SPEND", workspaceId },
+      data: { credits: -1, id: randomUUID(), ticketId, type: "SPEND", organizationId: workspaceId, workspaceId },
     });
     const balanceBefore = await services.creditBalance(workspaceId);
 
@@ -113,6 +114,26 @@ describe("credit balance", () => {
 
     expect(await services.creditBalance(workspaceId)).toBe(balanceBefore);
     expect(await prisma.creditLedgerEntry.count({ where: { workspaceId } })).toBe(1);
+  });
+
+  it("shares one Organization balance while keeping spend attributed to its Workspace", async () => {
+    const secondWorkspaceId = randomUUID();
+    await prisma.workspace.create({
+      data: { id: secondWorkspaceId, organizationId: workspaceId, name: "Second", slug: secondWorkspaceId },
+    });
+    await prisma.$transaction((tx) => services.grantTrialCredits(tx, workspaceId, workspaceId));
+    await services.recordTopUp(prisma, secondWorkspaceId, 25, "payment");
+    await prisma.$transaction((tx) => services.spendForTurn(tx, {
+      aiAgentId: randomUUID(), agentModel: null, sessionId: randomUUID(),
+      ticketId: randomUUID(), workspaceId: secondWorkspaceId,
+    }));
+
+    expect(await services.creditBalance(workspaceId)).toBe(524);
+    expect(await services.creditBalance(secondWorkspaceId)).toBe(524);
+    expect(await prisma.creditLedgerEntry.findMany({
+      where: { organizationId: workspaceId, type: "SPEND" },
+      select: { workspaceId: true },
+    })).toEqual([{ workspaceId: secondWorkspaceId }]);
   });
 });
 
