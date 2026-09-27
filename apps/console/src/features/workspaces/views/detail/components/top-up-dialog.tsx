@@ -1,4 +1,4 @@
-import { topUpWorkspace } from "@repo/api-client";
+import { topUpOrganization, topUpWorkspace } from "@repo/api-client";
 import { Button } from "@repo/ui/components/button";
 import {
   Dialog,
@@ -20,11 +20,13 @@ const numberFormat = new Intl.NumberFormat();
 
 export function TopUpDialog({
   workspaceId,
+  organizationId,
   balance,
   open,
   onOpenChange,
 }: {
-  workspaceId: string;
+  workspaceId?: string;
+  organizationId?: string;
   balance: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -44,11 +46,13 @@ export function TopUpDialog({
   }
 
   const mutation = useMutation({
-    mutationFn: () =>
-      topUpWorkspace(api, workspaceId, { credits: parsedCredits, note: note.trim() }),
+    mutationFn: () => organizationId
+      ? topUpOrganization(api, organizationId, { credits: parsedCredits, note: note.trim() })
+      : topUpWorkspace(api, workspaceId!, { credits: parsedCredits, note: note.trim() }),
     onSuccess: () => {
       toast.success(`Topped up ${numberFormat.format(parsedCredits)} Credits.`);
       queryClient.invalidateQueries({ queryKey: ["operator", "workspace", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["operator", "organizations"] });
       queryClient.invalidateQueries({ queryKey: ["operator", "workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["operator", "at-risk"] });
       onOpenChange(false);

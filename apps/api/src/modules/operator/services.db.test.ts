@@ -7,6 +7,9 @@ let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let getModelMargin: typeof import("./services").getModelMargin;
 let getOperatorOverview: typeof import("./services").getOperatorOverview;
 let topUpWorkspace: typeof import("./services").topUpWorkspace;
+let getOrganizationDetail: typeof import("./organizations").getOrganizationDetail;
+let listOrganizations: typeof import("./organizations").listOrganizations;
+let topUpOrganization: typeof import("./organizations").topUpOrganization;
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -15,6 +18,7 @@ beforeAll(async () => {
   ({ getModelMargin } = await import("./services"));
   ({ getOperatorOverview } = await import("./services"));
   ({ topUpWorkspace } = await import("./services"));
+  ({ getOrganizationDetail, listOrganizations, topUpOrganization } = await import("./organizations"));
 }, 60_000);
 
 afterAll(async () => {
@@ -42,6 +46,22 @@ it("records one Operator Action and one Top-Up in the same transaction", async (
     credits: 25,
     note: "Invoice 42",
   });
+});
+
+it("groups two Workspaces under one financial Organization and audits its Top-Up", async () => {
+  const organizationId = randomUUID();
+  const workspaceIds = [randomUUID(), randomUUID()];
+  const operatorId = randomUUID();
+  await prisma.organization.create({ data: { id: organizationId, name: "Acme" } });
+  await prisma.workspace.createMany({ data: workspaceIds.map((id) => ({ id, organizationId, name: id, slug: id })) });
+  await prisma.operator.create({ data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` } });
+  await prisma.user.create({ data: { id: randomUUID(), name: "Admin", email: `${randomUUID()}@example.com`, workspaceId: workspaceIds[0], organizationId, role: "ADMIN", isOrganizationAdmin: true } });
+  const result = await topUpOrganization(operatorId, organizationId, 25, "Invoice 42");
+  expect(result?.balance).toBe(25);
+  expect((await listOrganizations()).filter((row) => row.id === organizationId)).toMatchObject([{ balance: 25, workspaces: expect.arrayContaining(workspaceIds.map((id) => expect.objectContaining({ id }))) }]);
+  expect(await getOrganizationDetail(organizationId)).toMatchObject({ balance: 25, users: [{ name: "Admin" }], ledger: [{ credits: 25, type: "TOP_UP" }] });
+  expect(await prisma.creditLedgerEntry.count({ where: { organizationId, type: "TOP_UP" } })).toBe(1);
+  expect(await prisma.operatorAction.count({ where: { operatorId, type: "TOP_UP" } })).toBe(1);
 });
 
 beforeEach(async () => {

@@ -280,6 +280,39 @@ export async function fetchOperatorActions(
 }
 
 export type TopUpInput = { credits: number; note: string };
+export type OperatorOrganization = {
+  id: string;
+  name: string;
+  balance: number;
+  workspaces: { id: string; name: string; slug?: string }[];
+};
+
+export type OperatorOrganizationDetail = OperatorOrganization & {
+  users: { id: string; name: string; email: string }[];
+  payments: { id: string; credits: number; amountIdr: number; status: string; paidAt: string | null; createdAt: string }[];
+  ledger: { id: string; type: string; credits: number; note: string | null; createdAt: string; workspaceId: string }[];
+};
+
+export async function fetchOperatorOrganizations(client: ApiClient, search?: string) {
+  const response = await client.operator.organizations.$get({ query: search ? { search } : {} });
+  if (!response.ok) throw new Error("Failed to load Organizations.");
+  return (await response.json()) as { organizations: OperatorOrganization[] };
+}
+
+export async function fetchOperatorOrganizationDetail(client: ApiClient, id: string) {
+  const response = await client.operator.organizations[":id"].$get({ param: { id } });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("Failed to load the Organization.");
+  return (await response.json()) as OperatorOrganizationDetail;
+}
+
+export async function topUpOrganization(client: ApiClient, id: string, input: TopUpInput) {
+  const response = await client.operator.organizations[":id"]["top-ups"].$post({ param: { id }, json: input });
+  if (response.status === 404) throw new Error("Organization not found.");
+  if (!response.ok) throw new Error("Failed to record the Top-Up.");
+  return (await response.json()) as TopUpResult;
+}
+
 export type TopUpResult = {
   action: {
     id: string;

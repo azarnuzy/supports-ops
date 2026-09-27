@@ -21,6 +21,7 @@ import { operatorQuery, signOut } from "../../lib/auth";
 export const sections = [
   { group: "Monitor", icon: LayoutDashboardIcon, label: "Overview", slug: "" },
   { group: "Monitor", icon: UsersIcon, label: "Workspaces", slug: "workspaces" },
+  { group: "Finance", icon: UsersIcon, label: "Organizations", slug: "organizations" },
   { group: "Monitor", icon: AlertTriangleIcon, label: "Needs Attention", slug: "needs-attention" },
   {
     group: "Monitor",

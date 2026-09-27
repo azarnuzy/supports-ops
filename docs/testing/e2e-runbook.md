@@ -60,6 +60,12 @@ Masuk sebagai satu Organization Admin tanpa akun Human Agent kedua. Siapkan dua 
 
 Hasil: belum diverifikasi secara manual di browser.
 
+### Operator Organization directory (#274)
+
+Masuk ke Console sebagai Operator. Buka `/organizations` dan pastikan dua Workspace milik Organization yang sama tampil dalam satu baris dengan satu saldo. Buka detail Organization: kedua Workspace harus tertaut ke detail operasional masing-masing, Organization Admin terdaftar, dan pembayaran serta Credit Ledger terlihat. Catat saldo awal; gunakan **Record Top-Up** dengan jumlah dan catatan pembayaran, konfirmasi sekali, lalu pastikan saldo naik tepat sebesar jumlah itu, ledger mendapat satu `TOP_UP`, dan Audit Log mendapat satu `TOP_UP`. Periksa Billing dari kedua Workspace: saldonya sama dan Credits dapat dibelanjakan di masing-masing Workspace. Pastikan akun Workspace tidak dapat mengakses Console dan tampilan Operator tidak mengungkap isi Customer Message. Catat tanggal, browser, akun, saldo awal/akhir, dan hasil tiap langkah.
+
+Hasil #274: belum diverifikasi secara manual di browser.
+
 ### Shared Credit balance lintas Workspace (#268)
 
 Siapkan dua Workspace dalam satu Organization dan satu Workspace di Organization lain. Masuk sebagai Organization Admin, buka Billing di kedua Workspace, lalu jalankan satu AI Turn dari masing-masing Web Widget. Saldo Billing keduanya harus turun dari satu balance yang sama, sedangkan AI Usage tiap Workspace hanya mencatat spend sendiri. Membuat Workspace atau AI Agent tambahan tidak boleh menambah Trial Grant. Turunkan balance ke 100 lalu kirim Turn hingga melewati batas: Mailpit harus menerima satu alert low-balance untuk Organization Admin, bukan Admin Workspace biasa. Habiskan balance dan kirim Customer Message baru di kedua Workspace: kedua Ticket harus masuk Shared Human Queue dengan alasan `CREDIT_EXHAUSTION`, dan Mailpit menerima satu alert exhaustion. AI Turn yang sudah dimulai sebelum saldo habis boleh selesai. Organization lain tetap memiliki saldo dan AI Agent aktif. Catat tanggal, browser, saldo awal/akhir, Ticket, dan pesan Mailpit.
