@@ -48,6 +48,12 @@ Hasil 2026-09-27: verifikasi browser belum dilakukan; tidak ada sesi browser dan
 
 Hasil: belum diverifikasi secara manual di browser.
 
+### Shared Credit balance lintas Workspace (#268)
+
+Siapkan dua Workspace dalam satu Organization dan satu Workspace di Organization lain. Masuk sebagai Organization Admin, buka Billing di kedua Workspace, lalu jalankan satu AI Turn dari masing-masing Web Widget. Saldo Billing keduanya harus turun dari satu balance yang sama, sedangkan AI Usage tiap Workspace hanya mencatat spend sendiri. Membuat Workspace atau AI Agent tambahan tidak boleh menambah Trial Grant. Turunkan balance ke 100 lalu kirim Turn hingga melewati batas: Mailpit harus menerima satu alert low-balance untuk Organization Admin, bukan Admin Workspace biasa. Habiskan balance dan kirim Customer Message baru di kedua Workspace: kedua Ticket harus masuk Shared Human Queue dengan alasan `CREDIT_EXHAUSTION`, dan Mailpit menerima satu alert exhaustion. AI Turn yang sudah dimulai sebelum saldo habis boleh selesai. Organization lain tetap memiliki saldo dan AI Agent aktif. Catat tanggal, browser, saldo awal/akhir, Ticket, dan pesan Mailpit.
+
+Hasil 2026-09-27: belum diverifikasi secara manual di browser; fixture dua Workspace dalam satu Organization dan sesi browser untuk skenario ini belum disiapkan.
+
 Jalankan perintah ini dari root repository:
 
 ```sh
