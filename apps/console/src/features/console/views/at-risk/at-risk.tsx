@@ -1,7 +1,5 @@
-import { extendUnlimitedPeriod } from "@repo/api-client";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent } from "@repo/ui/components/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/components/dialog";
 import { Input } from "@repo/ui/components/input";
 import {
   Select,
@@ -18,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   BookOpenIcon,
@@ -29,7 +27,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../lib/api";
-import { TopUpDialog } from "../../../workspaces/views/detail/components/top-up-dialog";
 import {
   ConsoleDataTable,
   ConsolePageHeader,
@@ -136,58 +133,6 @@ export const conditionTone: Record<string, "danger" | "warning" | "neutral"> = {
   KNOWLEDGE_INGESTION_ISSUE: "warning",
 };
 
-function ExtendDialog({ workspace, close }: { workspace: Workspace; close: () => void }) {
-  const [endDate, setEndDate] = useState("");
-  const queryClient = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: () => extendUnlimitedPeriod(api, workspace.id, endDate),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["operator", "at-risk"] });
-      close();
-    },
-  });
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) close();
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Extend Unlimited Period</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          {workspace.name} · Current end: {date(workspace.activeUnlimitedPeriod?.endAt ?? null)}
-        </p>
-        <Input
-          aria-label="New end date"
-          type="date"
-          min={
-            workspace.activeUnlimitedPeriod?.endAt
-              ? new Date(new Date(workspace.activeUnlimitedPeriod.endAt).getTime() + 86_400_000)
-                  .toISOString()
-                  .slice(0, 10)
-              : new Date().toISOString().slice(0, 10)
-          }
-          value={endDate}
-          onChange={(event) => setEndDate(event.target.value)}
-        />
-        {mutation.isError && (
-          <p className="text-sm text-destructive">
-            {mutation.error instanceof Error
-              ? mutation.error.message
-              : "Could not extend the period."}
-          </p>
-        )}
-        <Button disabled={!endDate || mutation.isPending} onClick={() => mutation.mutate()}>
-          Extend period
-        </Button>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function AtRiskView() {
   const [range, setRange] = useState(() => trailingRange(30));
   const [category, setCategory] = useState("all");
@@ -197,8 +142,6 @@ export default function AtRiskView() {
   const [sort, setSort] = useState<Sort>("severity");
   const [direction, setDirection] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
-  const [topUp, setTopUp] = useState<Workspace | null>(null);
-  const [extend, setExtend] = useState<Workspace | null>(null);
   const query = useQuery({
     queryKey: ["operator", "at-risk", range],
     queryFn: () => fetchAtRisk(range),
@@ -607,13 +550,17 @@ export default function AtRiskView() {
                     </TableCell>
                     <TableCell>{date(workspace.lastCustomerActivityAt)}</TableCell>
                     <TableCell>
-                      {issue === "CREDIT_EXHAUSTED" || issue === "LOW_BALANCE" ? (
-                        <Button size="sm" variant="outline" onClick={() => setTopUp(workspace)}>
-                          Top up credits
-                        </Button>
-                      ) : issue === "UNLIMITED_ENDING_SOON" ? (
-                        <Button size="sm" variant="outline" onClick={() => setExtend(workspace)}>
-                          Extend period
+                      {(issue === "CREDIT_EXHAUSTED" ||
+                        issue === "LOW_BALANCE" ||
+                        issue === "UNLIMITED_ENDING_SOON") &&
+                      workspace.organizationId ? (
+                        <Button size="sm" variant="outline" asChild>
+                          <Link
+                            to="/organizations/$organizationId"
+                            params={{ organizationId: workspace.organizationId }}
+                          >
+                            Manage in Organization
+                          </Link>
                         </Button>
                       ) : (
                         <Button size="sm" variant="outline" asChild>
@@ -639,17 +586,6 @@ export default function AtRiskView() {
         </span>
         <ConsoleTablePagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
       </div>
-      {topUp && (
-        <TopUpDialog
-          workspaceId={topUp.id}
-          balance={topUp.balance}
-          open
-          onOpenChange={(open) => {
-            if (!open) setTopUp(null);
-          }}
-        />
-      )}
-      {extend && <ExtendDialog workspace={extend} close={() => setExtend(null)} />}
     </>
   );
 }

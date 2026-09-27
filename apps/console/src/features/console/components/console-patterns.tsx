@@ -12,7 +12,7 @@ export function ConsolePageHeader({
   actions,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
 }) {
   return (

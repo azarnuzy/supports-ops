@@ -5,12 +5,6 @@ import {
 } from "@repo/api-client";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent } from "@repo/ui/components/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@repo/ui/components/dropdown-menu";
 import { Input } from "@repo/ui/components/input";
 import {
   Select,
@@ -35,7 +29,6 @@ import {
   ArrowUpDownIcon,
   ArrowUpIcon,
   DownloadIcon,
-  EllipsisIcon,
   LayoutGridIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -54,13 +47,11 @@ import {
 import DateRangePicker, { trailingRange } from "../../../console/components/date-range-picker";
 import { ConsoleShell } from "../../../console/shell";
 import {
-  type AtRiskWorkspace,
   conditionLabel,
   conditionTone,
   operatorAtRiskQueryOptions,
 } from "../../../console/views/at-risk/at-risk";
 import { operatorOverviewQueryOptions } from "../../../console/views/overview/overview.services";
-import { TopUpDialog } from "../detail/components/top-up-dialog";
 
 const LIMIT = 8;
 const conditions: OperatorAttentionCondition[] = [
@@ -160,35 +151,6 @@ function Metric({
   );
 }
 
-function WorkspaceActions({
-  workspace,
-  onTopUp,
-}: {
-  workspace: Pick<AtRiskWorkspace, "id" | "balance" | "conditions">;
-  onTopUp: (workspace: { id: string; balance: number }) => void;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button size="icon" variant="ghost" className="size-8" aria-label="Workspace actions">
-          <EllipsisIcon className="size-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem asChild>
-          <Link to="/workspaces/$workspaceId" params={{ workspaceId: workspace.id }}>
-            Detail
-          </Link>
-        </DropdownMenuItem>
-        {workspace.conditions.includes("LOW_BALANCE") ||
-        workspace.conditions.includes("CREDIT_EXHAUSTED") ? (
-          <DropdownMenuItem onSelect={() => onTopUp(workspace)}>Top-Up</DropdownMenuItem>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 function csvCell(value: string | number) {
   const raw = String(value);
   const safe = typeof value === "string" && /^[\s]*[=+@\-\t\r]/.test(raw) ? `'${raw}` : raw;
@@ -199,6 +161,7 @@ function exportCsv(rows: OperatorWorkspace[]) {
   const header = [
     "Workspace",
     "Slug",
+    "Organization",
     "Health",
     "Users",
     "Channels",
@@ -213,6 +176,7 @@ function exportCsv(rows: OperatorWorkspace[]) {
   const data = rows.map((row) => [
     row.name,
     row.slug,
+    row.organizationName ?? "",
     row.conditions.map((condition) => conditionLabel[condition]).join("; ") || "Healthy",
     row.userCount,
     row.channels.join("; "),
@@ -247,7 +211,6 @@ export default function WorkspacesListView() {
   const [channel, setChannel] = useState<"ALL" | "WEB" | "WHATSAPP">("ALL");
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
-  const [topUp, setTopUp] = useState<{ id: string; balance: number } | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search.trim());
@@ -536,6 +499,7 @@ export default function WorkspacesListView() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[16%]">{heading("Workspace", "name")}</TableHead>
+                    <TableHead className="w-[12%]">Organization</TableHead>
                     <TableHead className="w-[12%]">Health</TableHead>
                     <TableHead className="text-right">{heading("Users", "userCount")}</TableHead>
                     <TableHead>Channels</TableHead>
@@ -551,7 +515,6 @@ export default function WorkspacesListView() {
                       {heading("Credits used", "creditsUsed")}
                     </TableHead>
                     <TableHead className="w-[11%]">{heading("Created", "createdAt")}</TableHead>
-                    <TableHead className="w-12 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -566,6 +529,19 @@ export default function WorkspacesListView() {
                           {row.name}
                         </Link>
                         <p className="text-muted-foreground">{row.slug}</p>
+                      </TableCell>
+                      <TableCell>
+                        {row.organizationId ? (
+                          <Link
+                            to="/organizations/$organizationId"
+                            params={{ organizationId: row.organizationId }}
+                            className="text-primary hover:underline"
+                          >
+                            {row.organizationName ?? "View →"}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex min-w-0 flex-wrap gap-1 [&_[data-slot=badge]]:max-w-full [&_[data-slot=badge]]:whitespace-normal">
@@ -628,9 +604,6 @@ export default function WorkspacesListView() {
                         />
                       </TableCell>
                       <TableCell>{dateTime(row.createdAt)}</TableCell>
-                      <TableCell className="text-center">
-                        <WorkspaceActions workspace={row} onTopUp={setTopUp} />
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -693,7 +666,13 @@ export default function WorkspacesListView() {
                           </td>
                           <td className="px-2 py-2">{dateTime(row.lastCustomerActivityAt)}</td>
                           <td className="px-4 py-2 text-center">
-                            <WorkspaceActions workspace={row} onTopUp={setTopUp} />
+                            <Link
+                              to="/workspaces/$workspaceId"
+                              params={{ workspaceId: row.id }}
+                              className="text-primary hover:underline"
+                            >
+                              Detail →
+                            </Link>
                           </td>
                         </tr>
                       ))}
@@ -743,16 +722,6 @@ export default function WorkspacesListView() {
             </CardContent>
           </Card>
         </div>
-        {topUp ? (
-          <TopUpDialog
-            workspaceId={topUp.id}
-            balance={topUp.balance}
-            open
-            onOpenChange={(open) => {
-              if (!open) setTopUp(null);
-            }}
-          />
-        ) : null}
       </div>
     </ConsoleShell>
   );
