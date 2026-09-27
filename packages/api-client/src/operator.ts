@@ -14,6 +14,7 @@ export type OperatorResolutionReason =
 
 export type OperatorOverview = {
   range: { from: string; to: string };
+  organizations: { total: number };
   workspaces: { total: number; active: number; new: number };
   previous: {
     activeWorkspaces: number;
@@ -290,8 +291,22 @@ export type OperatorOrganization = {
 export type OperatorOrganizationDetail = OperatorOrganization & {
   unlimitedPeriod: UnlimitedPeriod | null;
   users: { id: string; name: string; email: string }[];
-  payments: { id: string; credits: number; amountIdr: number; status: string; paidAt: string | null; createdAt: string }[];
-  ledger: { id: string; type: string; credits: number; note: string | null; createdAt: string; workspaceId: string }[];
+  payments: {
+    id: string;
+    credits: number;
+    amountIdr: number;
+    status: string;
+    paidAt: string | null;
+    createdAt: string;
+  }[];
+  ledger: {
+    id: string;
+    type: string;
+    credits: number;
+    note: string | null;
+    createdAt: string;
+    workspaceId: string;
+  }[];
 };
 
 export async function fetchOperatorOrganizations(client: ApiClient, search?: string) {
@@ -308,20 +323,30 @@ export async function fetchOperatorOrganizationDetail(client: ApiClient, id: str
 }
 
 export async function topUpOrganization(client: ApiClient, id: string, input: TopUpInput) {
-  const response = await client.operator.organizations[":id"]["top-ups"].$post({ param: { id }, json: input });
+  const response = await client.operator.organizations[":id"]["top-ups"].$post({
+    param: { id },
+    json: input,
+  });
   if (response.status === 404) throw new Error("Organization not found.");
   if (!response.ok) throw new Error("Failed to record the Top-Up.");
   return (await response.json()) as TopUpResult;
 }
 
-export async function changeOrganizationUnlimitedPeriod(client: ApiClient, id: string, action: "grant" | "extend" | "end", endDate: string | null = null) {
+export async function changeOrganizationUnlimitedPeriod(
+  client: ApiClient,
+  id: string,
+  action: "grant" | "extend" | "end",
+  endDate: string | null = null,
+) {
   const route = client.operator.organizations[":id"]["unlimited-period"];
-  const response = action === "grant"
-    ? await route.$post({ param: { id }, json: { endDate } })
-    : action === "extend"
-      ? await route.$patch({ param: { id }, json: { endDate } })
-      : await route.end.$post({ param: { id } });
-  if (response.status === 409) throw new Error("This Organization already has an active Unlimited Period.");
+  const response =
+    action === "grant"
+      ? await route.$post({ param: { id }, json: { endDate } })
+      : action === "extend"
+        ? await route.$patch({ param: { id }, json: { endDate } })
+        : await route.end.$post({ param: { id } });
+  if (response.status === 409)
+    throw new Error("This Organization already has an active Unlimited Period.");
   if (!response.ok) throw new Error("Unable to update the Organization Unlimited Period.");
   return (await response.json()) as { period: UnlimitedPeriod };
 }
