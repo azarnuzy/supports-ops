@@ -47,6 +47,7 @@ export function AppShell({
   fullWidth = false,
   headerRight,
   navSections,
+  sidebarTop,
 }: {
   brand: { name: string; to: string };
   children: ReactNode;
@@ -55,11 +56,12 @@ export function AppShell({
   fullWidth?: boolean;
   headerRight?: ReactNode;
   navSections: AppShellNavSection[];
+  sidebarTop?: ReactNode;
 }) {
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader className="h-12 justify-center py-0">
+        <SidebarHeader className="gap-1 px-2 pt-2 pb-3">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip={brand.name}>
@@ -72,8 +74,9 @@ export function AppShell({
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+          {sidebarTop}
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="gap-0">
           {navSections.map((section) => {
             const items = section.items.map((item) => (
               <SidebarMenuItem key={item.to}>
@@ -86,7 +89,7 @@ export function AppShell({
               </SidebarMenuItem>
             ));
             return (
-              <SidebarGroup key={section.label ?? section.items[0]?.to}>
+              <SidebarGroup className="px-2 py-1" key={section.label ?? section.items[0]?.to}>
                 {section.collapsible ? (
                   <Collapsible className="group/collapsible" defaultOpen>
                     <SidebarGroupLabel asChild>

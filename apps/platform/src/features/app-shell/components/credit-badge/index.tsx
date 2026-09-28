@@ -1,4 +1,3 @@
-import { Badge } from "@repo/ui/components/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -29,9 +28,9 @@ export function CreditBadge() {
   const state = balance <= 0 ? "exhausted" : balance < lowBalanceThreshold ? "warning" : "normal";
 
   const stateStyles = {
-    exhausted: "border-destructive/30 bg-destructive/10 text-destructive",
+    exhausted: "text-destructive",
     normal: "text-muted-foreground",
-    warning: "border-amber-600/30 text-amber-700 dark:text-amber-400",
+    warning: "text-amber-700 dark:text-amber-400",
   } as const;
 
   const stateMessage = {
@@ -44,11 +43,9 @@ export function CreditBadge() {
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link to={user.data.isOrganizationAdmin ? "/workspace/billing" : "/workspace/ai-usage"}>
-            <Badge variant="outline" className={stateStyles[state]}>
-              <CoinsIcon className="size-3.5" />
-              {formatCredits(balance)}
-            </Badge>
+          <Link className={`flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs hover:bg-accent ${stateStyles[state]}`} to={user.data.isOrganizationAdmin ? "/workspace/billing" : "/workspace/ai-usage"}>
+            <CoinsIcon className="size-3.5 shrink-0" />
+            <span><strong className="text-foreground">{formatCredits(balance)}</strong> Credits</span>
           </Link>
         </TooltipTrigger>
         <TooltipContent>{stateMessage[state]}</TooltipContent>

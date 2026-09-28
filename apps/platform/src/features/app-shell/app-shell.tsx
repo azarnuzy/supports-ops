@@ -28,6 +28,7 @@ import type { ReactNode } from "react";
 import { meQueryOptions, useLogoutMutation } from "../auth";
 import { getInitials } from "../../lib/utils";
 import { HeaderControls } from "./components/header-controls";
+import { WorkspaceSwitcher } from "./components/workspace-switcher";
 
 type NavItem = {
   icon: LucideIcon;
@@ -98,11 +99,13 @@ export function PlatformAppShell({
     user.data.role === "ADMIN"
       ? [
           {
-            items: [{ icon: LayoutDashboardIcon, label: "Dashboard", to: "/" }],
+            items: [
+              { icon: LayoutDashboardIcon, label: "Dashboard", to: "/" },
+              { icon: ChartColumnIcon, label: "AI Usage", to: "/workspace/ai-usage" },
+            ],
             label: "Overview",
           },
           {
-            collapsible: true,
             items: [
               ...conversationItems,
               { icon: LayoutListIcon, label: "All Conversations", to: "/chat/all" },
@@ -130,15 +133,14 @@ export function PlatformAppShell({
             items: [
               { icon: UsersRoundIcon, label: "Users", to: "/workspace/users" },
               { icon: TagsIcon, label: "Ticket categories", to: "/workspace/categories" },
-              { icon: ChartColumnIcon, label: "AI Usage", to: "/workspace/ai-usage" },
-              ...(user.data.isOrganizationAdmin
-                ? [{ icon: CoinsIcon, label: "Billing", to: "/workspace/billing" }]
-                : []),
             ],
             label: "Workspace",
           },
+          ...(user.data.isOrganizationAdmin
+            ? [{ items: [{ icon: CoinsIcon, label: "Billing", to: "/workspace/billing" }], label: "Organization" }]
+            : []),
         ]
-      : [{ collapsible: true, items: conversationItems, label: "Conversations" }];
+      : [{ items: conversationItems, label: "Conversations" }];
 
   const activeTo = activeNavItemTo(
     location.pathname,
@@ -152,12 +154,12 @@ export function PlatformAppShell({
   }));
 
   const footer = (
-    <SidebarMenu className="rounded-lg border bg-background p-1 group-data-[collapsible=icon]:items-center">
+    <SidebarMenu>
       <SidebarMenuItem>
-        <div className="flex items-center group-data-[collapsible=icon]:flex-col">
-          <SidebarMenuButton asChild size="lg" tooltip="Edit profile" className="flex-1">
+        <div className="flex items-center">
+          <SidebarMenuButton asChild size="lg" tooltip="Edit profile" className="h-11 min-w-0 flex-1">
             <Link to="/profile">
-              <Avatar className="shrink-0 rounded-md">
+              <Avatar className="size-7 shrink-0 rounded-md">
                 {user.data.image ? (
                   <AvatarImage src={user.data.image} alt={`${user.data.name} avatar`} />
                 ) : null}
@@ -165,7 +167,7 @@ export function PlatformAppShell({
                   {getInitials(user.data.name)}
                 </AvatarFallback>
               </Avatar>
-              <span className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+              <span className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-medium">{user.data.name}</span>
                 <span className="truncate text-xs text-muted-foreground">{user.data.email}</span>
               </span>
@@ -173,7 +175,7 @@ export function PlatformAppShell({
           </SidebarMenuButton>
           <Button
             aria-label={logoutMutation.isPending ? "Logging out" : "Logout"}
-            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+            className="size-8 shrink-0 text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:hidden"
             size="icon"
             title={logoutMutation.isPending ? "Logging out..." : "Logout"}
             type="button"
@@ -191,6 +193,7 @@ export function PlatformAppShell({
   return (
     <AppShell
       brand={{ name: "SupportOps", to: "/" }}
+      sidebarTop={<WorkspaceSwitcher />}
       footer={footer}
       fullBleed={fullBleed}
       fullWidth={fullWidth}

@@ -21,9 +21,9 @@ import { PlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { meQueryOptions } from "../../../auth";
 import {
-  switchToWorkspace,
   useActiveWorkspaceId,
   useCreateWorkspaceMutation,
+  useSwitchWorkspace,
   workspacesQueryOptions,
 } from "../../../workspaces";
 
@@ -37,10 +37,12 @@ export function WorkspaceSwitcher() {
   });
   const activeWorkspaceId = useActiveWorkspaceId();
   const createWorkspaceMutation = useCreateWorkspaceMutation();
+  const switchWorkspace = useSwitchWorkspace();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
 
-  if (!user.data || !workspaces.data || workspaces.data.length < 2 && !user.data.isOrganizationAdmin) return null;
+  if (!user.data || !workspaces.data) return null;
+  const activeWorkspaceName = workspaces.data.find((workspace) => workspace.id === activeWorkspaceId)?.name;
 
   function handleValueChange(value: string) {
     if (value === createWorkspaceValue) {
@@ -48,7 +50,7 @@ export function WorkspaceSwitcher() {
       return;
     }
 
-    if (value !== activeWorkspaceId) switchToWorkspace(value);
+    if (value !== activeWorkspaceId) void switchWorkspace(value);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -61,15 +63,22 @@ export function WorkspaceSwitcher() {
 
   return (
     <>
-      <Select value={activeWorkspaceId ?? undefined} onValueChange={handleValueChange}>
+      {workspaces.data.length < 2 && !user.data.isOrganizationAdmin ? (
+        <div className="flex h-9 min-w-0 items-center rounded-md bg-muted px-2 text-sm font-medium group-data-[collapsible=icon]:hidden" title={workspaces.data[0]?.name}>
+          <span className="truncate">{workspaces.data[0]?.name}</span>
+        </div>
+      ) : <Select value={activeWorkspaceId ?? undefined} onValueChange={handleValueChange}>
         <SelectTrigger
           aria-label="Workspace"
-          className="h-8 max-w-[10rem] rounded-md border-border/70 bg-background/80 px-2 text-xs font-semibold text-foreground shadow-none hover:bg-accent focus-visible:ring-2"
+          title={activeWorkspaceName}
+          className="h-9 w-full min-w-0 border-0 bg-muted px-2 text-sm font-medium shadow-none hover:bg-accent focus-visible:ring-2 group-data-[collapsible=icon]:hidden"
           size="sm"
         >
-          <SelectValue />
+          <SelectValue className="min-w-0 flex-1 overflow-hidden">
+            <span className="block truncate">{activeWorkspaceName}</span>
+          </SelectValue>
         </SelectTrigger>
-        <SelectContent align="end">
+        <SelectContent align="start">
           {workspaces.data.map((workspace) => (
             <SelectItem key={workspace.id} className="text-xs font-medium" value={workspace.id}>
               {workspace.name}
@@ -80,7 +89,7 @@ export function WorkspaceSwitcher() {
             Create Workspace
           </SelectItem> : null}
         </SelectContent>
-      </Select>
+      </Select>}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <form className="grid gap-5" onSubmit={handleSubmit}>
@@ -95,6 +104,7 @@ export function WorkspaceSwitcher() {
               <FieldLabel htmlFor="workspace-name">Name</FieldLabel>
               <Input
                 id="workspace-name"
+                placeholder="e.g. Acme Support"
                 required
                 value={name}
                 onChange={(event) => setName(event.target.value)}
