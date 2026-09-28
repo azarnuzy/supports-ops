@@ -119,10 +119,14 @@ export async function mountWidget({
   const scrollMessages = () =>
     messages?.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
   let eventSource: EventSource | undefined;
+  let waitingForAttachmentReply = false;
+  let attachmentMessagePosition: number | undefined;
+  let sendingAttachment: { bubble: HTMLElement; content: string; afterPosition: number } | undefined;
   let reconnectAttempt = 0;
   let reconnectTimer: number | undefined;
   let previousSessionToken: string | undefined;
   const streamedContent = new Map<string, string>();
+  const attachmentStatuses = new Map<string, string>();
   const identityKey = `supportops:web-identity:${widgetKey}`;
 
   const setIdentity = (name: string, email: string) => {
@@ -146,7 +150,7 @@ export async function mountWidget({
   };
 
   const showTyping = () => {
-    hideTyping();
+    if (messages?.querySelector("[data-typing]")) return;
     const typing = document.createElement("p");
     typing.className = "message typing";
     typing.dataset.typing = "";
@@ -159,11 +163,13 @@ export async function mountWidget({
   };
 
   const appendAttachment = (container: HTMLElement, attachment: WidgetAttachment) => {
+    if (container.querySelector(`[data-attachment-id="${attachment.id}"]`)) return;
     const image = attachment.mimeType.startsWith("image/");
+    const processingStatus = attachmentStatuses.get(attachment.id) ?? attachment.processingStatus;
     const statusText =
-      attachment.processingStatus === "FAILED"
+      processingStatus === "FAILED"
         ? "Could not be read"
-        : attachment.processingStatus === "READY"
+        : processingStatus === "READY"
           ? "✓"
           : "◌";
     if (image) {
@@ -234,13 +240,21 @@ export async function mountWidget({
     element.append(icon, info, preview, download);
     container.append(element);
   };
-  const appendMessage = (message: WidgetMessage) => {
+  const appendMessage = (message: WidgetMessage, provisional?: HTMLElement) => {
     // A positioned Message supersedes a streamed reply that has now been persisted.
     messages?.querySelectorAll("[data-provisional-id]").forEach((stale) => {
       stale.remove();
     });
-    if (messages?.querySelector(`[data-position="${message.position}"]`)) return;
-    const bubble = document.createElement("div");
+    const existing = messages?.querySelector<HTMLElement>(`[data-position="${message.position}"]`);
+    if (existing && existing !== provisional) {
+      provisional?.remove();
+      for (const attachment of message.attachments ?? []) appendAttachment(existing, attachment);
+      const time = existing.querySelector("time");
+      if (time) existing.append(time);
+      return;
+    }
+    const bubble = provisional ?? document.createElement("div");
+    bubble.replaceChildren();
     bubble.className = `message ${message.senderType === "CUSTOMER" ? "message-customer" : ""}`;
     bubble.dataset.position = String(message.position);
     for (const attachment of message.attachments ?? []) appendAttachment(bubble, attachment);
@@ -268,21 +282,23 @@ export async function mountWidget({
     // of always appending at the end — and above the unpositioned bubbles
     // (optimistic send, ephemeral turn, streaming reply, typing) that always
     // belong last.
-    const rendered = [...(messages?.children ?? [])] as HTMLElement[];
-    const index = orderedInsertIndex(
-      rendered.map((existing) =>
-        existing.dataset.position === undefined ? undefined : Number(existing.dataset.position),
-      ),
-      message.position,
-    );
-    if (index === -1) messages?.append(bubble);
-    else rendered[index].before(bubble);
+    if (!provisional) {
+      const rendered = [...(messages?.children ?? [])] as HTMLElement[];
+      const index = orderedInsertIndex(
+        rendered.map((existing) =>
+          existing.dataset.position === undefined ? undefined : Number(existing.dataset.position),
+        ),
+        message.position,
+      );
+      if (index === -1) messages?.append(bubble);
+      else rendered[index].before(bubble);
+    }
     // `.message` uses `width: fit-content` to hug the widest line, but browsers
     // resolve that against the available width rather than the rendered content
     // once text wraps — leaving a bubble stretched wider than any actual line.
     // Re-measure the rendered lines and clamp to the widest one to close the gap.
     if (content) tightenMessageCopyWidth(content);
-    scrollMessages();
+    if (!provisional) scrollMessages();
   };
 
   const connect = (accessToken: string) => {
@@ -315,7 +331,7 @@ export async function mountWidget({
       if (eventSource !== source) return;
       source.close();
       eventSource = undefined;
-      hideTyping();
+      if (!waitingForAttachmentReply) hideTyping();
       if (input) {
         input.disabled = false;
         input.placeholder = "Type your message…";
@@ -344,7 +360,25 @@ export async function mountWidget({
         position: number;
         senderType: string;
       };
-      hideTyping();
+      if (
+        sendingAttachment &&
+        message.senderType === "CUSTOMER" &&
+        message.content === sendingAttachment.content &&
+        message.position > sendingAttachment.afterPosition
+      ) {
+        sendingAttachment.bubble.dataset.position = String(message.position);
+        attachmentMessagePosition = message.position;
+        return;
+      }
+      if (
+        message.senderType !== "CUSTOMER" &&
+        (!waitingForAttachmentReply ||
+          (attachmentMessagePosition !== undefined && message.position > attachmentMessagePosition))
+      ) {
+        waitingForAttachmentReply = false;
+        attachmentMessagePosition = undefined;
+        hideTyping();
+      }
       appendMessage(message);
     });
     source.addEventListener("message.delta", (event) => {
@@ -352,6 +386,8 @@ export async function mountWidget({
         delta: string;
         provisionalId: string;
       };
+      waitingForAttachmentReply = false;
+      attachmentMessagePosition = undefined;
       hideTyping();
       let bubble = messages?.querySelector<HTMLElement>(
         `[data-provisional-id="${delta.provisionalId}"]`,
@@ -378,7 +414,11 @@ export async function mountWidget({
       if (input) input.disabled = status.status === "generating" || status.status === "resolved";
       if (status.status === "generating") {
         showTyping();
-      } else {
+      } else if (status.status === "resolved") {
+        waitingForAttachmentReply = false;
+        attachmentMessagePosition = undefined;
+        hideTyping();
+      } else if (!waitingForAttachmentReply) {
         hideTyping();
       }
       if (status.status === "resolved") {
@@ -392,6 +432,7 @@ export async function mountWidget({
         attachmentId: string;
         processingStatus: string;
       };
+      attachmentStatuses.set(update.attachmentId, update.processingStatus);
       const attachment = messages?.querySelector<HTMLElement>(
         `[data-attachment-id="${update.attachmentId}"]`,
       );
@@ -468,6 +509,9 @@ export async function mountWidget({
     }
   });
   const resetSession = () => {
+    waitingForAttachmentReply = false;
+    attachmentMessagePosition = undefined;
+    sendingAttachment = undefined;
     previousSessionToken =
       sessionStorage.getItem(`supportops:web-session:${widgetKey}`) ?? undefined;
     eventSource?.close();
@@ -552,15 +596,84 @@ export async function mountWidget({
 
     // Optimistic send: show the customer's own message immediately and
     // clear the composer — don't make the sender wait for the round trip.
-    const optimistic = document.createElement("p");
+    const optimistic = document.createElement(files.length ? "div" : "p");
     optimistic.className = "message message-customer";
-    optimistic.textContent = content;
-    if (!files.length) messages?.append(optimistic);
+    if (files.length) {
+      for (const file of files) {
+        if (file.type.startsWith("image/")) {
+          const preview = document.createElement("button");
+          preview.className = "attachment-image";
+          preview.type = "button";
+          preview.disabled = true;
+          const image = document.createElement("img");
+          image.alt = file.name;
+          image.src = URL.createObjectURL(file);
+          image.onload = () => URL.revokeObjectURL(image.src);
+          const status = document.createElement("span");
+          status.className = "attachment-status";
+          status.textContent = "Uploading…";
+          preview.append(image, status);
+          optimistic.append(preview);
+          continue;
+        }
+        const attachment = document.createElement("div");
+        attachment.className = "attachment-file";
+        const icon = document.createElement("span");
+        icon.className = "attachment-file-icon";
+        icon.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M14 3v5h5M9 13h6M9 17h6"/></svg>`;
+        const info = document.createElement("div");
+        info.className = "attachment-file-info";
+        const name = document.createElement("p");
+        name.className = "attachment-file-name";
+        name.textContent = file.name;
+        const status = document.createElement("p");
+        status.className = "attachment-file-meta";
+        status.textContent = `${formatBytes(file.size)} · Uploading…`;
+        info.append(name, status);
+        const preview = document.createElement("button");
+        preview.className = "attachment-file-action";
+        preview.type = "button";
+        preview.disabled = true;
+        preview.textContent = "Preview";
+        const download = document.createElement("button");
+        download.className = "attachment-file-action attachment-file-icon-button";
+        download.type = "button";
+        download.disabled = true;
+        download.textContent = "↓";
+        attachment.append(icon, info, preview, download);
+        optimistic.append(attachment);
+      }
+      if (content) {
+        const copy = document.createElement("div");
+        copy.className = "message-copy";
+        copy.textContent = content;
+        optimistic.append(copy);
+      }
+      const time = document.createElement("time");
+      time.className = "message-time";
+      time.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      optimistic.append(time);
+    } else {
+      optimistic.textContent = content;
+    }
+    messages?.append(optimistic);
+    if (files.length) {
+      const positions = messages?.querySelectorAll<HTMLElement>("[data-position]") ?? [];
+      const afterPosition = [...positions].reduce(
+        (highest, message) => Math.max(highest, Number(message.dataset.position)),
+        0,
+      );
+      sendingAttachment = { bubble: optimistic, content, afterPosition };
+    }
 
     input.disabled = true;
     input.placeholder = "Sending…";
     if (sendButton) sendButton.disabled = true;
     input.value = "";
+    if (files.length && attachmentInput) {
+      attachmentInput.value = "";
+      updateAttachmentTray();
+    }
     // Whether *this* submission opened a fresh SSE connection — the shared
     // `eventSource` variable can already be non-null from an unrelated
     // earlier connect() (e.g. auto-resume on load), so it can't be used to
@@ -569,11 +682,13 @@ export async function mountWidget({
     let connecting = false;
     try {
       if (files.length) {
+        waitingForAttachmentReply = true;
+        attachmentMessagePosition = undefined;
+        showTyping();
         const result = await sendAttachments(apiUrl, accessToken, content, files);
-        optimistic.remove();
-        appendMessage({ ...result.message, attachments: result.attachments });
-        if (attachmentInput) attachmentInput.value = "";
-        updateAttachmentTray();
+        attachmentMessagePosition = result.message.position;
+        appendMessage({ ...result.message, attachments: result.attachments }, optimistic);
+        sendingAttachment = undefined;
         connect(accessToken);
         connecting = true;
         return;
@@ -591,10 +706,22 @@ export async function mountWidget({
         connecting = true;
       }
     } catch {
+      waitingForAttachmentReply = false;
+      attachmentMessagePosition = undefined;
+      sendingAttachment = undefined;
       hideTyping();
       optimistic.classList.add("message-failed");
+      optimistic.querySelectorAll<HTMLElement>(".attachment-file-meta, .attachment-image .attachment-status").forEach((status) => {
+        status.textContent = "Upload failed";
+      });
       optimistic.title = "Failed to send — check your connection and try again.";
       input.value = content;
+      if (files.length && attachmentInput) {
+        const restored = new DataTransfer();
+        files.forEach((file) => restored.items.add(file));
+        attachmentInput.files = restored.files;
+        updateAttachmentTray();
+      }
       messageError?.removeAttribute("hidden");
     } finally {
       if (!connecting) {
@@ -750,6 +877,7 @@ function renderWidget(config: WidgetConfig) {
     .content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 16px; overflow-y: auto; }
     .message { display: flex; width: fit-content; max-width: 90%; flex-direction: column; gap: 2px; margin: 0 0 8px; padding: 10px 12px; border-radius: 12px 12px 12px 3px; background: #f1f5f9; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
     .message:has(.attachment-image, .attachment-file) { gap: 6px; }
+    .message:has(.attachment-file) { width: min(100%, 320px); }
     .message-customer { margin-left: auto; border-radius: 12px 12px 3px; background: ${escapeCss(config.primaryColor)}; color: white; white-space: pre-wrap; }
     .message-failed { opacity: .55; outline: 1px dashed #b91c1c; outline-offset: -1px; }
     .welcome { flex: 0 0 auto; text-align: center; }
@@ -786,7 +914,7 @@ function renderWidget(config: WidgetConfig) {
     .message-time { align-self: flex-end; color: currentColor; font-size: 10px; line-height: 1; opacity: .65; }
     .session-ready { margin: 16px 0 0; font-size: 14px; line-height: 1.45; }
     .start[data-start-new] { align-self: flex-start; margin-top: 10px; padding: 0; border: 0; background: transparent; color: ${escapeCss(config.primaryColor)}; cursor: pointer; font: inherit; font-size: 13px; font-weight: 650; text-decoration: underline; box-shadow: none; }
-    .composer { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 12px; padding: 4px 4px 4px 6px; border: 1px solid #cbd5e1; border-radius: 18px; background: white; }
+    .composer { position: relative; display: flex; align-items: center; gap: 4px; margin-top: 12px; padding: 4px 4px 4px 6px; border: 1px solid #cbd5e1; border-radius: 18px; background: white; }
     .composer[hidden] { display: none; }
     .composer:focus-within { border-color: ${escapeCss(config.primaryColor)}; box-shadow: 0 0 0 3px color-mix(in srgb, ${escapeCss(config.primaryColor)} 22%, transparent); }
     .composer-input { flex: 1; min-width: 0; border: 0; outline: none; padding: 8px 4px; font: inherit; font-size: 14px; color: inherit; background: transparent; }
@@ -796,7 +924,7 @@ function renderWidget(config: WidgetConfig) {
     .send:hover { filter: brightness(.94); background: ${escapeCss(config.primaryColor)}; }
     .send:disabled { opacity: .5; cursor: default; }
     .send:disabled:hover { filter: none; }
-    .attachment-tray { display: none; flex: 1 0 100%; gap: 6px; padding: 4px 2px 2px; overflow-x: auto; }
+    .attachment-tray { position: absolute; right: 0; bottom: calc(100% + 6px); left: 0; z-index: 1; display: none; gap: 6px; padding: 4px; overflow-x: auto; border-radius: 10px; background: white; box-shadow: 0 2px 10px rgb(15 23 42 / 12%); }
     .attachment-tray[data-visible] { display: flex; }
     .attachment-chip { display: flex; min-width: 0; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; background: #f1f5f9; font-size: 12px; color: #334155; }
     .attachment-chip img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; }
