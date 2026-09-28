@@ -1,9 +1,11 @@
+import { spawn } from "node:child_process";
 import Redis from "ioredis";
 import { createStorage } from "@repo/storage";
 import {
   externalErrorCode,
   externalHttpStatus,
   externalResponseCode,
+  fetchWithRetry,
   recordExternalError,
   tagExternalError,
 } from "@repo/api/external-errors";
@@ -87,16 +89,16 @@ export async function processAttachmentJob(job: { data: AttachmentProcessJob }) 
           if (
             error instanceof Error &&
             "externalProvider" in error &&
-            error.externalProvider === "MISTRAL"
+            typeof error.externalProvider === "string"
           )
             await recordExternalError(prisma, {
-              provider: "MISTRAL",
+              provider: error.externalProvider,
               operation: attachment.mimeType.startsWith("audio/")
                 ? "TRANSCRIPTION"
                 : "ATTACHMENT_READ",
               modelId: attachment.mimeType.startsWith("audio/")
-                ? "voxtral-mini-latest"
-                : "mistral-ocr-latest",
+                ? ingestionConfig.audioFallbackModel
+                : ingestionConfig.attachmentFallbackModel,
               workspaceId: attachment.workspaceId,
               resourceType: "ATTACHMENT",
               resourceId: attachment.id,
@@ -155,16 +157,47 @@ export async function extractAttachment(storageKey: string, mimeType: string) {
     if (!object.Body) throw new Error("Attachment file is missing.");
     return new TextDecoder().decode(await object.Body.transformToByteArray());
   }
-  if (!ingestionConfig.mistralApiKey)
-    throw new Error("Configure MISTRAL_API_KEY to process attachments.");
   if (mimeType.startsWith("audio/")) return transcribe(storageKey, mimeType);
   if (!mimeType.startsWith("image/") && !readableDocumentTypes.has(mimeType))
     throw new Error("This file type cannot be read automatically.");
+  if (mimeType.endsWith("wordprocessingml.document") || mimeType.endsWith("presentationml.presentation")) {
+    const object = await createStorage(storageConfig).getObject(storageKey);
+    if (!object.Body) throw new Error("Attachment file is missing.");
+    const { text, visual } = await readOffice(new Uint8Array(await object.Body.transformToByteArray()), mimeType.endsWith("presentationml.presentation") ? "pptx" : "docx");
+    if (text.trim() && !visual) return text;
+    const url = await createStorage(storageConfig).getSignedGetObjectUrl({ key: storageKey });
+    const visualText = await extractWithOpenRouter(url, mimeType);
+    return visualText || text;
+  }
   const url = await createStorage(storageConfig).getSignedGetObjectUrl({ key: storageKey });
+  return extractWithOpenRouter(url, mimeType);
+}
+
+function readOffice(data: Uint8Array, kind: "docx" | "pptx"): Promise<{ text: string; visual: boolean }> {
+  return new Promise((resolve, reject) => {
+    const process = spawn("python3", [new URL("./office-text.py", import.meta.url).pathname, kind], { stdio: ["pipe", "pipe", "pipe"] });
+    const output: Buffer[] = [];
+    const errors: Buffer[] = [];
+    process.stdout.on("data", (chunk: Buffer) => output.push(chunk));
+    process.stderr.on("data", (chunk: Buffer) => errors.push(chunk));
+    process.on("error", reject);
+    process.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`Office extraction failed: ${Buffer.concat(errors).toString().trim()}`));
+      try { resolve(JSON.parse(Buffer.concat(output).toString()) as { text: string; visual: boolean }); }
+      catch (error) { reject(error); }
+    });
+    process.stdin.end(data);
+  });
+}
+
+export async function extractDocument(url: string, mimeType: string) {
+  if (!ingestionConfig.mistralApiKey)
+    throw new Error("Configure MISTRAL_API_KEY to process Knowledge Source PDFs.");
   const document = mimeType.startsWith("image/")
     ? { image_url: url, type: "image_url" }
     : { document_url: url, type: "document_url" };
-  return withSpan(
+  try {
+    return await withSpan(
     "external.mistral.ocr",
     {
       "external.provider": "MISTRAL",
@@ -172,7 +205,7 @@ export async function extractAttachment(storageKey: string, mimeType: string) {
       "external.model_id": "mistral-ocr-latest",
     },
     async () => {
-      const response = await fetch("https://api.mistral.ai/v1/ocr", {
+      const response = await fetchWithRetry("https://api.mistral.ai/v1/ocr", {
         body: JSON.stringify({ document, model: "mistral-ocr-latest" }),
         headers: {
           Authorization: `Bearer ${ingestionConfig.mistralApiKey}`,
@@ -197,53 +230,82 @@ export async function extractAttachment(storageKey: string, mimeType: string) {
       return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
     },
     false,
-  );
+    );
+  } catch (error) {
+    if (!shouldFallback(error) || !ingestionConfig.openRouterApiKey) throw error;
+    return extractWithOpenRouter(url, mimeType);
+  }
+}
+
+function shouldFallback(error: unknown) {
+  if (!(error instanceof Error) || !("externalProvider" in error) || error.externalProvider !== "MISTRAL") return false;
+  const status = externalHttpStatus(error);
+  return status === 429 || (status !== undefined && status >= 500) || status === undefined;
+}
+
+async function extractWithOpenRouter(url: string, mimeType: string) {
+  if (!ingestionConfig.openRouterApiKey)
+    throw new Error("Configure OPENROUTER_API_KEY to process chat attachments.");
+  const model = ingestionConfig.attachmentFallbackModel;
+  return withSpan("external.openrouter.document", {
+    "external.provider": "OPENROUTER",
+    "external.operation": "ATTACHMENT_READ",
+    "external.model_id": model,
+  }, async () => {
+    const file = mimeType.startsWith("image/")
+      ? { type: "image_url", image_url: { url } }
+      : { type: "file", file: { filename: mimeType === "application/pdf" ? "document.pdf" : mimeType.endsWith("presentationml.presentation") ? "document.pptx" : "document.docx", file_data: url } };
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${ingestionConfig.openRouterApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: [
+          { type: "text", text: "Transcribe all readable content faithfully in reading order. Preserve headings, tables, and slide or page boundaries as Markdown. Do not summarize or invent missing text." },
+          file,
+        ] }],
+        ...(mimeType === "application/pdf" ? { plugins: [{ id: "file-parser", pdf: { engine: "native" } }] } : {}),
+      }),
+    }).catch((error: unknown) => { throw tagExternalError(error, "OPENROUTER"); });
+    if (!response.ok) {
+      const body = await response.text();
+      throw tagExternalError(new Error(`Document extraction failed: ${body}`), "OPENROUTER", response.status, externalResponseCode(body));
+    }
+    const body = await response.json().catch((error: unknown) => { throw tagExternalError(error, "OPENROUTER"); }) as { choices?: Array<{ message?: { content?: string } }> };
+    return body.choices?.[0]?.message?.content ?? "";
+  }, false);
 }
 
 async function transcribe(storageKey: string, mimeType: string) {
+  if (!ingestionConfig.openRouterApiKey)
+    throw new Error("Configure OPENROUTER_API_KEY to process voice notes.");
   const object = await createStorage(storageConfig).getObject(storageKey);
   if (!object.Body) throw new Error("Voice note file is missing.");
+  const subtype = mimeType.split("/")[1]?.split(";")[0] ?? "audio";
+  const extension = subtype === "mpeg" ? "mp3" : subtype === "mp4" ? "m4a" : subtype;
   const form = new FormData();
-  form.set("model", "voxtral-mini-latest");
+  form.set("model", ingestionConfig.audioFallbackModel);
   form.set(
     "file",
     new Blob([new Uint8Array(await object.Body.transformToByteArray())], { type: mimeType }),
-    `voice-note.${mimeType.split("/")[1]}`,
+    `voice-note.${extension}`,
   );
-  return withSpan(
-    "external.mistral.transcription",
-    {
-      "external.provider": "MISTRAL",
+  return withSpan("external.openrouter.transcription", {
+      "external.provider": "OPENROUTER",
       "external.operation": "TRANSCRIPTION",
-      "external.model_id": "voxtral-mini-latest",
-    },
-    async () => {
-      const response = await fetch("https://api.mistral.ai/v1/audio/transcriptions", {
+      "external.model_id": ingestionConfig.audioFallbackModel,
+    }, async () => {
+      const response = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
         body: form,
-        headers: { Authorization: `Bearer ${ingestionConfig.mistralApiKey}` },
+        headers: { Authorization: `Bearer ${ingestionConfig.openRouterApiKey}` },
         method: "POST",
-      }).catch((error: unknown) => {
-        throw tagExternalError(error, "MISTRAL");
-      });
+      }).catch((failure: unknown) => { throw tagExternalError(failure, "OPENROUTER"); });
       if (!response.ok) {
         const body = await response.text();
-        throw tagExternalError(
-          new Error(`Transcription failed: ${body}`),
-          "MISTRAL",
-          response.status,
-          externalResponseCode(body),
-        );
+        throw tagExternalError(new Error(`Transcription failed: ${body}`), "OPENROUTER", response.status, externalResponseCode(body));
       }
-      return (
-        (
-          (await response.json().catch((error: unknown) => {
-            throw tagExternalError(error, "MISTRAL");
-          })) as { text?: string }
-        ).text ?? ""
-      );
-    },
-    false,
-  );
+      return ((await response.json().catch((failure: unknown) => { throw tagExternalError(failure, "OPENROUTER"); })) as { text?: string }).text ?? "";
+    }, false);
 }
 
 async function requestReply(ticketId: string, workspaceId: string) {

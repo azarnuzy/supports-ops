@@ -48,6 +48,8 @@ const workerEnvSchema = z.object({
   LOG_LEVEL: logLevelSchema,
   LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
   OPENROUTER_API_KEY: optionalStringSchema,
+  ATTACHMENT_FALLBACK_MODEL: z.string().trim().min(1).default("google/gemini-3.1-flash-lite"),
+  AUDIO_FALLBACK_MODEL: z.string().trim().min(1).default("openai/whisper-large-v3-turbo"),
   COMPLETION_GATEWAY_API_KEY: optionalStringSchema,
   COMPLETION_GATEWAY_BASE_URL: z.string().trim().url().default(defaultCompletionGatewayBaseUrl),
   MISTRAL_API_KEY: optionalStringSchema,
@@ -103,6 +105,9 @@ export const classificationConfig = {
 
 export const ingestionConfig = {
   mistralApiKey: env.MISTRAL_API_KEY,
+  openRouterApiKey: env.OPENROUTER_API_KEY,
+  attachmentFallbackModel: env.ATTACHMENT_FALLBACK_MODEL,
+  audioFallbackModel: env.AUDIO_FALLBACK_MODEL,
   tavilyApiKey: env.TAVILY_API_KEY,
 } as const;
 
