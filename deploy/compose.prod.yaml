@@ -117,6 +117,8 @@ services:
       DATABASE_URL: "postgresql://${POSTGRES_USER:?Set POSTGRES_USER in env.production}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in env.production}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in env.production}?schema=public"
       INTERNAL_WORKER_TOKEN: "${INTERNAL_WORKER_TOKEN:?Set INTERNAL_WORKER_TOKEN in env.production}"
       MISTRAL_API_KEY: "${MISTRAL_API_KEY:-}"
+      ATTACHMENT_FALLBACK_MODEL: "${ATTACHMENT_FALLBACK_MODEL:-google/gemini-3.1-flash-lite}"
+      AUDIO_FALLBACK_MODEL: "${AUDIO_FALLBACK_MODEL:-openai/whisper-large-v3-turbo}"
       REDIS_URL: "redis://redis:6379"
       EMAIL_FROM: "${EMAIL_FROM:?Set EMAIL_FROM in env.production}"
       RESEND_API_KEY: "${RESEND_API_KEY:?Set RESEND_API_KEY in env.production}"

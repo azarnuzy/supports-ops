@@ -24,7 +24,7 @@ TOOL_MASTER_KEY="..."
 OPERATOR_AUTH_SECRET="..."
 ```
 
-Untuk Telemetry Langfuse, tambahkan juga konfigurasi pada bagian [Telemetry](#6-telemetry-di-langfuse). Attachment PDF/gambar merupakan skenario opsional yang juga memerlukan S3-compatible storage, `MISTRAL_API_KEY`, dan `INTERNAL_WORKER_TOKEN`.
+Untuk Telemetry Langfuse, tambahkan juga konfigurasi pada bagian [Telemetry](#6-telemetry-di-langfuse). Attachment PDF/gambar merupakan skenario opsional yang juga memerlukan S3-compatible storage, `OPENROUTER_API_KEY`, dan `INTERNAL_WORKER_TOKEN`.
 
 ## 2. Menyalakan stack dan demo Workspace
 
