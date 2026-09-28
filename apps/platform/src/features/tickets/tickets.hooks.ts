@@ -2,6 +2,7 @@ import type { TicketCategory, TicketDetail, TicketPriority, TicketStatus } from 
 import { queryOptions, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { queryKeys } from "../../lib/query-keys";
+import { useActiveWorkspaceId } from "../workspaces";
 import {
   claimTicket,
   generateSuggestedReply,
@@ -120,7 +121,8 @@ export function useSharedHumanQueueEvents() {
 
 export function useTicketEvents() {
   const invalidate = useTicketInvalidation();
-  useEffect(() => subscribeToSharedHumanQueue(() => void invalidate()), [invalidate]);
+  const workspaceId = useActiveWorkspaceId();
+  useEffect(() => subscribeToSharedHumanQueue(() => void invalidate()), [invalidate, workspaceId]);
 }
 
 /** Realtime for the currently open Ticket: new Messages, delivery, and
@@ -130,6 +132,7 @@ export function useTicketEvents() {
 export function useTicketDetailEvents(ticketId: string | undefined) {
   const queryClient = useQueryClient();
   const invalidateLists = useTicketInvalidation();
+  const workspaceId = useActiveWorkspaceId();
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
@@ -140,7 +143,7 @@ export function useTicketDetailEvents(ticketId: string | undefined) {
       void invalidateLists();
     };
     return subscribeToTicketEvents(ticketId, onEvent, setReconnecting);
-  }, [invalidateLists, queryClient, ticketId]);
+  }, [invalidateLists, queryClient, ticketId, workspaceId]);
 
   return { reconnecting };
 }

@@ -20,12 +20,14 @@ export function getActiveWorkspaceId() {
   return sessionStorage.getItem(activeWorkspaceStorageKey);
 }
 
-/** Switches this tab into a Workspace and opens its Inbox. A hard navigation
- * is simplest and correct here: every already-open `@repo/api-client`
- * instance was built with the previous selection baked into its headers, so
- * only a fresh page load (which reconstructs them) is guaranteed to send the
- * new one. */
+const workspaceChangeEvent = "supportops:workspace-changed";
+
+export function subscribeToWorkspaceChange(onChange: () => void) {
+  window.addEventListener(workspaceChangeEvent, onChange);
+  return () => window.removeEventListener(workspaceChangeEvent, onChange);
+}
+
 export function switchToWorkspace(workspaceId: string) {
   sessionStorage.setItem(activeWorkspaceStorageKey, workspaceId);
-  window.location.assign("/chat");
+  window.dispatchEvent(new Event(workspaceChangeEvent));
 }

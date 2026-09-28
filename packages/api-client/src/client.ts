@@ -14,11 +14,12 @@ export function activeWorkspaceId() {
 }
 
 export function createApiClient(baseUrl: string) {
-  const workspaceId = activeWorkspaceId();
-
   return hc<AppType>(baseUrl, {
     init: { credentials: "include" },
-    ...(workspaceId ? { headers: { "X-Workspace-Id": workspaceId } } : {}),
+    headers: () => {
+      const workspaceId = activeWorkspaceId();
+      return workspaceId ? { "X-Workspace-Id": workspaceId } : {};
+    },
   });
 }
 

@@ -1,7 +1,7 @@
 export {
   useActiveWorkspaceId,
   useCreateWorkspaceMutation,
+  useSwitchWorkspace,
   workspacesQueryOptions,
 } from "./workspaces.hooks";
-export { switchToWorkspace } from "./workspaces.services";
 export type { Workspace } from "./workspaces.types";
