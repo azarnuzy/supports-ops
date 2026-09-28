@@ -51,6 +51,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             <Label htmlFor="name">Name</Label>
             <Input
               id="name"
+              placeholder="Your full name"
               autoComplete="name"
               required
               value={name}
@@ -62,6 +63,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           <Label htmlFor="email">Email address</Label>
           <Input
             id="email"
+            placeholder="name@company.com"
             type="email"
             autoComplete="email"
             required
@@ -74,6 +76,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           <div className="relative">
             <Input
               id="password"
+              placeholder={isLogin ? "Enter your password" : "At least 8 characters"}
               type={showPassword ? "text" : "password"}
               className="pr-10"
               autoComplete={isLogin ? "current-password" : "new-password"}

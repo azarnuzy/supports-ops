@@ -37,6 +37,7 @@ export default function AddTextDialog({
             <FieldLabel htmlFor="knowledge-title">Title</FieldLabel>
             <Input
               id="knowledge-title"
+              placeholder="e.g. Returns policy"
               required
               value={title}
               onChange={(event) => setTitle(event.target.value)}
@@ -46,6 +47,7 @@ export default function AddTextDialog({
             <FieldLabel htmlFor="knowledge-content">Content</FieldLabel>
             <Textarea
               id="knowledge-content"
+              placeholder="Paste or write the knowledge your AI Agent should use"
               required
               rows={7}
               value={content}

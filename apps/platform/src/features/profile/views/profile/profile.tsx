@@ -71,6 +71,7 @@ const ProfileView = () => {
                   <FieldLabel htmlFor="profile-name">Display name</FieldLabel>
                   <Input
                     id="profile-name"
+                    placeholder="Your display name"
                     autoComplete="name"
                     value={name}
                     aria-invalid={Boolean(validationError)}

@@ -291,6 +291,7 @@ export default function ToolSheet({
                 <FieldLabel htmlFor="http-tool-json">Tool definition</FieldLabel>
                 <Textarea
                   id="http-tool-json"
+                  placeholder='{"name": "lookup_order"}'
                   rows={16}
                   className="max-h-[28rem] font-mono text-xs"
                   value={jsonDraft}

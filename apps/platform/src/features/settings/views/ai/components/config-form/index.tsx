@@ -163,6 +163,7 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             </FieldLabel>
             <Input
               id="follow-up-delay"
+              placeholder="Seconds"
               type="number"
               min={1}
               value={values.followUpAfterSeconds}
@@ -179,6 +180,7 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             </FieldLabel>
             <Input
               id="auto-resolve-delay"
+              placeholder="Seconds"
               type="number"
               min={1}
               value={values.autoResolveAfterSeconds}
@@ -213,6 +215,7 @@ export default function ConfigForm({ form }: ConfigFormProps) {
             </FieldLabel>
             <Input
               id="idle-close-delay"
+              placeholder="Seconds"
               type="number"
               min={1}
               value={values.idleCloseAfterSeconds}
