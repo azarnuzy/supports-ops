@@ -73,6 +73,39 @@ export function tagExternalError(
   });
 }
 
+// ponytail: single in-process gate, good enough for one worker process. If the
+// worker ever scales to multiple instances, move this to a Redis-backed limiter.
+let mistralGate: Promise<void> = Promise.resolve();
+
+/** Serializes calls with a minimum 1.1s gap, matching Mistral's OCR rate limit
+ * (1 request/second account-wide) so concurrent jobs and retries never overlap. */
+function throttleMistral<T>(fn: () => Promise<T>): Promise<T> {
+  const run = mistralGate.then(fn);
+  const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 1100));
+  mistralGate = run.then(wait, wait);
+  return run;
+}
+
+/** Retries a 429 response, honoring `Retry-After` when the provider sends one.
+ * Non-429 responses (including other errors) are returned as-is on the first try. */
+export async function fetchWithRetry(
+  input: string,
+  init: RequestInit,
+  maxAttempts = 3,
+): Promise<Response> {
+  return throttleMistral(async () => {
+    for (let attempt = 1; ; attempt++) {
+      const response = await fetch(input, init);
+      if (response.status !== 429 || attempt >= maxAttempts) return response;
+      const retryAfterSeconds = Number(response.headers.get("retry-after"));
+      const delayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000
+        : 2 ** attempt * 1000;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  });
+}
+
 export function externalResponseCode(body: string): string | undefined {
   try {
     const code = (JSON.parse(body) as { code?: unknown }).code;

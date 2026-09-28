@@ -16,7 +16,7 @@ import { createStorage } from "@repo/storage";
 import { UnrecoverableError } from "bullmq";
 import Redis from "ioredis";
 import { extractAttachment } from "./attachment-process";
-import { classificationConfig, storageConfig } from "./config";
+import { classificationConfig, ingestionConfig, storageConfig } from "./config";
 import { claimMessageSlot } from "./follow-up";
 import { prisma } from "./prisma";
 
@@ -288,18 +288,18 @@ async function read(attachment: TurnAttachment) {
     if (
       error instanceof Error &&
       "externalProvider" in error &&
-      error.externalProvider === "MISTRAL"
+      typeof error.externalProvider === "string"
     ) {
       const owned = await prisma.attachment.findUnique({
         select: { workspaceId: true },
         where: { id: attachment.id },
       });
       await recordExternalError(prisma, {
-        provider: "MISTRAL",
+        provider: error.externalProvider,
         operation: "WHATSAPP_ATTACHMENT_READ",
         modelId: attachment.mimeType.startsWith("audio/")
-          ? "voxtral-mini-latest"
-          : "mistral-ocr-latest",
+          ? ingestionConfig.audioFallbackModel
+          : ingestionConfig.attachmentFallbackModel,
         workspaceId: owned?.workspaceId,
         resourceType: "ATTACHMENT",
         resourceId: attachment.id,

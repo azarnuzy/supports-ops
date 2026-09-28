@@ -3,13 +3,12 @@ import { createStorage } from "@repo/storage";
 import {
   externalErrorCode,
   externalHttpStatus,
-  externalResponseCode,
   recordExternalError,
-  tagExternalError,
 } from "@repo/api/external-errors";
 import { Queue, type ConnectionOptions } from "bullmq";
 import Redis from "ioredis";
 import { embeddingConfig, ingestionConfig, storageConfig } from "./config";
+import { extractDocument } from "./attachment-process";
 import { prisma } from "./prisma";
 
 let publisher: Redis | undefined;
@@ -195,7 +194,11 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       await recordExternalError(prisma, {
         provider: error.externalProvider,
         operation: job.data.kind === "PDF" ? "KNOWLEDGE_OCR" : "KNOWLEDGE_CRAWL",
-        modelId: job.data.kind === "PDF" ? "mistral-ocr-latest" : undefined,
+        modelId: job.data.kind === "PDF"
+          ? error.externalProvider === "OPENROUTER"
+            ? ingestionConfig.attachmentFallbackModel
+            : "mistral-ocr-latest"
+          : undefined,
         workspaceId,
         resourceType: "KNOWLEDGE_SOURCE",
         resourceId: knowledgeSourceId,
@@ -219,36 +222,10 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
 async function extractPdf(id: string) {
   const source = await prisma.knowledgeSource.findFirst({ where: { id } });
   if (!source?.sourceUrl) throw new Error("PDF file is missing.");
-  if (!ingestionConfig.mistralApiKey) throw new Error("Configure MISTRAL_API_KEY to process PDFs.");
   const documentUrl = await createStorage(storageConfig).getSignedGetObjectUrl({
     key: source.sourceUrl,
   });
-  const response = await fetch("https://api.mistral.ai/v1/ocr", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${ingestionConfig.mistralApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "mistral-ocr-latest",
-      document: { type: "document_url", document_url: documentUrl },
-    }),
-  }).catch((error: unknown) => {
-    throw tagExternalError(error, "MISTRAL");
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw tagExternalError(
-      new Error(`OCR failed: ${body}`),
-      "MISTRAL",
-      response.status,
-      externalResponseCode(body),
-    );
-  }
-  const body = (await response.json().catch((error: unknown) => {
-    throw tagExternalError(error, "MISTRAL");
-  })) as { pages?: Array<{ markdown?: string }> };
-  return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
+  return extractDocument(documentUrl, "application/pdf");
 }
 
 async function extractUrl(id: string) {
