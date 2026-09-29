@@ -224,3 +224,23 @@ pnpm eval:ai-agent --id=staleness-conflicting-return-window
 ```
 
 Suite dijalankan manual, bukan sebagai CI gate. Hasil memuat input, expected output, actual reply, decision, Escalation Reason, Tool calls, dan jumlah Chunk yang ditemukan.
+
+## Eval klasifikasi sebelum Ticket
+
+[`classification-cases.ts`](../../apps/api/src/evals/classification-cases.ts) memuat 18 Eval Case sebelum Ticket dibuat. Set ini mewakili sapaan Indonesia/Inggris, Melayu, Jawa, Tagalog, riwayat Session, pertanyaan di luar layanan, pesan campuran sapaan dan masalah, kategori, serta prioritas. Aturan classifier memakai bahasa Indonesia untuk Indonesia/Melayu/bahasa daerah Indonesia dan bahasa Inggris untuk bahasa lain; pesan pendek ambigu mengikuti riwayat bila ada. Balasan sapaan dan judul Ticket pada Case dukungan yang diberi ekspektasi bahasa sama-sama dinilai. Kasus campuran adalah kontrol negatif untuk optimasi sapaan: `hi, where is my order?` harus tetap menjadi permintaan dukungan.
+
+[`classification-run.ts`](../../apps/api/src/evals/classification-run.ts) memanggil `classifyMessage` yang sama dengan Web Widget dan WhatsApp, memakai kategori aktual dari `EVAL_WORKSPACE_ID`. Runner menggunakan OpenRouter untuk semua model perbandingan, tanpa mengubah `LLM_MODEL_FAST` atau model Judge. Setiap model menghasilkan **Run tersendiri di Anvia Lens**, dengan tiga skor per percobaan (`support-decision`, `classification-quality`, `latency-ms`) dan tautan ke trace classifier. Runner memakai `runEvalCli` dan reporter OTLP yang sama dengan eval AI Agent. Pastikan `OPENROUTER_API_KEY`, `EVAL_WORKSPACE_ID`, `ENABLE_TELEMETRY=true`, `TELEMETRY_EXPORTER=otlp`, dan `TELEMETRY_EXPORTER_OTLP_ENDPOINT` yang menunjuk Lens tersedia, lalu jalankan:
+
+```bash
+pnpm eval:classification --models=openai/gpt-5.4-nano,google/gemini-3.1-flash-lite --json=/tmp/classification-eval.json
+pnpm eval:classification --models=openai/gpt-5.4-nano --id=language-
+pnpm eval:classification --models=openai/gpt-5.4-nano --id=language- --repeat=3
+```
+
+Setiap percobaan mencatat keputusan, kesalahan, dan durasi, lalu menampilkan akurasi, kesalahan keputusan, kegagalan kasus kritis, serta p50/p95 untuk semua pesan dan khusus pesan non-dukungan. Model gagal gate bila ada kasus kritis yang gagal, ada kesalahan keputusan dukungan, atau kurang dari 95% seluruh percobaan lulus. Kualitas balasan non-dukungan diperiksa secara deterministik untuk bahasa, ajakan menjelaskan kebutuhan, panjang, dan kata yang mengisyaratkan klaim bisnis. Judul, kategori, dan prioritas Ticket juga diperiksa bila Case memberi ekspektasi. Kasus dengan ekspektasi kategori membutuhkan key kategori tersebut di Workspace eval; runner berhenti jika tidak tersedia. Run dan Case tetap tercatat di Lens meskipun gate model gagal, sehingga hasilnya dapat dibandingkan dan ditelusuri.
+
+Satu run penuh memanggil model 18 kali per model; `--id=language-` hanya 6 kali per model. Bawaan `--repeat=1` menekan biaya. Pakai `--repeat=3` hanya untuk model finalis ketika perlu memeriksa konsistensi; p95 dari run kecil adalah petunjuk awal, bukan estimasi latensi produksi yang stabil. Pemeriksaan bahasa memakai penanda kata dan aksara, sehingga judul yang terlalu pendek atau ambigu bisa gagal meskipun dapat diterima manusia. Baca output Case yang gagal sebelum menyimpulkan model bermasalah.
+
+Ini adalah pengukuran **classifier**, termasuk panggilan model dan retry output terstruktur. Ini bukan waktu end-to-end Web Widget atau WhatsApp: penyimpanan Session, pembuatan Ticket, antrean, dan jaringan Channel tidak termasuk. Bandingkan durasi end-to-end secara terpisah pada trace produksi atau lingkungan staging dengan pesan yang sama. Hasil model di OpenRouter juga tidak dapat langsung dianggap sebagai waktu model yang sama melalui gateway Devscale. p95 dari hanya satu Case dengan sedikit pengulangan tidak stabil; gunakan seluruh suite dan beberapa pengulangan untuk keputusan model. Tidak ada Judge model dalam eval ini, sehingga model penilai tidak berubah antar-run.
+
+Untuk pemeriksaan alur lengkap di staging, kirim tiga urutan berikut melalui Web Widget dan WhatsApp, lalu catat waktu dari kirim hingga balasan muncul beserta durasi trace `platform.classify_message`: (1) `hi` → balasan tanpa Ticket; (2) `hi, where is my order NS-10482?` → Ticket dibuat; (3) `halo` diikuti `Saya belum menerima paketnya` → balasan sapaan lalu Ticket dibuat pada pesan kedua. Runner classifier tidak mengotomatiskan pemeriksaan Channel ini karena jalur tersebut menulis Session/Ticket dan menjadwalkan Follow-Up. Gunakan konfigurasi model yang sama dengan run classifier saat membandingkan trace staging.
