@@ -596,7 +596,7 @@ export async function mountWidget({
 
     // Optimistic send: show the customer's own message immediately and
     // clear the composer — don't make the sender wait for the round trip.
-    const optimistic = document.createElement(files.length ? "div" : "p");
+    const optimistic = document.createElement("div");
     optimistic.className = "message message-customer";
     if (files.length) {
       for (const file of files) {
@@ -643,20 +643,21 @@ export async function mountWidget({
         attachment.append(icon, info, preview, download);
         optimistic.append(attachment);
       }
-      if (content) {
-        const copy = document.createElement("div");
-        copy.className = "message-copy";
-        copy.textContent = content;
-        optimistic.append(copy);
-      }
-      const time = document.createElement("time");
-      time.className = "message-time";
-      time.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      optimistic.append(time);
-    } else {
-      optimistic.textContent = content;
     }
+    const copy = document.createElement("div");
+    if (content) {
+      copy.className = "message-copy";
+      copy.textContent = content;
+      optimistic.append(copy);
+    }
+    const sentAt = new Date();
+    const time = document.createElement("time");
+    time.className = "message-time";
+    time.dateTime = sentAt.toISOString();
+    time.textContent = sentAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    optimistic.append(time);
     messages?.append(optimistic);
+    if (content) tightenMessageCopyWidth(copy);
     if (files.length) {
       const positions = messages?.querySelectorAll<HTMLElement>("[data-position]") ?? [];
       const afterPosition = [...positions].reduce(
