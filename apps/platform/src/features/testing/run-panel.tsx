@@ -17,9 +17,11 @@ import { useEstimateRunQuery, useRunsQuery, useStartRunMutation } from "./hooks"
 const caseLabels: Record<EvalRunCaseStatus, string> = {
   EVALUATED: "Evaluated",
   EXECUTION_ERROR: "Execution error",
+  INVALID: "Invalid case",
   PENDING: "Waiting",
   RUNNING: "Running",
   UNEXECUTED: "Not executed",
+  UNGRADED: "Not graded",
 };
 
 const deliveryLabels: Record<EvalDeliveryStatus, string> = {
@@ -54,7 +56,8 @@ export function RunConfirmDialog({
             Run {caseIds.length} {caseIds.length === 1 ? "case" : "cases"}?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Each selected case runs once against your AI Agent and is charged like a live AI Turn.
+            Each selected case runs once. AI Agent calls are charged like a live AI Turn; each
+            successful Judge model call costs its own Credit.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {estimate.isError ? (
@@ -66,15 +69,43 @@ export function RunConfirmDialog({
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="text-muted-foreground">Estimated Credits</dt>
             <dd className="text-right font-medium">
-              {data.unlimited ? "Unlimited Period (no charge)" : `up to ${data.credits}`}
+              {data.unlimited
+                ? "Unlimited Period (no charge)"
+                : data.judgeCredits > 0
+                  ? `${data.credits + data.judgeCreditsMin} to ${data.totalCredits}`
+                  : `up to ${data.credits}`}
             </dd>
-            <dt className="text-muted-foreground">Rate</dt>
+            <dt className="text-muted-foreground">AI Agent</dt>
             <dd className="text-right">
-              {data.modelRate} per AI Turn · {data.agentModel}
+              {data.agentTurns} {data.agentTurns === 1 ? "AI Turn" : "AI Turns"} × {data.modelRate}{" "}
+              · {data.agentModel}
             </dd>
+            {data.judgeCallsMax > 0 ? (
+              <>
+                <dt className="text-muted-foreground">Judge</dt>
+                <dd className="text-right">
+                  {data.judgeCallsMin === data.judgeCallsMax
+                    ? data.judgeCallsMax
+                    : `${data.judgeCallsMin}–${data.judgeCallsMax}`}{" "}
+                  calls × {data.judgeRate} Credit
+                </dd>
+              </>
+            ) : null}
             <dt className="text-muted-foreground">Balance</dt>
             <dd className="text-right">{data.balance}</dd>
           </dl>
+        ) : null}
+        {data && data.judgeCallsMax > 0 && data.judgeCallsMin !== data.judgeCallsMax ? (
+          <p className="text-xs text-muted-foreground">
+            The Judge range is an estimate: how many Judge calls a metric makes depends on the
+            answer it grades. Only successful Judge calls are charged.
+          </p>
+        ) : null}
+        {data && data.evaluatorHealthCases > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Negative controls check that the evaluator can fail. They call no AI Agent and are
+            never counted as regressions.
+          </p>
         ) : null}
         {data && !data.sufficient ? (
           <p className="text-sm text-destructive" role="alert">
@@ -107,7 +138,12 @@ export function RunConfirmDialog({
 function RunCard({ run }: { run: EvalRun }) {
   const { progress } = run;
   const active = run.status === "QUEUED" || run.status === "RUNNING";
-  const done = progress.evaluated + progress.executionErrors + progress.unexecuted;
+  const done =
+    progress.evaluated +
+    progress.executionErrors +
+    progress.unexecuted +
+    progress.ungraded +
+    progress.invalid;
   return (
     <div className="grid gap-3 border-b p-4 last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -131,11 +167,24 @@ function RunCard({ run }: { run: EvalRun }) {
       <p aria-live="polite" className="text-sm">
         {done} of {progress.total} cases done · {progress.evaluated} evaluated
         {progress.executionErrors > 0 ? ` · ${progress.executionErrors} execution errors` : ""}
+        {progress.ungraded > 0 ? ` · ${progress.ungraded} not graded` : ""}
+        {progress.invalid > 0 ? ` · ${progress.invalid} invalid` : ""}
         {progress.unexecuted > 0 ? ` · ${progress.unexecuted} not executed` : ""}
-        {active ? "" : ` · ${run.chargedCredits} Credits charged`}
+        {active
+          ? ""
+          : ` · ${run.chargedCredits} Credits charged (${run.agentCharged} AI Agent, ${run.judgeCharged} Judge)`}
       </p>
+      {progress.evaluatorChecks > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Evaluator checks: {progress.evaluatorHealthy} of {progress.evaluatorChecks} failed as they
+          should. These are not AI Agent results.
+        </p>
+      ) : null}
       {run.creditExhausted ? (
-        <p className="text-sm text-destructive">Credits ran out; remaining cases were not executed.</p>
+        <p className="text-sm text-destructive">
+          Credits ran out; remaining cases were not executed or not graded. Answers already
+          generated are kept in the report.
+        </p>
       ) : null}
       {run.error ? <p className="text-sm text-destructive">{run.error}</p> : null}
       <p className="text-xs text-muted-foreground">
@@ -147,7 +196,10 @@ function RunCard({ run }: { run: EvalRun }) {
         <ul className="mt-2 grid gap-1">
           {run.cases.map((item) => (
             <li className="flex flex-wrap justify-between gap-2" key={item.id}>
-              <span>{item.caseKey}</span>
+              <span>
+                {item.caseKey}
+                {item.evaluatorHealth ? " (evaluator check)" : ""}
+              </span>
               <span className={item.status === "EXECUTION_ERROR" ? "text-destructive" : "text-muted-foreground"}>
                 {caseLabels[item.status]}
                 {item.error ? ` — ${item.error}` : ""}

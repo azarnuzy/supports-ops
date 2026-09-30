@@ -84,6 +84,7 @@ export function CaseEditor({
   const [canaries, setCanaries] = useState((meta.canaries ?? []).join("\n"));
   const [language, setLanguage] = useState(meta.language ?? "");
   const [passages, setPassages] = useState(passagesText(meta.expectedPassages ?? []));
+  const [retrievalTarget, setRetrievalTarget] = useState(meta.retrievalTarget ?? "agent");
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -95,7 +96,10 @@ export function CaseEditor({
     }
     if (metric === "visibility") metadata.canaries = lines(canaries);
     if (metric === "language" && language) metadata.language = language as "en" | "id";
-    if (metric === "retrieval") metadata.expectedPassages = parsePassages(passages);
+    if (metric === "retrieval") {
+      metadata.expectedPassages = parsePassages(passages);
+      metadata.retrievalTarget = retrievalTarget;
+    }
     onSave({
       attachments: attachments.filter((a) => a.id.trim()),
       caseKey,
@@ -338,6 +342,20 @@ export function CaseEditor({
             ) : null}
             {metric === "retrieval" ? (
               <Field>
+                <FieldLabel htmlFor="case-retrieval-target">Retrieval path</FieldLabel>
+                <NativeSelect
+                  id="case-retrieval-target"
+                  value={retrievalTarget}
+                  onChange={(e) => setRetrievalTarget(e.target.value as "agent" | "retriever")}
+                >
+                  <NativeSelectOption value="agent">Full AI Agent turn (charged)</NativeSelectOption>
+                  <NativeSelectOption value="retriever">
+                    Retriever only (no AI Agent call)
+                  </NativeSelectOption>
+                </NativeSelect>
+                <FieldDescription>
+                  Retriever only searches with the Customer Message and charges no AI Turn.
+                </FieldDescription>
                 <FieldLabel htmlFor="case-passages">Expected passages</FieldLabel>
                 <Textarea id="case-passages" rows={4} value={passages} onChange={(e) => setPassages(e.target.value)} />
                 <FieldDescription>

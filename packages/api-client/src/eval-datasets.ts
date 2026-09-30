@@ -20,6 +20,7 @@ export type EvalCaseMetadata = {
   decisions?: ("CLARIFY" | "ESCALATE" | "REPLY" | "RESOLVE")[];
   expectedPassages?: { fragment: string; grade?: 1 | 2; source: string }[];
   language?: "en" | "id";
+retrievalTarget?: "agent" | "retriever";
   tool?: string;
   toolMustNotBeCalled?: boolean;
 };
