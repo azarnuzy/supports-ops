@@ -218,18 +218,18 @@ async function publishQueue(workspaceId: string) {
  * timer that had just become due. */
 export async function processFollowUpJob(job: { data: FollowUpJob }) {
   const result = await prisma.$transaction(async (tx) => {
-    const [ticket, settings] = await Promise.all([
-      tx.ticket.findFirst({
-        include: {
-          aiAgent: { select: { agentModel: true } },
-          channel: { select: { type: true } },
-          messages: { orderBy: { position: "desc" }, take: 1 },
-          session: { include: { conversation: true } },
-        },
-        where: { id: job.data.ticketId, status: "AI_HANDLING", workspaceId: job.data.workspaceId },
-      }),
-      tx.aiSettings.findUnique({ where: { workspaceId: job.data.workspaceId } }),
-    ]);
+    const ticket = await tx.ticket.findFirst({
+      include: {
+        aiAgent: { select: { agentModel: true } },
+        channel: { select: { type: true } },
+        messages: { orderBy: { position: "desc" }, take: 1 },
+        session: { include: { conversation: true } },
+      },
+      where: { id: job.data.ticketId, status: "AI_HANDLING", workspaceId: job.data.workspaceId },
+    });
+    const settings = await tx.aiSettings.findUnique({
+      where: { workspaceId: job.data.workspaceId },
+    });
     const last = ticket?.messages[0];
     if (
       !ticket?.session.conversation ||
@@ -303,18 +303,18 @@ export async function processFollowUpJob(job: { data: FollowUpJob }) {
 
 export async function processAutoResolveJob(job: { data: AutoResolveJob }) {
   const closing = await prisma.$transaction(async (tx) => {
-    const [ticket, settings] = await Promise.all([
-      tx.ticket.findFirst({
-        include: {
-          channel: { select: { type: true } },
-          messages: { orderBy: { position: "desc" }, take: 1 },
-          session: { include: { conversation: true } },
-          workspace: { select: { closingMessage: true } },
-        },
-        where: { id: job.data.ticketId, status: "AI_HANDLING", workspaceId: job.data.workspaceId },
-      }),
-      tx.aiSettings.findUnique({ where: { workspaceId: job.data.workspaceId } }),
-    ]);
+    const ticket = await tx.ticket.findFirst({
+      include: {
+        channel: { select: { type: true } },
+        messages: { orderBy: { position: "desc" }, take: 1 },
+        session: { include: { conversation: true } },
+        workspace: { select: { closingMessage: true } },
+      },
+      where: { id: job.data.ticketId, status: "AI_HANDLING", workspaceId: job.data.workspaceId },
+    });
+    const settings = await tx.aiSettings.findUnique({
+      where: { workspaceId: job.data.workspaceId },
+    });
     const last = ticket?.messages[0];
     if (
       !ticket?.session.conversation ||

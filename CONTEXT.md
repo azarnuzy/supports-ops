@@ -239,8 +239,16 @@ The developer-facing record of how the AI Agent ran — spans, prompts, token co
 _Avoid_: Logging, Monitoring, Tracing (a single trace is Telemetry, not an AI Activity)
 
 **Eval Case**:
-One fixed input paired with what a correct AI Agent response looks like, belonging to a category that names the product requirement it defends — grounding, visibility safety, escalation, classification, and so on.
+One predefined input paired with what correct AI Agent behaviour looks like, belonging to a category that names the product requirement it defends — grounding, visibility safety, escalation, classification, and so on. The input may include earlier Customer and AI Agent Messages as fixed history; executing the case evaluates one new AI Turn.
 _Avoid_: Test, Fixture, Example
+
+**Eval Dataset**:
+A Workspace's named collection of Eval Cases and their default evaluation criteria, curated by its Admins for repeatable evaluation of its AI Agent.
+_Avoid_: Test Set, Test Collection
+
+**Eval Run**:
+One execution of selected Eval Cases against a Workspace's configured AI Agent, with results correlated to its Telemetry for review in an external evaluation backend.
+_Avoid_: Test Session, Simulation Session
 
 **Eval Suite**:
 A category's Eval Cases run together against the AI Agent. Always contains negative controls — cases that must fail — so a broken evaluator cannot make everything appear to pass.
