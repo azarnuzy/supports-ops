@@ -29,6 +29,8 @@ const workspaceScopedModels = new Set([
   "HttpToolConfig",
   "McpServer",
   "McpTool",
+  "EvalDataset",
+  "EvalCase",
 ]);
 
 type QueryArguments = {
