@@ -95,13 +95,15 @@ export function createIsolatedTelemetry(options: {
   });
 
   return {
-    /** Sends everything recorded so far, so every failed request is reported before this returns. */
+    /** Sends everything recorded so far, so every failed request is reported before this returns.
+     * A refused export makes the SDK's flush reject; that is already reported through `onFailure`,
+     * so it is settled here rather than allowed to cut the other provider's flush short. */
     async flush() {
-      await Promise.all([tracerProvider.forceFlush(), loggerProvider.forceFlush()]);
+      await Promise.allSettled([tracerProvider.forceFlush(), loggerProvider.forceFlush()]);
     },
     logger: loggerProvider.getLogger("@repo/logger/eval") as Logger,
     async shutdown() {
-      await Promise.all([tracerProvider.shutdown(), loggerProvider.shutdown()]);
+      await Promise.allSettled([tracerProvider.shutdown(), loggerProvider.shutdown()]);
     },
     tracer: tracerProvider.getTracer("@anvia/otel") as Tracer,
   };
