@@ -8,6 +8,7 @@ import { PlatformAppShell } from "../app-shell";
 import ResourceListState from "../settings/components/resource-list-state";
 import { SettingsHeader } from "../settings/components/settings-header";
 import { CreateDatasetDrawer } from "./create-dataset-drawer";
+import { DestinationForm } from "./destination-form";
 import { useDatasetsQuery } from "./hooks";
 
 function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
@@ -68,6 +69,7 @@ const TestingView = () => {
             <DatasetRow key={dataset.id} dataset={dataset} />
           ))}
         </div>
+        <DestinationForm />
       </section>
       <CreateDatasetDrawer open={creating} onOpenChange={setCreating} />
     </PlatformAppShell>
