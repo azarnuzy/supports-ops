@@ -27,8 +27,9 @@ export type ResolvedExpectedPassage = ExpectedPassage & { chunkIds: string[] };
  */
 export async function resolveExpectedPassages(
   passages: readonly ExpectedPassage[],
+  /** Defaults to the manual CLI's Workspace; Admin-started Runs pass their own. */
+  workspaceId: string | undefined = evalConfig.workspaceId,
 ): Promise<ResolvedExpectedPassage[]> {
-  const workspaceId = evalConfig.workspaceId;
   if (!workspaceId) {
     throw new Error("EVAL_WORKSPACE_ID is required to resolve expected-passage labels.");
   }

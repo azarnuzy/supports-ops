@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { answerRelevancy, gEval, runEvalCli, type AnyEvalMetric } from "@anvia/core/evals";
+import { runEvalCli, type AnyEvalMetric } from "@anvia/core/evals";
 import { createOtelEvalReporter } from "@anvia/otel";
 import { createReplyModel } from "@repo/ai-agent";
 import { shutdownTelemetry, startTelemetry } from "@repo/logger/telemetry";
@@ -9,8 +9,8 @@ import { unscopedPrisma } from "../utils/prisma";
 import { cases, type MetricName } from "./cases";
 import { deterministicMetrics } from "./deterministic";
 import { evalReporterOptions } from "./reporter";
+import { judgedMetrics, judgeThreshold } from "./run-metrics";
 import {
-  groundedFaithfulness,
   negativeControl,
   retrievalNdcg,
   retrievalPrecision,
@@ -47,7 +47,7 @@ const judgeModel = createReplyModel({
   modelId: gatewayModelId(evalConfig.judgeModelId),
 });
 
-const judge = { model: judgeModel, threshold: 0.7 } as const;
+const judge = { model: judgeModel, threshold: judgeThreshold } as const;
 
 /** One suite per metric, in the flat shape the reference project uses: the
  * metric is fixed for the suite, and each Case carries whatever that metric
@@ -78,7 +78,7 @@ const suites: Array<{
   {
     key: "relevancy",
     metric: "relevancy",
-    metrics: [answerRelevancy(judge)],
+    metrics: judgedMetrics.relevancy(judge),
     name: "northstar-relevancy",
   },
   {
@@ -86,21 +86,13 @@ const suites: Array<{
     metric: "faithfulness",
     // Judged against what retrieval actually returned this turn, passage by
     // passage — see groundedFaithfulness for why the library metric is not used.
-    metrics: [groundedFaithfulness(judge)],
+    metrics: judgedMetrics.faithfulness(judge),
     name: "northstar-faithfulness",
   },
   {
     key: "geval",
     metric: "gEval",
-    metrics: [
-      gEval({
-        ...judge,
-        criteria:
-          "The answer is correct against the expected answer, addresses the question directly, states any condition or exception the expected answer states, and never invents policy, prices, stock, or internal procedure.",
-        evaluationParams: ["input", "actualOutput", "expectedOutput"],
-        name: "answer-quality",
-      }),
-    ],
+    metrics: judgedMetrics.gEval(judge),
     name: "northstar-g-eval",
   },
   {
