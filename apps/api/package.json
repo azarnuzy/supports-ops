@@ -44,6 +44,7 @@
     "@repo/channels": "workspace:*",
     "@repo/knowledge": "workspace:*",
     "@repo/logger": "workspace:*",
+    "@repo/shared": "workspace:*",
     "@repo/storage": "workspace:*",
     "@repo/tools": "workspace:*",
     "ajv": "^8.20.0",

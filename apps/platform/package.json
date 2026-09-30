@@ -17,6 +17,7 @@
     "@repo/api-client": "workspace:*",
     "@repo/channels": "workspace:*",
     "@repo/layouts": "workspace:*",
+    "@repo/shared": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-router": "^1.170.25",

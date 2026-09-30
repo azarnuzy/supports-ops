@@ -62,6 +62,9 @@ importers:
       '@repo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@repo/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -209,6 +212,9 @@ importers:
       '@repo/layouts':
         specifier: workspace:*
         version: link:../../packages/layouts
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -483,6 +489,10 @@ importers:
         version: 7.0.2
 
   packages/shared:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       typescript:
         specifier: ^7.0.2
