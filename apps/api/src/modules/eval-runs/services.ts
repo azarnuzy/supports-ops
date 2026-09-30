@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { embeddingConfig } from "../../config";
-import { isDeterministicMetric } from "../../evals/deterministic";
+import { casePlan, isRunnableMetric } from "../../evals/run-metrics";
 import { isUniqueConstraintError, prisma } from "../../utils/prisma";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { modelRateFor, resolveAgentModelId } from "../ai-agent/model-catalog";
-import { creditBalance, hasActiveUnlimitedPeriod } from "../credits/services";
+import { creditBalance, hasActiveUnlimitedPeriod, judgeCreditRate } from "../credits/services";
 import { presentCase } from "../eval-datasets/services";
 import { enqueueEvalRun } from "./queue";
 import type { Selection } from "./schema";
@@ -64,42 +64,56 @@ async function loadSelection({ caseIds, datasetId }: Selection) {
       "Complete every selected Case before running it.",
       incomplete.map(({ row }) => row.caseKey),
     );
-  // ponytail: only deterministic metrics run for now; Judge and retrieval metrics are enabled by
-  // the Judge ticket, because they need a Judge Model rate and labelled Knowledge.
-  const gated = cases.filter(({ row }) => !isDeterministicMetric(row.metric ?? ""));
+  const gated = cases.filter(({ row }) => !isRunnableMetric(row.metric ?? ""));
   if (gated.length)
     throw new RunBlockedError(
       "metric_not_enabled",
-      "These Cases use a metric that cannot be run yet.",
+      "These Cases use a metric that cannot be run.",
       gated.map(({ row }) => row.caseKey),
     );
   return { cases: cases.map(({ row }) => row), dataset };
 }
 
-async function estimateFor(caseCount: number) {
+type Row = Awaited<ReturnType<typeof loadSelection>>["cases"][number];
+
+/** What the selection may cost before it runs. AI Agent Credits are a ceiling: one AI Turn per Case
+ * that calls the AI Agent (a retriever-only or evaluator-health Case calls none), and a turn that
+ * fails before deciding is not charged. Judge Credits are a range, because how many Judge calls a
+ * metric makes depends on live output (e.g. how many claims the answer contains). */
+async function estimateFor(cases: Row[]) {
   const agent = await loadAgent();
   const [balance, unlimited] = await Promise.all([
     creditBalance(requireWorkspaceId()),
     hasActiveUnlimitedPeriod(requireWorkspaceId()),
   ]);
   const rate = modelRateFor(agent.agentModel);
-  // Every selected Case is one AI Turn. A turn that fails before deciding is not charged, so this
-  // is the ceiling. Judge calls are not part of it: no selectable metric makes any yet.
-  const credits = unlimited ? 0 : caseCount * rate;
+  const plans = cases.map((row) => casePlan({ metadata: row.metadata, metric: row.metric ?? "" }));
+  const agentTurns = plans.filter((plan) => plan.agentTurn).length;
+  const judgeCallsMin = plans.reduce((sum, plan) => sum + plan.judgeCalls[0], 0);
+  const judgeCallsMax = plans.reduce((sum, plan) => sum + plan.judgeCalls[1], 0);
+  const credits = unlimited ? 0 : agentTurns * rate;
+  const judgeCredits = unlimited ? 0 : judgeCallsMax * judgeCreditRate;
   return {
     agentModel: agent.agentModel,
+    agentTurns,
     balance,
-    caseCount,
+    caseCount: cases.length,
     credits,
-    judgeCredits: 0,
+    evaluatorHealthCases: plans.filter((plan) => plan.evaluatorHealth).length,
+    judgeCallsMax,
+    judgeCallsMin,
+    judgeCredits,
+    judgeCreditsMin: unlimited ? 0 : judgeCallsMin * judgeCreditRate,
+    judgeRate: judgeCreditRate,
     modelRate: rate,
-    sufficient: unlimited || balance >= credits,
+    sufficient: unlimited || balance >= credits + judgeCredits,
+    totalCredits: credits + judgeCredits,
     unlimited,
   };
 }
 
 export async function estimateRun(selection: Selection) {
-  return estimateFor((await loadSelection(selection)).cases.length);
+  return estimateFor((await loadSelection(selection)).cases);
 }
 
 export async function startRun(selection: Selection) {
@@ -111,7 +125,7 @@ export async function startRun(selection: Selection) {
   const agent = await loadAgent();
   if ((await creditBalance(workspaceId)) <= 0 && !(await hasActiveUnlimitedPeriod(workspaceId)))
     throw new RunBlockedError("credits_exhausted", "This Organization has no Credits left.");
-  const estimate = await estimateFor(cases.length);
+  const estimate = await estimateFor(cases);
 
   const id = randomUUID();
   try {
@@ -146,7 +160,9 @@ export async function startRun(selection: Selection) {
         destinationDashboardUrl: destination.dashboardUrl,
         destinationEndpoint: destination.endpoint,
         embeddingModel: embeddingConfig.modelId,
-        estimatedCredits: estimate.credits,
+        estimatedCredits: estimate.totalCredits,
+        estimatedJudgeCredits: estimate.judgeCredits,
+        estimatedJudgeCreditsMin: estimate.judgeCreditsMin,
         id,
         instructionsSha256: createHash("sha256")
           .update(agent.instructions ?? "")
@@ -176,10 +192,15 @@ export async function getRun(id: string) {
     where: { id },
   });
   if (!run) throw new RunNotFoundError();
-  const { _sum } = await prisma.creditLedgerEntry.aggregate({
+  // Judge spend is attributed apart from AI Agent Turns, so an Admin sees which one cost what.
+  const charged = await prisma.creditLedgerEntry.groupBy({
+    _count: { _all: true },
     _sum: { credits: true },
+    by: ["chargeKind"],
     where: { evalRunId: id },
   });
+  const chargedFor = (kind: "AI_TURN" | "JUDGE") =>
+    -(charged.find((row) => row.chargeKind === kind)?._sum.credits ?? 0);
   const {
     destinationCredentialsEncrypted: _credentials,
     destinationEndpoint: _endpoint,
@@ -196,6 +217,8 @@ export async function getRun(id: string) {
         caseKey,
         category,
         error,
+        evaluatorHealth,
+        judgeCalls,
         limitations,
         metric,
         passed,
@@ -206,7 +229,9 @@ export async function getRun(id: string) {
         caseKey,
         category,
         error,
+        evaluatorHealth,
         id: caseId,
+        judgeCalls,
         limitations,
         metric,
         passed,
@@ -215,13 +240,22 @@ export async function getRun(id: string) {
         traceId,
       }),
     ),
-    chargedCredits: -(_sum.credits ?? 0),
+    agentCharged: chargedFor("AI_TURN"),
+    chargedCredits: charged.reduce((sum, row) => sum - (row._sum.credits ?? 0), 0),
+    judgeCallsCharged: charged.find((row) => row.chargeKind === "JUDGE")?._count._all ?? 0,
+    judgeCharged: chargedFor("JUDGE"),
     progress: {
       evaluated: count("EVALUATED"),
+      // Evaluator-health checks are not product results: their expected failure is a pass here
+      // and they are counted apart, so they can never read as a regression or as AI quality.
+      evaluatorChecks: cases.filter((item) => item.evaluatorHealth).length,
+      evaluatorHealthy: cases.filter((item) => item.evaluatorHealth && item.passed === true).length,
       executionErrors: count("EXECUTION_ERROR"),
-      passed: cases.filter((item) => item.passed === true).length,
+      invalid: count("INVALID"),
+      passed: cases.filter((item) => !item.evaluatorHealth && item.passed === true).length,
       total: cases.length,
       unexecuted: count("UNEXECUTED"),
+      ungraded: count("UNGRADED"),
     },
   };
 }
