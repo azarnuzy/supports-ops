@@ -109,3 +109,53 @@ export async function deleteEvalCase(client: ApiClient, datasetId: string, caseI
   });
   if (!response.ok) return fail(response, "Failed to delete the case.");
 }
+
+export type EvalImportRow = { case: EvalCaseInput | null; errors: string[]; row: number };
+export type EvalImportPreview = {
+  error: string | null;
+  rows: EvalImportRow[];
+  truncated: { limit: number; total: number } | null;
+};
+export type EvalImportSource =
+  | { source: "csv" | "paste"; text: string }
+  | {
+      selections: { includeHistory: boolean; messageId: string }[];
+      source: "sessions";
+    };
+export type EvalImportSession = {
+  createdAt: string;
+  id: string;
+  messages: { content: string; id: string; position: number }[];
+};
+
+export async function listEvalImportSessions(client: ApiClient) {
+  const response = await routes(client)["import-sessions"].$get();
+  if (!response.ok) throw new Error("Failed to load recent Sessions.");
+  return (await response.json()) as unknown as { sessions: EvalImportSession[] };
+}
+
+export async function previewEvalImport(
+  client: ApiClient,
+  datasetId: string,
+  source: EvalImportSource,
+) {
+  const response = await routes(client)[":id"].import.preview.$post({
+    json: source as never,
+    param: { id: datasetId },
+  });
+  if (!response.ok) throw new Error("Failed to preview the import.");
+  return (await response.json()) as unknown as { preview: EvalImportPreview };
+}
+
+export async function importEvalCases(
+  client: ApiClient,
+  datasetId: string,
+  source: EvalImportSource,
+) {
+  const response = await routes(client)[":id"].import.$post({
+    json: source as never,
+    param: { id: datasetId },
+  });
+  if (!response.ok) return fail(response, "Failed to import the cases.");
+  return (await response.json()) as unknown as { import: EvalImportPreview };
+}

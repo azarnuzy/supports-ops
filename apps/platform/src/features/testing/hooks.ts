@@ -6,6 +6,9 @@ import {
   deleteCase,
   getDataset,
   getDatasets,
+  getImportSessions,
+  importCases,
+  previewImport,
   getDestination,
   saveDestination,
   updateCase,
@@ -48,3 +51,9 @@ export const useSaveDestinationMutation = () => {
 };
 
 export const useCheckDestinationMutation = () => useMutation({ mutationFn: checkDestination });
+
+export const useImportSessionsQuery = (enabled: boolean) =>
+  useQuery({ enabled, queryFn: getImportSessions, queryKey: ["workspace", "eval-import-sessions"] });
+
+export const usePreviewImportMutation = () => useMutation({ mutationFn: previewImport });
+export const useImportCasesMutation = () => useMutate(importCases);

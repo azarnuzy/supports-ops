@@ -9,6 +9,10 @@ import {
   type EvalDatasetInput,
   getEvalDataset,
   getEvalDestination,
+  importEvalCases,
+  listEvalImportSessions,
+  previewEvalImport,
+  type EvalImportSource,
   listEvalDatasets,
   saveEvalDestination,
   updateEvalCase,
@@ -40,3 +44,9 @@ export const getDestination = () => getEvalDestination(apiClient);
 export const saveDestination = (input: EvalDestinationInput) =>
   saveEvalDestination(apiClient, input);
 export const checkDestination = () => checkEvalDestination(apiClient);
+
+export const getImportSessions = () => listEvalImportSessions(apiClient);
+export const previewImport = ({ datasetId, source }: { datasetId: string; source: EvalImportSource }) =>
+  previewEvalImport(apiClient, datasetId, source);
+export const importCases = ({ datasetId, source }: { datasetId: string; source: EvalImportSource }) =>
+  importEvalCases(apiClient, datasetId, source);
