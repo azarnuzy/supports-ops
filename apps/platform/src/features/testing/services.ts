@@ -7,6 +7,7 @@ import {
   estimateEvalRun,
   type EvalRunSelection,
   listEvalRuns,
+  retryEvalRunDelivery,
   startEvalRun,
   type EvalDestinationInput,
   type EvalCaseInput,
@@ -57,4 +58,6 @@ export const importCases = ({ datasetId, source }: { datasetId: string; source: 
 
 export const estimateRun = (selection: EvalRunSelection) => estimateEvalRun(apiClient, selection);
 export const startRun = (selection: EvalRunSelection) => startEvalRun(apiClient, selection);
+export const retryDelivery = (id: string, target: "CENTRAL" | "WORKSPACE") =>
+  retryEvalRunDelivery(apiClient, id, target);
 export const getRuns = (datasetId: string) => listEvalRuns(apiClient, datasetId);

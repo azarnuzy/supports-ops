@@ -6,6 +6,7 @@ import {
   deleteCase,
   estimateRun,
   getRuns,
+  retryDelivery,
   startRun,
   getDataset,
   getDatasets,
@@ -86,6 +87,15 @@ export const useStartRunMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: startRun,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace", "eval-runs"] }),
+  });
+};
+
+export const useRetryDeliveryMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, target }: { id: string; target: "CENTRAL" | "WORKSPACE" }) =>
+      retryDelivery(id, target),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace", "eval-runs"] }),
   });
 };
