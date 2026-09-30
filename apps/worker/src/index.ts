@@ -37,6 +37,8 @@ import {
   type WhatsAppTurnJob,
 } from "./whatsapp-turn";
 import type { WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
+import { failEvalRun, processEvalRun } from "@repo/api/eval-run";
+import type { EvalRunJob } from "@repo/api/eval-run-queue";
 
 export type { ExampleJob } from "./types";
 
@@ -150,6 +152,10 @@ export function startWhatsAppTurnWorker() {
   );
 }
 
+export function startEvalRunWorker() {
+  return new Worker<EvalRunJob>("eval-run", processEvalRun, { connection });
+}
+
 export function runWorker() {
   setStorageErrorReporter((operation, error) =>
     recordExternalError(prisma, {
@@ -167,6 +173,7 @@ export function runWorker() {
   const followUpWorker = startFollowUpWorker();
   const ticketKnowledgeIndexWorker = startTicketKnowledgeIndexWorker();
   const whatsAppTurnWorker = startWhatsAppTurnWorker();
+  const evalRunWorker = startEvalRunWorker();
 
   worker.on("completed", (job) => {
     logger.info({ jobId: job.id }, "Job completed");
@@ -197,9 +204,15 @@ export function runWorker() {
     logger.error({ err: error, jobId: job?.id }, "WhatsApp turn failed");
   });
 
+  evalRunWorker.on("failed", (job, error) => {
+    logger.error({ err: error, jobId: job?.id }, "Eval Run failed");
+    if (job) void failEvalRun(job.data.runId, error.message);
+  });
+
   return {
     attachmentProcessWorker,
     creditAlertEmailWorker,
+    evalRunWorker,
     followUpWorker,
     knowledgeIngestWorker,
     sessionEmailWorker,
