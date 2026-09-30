@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
+import { importSourceSchema } from "./import";
 import { caseSchema, datasetSchema } from "./schema";
 import {
   CaseNotFoundError,
@@ -11,6 +12,9 @@ import {
   deleteCase,
   DuplicateCaseKeyError,
   getDataset,
+  importCases,
+  listImportSessions,
+  previewImport,
   listDatasets,
   updateCase,
   updateDataset,
@@ -41,6 +45,7 @@ export const evalDatasetsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/", zValidator("json", datasetSchema), async (c) =>
     c.json({ dataset: await createDataset(c.req.valid("json")) }, 201),
   )
+  .get("/import-sessions", async (c) => c.json({ sessions: await listImportSessions() }, 200))
   .get("/:id", (c) =>
     respond(async () => c.json({ dataset: await getDataset(c.req.param("id")) }, 200), c),
   )
@@ -48,6 +53,20 @@ export const evalDatasetsRouter = new Hono<{ Variables: AuthVariables }>()
     respond(
       async () =>
         c.json({ dataset: await updateDataset(c.req.param("id"), c.req.valid("json")) }, 200),
+      c,
+    ),
+  )
+  .post("/:id/import/preview", zValidator("json", importSourceSchema), (c) =>
+    respond(
+      async () =>
+        c.json({ preview: await previewImport(c.req.param("id"), c.req.valid("json")) }, 200),
+      c,
+    ),
+  )
+  .post("/:id/import", zValidator("json", importSourceSchema), (c) =>
+    respond(
+      async () =>
+        c.json({ import: await importCases(c.req.param("id"), c.req.valid("json")) }, 201),
       c,
     ),
   )
