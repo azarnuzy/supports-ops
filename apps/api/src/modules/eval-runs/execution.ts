@@ -19,7 +19,7 @@ import {
 import { unscopedPrisma as db } from "../../utils/prisma";
 import { creditBalance, hasActiveUnlimitedPeriod, spendForJudgeCall } from "../credits/services";
 import { createJudgeBaseModel, judgeModelId, meterJudge } from "./judge";
-import type { EvalRunJob } from "./queue";
+import { enqueueEvalDelivery, type EvalRunJob } from "./queue";
 import { centralSink, workspaceSink } from "./sinks";
 
 const interrupted =
@@ -134,22 +134,34 @@ export async function processEvalRun({ data }: { data: EvalRunJob }) {
       select: { target: true },
       where: { runId },
     });
-    const delivery = (name: "CENTRAL" | "WORKSPACE", configured: boolean) =>
+    const delivery = (
+      name: "CENTRAL" | "WORKSPACE",
+      configured: boolean,
+    ): "DELIVERED" | "ERROR" | "NOT_CONFIGURED" =>
       !configured
         ? "NOT_CONFIGURED"
         : failed.some((row) => row.target === name)
           ? "ERROR"
           : "DELIVERED";
+    const settled = {
+      centralDelivery: delivery("CENTRAL", central !== null),
+      workspaceDelivery: delivery("WORKSPACE", true),
+    };
+    // A refused destination is retried in the background, on its own job; PENDING until it lands.
+    const retry = (["CENTRAL", "WORKSPACE"] as const).filter(
+      (name) => settled[name === "CENTRAL" ? "centralDelivery" : "workspaceDelivery"] === "ERROR",
+    );
     await db.evalRun.update({
       data: {
-        centralDelivery: delivery("CENTRAL", central !== null),
+        centralDelivery: retry.includes("CENTRAL") ? "PENDING" : settled.centralDelivery,
         error: failure ?? null,
         finishedAt: new Date(),
         status: failure ? "ERROR" : "FINISHED",
-        workspaceDelivery: delivery("WORKSPACE", true),
+        workspaceDelivery: retry.includes("WORKSPACE") ? "PENDING" : settled.workspaceDelivery,
       },
       where: { id: runId },
     });
+    for (const target of retry) await enqueueEvalDelivery({ runId, target, workspaceId });
   }
 }
 
@@ -328,6 +340,7 @@ async function retainEvidence(runId: string, workspaceId: string, failure: Telem
     data: [
       {
         body: failure.body,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         eventId: createHash("sha256").update(failure.body).digest("hex"),
         id: randomUUID(),
         lastError: failure.error,

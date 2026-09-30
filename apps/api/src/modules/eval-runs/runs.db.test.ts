@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
   process.env.EVAL_DESTINATION_ALLOWED_HOSTS = "lens.test,broken.test";
   return {
     current: { userId: "" },
+    deliveries: [] as Array<{ runId: string; target: "CENTRAL" | "WORKSPACE"; workspaceId: string }>,
     jobs: [] as Array<{ runId: string; workspaceId: string }>,
     judge: { calls: 0, failOn: 0 },
     memories: [] as unknown[],
@@ -36,6 +37,9 @@ vi.mock("../auth/instance", () => ({
   operatorAuth: { api: { getSession: async () => null } },
 }));
 vi.mock("./queue", () => ({
+  enqueueEvalDelivery: async (job: (typeof mocks.deliveries)[number]) => {
+    mocks.deliveries.push(job);
+  },
   enqueueEvalRun: async (job: { runId: string; workspaceId: string }) => {
     mocks.jobs.push(job);
   },
@@ -127,6 +131,7 @@ beforeEach(async () => {
   await truncateAll(prisma);
   Object.assign(mocks.current, { userId: "" });
   mocks.jobs.length = 0;
+  mocks.deliveries.length = 0;
   mocks.memories.length = 0;
   mocks.turn.mockReset();
   Object.assign(mocks.judge, { calls: 0, failOn: 0 });
@@ -512,8 +517,9 @@ it("keeps evidence a destination refused and reports delivery separately from ex
     centralDelivery: "DELIVERED",
     progress: { evaluated: 1 },
     status: "FINISHED",
-    workspaceDelivery: "ERROR",
+    workspaceDelivery: "PENDING",
   });
+  expect(mocks.deliveries).toEqual([{ runId: run.id, target: "WORKSPACE", workspaceId: "wa1" }]);
   const evidence = await prisma.evalRunEvidence.findMany({ where: { runId: run.id } });
   expect(evidence.length).toBeGreaterThan(0);
   expect(evidence.every((row) => row.target === "WORKSPACE" && row.body.includes("resource"))).toBe(true);
@@ -705,4 +711,52 @@ it("runs a negative control only as an evaluator-health check: free, and never a
   expect(finished.progress).toMatchObject({ evaluatorChecks: 1, evaluatorHealthy: 1, passed: 0 });
   expect(mocks.turn).toHaveBeenCalledTimes(1); // only "plain"
   expect(finished.chargedCredits).toBe(0);
+});
+
+it("retries one destination from stored evidence with no model call or Credits", async () => {
+  const delivery = await import("./delivery");
+  mocks.current.userId = "admin-a1";
+  await destination("wa1", "broken.test");
+  const { make } = await dataset();
+  await make("a");
+  failHost = "broken.test";
+  const { run } = await (
+    await call("/eval-runs", "POST", { caseIds: ["case-wa1-a"], datasetId: "ds-wa1" })
+  ).json();
+  await drain();
+  const spent = await prisma.creditLedgerEntry.count();
+  const job = (attemptsMade: number) =>
+    ({
+      attemptsMade,
+      data: mocks.deliveries[0],
+      opts: { attempts: 2 },
+    }) as never;
+
+  // Still down: the first attempt asks the queue to retry, the last one ends in a terminal error.
+  await expect(delivery.processEvalDelivery(job(0))).rejects.toThrow();
+  await delivery.processEvalDelivery(job(1));
+  let detail = (await (await call(`/eval-runs/${run.id}`)).json()).run;
+  expect(detail).toMatchObject({
+    centralDelivery: "DELIVERED",
+    workspaceDelivery: "ERROR",
+    workspaceRetryable: true,
+  });
+
+  // Once retention lapses the evidence can no longer be retried.
+  await prisma.evalRunEvidence.updateMany({ data: { expiresAt: new Date(0) }, where: { runId: run.id } });
+  expect((await call(`/eval-runs/${run.id}/delivery/WORKSPACE/retry`, "POST")).status).toBe(409);
+  await prisma.evalRunEvidence.updateMany({
+    data: { expiresAt: new Date(Date.now() + 60_000) },
+    where: { runId: run.id },
+  });
+
+  // Recovered: an Admin retry inside retention delivers it and leaves central untouched.
+  failHost = "";
+  const ok = await call(`/eval-runs/${run.id}/delivery/WORKSPACE/retry`, "POST");
+  expect(ok.status).toBe(200);
+  await delivery.processEvalDelivery(job(0));
+  detail = (await (await call(`/eval-runs/${run.id}`)).json()).run;
+  expect(detail).toMatchObject({ centralDelivery: "DELIVERED", workspaceDelivery: "DELIVERED" });
+  expect(mocks.turn).toHaveBeenCalledTimes(1);
+  expect(await prisma.creditLedgerEntry.count()).toBe(spent);
 });

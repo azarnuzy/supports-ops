@@ -161,6 +161,12 @@ model EvalRunEvidence {
   body        String
   attempts    Int                @default(1)
   lastError   String
+  /// Set once the destination accepted it; the body is dropped then.
+  deliveredAt DateTime?
+  /// Set when retries ran out or retention lapsed. Terminal until an Admin retries within retention.
+  failedAt    DateTime?
+  /// Unresolved evidence is kept until this instant, then explicitly failed.
+  expiresAt   DateTime           @default(dbgenerated("(now() + interval '7 days')"))
   createdAt   DateTime           @default(now())
   run         EvalRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
 

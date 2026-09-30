@@ -12,7 +12,12 @@ import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { toast } from "@repo/ui/components/sonner";
 import { ExternalLinkIcon } from "lucide-react";
-import { useEstimateRunQuery, useRunsQuery, useStartRunMutation } from "./hooks";
+import {
+  useEstimateRunQuery,
+  useRetryDeliveryMutation,
+  useRunsQuery,
+  useStartRunMutation,
+} from "./hooks";
 
 const caseLabels: Record<EvalRunCaseStatus, string> = {
   EVALUATED: "Evaluated",
@@ -28,7 +33,7 @@ const deliveryLabels: Record<EvalDeliveryStatus, string> = {
   DELIVERED: "Delivered",
   ERROR: "Delivery failed",
   NOT_CONFIGURED: "Not configured",
-  PENDING: "Delivery pending",
+  PENDING: "Delivery pending or retrying",
 };
 
 const runLabels = { ERROR: "Error", FINISHED: "Finished", QUEUED: "Queued", RUNNING: "Running" };
@@ -135,6 +140,45 @@ export function RunConfirmDialog({
   );
 }
 
+function DeliveryLine({
+  expiresAt,
+  label,
+  retryable,
+  runId,
+  status,
+  target,
+}: {
+  expiresAt: string | null;
+  label: string;
+  retryable: boolean;
+  runId: string;
+  status: EvalDeliveryStatus;
+  target: "CENTRAL" | "WORKSPACE";
+}) {
+  const retry = useRetryDeliveryMutation();
+  const expired = status === "ERROR" && !retryable;
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      {label} — {expired ? "Delivery failed and can no longer be retried" : deliveryLabels[status]}
+      {expiresAt && status !== "DELIVERED"
+        ? ` · kept until ${new Date(expiresAt).toLocaleDateString()}`
+        : ""}
+      {retryable ? (
+        <Button
+          disabled={retry.isPending}
+          onClick={() =>
+            retry.mutate({ id: runId, target }, { onError: (error) => toast.error(error.message) })
+          }
+          size="sm"
+          variant="outline"
+        >
+          Retry delivery
+        </Button>
+      ) : null}
+    </span>
+  );
+}
+
 function RunCard({ run }: { run: EvalRun }) {
   const { progress } = run;
   const active = run.status === "QUEUED" || run.status === "RUNNING";
@@ -187,10 +231,27 @@ function RunCard({ run }: { run: EvalRun }) {
         </p>
       ) : null}
       {run.error ? <p className="text-sm text-destructive">{run.error}</p> : null}
-      <p className="text-xs text-muted-foreground">
-        Report delivery: your destination — {deliveryLabels[run.workspaceDelivery]} · SupportOps
-        tracing — {deliveryLabels[run.centralDelivery]}
-      </p>
+      <div className="grid gap-1 text-xs text-muted-foreground">
+        <DeliveryLine
+          expiresAt={run.workspaceExpiresAt}
+          label="Your destination"
+          retryable={run.workspaceRetryable}
+          runId={run.id}
+          status={run.workspaceDelivery}
+          target="WORKSPACE"
+        />
+        <DeliveryLine
+          expiresAt={run.centralExpiresAt}
+          label="SupportOps tracing"
+          retryable={run.centralRetryable}
+          runId={run.id}
+          status={run.centralDelivery}
+          target="CENTRAL"
+        />
+        {run.workspaceDelivery === "DELIVERED" ? (
+          <span>Accepted by your destination; it can take a moment to appear in the report.</span>
+        ) : null}
+      </div>
       <details className="text-sm">
         <summary className="cursor-pointer text-muted-foreground">Case progress</summary>
         <ul className="mt-2 grid gap-1">
