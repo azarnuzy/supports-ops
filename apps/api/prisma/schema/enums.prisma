@@ -153,6 +153,11 @@ enum CreditLedgerEntryType {
   SPEND
 }
 
+enum CreditChargeKind {
+  AI_TURN
+  JUDGE
+}
+
 enum OperatorActionType {
   TOP_UP
   UNLIMITED_PERIOD_GRANTED

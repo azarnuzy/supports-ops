@@ -72,6 +72,10 @@ model CreditLedgerEntry {
   outputTokens      Int?
   /// The Eval Run this spend was made for, so it stays attributable after the scratch Ticket is removed.
   evalRunId         String?
+  /// Distinguishes an Eval Run's AI Agent Turn from its Judge model calls. Null outside Eval Runs.
+  chargeKind        CreditChargeKind?
+  judgeModel        String?
+  evalCaseKey       String?
   createdAt       DateTime              @default(now())
   workspace       Workspace             @relation(fields: [workspaceId], references: [id])
   organization    Organization          @relation(fields: [organizationId], references: [id])
