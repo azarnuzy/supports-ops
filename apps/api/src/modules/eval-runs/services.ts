@@ -6,12 +6,13 @@ import { requireWorkspaceId } from "../../utils/workspace-context";
 import { modelRateFor, resolveAgentModelId } from "../ai-agent/model-catalog";
 import { creditBalance, hasActiveUnlimitedPeriod } from "../credits/services";
 import { presentCase } from "../eval-datasets/services";
-import { enqueueEvalRun } from "./queue";
+import { enqueueEvalDelivery, enqueueEvalRun } from "./queue";
 import type { Selection } from "./schema";
 
 export class RunSelectionNotFoundError extends Error {}
 export class RunNotFoundError extends Error {}
 export class RunActiveError extends Error {}
+export class DeliveryNotRetryableError extends Error {}
 export class RunBlockedError extends Error {
   constructor(
     readonly code:
@@ -180,6 +181,17 @@ export async function getRun(id: string) {
     _sum: { credits: true },
     where: { evalRunId: id },
   });
+  const open = await prisma.evalRunEvidence.findMany({
+    orderBy: { expiresAt: "asc" },
+    select: { expiresAt: true, target: true },
+    where: { deliveredAt: null, runId: id },
+  });
+  const expiry = (target: "CENTRAL" | "WORKSPACE") =>
+    open.find((row) => row.target === target)?.expiresAt ?? null;
+  const retryable = (target: "CENTRAL" | "WORKSPACE") => {
+    const expiresAt = expiry(target);
+    return run.status !== "QUEUED" && run.status !== "RUNNING" && !!expiresAt && expiresAt > new Date();
+  };
   const {
     destinationCredentialsEncrypted: _credentials,
     destinationEndpoint: _endpoint,
@@ -215,7 +227,11 @@ export async function getRun(id: string) {
         traceId,
       }),
     ),
+    centralExpiresAt: expiry("CENTRAL"),
+    centralRetryable: run.centralDelivery === "ERROR" && retryable("CENTRAL"),
     chargedCredits: -(_sum.credits ?? 0),
+    workspaceExpiresAt: expiry("WORKSPACE"),
+    workspaceRetryable: run.workspaceDelivery === "ERROR" && retryable("WORKSPACE"),
     progress: {
       evaluated: count("EVALUATED"),
       executionErrors: count("EXECUTION_ERROR"),
@@ -234,4 +250,24 @@ export async function listRuns(datasetId?: string) {
     where: datasetId ? { datasetId } : {},
   });
   return Promise.all(runs.map((run) => getRun(run.id)));
+}
+
+/** Admin retry of one destination's terminal delivery error, while its evidence is still retained.
+ * Only queues stored evidence: no model call, no Credits. */
+export async function retryDelivery(id: string, target: "CENTRAL" | "WORKSPACE") {
+  const run = await getRun(id);
+  const retryable = target === "CENTRAL" ? run.centralRetryable : run.workspaceRetryable;
+  if (!retryable)
+    throw new DeliveryNotRetryableError("There is no unexpired evidence left to deliver.");
+  const workspaceId = requireWorkspaceId();
+  await prisma.evalRunEvidence.updateMany({
+    data: { failedAt: null },
+    where: { deliveredAt: null, expiresAt: { gt: new Date() }, runId: id, target },
+  });
+  await prisma.evalRun.update({
+    data: target === "CENTRAL" ? { centralDelivery: "PENDING" } : { workspaceDelivery: "PENDING" },
+    where: { id },
+  });
+  await enqueueEvalDelivery({ runId: id, target, workspaceId });
+  return getRun(id);
 }

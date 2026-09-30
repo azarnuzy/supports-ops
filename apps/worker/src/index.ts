@@ -38,7 +38,8 @@ import {
 } from "./whatsapp-turn";
 import type { WhatsAppDeliveryJob } from "@repo/api/whatsapp-queue";
 import { failEvalRun, processEvalRun } from "@repo/api/eval-run";
-import type { EvalRunJob } from "@repo/api/eval-run-queue";
+import { processEvalDelivery } from "@repo/api/eval-run-delivery";
+import type { EvalDeliveryJob, EvalRunJob } from "@repo/api/eval-run-queue";
 
 export type { ExampleJob } from "./types";
 
@@ -153,7 +154,14 @@ export function startWhatsAppTurnWorker() {
 }
 
 export function startEvalRunWorker() {
-  return new Worker<EvalRunJob>("eval-run", processEvalRun, { connection });
+  return new Worker<EvalRunJob | EvalDeliveryJob>(
+    "eval-run",
+    (job) =>
+      job.name === "deliver"
+        ? processEvalDelivery(job as Job<EvalDeliveryJob>)
+        : processEvalRun(job as Job<EvalRunJob>),
+    { connection },
+  );
 }
 
 export function runWorker() {
@@ -206,7 +214,7 @@ export function runWorker() {
 
   evalRunWorker.on("failed", (job, error) => {
     logger.error({ err: error, jobId: job?.id }, "Eval Run failed");
-    if (job) void failEvalRun(job.data.runId, error.message);
+    if (job && job.name !== "deliver") void failEvalRun(job.data.runId, error.message);
   });
 
   return {

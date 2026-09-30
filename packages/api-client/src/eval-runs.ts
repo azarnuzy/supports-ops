@@ -25,6 +25,9 @@ export type EvalRunEstimate = {
 
 export type EvalRun = {
   centralDelivery: EvalDeliveryStatus;
+  /** Stored evidence is kept until this time, then the delivery is failed for good. */
+  centralExpiresAt: string | null;
+  centralRetryable: boolean;
   cases: {
     caseKey: string;
     category: string;
@@ -57,6 +60,8 @@ export type EvalRun = {
   };
   status: EvalRunStatus;
   workspaceDelivery: EvalDeliveryStatus;
+  workspaceExpiresAt: string | null;
+  workspaceRetryable: boolean;
 };
 
 const routes = (client: ApiClient) => client["eval-runs"];
@@ -89,4 +94,16 @@ export async function listEvalRuns(client: ApiClient, datasetId: string) {
   const response = await routes(client).$get({ query: { datasetId } });
   if (!response.ok) throw new Error("Failed to load Runs.");
   return (await response.json()) as unknown as { runs: EvalRun[] };
+}
+
+export async function retryEvalRunDelivery(
+  client: ApiClient,
+  id: string,
+  target: "CENTRAL" | "WORKSPACE",
+) {
+  const response = await routes(client)[":id"].delivery[":target"].retry.$post({
+    param: { id, target },
+  });
+  if (!response.ok) return fail(response, "Failed to retry delivery.");
+  return (await response.json()) as unknown as { run: EvalRun };
 }
