@@ -116,6 +116,8 @@ export async function spendForTurn(
     aiAgentId: string;
     agentModel: string | null;
     channel?: "WEB" | "WHATSAPP" | null;
+    /** Set for an Eval Run's spend, so it stays attributable after the scratch Ticket is removed. */
+    evalRunId?: string | null;
     providerCostUsd?: number | null;
     sessionId: string;
     ticketId: string;
@@ -152,6 +154,7 @@ export async function spendForTurn(
       cachedInputTokens: params.usage?.cachedInputTokens ?? null,
       channel: params.channel ?? null,
       credits: -credits,
+      evalRunId: params.evalRunId ?? null,
       id: randomUUID(),
       organizationId,
       inputTokens: params.usage?.inputTokens ?? null,

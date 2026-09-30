@@ -1,12 +1,5 @@
 #!/usr/bin/env node
-import {
-  answerRelevancy,
-  contains,
-  exactMatch,
-  gEval,
-  runEvalCli,
-  type AnyEvalMetric,
-} from "@anvia/core/evals";
+import { answerRelevancy, gEval, runEvalCli, type AnyEvalMetric } from "@anvia/core/evals";
 import { createOtelEvalReporter } from "@anvia/otel";
 import { createReplyModel } from "@repo/ai-agent";
 import { shutdownTelemetry, startTelemetry } from "@repo/logger/telemetry";
@@ -14,18 +7,14 @@ import { aiAgentConfig, embeddingConfig, evalConfig, telemetryConfig } from "../
 import { gatewayModelId, resolveAgentModelId } from "../modules/ai-agent/model-catalog";
 import { unscopedPrisma } from "../utils/prisma";
 import { cases, type MetricName } from "./cases";
+import { deterministicMetrics } from "./deterministic";
 import {
-  decisionMatches,
   groundedFaithfulness,
-  languageMatches,
-  normalizeText,
   negativeControl,
-  neverLeaksInternal,
   retrievalNdcg,
   retrievalPrecision,
   retrievalRecall,
   retrievalReciprocalRank,
-  toolUsage,
 } from "./metrics";
 import {
   runEvalTurn,
@@ -76,24 +65,13 @@ const suites: Array<{
   {
     key: "contains",
     metric: "contains",
-    metrics: [
-      contains<EvalTurnInput, EvalTurnOutput, string>({
-        actual: ({ output }) => normalizeText(output.output),
-        expected: ({ case: testCase }) => normalizeText(String(testCase.expected ?? "")),
-      }),
-    ],
+    metrics: deterministicMetrics.contains(),
     name: "northstar-contains",
   },
   {
     key: "exactmatch",
     metric: "exactMatch",
-    metrics: [
-      exactMatch<EvalTurnInput, EvalTurnOutput, string>({
-        actual: ({ output }: { output: EvalTurnOutput }) => normalizeText(output.output),
-        expected: ({ case: testCase }: { case: { expected?: string } }) =>
-          normalizeText(String(testCase.expected ?? "")),
-      }),
-    ],
+    metrics: deterministicMetrics.exactMatch(),
     name: "northstar-exact-match",
   },
   {
@@ -127,25 +105,25 @@ const suites: Array<{
   {
     key: "decision",
     metric: "decision",
-    metrics: [decisionMatches()],
+    metrics: deterministicMetrics.decision(),
     name: "northstar-decision",
   },
   {
     key: "tool",
     metric: "tool",
-    metrics: [toolUsage()],
+    metrics: deterministicMetrics.tool(),
     name: "northstar-tool-usage",
   },
   {
     key: "visibility",
     metric: "visibility",
-    metrics: [neverLeaksInternal()],
+    metrics: deterministicMetrics.visibility(),
     name: "northstar-visibility",
   },
   {
     key: "language",
     metric: "language",
-    metrics: [languageMatches()],
+    metrics: deterministicMetrics.language(),
     name: "northstar-language",
   },
   {

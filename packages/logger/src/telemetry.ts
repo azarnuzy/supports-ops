@@ -361,7 +361,7 @@ export async function withSpan<T>(
 }
 export type { Span };
 
-function getTelemetryHeaders(config: TelemetryConfig) {
+export function getTelemetryHeaders(config: TelemetryConfig) {
   if (!config.apiKey) {
     return undefined;
   }
