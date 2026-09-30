@@ -42,6 +42,7 @@ model Workspace {
   externalErrors       ExternalError[]
   evalDestination      EvalDestination?
   evalDatasets         EvalDataset[]
+  evalRuns             EvalRun[]
   @@index([organizationId])
 }
 
@@ -69,6 +70,8 @@ model CreditLedgerEntry {
   inputTokens       Int?
   cachedInputTokens Int?
   outputTokens      Int?
+  /// The Eval Run this spend was made for, so it stays attributable after the scratch Ticket is removed.
+  evalRunId         String?
   createdAt       DateTime              @default(now())
   workspace       Workspace             @relation(fields: [workspaceId], references: [id])
   organization    Organization          @relation(fields: [organizationId], references: [id])
@@ -76,6 +79,7 @@ model CreditLedgerEntry {
 
   @@index([workspaceId, createdAt])
   @@index([organizationId, createdAt])
+  @@index([evalRunId])
 }
 
 /// One checkout for a Top-Up Pack (ADR-0023). Its Credits reach the ledger only

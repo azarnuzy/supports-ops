@@ -32,6 +32,9 @@ const workspaceScopedModels = new Set([
   "EvalDestination",
   "EvalDataset",
   "EvalCase",
+  "EvalRun",
+  "EvalRunCase",
+  "EvalRunEvidence",
 ]);
 
 type QueryArguments = {
