@@ -1,5 +1,6 @@
 import type { EvalCase, EvalCaseInput } from "@repo/api-client";
 import { Badge } from "@repo/ui/components/badge";
+import { Checkbox } from "@repo/ui/components/checkbox";
 import { Button } from "@repo/ui/components/button";
 import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
@@ -19,6 +20,9 @@ import {
   useUpdateDatasetMutation,
 } from "./hooks";
 import { nextCaseKeys } from "./paste";
+import { RunConfirmDialog, RunsPanel } from "./run-panel";
+
+const maxCasesPerRun = 100;
 
 const onError = (error: unknown) =>
   toast.error(error instanceof Error ? error.message : "Something went wrong.");
@@ -34,6 +38,8 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
   const [criteria, setCriteria] = useState("");
   // `null` = closed, `"new"` = adding, otherwise the case being edited.
   const [editing, setEditing] = useState<EvalCase | "new" | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (dataset) {
@@ -44,6 +50,11 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
 
   const cases = dataset?.cases ?? [];
   const incomplete = cases.filter((c) => !c.complete).length;
+  // Deleted or edited-incomplete cases drop out of the selection instead of blocking the Run.
+  const chosen = cases.filter((c) => c.complete && selected.includes(c.id)).map((c) => c.id);
+  const readyIds = cases.filter((c) => c.complete).map((c) => c.id).slice(0, maxCasesPerRun);
+  const toggle = (id: string) =>
+    setSelected((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]));
 
   function save(input: EvalCaseInput) {
     const done = { onError, onSuccess: () => setEditing(null) };
@@ -111,11 +122,14 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
               </p>
               <div className="flex gap-2">
                 <Button
-                  disabled
-                  title="Running evaluations is not available yet."
+                  disabled={readyIds.length === 0}
                   variant="outline"
+                  onClick={() => setSelected(chosen.length === readyIds.length ? [] : readyIds)}
                 >
-                  <PlayIcon className="size-4" /> Run (not available yet)
+                  {chosen.length === readyIds.length && chosen.length > 0 ? "Clear selection" : "Select all ready"}
+                </Button>
+                <Button disabled={chosen.length === 0} onClick={() => setConfirming(true)}>
+                  <PlayIcon className="size-4" /> Run {chosen.length > 0 ? `${chosen.length} selected` : "selected"}
                 </Button>
                 <Button onClick={() => setEditing("new")}>
                   <PlusIcon className="size-4" /> Add case
@@ -131,6 +145,13 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
               ) : null}
               {cases.map((item) => (
                 <div className="flex items-center gap-2 border-b last:border-b-0" key={item.id}>
+                  <Checkbox
+                    aria-label={`Select case ${item.caseKey}`}
+                    checked={chosen.includes(item.id)}
+                    className="ml-4"
+                    disabled={!item.complete || (!chosen.includes(item.id) && chosen.length >= maxCasesPerRun)}
+                    onCheckedChange={() => toggle(item.id)}
+                  />
                   <button
                     className="flex min-w-0 flex-1 items-center justify-between gap-4 p-4 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                     type="button"
@@ -163,9 +184,22 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
                 </div>
               ))}
             </div>
+            <RunsPanel datasetId={datasetId} />
           </>
         ) : null}
       </section>
+
+      {confirming ? (
+        <RunConfirmDialog
+          caseIds={chosen}
+          datasetId={datasetId}
+          onClose={() => setConfirming(false)}
+          onStarted={() => {
+            setConfirming(false);
+            setSelected([]);
+          }}
+        />
+      ) : null}
 
       {editing ? (
         <CaseEditor

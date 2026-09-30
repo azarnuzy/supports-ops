@@ -4,6 +4,10 @@ import {
   createEvalCase,
   createEvalDataset,
   deleteEvalCase,
+  estimateEvalRun,
+  type EvalRunSelection,
+  listEvalRuns,
+  startEvalRun,
   type EvalDestinationInput,
   type EvalCaseInput,
   type EvalDatasetInput,
@@ -50,3 +54,7 @@ export const previewImport = ({ datasetId, source }: { datasetId: string; source
   previewEvalImport(apiClient, datasetId, source);
 export const importCases = ({ datasetId, source }: { datasetId: string; source: EvalImportSource }) =>
   importEvalCases(apiClient, datasetId, source);
+
+export const estimateRun = (selection: EvalRunSelection) => estimateEvalRun(apiClient, selection);
+export const startRun = (selection: EvalRunSelection) => startEvalRun(apiClient, selection);
+export const getRuns = (datasetId: string) => listEvalRuns(apiClient, datasetId);

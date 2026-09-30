@@ -4,6 +4,9 @@ import {
   createCase,
   createDataset,
   deleteCase,
+  estimateRun,
+  getRuns,
+  startRun,
   getDataset,
   getDatasets,
   getImportSessions,
@@ -57,3 +60,32 @@ export const useImportSessionsQuery = (enabled: boolean) =>
 
 export const usePreviewImportMutation = () => useMutation({ mutationFn: previewImport });
 export const useImportCasesMutation = () => useMutate(importCases);
+
+const runsKey = (datasetId: string) => ["workspace", "eval-runs", datasetId] as const;
+
+/** Polls every 3s while a Run is queued or running, so progress and delivery follow the worker. */
+export const useRunsQuery = (datasetId: string) =>
+  useQuery({
+    queryFn: () => getRuns(datasetId),
+    queryKey: runsKey(datasetId),
+    refetchInterval: (query) =>
+      query.state.data?.runs.some((r) => r.status === "QUEUED" || r.status === "RUNNING") ||
+      query.state.data?.runs.some((r) => r.centralDelivery === "PENDING" || r.workspaceDelivery === "PENDING")
+        ? 3_000
+        : false,
+  });
+
+export const useEstimateRunQuery = (selection: { caseIds: string[]; datasetId: string } | null) =>
+  useQuery({
+    enabled: selection !== null,
+    queryFn: () => estimateRun(selection as { caseIds: string[]; datasetId: string }),
+    queryKey: ["workspace", "eval-run-estimate", selection],
+  });
+
+export const useStartRunMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: startRun,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace", "eval-runs"] }),
+  });
+};
