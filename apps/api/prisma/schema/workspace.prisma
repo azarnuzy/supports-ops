@@ -40,6 +40,7 @@ model Workspace {
   topUpPayments       TopUpPayment[]
   operatorActions     OperatorAction[]
   externalErrors       ExternalError[]
+  evalDestination      EvalDestination?
   evalDatasets         EvalDataset[]
   @@index([organizationId])
 }

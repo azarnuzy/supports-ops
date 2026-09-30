@@ -29,6 +29,7 @@ const workspaceScopedModels = new Set([
   "HttpToolConfig",
   "McpServer",
   "McpTool",
+  "EvalDestination",
   "EvalDataset",
   "EvalCase",
 ]);

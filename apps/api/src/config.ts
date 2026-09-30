@@ -82,6 +82,7 @@ const apiEnvSchema = z
     OPERATOR_AUTH_SECRET: optionalStringSchema,
     COMPLETION_GATEWAY_API_KEY: optionalStringSchema,
     EVAL_JUDGE_MODEL: optionalStringSchema,
+    EVAL_DESTINATION_ALLOWED_HOSTS: optionalStringSchema,
     EVAL_WORKSPACE_ID: optionalStringSchema,
     COMPLETION_GATEWAY_BASE_URL: z.string().trim().url().default(defaultCompletionGatewayBaseUrl),
     S3_ACCESS_KEY_ID: optionalStringSchema,
@@ -204,6 +205,12 @@ export const aiAgentConfig = {
 export const evalConfig = {
   judgeModelId: env.EVAL_JUDGE_MODEL ?? env.LLM_MODEL_FAST,
   workspaceId: env.EVAL_WORKSPACE_ID,
+  /** Hostnames a Workspace evaluation destination may use even when they are private or plain
+   * HTTP (self-hosted Lens/Langfuse). Deployment-owned; empty by default. */
+  destinationAllowedHosts: (env.EVAL_DESTINATION_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean),
 } as const;
 
 export const mayarConfig = {

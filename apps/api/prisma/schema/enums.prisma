@@ -184,3 +184,8 @@ enum AiActivityType {
   TICKET_KNOWLEDGE_INDEXED
   TICKET_KNOWLEDGE_RETRIEVED
 }
+
+enum EvalBackend {
+  LENS
+  LANGFUSE
+}
