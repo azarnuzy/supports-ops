@@ -16,3 +16,4 @@ export * from "./web-widget";
 export * from "./whatsapp";
 export * from "./workspaces";
 export * from "./eval-datasets";
+export * from "./eval-destination";

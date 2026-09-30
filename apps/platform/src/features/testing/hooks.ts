@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  checkDestination,
   createCase,
   createDataset,
   deleteCase,
   getDataset,
   getDatasets,
+  getDestination,
+  saveDestination,
   updateCase,
   updateDataset,
 } from "./services";
@@ -30,3 +33,18 @@ export const useUpdateDatasetMutation = () => useMutate(updateDataset);
 export const useCreateCaseMutation = () => useMutate(createCase);
 export const useUpdateCaseMutation = () => useMutate(updateCase);
 export const useDeleteCaseMutation = () => useMutate(deleteCase);
+
+const destinationKey = ["workspace", "eval-destination"] as const;
+
+export const useDestinationQuery = () =>
+  useQuery({ queryFn: getDestination, queryKey: destinationKey });
+
+export const useSaveDestinationMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: saveDestination,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: destinationKey }),
+  });
+};
+
+export const useCheckDestinationMutation = () => useMutation({ mutationFn: checkDestination });

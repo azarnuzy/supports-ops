@@ -1,12 +1,16 @@
 import {
+  checkEvalDestination,
   createApiClient,
   createEvalCase,
   createEvalDataset,
   deleteEvalCase,
+  type EvalDestinationInput,
   type EvalCaseInput,
   type EvalDatasetInput,
   getEvalDataset,
+  getEvalDestination,
   listEvalDatasets,
+  saveEvalDestination,
   updateEvalCase,
   updateEvalDataset,
 } from "@repo/api-client";
@@ -31,3 +35,8 @@ export const updateCase = ({
 }) => updateEvalCase(apiClient, datasetId, caseId, input);
 export const deleteCase = ({ caseId, datasetId }: { caseId: string; datasetId: string }) =>
   deleteEvalCase(apiClient, datasetId, caseId);
+
+export const getDestination = () => getEvalDestination(apiClient);
+export const saveDestination = (input: EvalDestinationInput) =>
+  saveEvalDestination(apiClient, input);
+export const checkDestination = () => checkEvalDestination(apiClient);
