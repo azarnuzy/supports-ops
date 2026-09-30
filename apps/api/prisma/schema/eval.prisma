@@ -55,6 +55,12 @@ enum EvalRunCaseStatus {
   EXECUTION_ERROR
   /// Never started (Credit Exhaustion, or the Run ended first).
   UNEXECUTED
+  /// The AI Agent ran but the Judge could not: Credits ran out before or during grading. The
+  /// generated evidence is retained; the Case has no score, which is not a failure.
+  UNGRADED
+  /// The Case cannot be graded as written, e.g. a retrieval label no longer resolves to a Chunk.
+  /// Never an ordinary score of zero.
+  INVALID
 }
 
 enum EvalDeliveryStatus {
@@ -84,7 +90,10 @@ model EvalRun {
   agentModel                      String
   instructionsSha256              String
   embeddingModel                  String
+  /// Upper bound: AI Agent Credits plus the highest expected Judge Credits.
   estimatedCredits                Int
+  estimatedJudgeCredits           Int                @default(0)
+  estimatedJudgeCreditsMin        Int                @default(0)
   creditExhausted                 Boolean            @default(false)
   error                           String?
   destinationBackend              EvalBackend
@@ -123,7 +132,11 @@ model EvalRunCase {
   metric             String
   metadata           Json              @default("{}")
   status             EvalRunCaseStatus @default(PENDING)
+  /// For an evaluator-health Case: whether the evaluator failed it as it must. Never a regression.
   passed             Boolean?
+  evaluatorHealth    Boolean           @default(false)
+  /// Successful (charged) Judge model calls made for this Case.
+  judgeCalls         Int               @default(0)
   traceId            String?
   error              String?
   /// Evidence limits Admins must see, e.g. a mutating Tool that was denied.

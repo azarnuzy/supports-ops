@@ -35,6 +35,9 @@ export const evalCaseMetadataSchema = z.object({
     .max(50)
     .optional(),
   language: z.enum(["en", "id"]).optional(),
+  /** `retrieval` Cases: `retriever` searches with the Customer's message and calls no AI Agent;
+   * `agent` (default) is a full AI Turn. */
+  retrievalTarget: z.enum(["agent", "retriever"]).optional(),
   tool: z.string().trim().min(1).max(200).optional(),
   toolMustNotBeCalled: z.boolean().optional(),
 });

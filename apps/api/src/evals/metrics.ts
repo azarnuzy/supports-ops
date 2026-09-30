@@ -183,9 +183,10 @@ export function languageMatches(): Metric<string> {
  * label no longer resolves to any Chunk — the latter is the acceptance
  * criterion that a stale label must fail loudly, not score zero silently.
  */
-async function loadRetrievalCase(testCase: {
-  metadata?: unknown;
-}): Promise<
+async function loadRetrievalCase(
+  testCase: { metadata?: unknown },
+  workspaceId?: string,
+): Promise<
   { relevant: Awaited<ReturnType<typeof resolveExpectedPassages>> } | EvalOutcome<never>
 > {
   const expectedPassages = metadataOf(testCase).expectedPassages;
@@ -194,7 +195,7 @@ async function loadRetrievalCase(testCase: {
       kind: "configuration",
     });
   }
-  const relevant = await resolveExpectedPassages(expectedPassages);
+  const relevant = await resolveExpectedPassages(expectedPassages, workspaceId);
   const stale = relevant.filter((passage) => passage.chunkIds.length === 0);
   if (stale.length) {
     return EvalOutcome.invalid(
@@ -222,13 +223,15 @@ function retrievalMetric(options: {
   /** Per-Case pass threshold, for triage only. */
   threshold: number;
   required: boolean;
+  /** The Workspace whose Knowledge the labels resolve against; the CLI's when omitted. */
+  workspaceId?: string;
   score: (relevant: Parameters<typeof recallAtK>[0], retrievedIds: string[]) => number;
 }): Metric<number> {
   return defineMetric<EvalTurnInput, EvalTurnOutput, number, string>({
     dataType: "NUMERIC",
     direction: "higher_is_better",
     async evaluate({ case: testCase, output }) {
-      const loaded = await loadRetrievalCase(testCase);
+      const loaded = await loadRetrievalCase(testCase, options.workspaceId);
       if ("outcome" in loaded) return loaded;
       const retrievedIds = output.retrievedChunks.map((chunk) => chunk.chunkId);
       const score = options.score(loaded.relevant, retrievedIds);
@@ -244,23 +247,36 @@ function retrievalMetric(options: {
 }
 
 /** Context recall: every required passage was retrieved somewhere this turn. */
-export const retrievalRecall = () =>
-  retrievalMetric({ name: "recall@k", required: true, score: recallAtK, threshold: 1 });
+export const retrievalRecall = (workspaceId?: string) =>
+  retrievalMetric({ name: "recall@k", required: true, score: recallAtK, threshold: 1, workspaceId });
 
 /** Reciprocal rank; the suite mean is MRR. A Case passes with a relevant Chunk in the top 3. */
-export const retrievalReciprocalRank = () =>
-  retrievalMetric({ name: "mrr", required: false, score: reciprocalRank, threshold: 1 / 3 });
+export const retrievalReciprocalRank = (workspaceId?: string) =>
+  retrievalMetric({
+    name: "mrr",
+    required: false,
+    score: reciprocalRank,
+    threshold: 1 / 3,
+    workspaceId,
+  });
 
-export const retrievalNdcg = (k: number) =>
+export const retrievalNdcg = (k: number, workspaceId?: string) =>
   retrievalMetric({
     name: `ndcg@${k}`,
     required: false,
     score: (relevant, ids) => ndcgAtK(relevant, ids, k),
     threshold: 0.5,
+    workspaceId,
   });
 
-export const retrievalPrecision = () =>
-  retrievalMetric({ name: "precision@k", required: false, score: precisionAtK, threshold: 0 });
+export const retrievalPrecision = (workspaceId?: string) =>
+  retrievalMetric({
+    name: "precision@k",
+    required: false,
+    score: precisionAtK,
+    threshold: 0,
+    workspaceId,
+  });
 
 /**
  * Faithfulness judged against the retrieved passages themselves. The library

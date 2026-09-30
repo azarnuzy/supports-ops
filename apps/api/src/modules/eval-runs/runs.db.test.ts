@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => {
     current: { userId: "" },
     deliveries: [] as Array<{ runId: string; target: "CENTRAL" | "WORKSPACE"; workspaceId: string }>,
     jobs: [] as Array<{ runId: string; workspaceId: string }>,
+    judge: { calls: 0, failOn: 0 },
     memories: [] as unknown[],
+    retrieverSearches: 0,
     turn: vi.fn(),
   };
 });
@@ -43,8 +45,62 @@ vi.mock("./queue", () => ({
   },
 }));
 vi.mock("../credits/alerts-queue", () => ({ enqueueCreditAlertEmail: vi.fn(async () => undefined) }));
+vi.mock("@repo/knowledge", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@repo/knowledge")>()),
+  createOpenAiEmbeddingClient: () => ({ embed: async () => [[0.1]] }),
+  searchChunks: async () => {
+    mocks.retrieverSearches += 1;
+    return [];
+  },
+}));
+// The Judge is a controlled double at the model boundary: Anvia's real metrics run on top of it.
+// Its one answer satisfies every Judge schema (steps, statements, verdicts, claims, a score), and
+// every completed call reports usage, so the tests count exactly what was called and charged.
 vi.mock("@repo/ai-agent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@repo/ai-agent")>()),
+  createReplyModel: () => ({
+    capabilities: {
+      documentInput: false,
+      imageInput: false,
+      outputSchema: false,
+      reasoning: false,
+      streaming: false,
+      toolChoice: true,
+      tools: true,
+    },
+    completion: async (request: { tools: Array<{ name: string }> }) => {
+      mocks.judge.calls += 1;
+      if (mocks.judge.failOn === mocks.judge.calls) throw new Error("judge down");
+      return {
+        choice: [
+          {
+            input: {
+              claims: ["c"],
+              reason: "ok",
+              score: 8,
+              statements: ["s"],
+              steps: ["step"],
+              verdicts: [{ reason: "r", supported: true, verdict: "yes" }],
+            },
+            toolCallId: `call-${mocks.judge.calls}`,
+            toolName: request.tools[0]?.name,
+            type: "tool-call",
+          },
+        ],
+        finishReason: "tool-calls",
+        rawResponse: {},
+        usage: {
+          cacheCreationInputTokens: 0,
+          cachedInputTokens: 2,
+          inputTokens: 10,
+          outputTokens: 5,
+          totalTokens: 15,
+        },
+      };
+    },
+    modelId: "judge",
+    provider: "fake",
+  }),
   runAiAgentTurn: mocks.turn,
 }));
 
@@ -78,6 +134,8 @@ beforeEach(async () => {
   mocks.deliveries.length = 0;
   mocks.memories.length = 0;
   mocks.turn.mockReset();
+  Object.assign(mocks.judge, { calls: 0, failOn: 0 });
+  mocks.retrieverSearches = 0;
   posts.length = 0;
   failHost = "";
   vi.stubGlobal(
@@ -237,11 +295,11 @@ it("keeps evaluation Runs Admin-only and inside the caller's Workspace", async (
   expect((await call("/eval-runs", "POST", body, "wa1")).status).toBe(403);
 });
 
-it("refuses to start incomplete, not-yet-enabled or destination-less selections", async () => {
+it("refuses to start incomplete, unsupported-metric or destination-less selections", async () => {
   mocks.current.userId = "admin-a1";
   const { make } = await dataset();
   await make("draft", { expected: "" });
-  await make("judge", { metric: "gEval" });
+  await make("unknown", { metric: "bogus" });
   await make("ok");
   const start = (ids: string[]) =>
     call("/eval-runs", "POST", { caseIds: ids.map((id) => `case-wa1-${id}`), datasetId: "ds-wa1" });
@@ -249,7 +307,7 @@ it("refuses to start incomplete, not-yet-enabled or destination-less selections"
   const incomplete = await start(["draft"]);
   expect(incomplete.status).toBe(422);
   expect(await incomplete.json()).toMatchObject({ caseKeys: ["draft"], error: "incomplete_cases" });
-  expect((await (await start(["judge"])).json()).error).toBe("metric_not_enabled");
+  expect((await (await start(["unknown"])).json()).error).toBe("metric_not_enabled");
   expect((await (await start(["ok"])).json()).error).toBe("destination_required");
   expect(
     (await call("/eval-runs", "POST", { caseIds: [], datasetId: "ds-wa1" })).status,
@@ -468,6 +526,191 @@ it("keeps evidence a destination refused and reports delivery separately from ex
   // Retained without another model call or another charge.
   expect(mocks.turn).toHaveBeenCalledTimes(1);
   expect(await prisma.creditLedgerEntry.count({ where: { type: "SPEND" } })).toBe(1);
+});
+
+const detail = async (id: string) => (await (await call(`/eval-runs/${id}`)).json()).run;
+const startRun = async (...keys: string[]) =>
+  (
+    await (
+      await call("/eval-runs", "POST", {
+        caseIds: keys.map((key) => `case-wa1-${key}`),
+        datasetId: "ds-wa1",
+      })
+    ).json()
+  ).run;
+const spends = (kind: "AI_TURN" | "JUDGE") =>
+  prisma.creditLedgerEntry.findMany({ where: { chargeKind: kind, type: "SPEND" } });
+const statuses = (run: { cases: Array<{ status: string }> }) => run.cases.map((c) => c.status);
+
+it("estimates AI Agent and Judge Credits separately, with a range for Judge calls", async () => {
+  mocks.current.userId = "admin-a1";
+  const { make } = await dataset();
+  await make("plain");
+  await make("geval", { metric: "gEval" });
+  await make("relevancy", { expected: "", metric: "relevancy" });
+  await make("faith", { expected: "", metric: "faithfulness" });
+  await make("retriever", {
+    expected: "",
+    metadata: { expectedPassages: [{ fragment: "x", source: "y" }], retrievalTarget: "retriever" },
+    metric: "retrieval",
+  });
+  await make("control", { expected: "", metric: "negativeControl" });
+
+  const all = ["plain", "geval", "relevancy", "faith", "retriever", "control"];
+  const { estimate } = await (
+    await call("/eval-runs/estimate", "POST", {
+      caseIds: all.map((key) => `case-wa1-${key}`),
+      datasetId: "ds-wa1",
+    })
+  ).json();
+  // Retriever-only and evaluator-health Cases make no AI Agent call, so they are not AI Turns.
+  expect(estimate).toMatchObject({
+    agentTurns: 4,
+    evaluatorHealthCases: 1,
+    judgeCallsMax: 7,
+    judgeCallsMin: 5,
+    judgeCredits: 7,
+    judgeCreditsMin: 5,
+    judgeRate: 1,
+    sufficient: true,
+  });
+  expect(estimate.credits).toBe(4 * estimate.modelRate);
+  expect(estimate.totalCredits).toBe(estimate.credits + 7);
+});
+
+it("charges every successful Judge call apart from the AI Turn, recording actual usage", async () => {
+  mocks.current.userId = "admin-a1";
+  await destination("wa1");
+  const { make } = await dataset();
+  await make("geval", { metric: "gEval" });
+  await make("relevancy", { expected: "", metric: "relevancy" });
+  await make("plain");
+
+  const run = await startRun("geval", "relevancy", "plain");
+  await drain();
+
+  const finished = await detail(run.id);
+  expect(
+    finished.cases.map((c: { caseKey: string; judgeCalls: number; status: string }) => [
+      c.caseKey,
+      c.status,
+      c.judgeCalls,
+    ]),
+  ).toEqual([
+    ["geval", "EVALUATED", 2],
+    ["relevancy", "EVALUATED", 3],
+    ["plain", "EVALUATED", 0],
+  ]);
+  // Two and three Judge calls within one metric each; the deterministic Case adds no Judge charge.
+  const judge = await spends("JUDGE");
+  expect(judge).toHaveLength(5);
+  expect(judge.every((entry) => entry.credits === -1 && entry.evalRunId === run.id)).toBe(true);
+  expect(judge.every((entry) => entry.inputTokens === 10 && entry.outputTokens === 5)).toBe(true);
+  expect(judge.every((entry) => entry.judgeModel && entry.evalCaseKey)).toBe(true);
+  expect(judge.filter((entry) => entry.evalCaseKey === "relevancy")).toHaveLength(3);
+  const turns = await spends("AI_TURN");
+  expect(turns).toHaveLength(3);
+  expect(mocks.judge.calls).toBe(5);
+  expect(finished).toMatchObject({ judgeCallsCharged: 5, judgeCharged: 5 });
+  expect(finished.agentCharged).toBe(3 * (turns[0]?.modelRate ?? 0));
+  expect(finished.chargedCredits).toBe(finished.agentCharged + 5);
+});
+
+it("does not charge a failed Judge call and reports it as an execution error", async () => {
+  mocks.current.userId = "admin-a1";
+  await destination("wa1");
+  const { make } = await dataset();
+  await make("geval", { metric: "gEval" });
+  mocks.judge.failOn = 2; // the scoring call, after the steps call succeeded
+
+  const run = await startRun("geval");
+  await drain();
+
+  const finished = await detail(run.id);
+  expect(finished.cases[0]).toMatchObject({ judgeCalls: 1, status: "EXECUTION_ERROR" });
+  expect(finished.cases[0].error).toContain("not charged");
+  expect(await spends("JUDGE")).toHaveLength(1);
+  // The AI Agent's own answer was still produced and charged under the existing rules.
+  expect(await spends("AI_TURN")).toHaveLength(1);
+  expect(finished.creditExhausted).toBe(false);
+});
+
+it("stops Judge work at Credit Exhaustion, keeps the answer, and marks the Case ungraded", async () => {
+  mocks.current.userId = "admin-a1";
+  await destination("wa1");
+  const { make } = await dataset();
+  await make("geval", { metric: "gEval" });
+  await make("next");
+  const rate = (
+    await (
+      await call("/eval-runs/estimate", "POST", { caseIds: ["case-wa1-next"], datasetId: "ds-wa1" })
+    ).json()
+  ).estimate.modelRate;
+  // The AI Turn and exactly one Judge call are affordable; the second Judge call is not.
+  await prisma.creditLedgerEntry.update({ data: { credits: rate + 1 }, where: { id: "grant-a" } });
+
+  const run = await startRun("geval", "next");
+  await drain();
+
+  const finished = await detail(run.id);
+  expect(finished).toMatchObject({ creditExhausted: true, status: "FINISHED" });
+  expect(statuses(finished)).toEqual(["UNGRADED", "UNEXECUTED"]);
+  expect(finished.progress).toMatchObject({
+    evaluated: 0,
+    executionErrors: 0,
+    ungraded: 1,
+    unexecuted: 1,
+  });
+  expect(mocks.judge.calls).toBe(1);
+  expect(mocks.turn).toHaveBeenCalledTimes(1);
+  expect(await spends("JUDGE")).toHaveLength(1);
+});
+
+it("runs a retriever-only Case without an AI Turn and reports a stale label as invalid, not zero", async () => {
+  mocks.current.userId = "admin-a1";
+  await destination("wa1");
+  const { make } = await dataset();
+  const stale = { expectedPassages: [{ fragment: "gone", source: "Removed FAQ" }] };
+  await make("retriever", {
+    expected: "",
+    metadata: { ...stale, retrievalTarget: "retriever" },
+    metric: "retrieval",
+  });
+  await make("full-turn", { expected: "", metadata: stale, metric: "retrieval" });
+
+  const run = await startRun("retriever", "full-turn");
+  await drain();
+
+  const finished = await detail(run.id);
+  expect(statuses(finished)).toEqual(["INVALID", "INVALID"]);
+  expect(finished.cases[0].error).toContain("no longer resolves");
+  expect(finished.progress).toMatchObject({ evaluated: 0, executionErrors: 0, invalid: 2, passed: 0 });
+  // The retriever path searched with no AI Agent call; only the full-turn Case ran an AI Turn.
+  expect(mocks.retrieverSearches).toBe(1);
+  expect(mocks.turn).toHaveBeenCalledTimes(1);
+  expect(await spends("AI_TURN")).toHaveLength(1);
+  expect(await spends("JUDGE")).toHaveLength(0);
+});
+
+it("runs a negative control only as an evaluator-health check: free, and never a regression", async () => {
+  mocks.current.userId = "admin-a1";
+  await destination("wa1");
+  const { make } = await dataset();
+  await make("control", { expected: "", metric: "negativeControl" });
+  await make("plain");
+
+  const first = await startRun("plain");
+  await drain();
+  // The selected subset is exactly what ran: no control was added to it.
+  expect((await detail(first.id)).cases.map((c: { caseKey: string }) => c.caseKey)).toEqual(["plain"]);
+
+  const second = await startRun("control");
+  await drain();
+  const finished = await detail(second.id);
+  expect(finished.cases[0]).toMatchObject({ evaluatorHealth: true, passed: true, status: "EVALUATED" });
+  expect(finished.progress).toMatchObject({ evaluatorChecks: 1, evaluatorHealthy: 1, passed: 0 });
+  expect(mocks.turn).toHaveBeenCalledTimes(1); // only "plain"
+  expect(finished.chargedCredits).toBe(0);
 });
 
 it("retries one destination from stored evidence with no model call or Credits", async () => {

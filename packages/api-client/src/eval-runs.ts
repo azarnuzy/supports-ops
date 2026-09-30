@@ -7,19 +7,33 @@ export type EvalRunCaseStatus =
   | "RUNNING"
   | "EVALUATED"
   | "EXECUTION_ERROR"
-  | "UNEXECUTED";
+  | "UNEXECUTED"
+  | "UNGRADED"
+  | "INVALID";
 export type EvalDeliveryStatus = "PENDING" | "DELIVERED" | "ERROR" | "NOT_CONFIGURED";
 
 export type EvalRunSelection = { caseIds: string[]; datasetId: string };
 
 export type EvalRunEstimate = {
   agentModel: string;
+  /** Cases that make an AI Agent call; retriever-only and evaluator-health Cases make none. */
+  agentTurns: number;
   balance: number;
   caseCount: number;
+  /** AI Agent Credits (a ceiling). */
   credits: number;
+  evaluatorHealthCases: number;
+  judgeCallsMax: number;
+  judgeCallsMin: number;
+  /** Judge Credits at the most Judge calls the selected metrics may make. */
   judgeCredits: number;
+  /** Judge Credits at the fewest. The real count depends on live output. */
+  judgeCreditsMin: number;
+  judgeRate: number;
   modelRate: number;
   sufficient: boolean;
+  /** AI Agent Credits plus the most Judge Credits. */
+  totalCredits: number;
   unlimited: boolean;
 };
 
@@ -32,7 +46,10 @@ export type EvalRun = {
     caseKey: string;
     category: string;
     error: string | null;
+    /** A negative control: its expected failure is never a product regression. */
+    evaluatorHealth: boolean;
     id: string;
+    judgeCalls: number;
     limitations: unknown;
     metric: string;
     passed: boolean | null;
@@ -40,6 +57,7 @@ export type EvalRun = {
     status: EvalRunCaseStatus;
     traceId: string | null;
   }[];
+  agentCharged: number;
   chargedCredits: number;
   createdAt: string;
   creditExhausted: boolean;
@@ -51,12 +69,18 @@ export type EvalRun = {
   estimatedCredits: number;
   finishedAt: string | null;
   id: string;
+  judgeCallsCharged: number;
+  judgeCharged: number;
   progress: {
     evaluated: number;
+    evaluatorChecks: number;
+    evaluatorHealthy: number;
     executionErrors: number;
+    invalid: number;
     passed: number;
     total: number;
     unexecuted: number;
+    ungraded: number;
   };
   status: EvalRunStatus;
   workspaceDelivery: EvalDeliveryStatus;

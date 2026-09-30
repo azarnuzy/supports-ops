@@ -1,3 +1,4 @@
+import type { CompletionModel } from "@anvia/core";
 import { runEvalSuite, type EvalCase } from "@anvia/core/evals";
 import { createOtelEvalReporter, createOtelObserver } from "@anvia/otel";
 import { captureMode, withAgentObserver } from "@repo/ai-agent";
@@ -7,11 +8,17 @@ import {
   type TelemetrySink,
 } from "@repo/logger/isolated-telemetry";
 import { createHash, randomUUID } from "node:crypto";
-import { deterministicMetrics, isDeterministicMetric } from "../../evals/deterministic";
 import { evalReporterOptions } from "../../evals/reporter";
-import { createEvalTarget, type EvalTurnInput, type EvalTurnOutput } from "../../evals/target";
+import { casePlan, isRunnableMetric, judgeThreshold, metricsFor } from "../../evals/run-metrics";
+import {
+  createEvalTarget,
+  runRetriever,
+  type EvalTurnInput,
+  type EvalTurnOutput,
+} from "../../evals/target";
 import { unscopedPrisma as db } from "../../utils/prisma";
-import { creditBalance, hasActiveUnlimitedPeriod } from "../credits/services";
+import { creditBalance, hasActiveUnlimitedPeriod, spendForJudgeCall } from "../credits/services";
+import { createJudgeBaseModel, judgeModelId, meterJudge } from "./judge";
 import { enqueueEvalDelivery, type EvalRunJob } from "./queue";
 import { centralSink, workspaceSink } from "./sinks";
 
@@ -91,7 +98,7 @@ export async function processEvalRun({ data }: { data: EvalRunJob }) {
       if (started.count === 0) continue;
       currentCaseKey = item.caseKey;
 
-      const outcome = await executeCase({
+      const { creditExhausted, ...outcome } = await executeCase({
         item,
         observer,
         reporter,
@@ -103,6 +110,9 @@ export async function processEvalRun({ data }: { data: EvalRunJob }) {
         data: { ...outcome, finishedAt: new Date() },
         where: { id: item.id },
       });
+      if (creditExhausted) {
+        await db.evalRun.update({ data: { creditExhausted: true }, where: { id: runId } });
+      }
     }
   } catch (error) {
     failure = message(error);
@@ -159,6 +169,34 @@ async function creditsExhausted(workspaceId: string) {
   return (await creditBalance(workspaceId)) <= 0 && !(await hasActiveUnlimitedPeriod(workspaceId));
 }
 
+const emptyOutput: EvalTurnOutput = {
+  decision: "REPLY",
+  durationMs: 0,
+  escalationReason: null,
+  limitations: [],
+  output: "",
+  retrieved: [],
+  retrievedChunks: [],
+  toolCalls: [],
+};
+
+/** Why a metric called the Case invalid (e.g. a retrieval label that no longer resolves). */
+const invalidReason = (result: { metrics: Array<{ outcome: unknown }> }) =>
+  result.metrics
+    .map((metric) => metric.outcome as { outcome: string; reason?: string })
+    .find((outcome) => outcome.outcome === "invalid")?.reason;
+
+type CaseOutcome = {
+  creditExhausted?: boolean;
+  error?: string;
+  evaluatorHealth?: boolean;
+  judgeCalls?: number;
+  limitations?: string[];
+  passed?: boolean;
+  status: "EVALUATED" | "EXECUTION_ERROR" | "INVALID" | "UNGRADED";
+  traceId?: string | null;
+};
+
 async function executeCase(params: {
   item: Awaited<ReturnType<typeof db.evalRunCase.findMany>>[number];
   observer: ReturnType<typeof createOtelObserver>;
@@ -166,12 +204,13 @@ async function executeCase(params: {
   run: NonNullable<Awaited<ReturnType<typeof db.evalRun.findFirst>>>;
   target: ReturnType<typeof createEvalTarget>;
   telemetryRunId: string;
-}) {
+}): Promise<CaseOutcome> {
   const { item, run } = params;
   const metric = item.metric;
-  if (!isDeterministicMetric(metric)) {
-    return { error: "This metric cannot be run yet.", status: "EXECUTION_ERROR" as const };
+  if (!isRunnableMetric(metric)) {
+    return { error: "This metric cannot be run.", status: "EXECUTION_ERROR" as const };
   }
+  const plan = casePlan(item);
   const evalCase: EvalCase<EvalTurnInput, string> = {
     expected: item.expected,
     id: item.caseKey,
@@ -181,17 +220,43 @@ async function executeCase(params: {
       history: item.history as EvalTurnInput["history"],
       message: item.message,
     },
-    metadata: { category: item.category, metric, ...(item.metadata as object) },
+    metadata: {
+      category: item.category,
+      metric,
+      ...(item.metadata as object),
+      ...(plan.evaluatorHealth ? { evaluatorHealth: true } : {}),
+    },
   };
   let output: EvalTurnOutput | undefined;
+  let meter: ReturnType<typeof meterJudge>["meter"] | undefined;
+  const judgeCaseCalls = () => meter?.calls ?? 0;
   try {
+    let judge: { model: CompletionModel; threshold: number } | undefined;
+    if (plan.judgeCalls[1] > 0) {
+      const metered = meterJudge(createJudgeBaseModel(), {
+        // Credit Exhaustion stops Judge work as it stops AI Turns.
+        canCall: async () => !(await creditsExhausted(run.workspaceId)),
+        charge: (usage) =>
+          db.$transaction((tx) =>
+            spendForJudgeCall(tx, {
+              caseKey: item.caseKey,
+              evalRunId: run.id,
+              judgeModel: judgeModelId(),
+              usage,
+              workspaceId: run.workspaceId,
+            }),
+          ),
+      });
+      meter = metered.meter;
+      judge = { model: metered.model, threshold: judgeThreshold };
+    }
     // One suite per Case, all sharing the Run's id, so a Case can be started, skipped or stopped
     // on its own terms while the report still groups under the Run.
     const suite = await withAgentObserver(params.observer, () =>
       runEvalSuite({
         cases: [evalCase],
         concurrency: 1,
-        metrics: deterministicMetrics[metric]() as never,
+        metrics: metricsFor(item, { criteria: run.criteria, judge, workspaceId: run.workspaceId }) as never,
         name: run.datasetName,
         reporters: [params.reporter as never],
         run: {
@@ -204,18 +269,25 @@ async function executeCase(params: {
             datasetId: run.datasetId,
             embeddingModel: run.embeddingModel,
             instructionsSha256: run.instructionsSha256,
+            ...(plan.judgeCalls[1] > 0 ? { judgeModel: judgeModelId() } : {}),
             runId: run.id,
             workspaceId: run.workspaceId,
           },
         },
         target: async (input) => {
-          output = await params.target.runTurn(input);
+          output = plan.agentTurn
+            ? await params.target.runTurn(input)
+            : plan.retriever
+              ? await runRetriever(run.workspaceId, input)
+              : emptyOutput;
           return output;
         },
       }),
     );
     const result = suite.results[0];
     const base = {
+      evaluatorHealth: plan.evaluatorHealth,
+      judgeCalls: judgeCaseCalls(),
       limitations: output?.limitations ?? [],
       traceId: output?.trace?.traceId ?? null,
     };
@@ -226,17 +298,35 @@ async function executeCase(params: {
         status: "EXECUTION_ERROR" as const,
       };
     }
-    if (result.outcome === "invalid") {
+    if (meter?.exhausted) {
+      // The AI Agent's answer is kept in the report; only grading is missing, and that is not a failure.
       return {
         ...base,
-        error: "The result could not be graded.",
-        status: "EXECUTION_ERROR" as const,
+        creditExhausted: true,
+        error: "Credits ran out before this Case was fully graded. The AI Agent's answer is kept.",
+        status: "UNGRADED" as const,
       };
     }
-    return { ...base, passed: result.outcome === "pass", status: "EVALUATED" as const };
+    if (result.outcome === "invalid") {
+      return meter?.failed
+        ? {
+            ...base,
+            error: "The Judge model call failed. It was not charged.",
+            status: "EXECUTION_ERROR" as const,
+          }
+        : {
+            ...base,
+            error: message(invalidReason(result) ?? "This Case could not be graded."),
+            status: "INVALID" as const,
+          };
+    }
+    // A negative control must fail: `passed` says the evaluator behaved, never a product result.
+    const passed = plan.evaluatorHealth ? result.outcome === "fail" : result.outcome === "pass";
+    return { ...base, passed, status: "EVALUATED" as const };
   } catch (error) {
     return {
       error: message(error),
+      judgeCalls: judgeCaseCalls(),
       limitations: output?.limitations ?? [],
       status: "EXECUTION_ERROR" as const,
     };
