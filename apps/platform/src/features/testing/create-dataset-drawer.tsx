@@ -1,34 +1,41 @@
 import type { EvalImportPreview, EvalImportSource } from "@repo/api-client";
+import {
+  EVAL_CSV_TEMPLATE,
+  IMPORT_ROW_LIMIT,
+  importSourceSchema,
+  keyAllocator,
+  previewCsv,
+  previewPaste,
+  validate,
+} from "@repo/shared/eval-import";
 import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@repo/ui/components/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@repo/ui/components/dialog";
 import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@repo/ui/components/sheet";
 import { toast } from "@repo/ui/components/sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { Textarea } from "@repo/ui/components/textarea";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDownIcon } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { DownloadIcon } from "lucide-react";
+import { type FormEvent, useRef, useState } from "react";
 import {
   useCreateDatasetMutation,
   useImportCasesMutation,
   useImportSessionsQuery,
-  usePreviewImportMutation,
+  useUpdateDatasetMutation,
 } from "./hooks";
+import { formatTestingDate } from "./format";
 import { ImportPreviewPanel } from "./import-preview";
 
 type Tab = "csv" | "paste" | "sessions";
 
-/** The dataset is created lazily on first Preview (the import API is dataset-scoped), then the
- * previewed source is saved as draft cases by Create. */
 export function CreateDatasetDrawer({
   onOpenChange,
   open,
@@ -38,8 +45,9 @@ export function CreateDatasetDrawer({
 }) {
   const navigate = useNavigate();
   const createDataset = useCreateDatasetMutation();
+  const updateDataset = useUpdateDatasetMutation();
   const importCases = useImportCasesMutation();
-  const previewImport = usePreviewImportMutation();
+  const [step, setStep] = useState(0);
   const [tab, setTab] = useState<Tab>("paste");
   const [name, setName] = useState("");
   const [pasted, setPasted] = useState("");
@@ -48,11 +56,11 @@ export function CreateDatasetDrawer({
   const [criteria, setCriteria] = useState("");
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [preview, setPreview] = useState<EvalImportPreview | null>(null);
+  const [acceptSkipped, setAcceptSkipped] = useState(false);
   const [busy, setBusy] = useState(false);
+  const fileRead = useRef(0);
   const sessions = useImportSessionsQuery(open && tab === "sessions");
-
-  // Only the active tab's input is imported; null means "create an empty dataset".
-  const messageIds = Object.keys(selected).filter((id) => selected[id] !== undefined);
+  const messageIds = Object.keys(selected);
   const source: EvalImportSource | null =
     tab === "paste"
       ? pasted.trim()
@@ -65,24 +73,31 @@ export function CreateDatasetDrawer({
         : messageIds.length
           ? {
               selections: messageIds.map((messageId) => ({
-                includeHistory: selected[messageId] as boolean,
+                includeHistory: selected[messageId] === true,
                 messageId,
               })),
               source: "sessions",
             }
           : null;
-  const validRows = preview?.rows.filter((r) => r.case).length ?? 0;
-  // Saving is blocked until the Admin has seen the preview (errors and truncation) of this input.
-  const canCreate = !busy && !!name.trim() && (!source || (!!preview && validRows > 0));
+  const validRows = preview?.rows.filter((row) => row.case).length ?? 0;
+  const skippedRows =
+    (preview?.rows.filter((row) => !row.case).length ?? 0) +
+    (preview?.truncated ? preview.truncated.total - preview.truncated.limit : 0);
+  const reviewed =
+    !source || (!!preview && !preview.error && validRows > 0 && (!skippedRows || acceptSkipped));
 
   function edit<T>(setter: (value: T) => void) {
     return (value: T) => {
+      fileRead.current++;
       setter(value);
       setPreview(null);
+      setAcceptSkipped(false);
     };
   }
 
   function reset() {
+    fileRead.current++;
+    setStep(0);
     setTab("paste");
     setName("");
     setPasted("");
@@ -91,6 +106,7 @@ export function CreateDatasetDrawer({
     setCriteria("");
     setDatasetId(null);
     setPreview(null);
+    setAcceptSkipped(false);
   }
 
   function close(next: boolean) {
@@ -99,222 +115,509 @@ export function CreateDatasetDrawer({
     if (!next) reset();
   }
 
-  async function ensureDataset() {
-    if (datasetId) return datasetId;
-    const { dataset } = await createDataset.mutateAsync({ criteria, name });
-    setDatasetId(dataset.id);
-    return dataset.id;
+  function makePreview(input: EvalImportSource): EvalImportPreview {
+    const parsed = importSourceSchema.safeParse(input);
+    if (!parsed.success)
+      return {
+        error:
+          input.source === "sessions" && input.selections.length > 500
+            ? "Select at most 500 Customer Messages. Only the first 100 can be imported into a dataset at once."
+            : parsed.error.issues.map((issue) => issue.message).join(" "),
+        rows: [],
+        truncated: null,
+      };
+    const alloc = keyAllocator([]);
+    if (input.source === "csv") {
+      const result = previewCsv(input.text, alloc);
+      return !result.error && !result.rows.length
+        ? { ...result, error: "The CSV contains only a header. Add at least one data row." }
+        : result;
+    }
+    if (input.source === "paste") return previewPaste(input.text, alloc);
+    const messages = new Map(
+      (sessions.data?.sessions ?? []).flatMap((session) =>
+        session.messages.map((message) => [message.id, message] as const),
+      ),
+    );
+    return {
+      error: null,
+      rows: input.selections.slice(0, IMPORT_ROW_LIMIT).map((selection, index) => {
+        const message = messages.get(selection.messageId);
+        return message
+          ? validate(index + 1, { caseKey: alloc.fresh(), message: message.content }, alloc)
+          : {
+              case: null,
+              errors: ["Customer Message is no longer available. Refresh and select again."],
+              row: index + 1,
+            };
+      }),
+      truncated:
+        input.selections.length > IMPORT_ROW_LIMIT
+          ? { limit: IMPORT_ROW_LIMIT, total: input.selections.length }
+          : null,
+    };
   }
 
-  async function runPreview() {
-    if (!source) return;
-    setBusy(true);
-    try {
-      const id = await ensureDataset();
-      setPreview((await previewImport.mutateAsync({ datasetId: id, source })).preview);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to preview the import.");
-    } finally {
-      setBusy(false);
-    }
+  function review() {
+    setAcceptSkipped(false);
+    setPreview(source ? makePreview(source) : null);
+    setStep(1);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canCreate) return;
+    if (step !== 2 || busy || !name.trim() || !reviewed) return;
     setBusy(true);
+    let id = datasetId;
     try {
-      const id = await ensureDataset();
-      if (source) await importCases.mutateAsync({ datasetId: id, source });
-      toast.success("Dataset created.");
+      if (!id) {
+        id = (await createDataset.mutateAsync({ criteria, name })).dataset.id;
+        setDatasetId(id);
+      } else await updateDataset.mutateAsync({ id, input: { criteria, name } });
+      if (source) {
+        // The server revalidates current Workspace data and remains authoritative.
+        const result = (await importCases.mutateAsync({ datasetId: id, source })).import;
+        const saved = result.rows.filter((row) => row.case).length;
+        if (!saved) {
+          setPreview(result);
+          setAcceptSkipped(false);
+          setStep(1);
+          toast.error("Dataset created, but no cases were imported. Review the errors and retry.");
+          return;
+        }
+        const skipped = result.rows.filter((row) => !row.case).length;
+        if (skipped || result.truncated)
+          toast.warning(`${saved} cases imported. Some rows were skipped; review the dataset.`);
+        else toast.success(`Dataset created with ${saved} cases.`);
+      } else toast.success("Dataset created.");
       onOpenChange(false);
       reset();
       void navigate({ params: { datasetId: id }, to: "/testing/$datasetId" });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create the dataset.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to create the dataset. Your input is kept for retry.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
   async function readCsv(file: File | undefined) {
-    if (!file) return;
-    setCsv({ name: file.name, text: await file.text() });
+    const request = ++fileRead.current;
+    setCsv(null);
     setPreview(null);
+    setAcceptSkipped(false);
+    if (!file) return;
+    if (file.size > 5_000_000) {
+      toast.error("Choose a CSV file no larger than 5 MB.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const text = await file.text();
+      if (request !== fileRead.current) return;
+      setCsv({ name: file.name, text });
+      setPreview(makePreview({ source: "csv", text }));
+    } catch {
+      toast.error("Unable to read the CSV file. Choose the file again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadTemplate() {
+    const url = URL.createObjectURL(
+      new Blob([EVAL_CSV_TEMPLATE], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "supportops-eval-dataset-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
-    <Sheet open={open} onOpenChange={close}>
-      <SheetContent className="w-full gap-0 sm:max-w-xl" showCloseButton={false}>
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent
+        className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        showCloseButton={false}
+      >
+        <DialogHeader className="border-b px-5 py-4">
+          <DialogTitle>Create Dataset</DialogTitle>
+          <DialogDescription>
+            Choose Customer Messages, review your cases, then set default grading criteria.
+          </DialogDescription>
+          <ol className="mt-2 flex flex-wrap gap-4 text-xs" aria-label="Creation steps">
+            {["Choose source", "Review cases", "Evaluation criteria"].map((label, index) => (
+              <li
+                key={label}
+                aria-current={step === index ? "step" : undefined}
+                className={
+                  step === index ? "font-semibold text-foreground" : "text-muted-foreground"
+                }
+              >
+                {index + 1}. {label}
+              </li>
+            ))}
+          </ol>
+        </DialogHeader>
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-          <SheetHeader className="flex-row items-center justify-between gap-2 border-b">
-            <div>
-              <SheetTitle>Create Dataset</SheetTitle>
-              <SheetDescription className="sr-only">
-                Name the dataset and optionally paste the first Customer Messages.
-              </SheetDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button disabled={busy} type="button" variant="outline" onClick={() => close(false)}>
-                Cancel
-              </Button>
-              <Button disabled={busy || !name.trim()} type="submit">
-                {busy ? "Working…" : "Create"}
-              </Button>
-            </div>
-          </SheetHeader>
-          <div className="grid min-h-0 flex-1 content-start gap-6 overflow-y-auto p-4">
-            <Field>
-              <FieldLabel htmlFor="dataset-name">Dataset name</FieldLabel>
-              <Input
-                id="dataset-name"
-                maxLength={120}
-                disabled={!!datasetId}
-                required
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-            <Tabs value={tab} onValueChange={(value) => edit(setTab)(value as Tab)}>
-              <TabsList>
-                <TabsTrigger value="paste">Paste messages</TabsTrigger>
-                <TabsTrigger value="sessions">
-                  Recent Sessions
-                </TabsTrigger>
-                <TabsTrigger value="csv">
-                  Upload CSV
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent className="mt-3" value="paste">
-                <Field>
-                  <FieldLabel htmlFor="dataset-paste">Customer Messages</FieldLabel>
-                  <Textarea
-                    id="dataset-paste"
-                    rows={8}
-                    value={pasted}
-                    onChange={(event) => edit(setPasted)(event.target.value)}
-                  />
-                  <FieldDescription>
-                    Separate messages with a line containing only <code>---</code>. Optional — you
-                    can add cases later.
-                  </FieldDescription>
-                </Field>
-              </TabsContent>
-              <TabsContent className="mt-3 grid gap-2" value="sessions">
-                {sessions.isPending ? (
-                  <p className="text-sm text-muted-foreground">Loading recent Sessions…</p>
-                ) : sessions.isError ? (
-                  <p className="text-sm text-destructive">Failed to load recent Sessions.</p>
-                ) : sessions.data.sessions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No Sessions with Customer Messages yet.
-                  </p>
-                ) : (
-                  <ul className="grid max-h-80 gap-3 overflow-y-auto">
-                    {sessions.data.sessions.map((session) => (
-                      <li className="grid gap-1 rounded-lg border p-2" key={session.id}>
-                        <p className="text-xs text-muted-foreground">
-                          Session · {new Date(session.createdAt).toLocaleString()}
-                        </p>
-                        {session.messages.map((message) => (
-                          <div className="grid gap-1" key={message.id}>
-                            <label className="flex items-start gap-2 text-sm">
-                              <Checkbox
-                                checked={selected[message.id] !== undefined}
-                                onCheckedChange={(checked) => {
-                                  const next = { ...selected };
-                                  if (checked === true) next[message.id] = false;
-                                  else delete next[message.id];
-                                  edit(setSelected)(next);
-                                }}
-                              />
-                              <span className="line-clamp-3 whitespace-pre-wrap">
-                                {message.content}
-                              </span>
-                            </label>
-                            {selected[message.id] !== undefined && (
-                              <label className="ml-6 flex items-center gap-2 text-xs text-muted-foreground">
-                                <Checkbox
-                                  checked={selected[message.id]}
-                                  onCheckedChange={(checked) =>
-                                    edit(setSelected)({
-                                      ...selected,
-                                      [message.id]: checked === true,
-                                    })
-                                  }
-                                />
-                                Include preceding history
-                              </label>
-                            )}
-                          </div>
-                        ))}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <FieldDescription>
-                  Earlier AI Agent replies are imported as history only, never as the expected
-                  answer.
-                </FieldDescription>
-              </TabsContent>
-              <TabsContent className="mt-3" value="csv">
-                <Field>
-                  <FieldLabel htmlFor="dataset-csv">CSV file</FieldLabel>
-                  <Input
-                    accept=".csv,text/csv"
-                    id="dataset-csv"
-                    type="file"
-                    onChange={(event) => void readCsv(event.target.files?.[0])}
-                  />
-                  <FieldDescription>
-                    {csv ? `Selected: ${csv.name}. ` : ""}Use a column named message, user_message,
-                    prompt, input or text (or a single column of messages). Structured columns:
-                    caseKey, category, expected, metric, clarificationCount, and JSON history,
-                    attachments and metadata.
-                  </FieldDescription>
-                </Field>
-              </TabsContent>
-            </Tabs>
-            {source && (
-              <div className="grid gap-2">
-                <Button
-                  className="justify-self-start"
-                  disabled={busy || !name.trim()}
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void runPreview()}
-                >
-                  Preview import
-                </Button>
-                {!name.trim() && (
-                  <p className="text-xs text-muted-foreground">Name the dataset to preview.</p>
-                )}
-                {preview && <ImportPreviewPanel preview={preview} />}
-              </div>
+          <fieldset
+            disabled={busy}
+            className="grid min-h-0 content-start gap-4 overflow-y-auto p-5"
+          >
+            {datasetId && (
+              <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+                The dataset has been created. Retry to finish importing your cases; Cancel keeps the
+                dataset.
+              </p>
             )}
-            <Collapsible className="rounded-lg border">
-              <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-sm font-medium">
-                Evaluation criteria <ChevronDownIcon className="size-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="border-t p-3">
-                <Field>
-                  <FieldLabel htmlFor="dataset-criteria">Default grading criteria</FieldLabel>
+            {step === 0 && (
+              <>
+                <Field className="gap-1.5">
+                  <FieldLabel htmlFor="dataset-name">Dataset name</FieldLabel>
+                  <Input
+                    id="dataset-name"
+                    maxLength={120}
+                    placeholder="e.g. Refund policy checks"
+                    required
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                  <FieldDescription className="text-xs">
+                    A short name for a collection you will run again.
+                  </FieldDescription>
+                </Field>
+                <Tabs value={tab} onValueChange={(value) => edit(setTab)(value as Tab)}>
+                  <TabsList className="w-full flex-wrap group-data-[orientation=horizontal]/tabs:h-auto">
+                    <TabsTrigger
+                      className="h-auto flex-1 text-xs sm:text-sm"
+                      disabled={busy}
+                      value="paste"
+                    >
+                      Paste Messages
+                    </TabsTrigger>
+                    <TabsTrigger
+                      className="h-auto flex-1 text-xs sm:text-sm"
+                      disabled={busy}
+                      value="sessions"
+                    >
+                      Recent Sessions
+                    </TabsTrigger>
+                    <TabsTrigger
+                      className="h-auto flex-1 text-xs sm:text-sm"
+                      disabled={busy}
+                      value="csv"
+                    >
+                      Upload CSV
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent className="mt-4" value="paste">
+                    <Field className="gap-1.5">
+                      <FieldLabel htmlFor="dataset-paste">Customer Messages</FieldLabel>
+                      <Textarea
+                        id="dataset-paste"
+                        rows={7}
+                        maxLength={1_000_000}
+                        placeholder={
+                          "How do I request a refund?\n---\nWhere can I update my billing details?"
+                        }
+                        value={pasted}
+                        onChange={(event) => edit(setPasted)(event.target.value)}
+                      />
+                      <FieldDescription className="text-xs">
+                        One case per message. Separate messages with a line containing only{" "}
+                        <code>---</code>. Leave empty to create a dataset and add cases later.
+                      </FieldDescription>
+                    </Field>
+                  </TabsContent>
+                  <TabsContent className="mt-4 grid gap-3" value="sessions">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {messageIds.length} messages selected
+                      </p>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          type="button"
+                          disabled={!sessions.data?.sessions.length}
+                          onClick={() =>
+                            edit(setSelected)(
+                              Object.fromEntries(
+                                (sessions.data?.sessions ?? []).flatMap((session) =>
+                                  session.messages.map((message) => [message.id, true]),
+                                ),
+                              ),
+                            )
+                          }
+                        >
+                          Select all
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          type="button"
+                          disabled={!messageIds.length}
+                          onClick={() => edit(setSelected)({})}
+                        >
+                          Clear selection
+                        </Button>
+                      </div>
+                    </div>
+                    {sessions.isPending ? (
+                      <p className="text-sm text-muted-foreground">Loading recent Sessions…</p>
+                    ) : sessions.isError ? (
+                      <div className="text-sm text-destructive">
+                        Unable to load recent Sessions.{" "}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          onClick={() => void sessions.refetch()}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    ) : !sessions.data.sessions.length ? (
+                      <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                        No Sessions with Customer Messages yet. Paste messages or upload a CSV
+                        instead.
+                      </p>
+                    ) : (
+                      <ul className="grid gap-2">
+                        {sessions.data.sessions.map((session) => {
+                          const customer = session.conversation?.customerIdentity;
+                          const label =
+                            customer?.name ||
+                            customer?.email ||
+                            customer?.phoneE164 ||
+                            `Session ${session.id.slice(0, 8)}`;
+                          const allSelected = session.messages.every(
+                            (message) => selected[message.id] !== undefined,
+                          );
+                          return (
+                            <li className="overflow-hidden rounded-lg border" key={session.id}>
+                              <div className="flex items-center justify-between gap-2 bg-muted/30 px-3 py-2">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{label}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {session.conversation?.channel.name ?? "Channel unavailable"} ·{" "}
+                                    {session.messages.length} Customer Messages ·{" "}
+                                    {formatTestingDate(session.createdAt)}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  type="button"
+                                  onClick={() => {
+                                    const next = { ...selected };
+                                    session.messages.forEach((message) => {
+                                      if (allSelected) delete next[message.id];
+                                      else next[message.id] = true;
+                                    });
+                                    edit(setSelected)(next);
+                                  }}
+                                >
+                                  {allSelected ? "Clear" : "Select all"}
+                                </Button>
+                              </div>
+                              <div className="grid divide-y">
+                                {session.messages.map((message) => (
+                                  <div className="grid gap-1.5 px-3 py-2" key={message.id}>
+                                    <label className="flex items-start gap-2 text-sm">
+                                      <Checkbox
+                                        checked={selected[message.id] !== undefined}
+                                        onCheckedChange={(checked) => {
+                                          const next = { ...selected };
+                                          if (checked === true) next[message.id] = true;
+                                          else delete next[message.id];
+                                          edit(setSelected)(next);
+                                        }}
+                                      />
+                                      <span className="line-clamp-2 whitespace-pre-wrap">
+                                        {message.content}
+                                      </span>
+                                    </label>
+                                    {selected[message.id] !== undefined && (
+                                      <label className="ml-6 flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Checkbox
+                                          checked={selected[message.id]}
+                                          onCheckedChange={(checked) =>
+                                            edit(setSelected)({
+                                              ...selected,
+                                              [message.id]: checked === true,
+                                            })
+                                          }
+                                        />
+                                        Include preceding conversation history
+                                      </label>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    <FieldDescription className="text-xs">
+                      Each selected Customer Message becomes one case. Up to 20 earlier Customer /
+                      AI Agent turns are context only; previous AI responses never become expected
+                      answers.
+                    </FieldDescription>
+                  </TabsContent>
+                  <TabsContent className="mt-4 grid gap-3" value="csv">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium">Import existing cases</p>
+                      <Button size="sm" type="button" variant="outline" onClick={downloadTemplate}>
+                        <DownloadIcon className="size-3.5" />
+                        Download CSV Template
+                      </Button>
+                    </div>
+                    <Field className="gap-1.5">
+                      <FieldLabel htmlFor="dataset-csv">CSV file</FieldLabel>
+                      <Input
+                        accept=".csv,text/csv"
+                        id="dataset-csv"
+                        type="file"
+                        disabled={busy}
+                        onChange={(event) => void readCsv(event.target.files?.[0])}
+                      />
+                      <FieldDescription className="text-xs">
+                        {csv ? `Selected: ${csv.name}. ` : ""}Up to 100 rows · 5 MB. Validation runs
+                        when you select a file.
+                      </FieldDescription>
+                    </Field>
+                    <div className="rounded-lg bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+                      <p>
+                        <strong className="text-foreground">Required:</strong> <code>message</code>.
+                      </p>
+                      <p>
+                        <strong className="text-foreground">Optional:</strong>{" "}
+                        <code>
+                          caseKey, category, expected, metric, clarificationCount, history,
+                          attachments, metadata
+                        </code>
+                        . History, attachments and metadata use JSON. Case IDs are generated when
+                        omitted; missing criteria can be completed later.
+                      </p>
+                    </div>
+                    {preview && <ImportPreviewPanel preview={preview} />}
+                  </TabsContent>
+                </Tabs>
+              </>
+            )}
+            {step === 1 && (
+              <>
+                <div>
+                  <h3 className="text-sm font-semibold">Review cases</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {name} ·{" "}
+                    {tab === "csv"
+                      ? csv?.name
+                      : tab === "sessions"
+                        ? "Recent Sessions"
+                        : "Pasted messages"}
+                  </p>
+                </div>
+                {preview ? (
+                  <ImportPreviewPanel preview={preview} />
+                ) : (
+                  <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+                    An empty dataset will be created. Add cases from the dataset page.
+                  </p>
+                )}
+                {tab === "sessions" && source && (
+                  <p className="text-xs text-muted-foreground">
+                    History is copied from the Session when cases are imported. Earlier AI responses
+                    remain context only.
+                  </p>
+                )}
+                {skippedRows > 0 && (
+                  <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+                    <Checkbox
+                      checked={acceptSkipped}
+                      onCheckedChange={(checked) => setAcceptSkipped(checked === true)}
+                    />
+                    <span>
+                      Import {validRows} valid rows and skip {skippedRows} rows that are invalid or
+                      exceed the 100-row limit.
+                    </span>
+                  </label>
+                )}
+              </>
+            )}
+            {step === 2 && (
+              <>
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                  <span className="font-medium">{name}</span>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {validRows} cases to import{skippedRows ? ` · ${skippedRows} rows skipped` : ""}
+                  </p>
+                </div>
+                <Field className="gap-1.5">
+                  <FieldLabel htmlFor="dataset-criteria">
+                    Default grading criteria{" "}
+                    <span className="font-normal text-muted-foreground">(optional)</span>
+                  </FieldLabel>
                   <Textarea
                     id="dataset-criteria"
                     maxLength={4000}
                     rows={4}
+                    placeholder="e.g. Answer using published policy, explain the next step clearly, and avoid unsupported promises."
                     value={criteria}
                     onChange={(event) => setCriteria(event.target.value)}
                   />
-                  <FieldDescription>
-                    Used by judged metrics; each case's expected answer stays authoritative.
+                  <FieldDescription className="text-xs">
+                    A default rubric for judged metrics. Choose the evaluation type and its required
+                    expectations for each case in the case editor. Previous AI responses are
+                    context, not reference answers.
                   </FieldDescription>
                 </Field>
-              </CollapsibleContent>
-            </Collapsible>
+              </>
+            )}
+          </fieldset>
+          <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
+            <Button disabled={busy} type="button" variant="ghost" onClick={() => close(false)}>
+              Cancel
+            </Button>
+            <div className="flex gap-2">
+              {step > 0 && (
+                <Button
+                  disabled={busy}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep(step - 1)}
+                >
+                  Back
+                </Button>
+              )}
+              {step < 2 ? (
+                <Button
+                  disabled={
+                    busy ||
+                    !name.trim() ||
+                    (step === 0 && tab !== "paste" && !source) ||
+                    (step === 1 && !reviewed)
+                  }
+                  type="button"
+                  onClick={() => (step === 0 ? review() : setStep(2))}
+                >
+                  {step === 0 ? "Review cases" : "Continue"}
+                </Button>
+              ) : (
+                <Button disabled={busy || !name.trim() || !reviewed} type="submit">
+                  {busy ? "Creating…" : datasetId ? "Finish import" : "Create Dataset"}
+                </Button>
+              )}
+            </div>
           </div>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

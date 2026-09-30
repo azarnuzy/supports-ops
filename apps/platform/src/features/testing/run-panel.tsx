@@ -1,4 +1,4 @@
-import type { EvalDeliveryStatus, EvalRun, EvalRunCaseStatus } from "@repo/api-client";
+import type { EvalCase, EvalDeliveryStatus, EvalRun, EvalRunCaseStatus } from "@repo/api-client";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -11,7 +11,9 @@ import {
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { toast } from "@repo/ui/components/sonner";
-import { ExternalLinkIcon } from "lucide-react";
+import { ExternalLinkIcon, RotateCcwIcon } from "lucide-react";
+import { useState } from "react";
+import { formatTestingDate, runResults } from "./format";
 import {
   useEstimateRunQuery,
   useRetryDeliveryMutation,
@@ -108,8 +110,8 @@ export function RunConfirmDialog({
         ) : null}
         {data && data.evaluatorHealthCases > 0 ? (
           <p className="text-xs text-muted-foreground">
-            Negative controls check that the evaluator can fail. They call no AI Agent and are
-            never counted as regressions.
+            Negative controls check that the evaluator can fail. They call no AI Agent and are never
+            counted as regressions.
           </p>
         ) : null}
         {data && !data.sufficient ? (
@@ -179,7 +181,17 @@ function DeliveryLine({
   );
 }
 
-function RunCard({ run }: { run: EvalRun }) {
+function RunCard({
+  run,
+  rerunIds,
+  running,
+}: {
+  run: EvalRun;
+  rerunIds: string[];
+  running: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const results = runResults(run);
   const { progress } = run;
   const active = run.status === "QUEUED" || run.status === "RUNNING";
   const done =
@@ -195,20 +207,36 @@ function RunCard({ run }: { run: EvalRun }) {
           <Badge variant={run.status === "ERROR" ? "destructive" : "secondary"}>
             {runLabels[run.status]}
           </Badge>
-          <span className="text-muted-foreground">{new Date(run.createdAt).toLocaleString()}</span>
+          <span className="text-muted-foreground">{formatTestingDate(run.createdAt)}</span>
         </span>
-        {run.workspaceDelivery === "DELIVERED" || run.status === "FINISHED" ? (
-          <a
-            className="inline-flex items-center gap-1 text-sm underline-offset-4 hover:underline"
-            href={run.destinationDashboardUrl}
-            rel="noreferrer"
-            target="_blank"
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={running || !rerunIds.length}
+            onClick={() => setConfirming(true)}
+            title="Rerun currently ready cases from this Evaluation"
           >
-            Open report <ExternalLinkIcon className="size-3.5" />
-          </a>
-        ) : null}
+            <RotateCcwIcon className="size-3.5" />
+            Rerun {rerunIds.length} cases
+          </Button>
+          {run.workspaceDelivery === "DELIVERED" || run.status === "FINISHED" ? (
+            <a
+              className="inline-flex items-center gap-1 text-sm underline-offset-4 hover:underline"
+              href={run.destinationDashboardUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Open report <ExternalLinkIcon className="size-3.5" />
+            </a>
+          ) : null}
+        </div>
       </div>
-      <p aria-live="polite" className="text-sm">
+      <p className="text-sm font-medium">
+        {results.passed} passed · {results.failed} failed{" "}
+        <span className="font-normal text-muted-foreground">· excludes evaluator checks</span>
+      </p>
+      <p aria-live="polite" className="text-xs text-muted-foreground">
         {done} of {progress.total} cases done · {progress.evaluated} evaluated
         {progress.executionErrors > 0 ? ` · ${progress.executionErrors} execution errors` : ""}
         {progress.ungraded > 0 ? ` · ${progress.ungraded} not graded` : ""}
@@ -261,30 +289,73 @@ function RunCard({ run }: { run: EvalRun }) {
                 {item.caseKey}
                 {item.evaluatorHealth ? " (evaluator check)" : ""}
               </span>
-              <span className={item.status === "EXECUTION_ERROR" ? "text-destructive" : "text-muted-foreground"}>
-                {caseLabels[item.status]}
+              <span
+                className={
+                  item.status === "EXECUTION_ERROR" ? "text-destructive" : "text-muted-foreground"
+                }
+              >
+                {item.status === "EVALUATED" && !item.evaluatorHealth && item.passed !== null
+                  ? item.passed
+                    ? "Passed"
+                    : "Failed"
+                  : caseLabels[item.status]}
                 {item.error ? ` — ${item.error}` : ""}
               </span>
             </li>
           ))}
         </ul>
       </details>
+      {confirming && (
+        <RunConfirmDialog
+          caseIds={rerunIds}
+          datasetId={run.datasetId}
+          onClose={() => setConfirming(false)}
+          onStarted={() => setConfirming(false)}
+        />
+      )}
     </div>
   );
 }
 
-export function RunsPanel({ datasetId }: { datasetId: string }) {
-  const runs = useRunsQuery(datasetId).data?.runs ?? [];
-  if (runs.length === 0) return null;
+export function RunsPanel({ datasetId, cases }: { datasetId: string; cases: EvalCase[] }) {
+  const query = useRunsQuery(datasetId);
+  const runs = query.data?.runs ?? [];
+  const running = runs.some((run) => run.status === "QUEUED" || run.status === "RUNNING");
   return (
     <section aria-label="Runs" className="grid gap-2">
-      <h2 className="text-lg font-semibold">Runs</h2>
+      <h2 className="text-sm font-semibold">Evaluations</h2>
       <p className="text-sm text-muted-foreground">
         Answers, scores and traces are in your evaluation destination.
       </p>
       <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        {query.isPending && (
+          <p className="p-4 text-sm text-muted-foreground">Loading Evaluations…</p>
+        )}
+        {query.isError && (
+          <div className="flex items-center justify-between p-4 text-sm text-destructive">
+            Unable to load Evaluations.
+            <Button size="sm" variant="outline" onClick={() => void query.refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+        {!query.isPending && !query.isError && !runs.length && (
+          <p className="p-6 text-center text-sm text-muted-foreground">
+            No Evaluations yet. Select ready cases and start your first run.
+          </p>
+        )}
         {runs.map((run) => (
-          <RunCard key={run.id} run={run} />
+          <RunCard
+            key={run.id}
+            run={run}
+            running={running}
+            rerunIds={cases
+              .filter(
+                (item) => item.complete && run.cases.some((ran) => ran.caseKey === item.caseKey),
+              )
+              .slice(0, 100)
+              .map((item) => item.id)}
+          />
         ))}
       </div>
     </section>

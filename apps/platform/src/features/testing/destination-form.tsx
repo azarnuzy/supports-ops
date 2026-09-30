@@ -1,4 +1,14 @@
 import type { EvalBackend, EvalDestinationReadiness } from "@repo/api-client";
+import { Badge } from "@repo/ui/components/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@repo/ui/components/dialog";
+import { Settings2Icon } from "lucide-react";
+import { formatTestingDate } from "./format";
 import { Button } from "@repo/ui/components/button";
 import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
@@ -39,6 +49,8 @@ export function DestinationForm() {
   const save = useSaveDestinationMutation();
   const check = useCheckDestinationMutation();
   const saved = query.data?.evalDestination;
+  const [open, setOpen] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [backend, setBackend] = useState<EvalBackend>("LENS");
   const [endpoint, setEndpoint] = useState("");
   const [dashboardUrl, setDashboardUrl] = useState("");
@@ -54,6 +66,19 @@ export function DestinationForm() {
 
   const [publicLabel, secretLabel] = keyLabels[backend];
   const readiness = check.data?.readiness;
+
+  let connectionLabel = "Not checked";
+  if (query.isPending) connectionLabel = "Loading…";
+  else if (query.isError) connectionLabel = "Unavailable";
+  else if (!saved) connectionLabel = "Not configured";
+  else if (check.isPending) connectionLabel = "Checking…";
+  else if (check.isError) connectionLabel = "Check failed";
+  else if (readiness) {
+    if (readiness.endpoint !== "accepted") connectionLabel = "Connection failed";
+    else if (readiness.reports === "compatible") connectionLabel = "Connected";
+    else if (readiness.reports === "unsupported") connectionLabel = "Reports unsupported";
+    else connectionLabel = "Endpoint accepted · reports not checked";
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -71,112 +96,223 @@ export function DestinationForm() {
           setPublicKey("");
           setSecretKey("");
           check.reset();
+          setCheckedAt(null);
+          setOpen(false);
           toast.success("Evaluation destination saved.");
         },
       },
     );
   }
 
+  function toggleOpen(next: boolean) {
+    if (save.isPending) return;
+    setOpen(next);
+    setPublicKey("");
+    setSecretKey("");
+    setBackend(saved?.backend ?? "LENS");
+    setEndpoint(saved?.endpoint ?? "");
+    setDashboardUrl(saved?.dashboardUrl ?? "");
+  }
+
   return (
-    <form className="grid gap-4 rounded-xl border bg-card p-4 shadow-sm" onSubmit={submit}>
-      <div>
-        <h2 className="font-medium">Evaluation destination</h2>
-        <p className="text-sm text-muted-foreground">
-          Where Eval Run reports are sent. Credentials are stored encrypted and never shown again.
-        </p>
-      </div>
-      <Field>
-        <FieldLabel htmlFor="eval-backend">Backend</FieldLabel>
-        <NativeSelect
-          id="eval-backend"
-          value={backend}
-          onChange={(e) => setBackend(e.target.value as EvalBackend)}
-        >
-          <NativeSelectOption value="LENS">Anvia Lens</NativeSelectOption>
-          <NativeSelectOption value="LANGFUSE">Langfuse</NativeSelectOption>
-        </NativeSelect>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="eval-endpoint">Endpoint</FieldLabel>
-        <Input
-          id="eval-endpoint"
-          type="url"
-          required
-          placeholder="https://…"
-          value={endpoint}
-          onChange={(e) => setEndpoint(e.target.value)}
-        />
-        <FieldDescription>HTTPS OTLP endpoint of your backend.</FieldDescription>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="eval-dashboard">Dashboard URL</FieldLabel>
-        <Input
-          id="eval-dashboard"
-          type="url"
-          required
-          placeholder="https://…"
-          value={dashboardUrl}
-          onChange={(e) => setDashboardUrl(e.target.value)}
-        />
-      </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="eval-public">{publicLabel}</FieldLabel>
-          <Input
-            id="eval-public"
-            autoComplete="off"
-            required={!saved}
-            placeholder={saved ? `••••${saved.publicKeyLastFour}` : ""}
-            value={publicKey}
-            onChange={(e) => setPublicKey(e.target.value)}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="eval-secret">{secretLabel}</FieldLabel>
-          <Input
-            id="eval-secret"
-            type="password"
-            autoComplete="new-password"
-            required={!saved}
-            placeholder={saved ? `••••${saved.secretKeyLastFour}` : ""}
-            value={secretKey}
-            onChange={(e) => setSecretKey(e.target.value)}
-          />
-        </Field>
-      </div>
-      {saved ? (
-        <FieldDescription>Leave both keys empty to keep the saved credentials.</FieldDescription>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={save.isPending}>
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!saved || check.isPending}
-          onClick={() => check.mutate(undefined, { onError })}
-        >
-          {check.isPending ? "Checking…" : "Check connection"}
-        </Button>
-        {saved ? (
-          <a
-            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            href={saved.dashboardUrl}
-            rel="noreferrer"
-            target="_blank"
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
+        <div className="grid min-w-0 flex-1 gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-medium">Evaluation destination</h2>
+            {saved && (
+              <span className="text-xs text-muted-foreground">
+                {saved.backend === "LENS" ? "Anvia Lens" : "Langfuse"}
+              </span>
+            )}
+            <Badge
+              variant={
+                check.isError ||
+                (readiness &&
+                  (readiness.endpoint !== "accepted" || readiness.reports === "unsupported"))
+                  ? "destructive"
+                  : "outline"
+              }
+            >
+              {connectionLabel}
+            </Badge>
+          </div>
+          <p className="truncate text-xs text-muted-foreground" title={saved?.endpoint}>
+            {saved
+              ? saved.endpoint.replace(/^https?:\/\//, "")
+              : "Connect a destination to receive Evaluation reports."}
+            {checkedAt ? ` · Last checked ${formatTestingDate(checkedAt)}` : ""}
+          </p>
+          {check.isError && (
+            <p className="text-xs text-destructive" role="alert">
+              Unable to check this destination. Try again.
+            </p>
+          )}
+          {readiness &&
+            (readiness.endpoint !== "accepted" || readiness.reports !== "compatible") && (
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                {endpointLabels[readiness.endpoint]} · {reportLabels[readiness.reports]}
+              </p>
+            )}
+          {query.isError && (
+            <Button
+              size="sm"
+              variant="link"
+              className="justify-self-start px-0"
+              onClick={() => void query.refetch()}
+            >
+              Retry loading destination
+            </Button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {saved && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={check.isPending || save.isPending}
+              onClick={() =>
+                check.mutate(undefined, { onError, onSettled: () => setCheckedAt(Date.now()) })
+              }
+            >
+              {check.isPending ? "Checking…" : "Check connection"}
+            </Button>
+          )}
+          {saved && (
+            <Button size="sm" variant="ghost" asChild>
+              <a href={saved.dashboardUrl} rel="noreferrer" target="_blank">
+                Open dashboard
+              </a>
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={query.isPending || query.isError || check.isPending}
+            onClick={() => toggleOpen(true)}
           >
-            Open dashboard
-          </a>
-        ) : null}
+            <Settings2Icon className="size-3.5" />
+            {saved ? "Edit" : "Configure"}
+          </Button>
+        </div>
       </div>
-      {readiness ? (
-        <ul className="grid gap-1 text-sm" aria-live="polite">
-          <li>Credentials configured</li>
-          <li>{endpointLabels[readiness.endpoint]}</li>
-          <li>{reportLabels[readiness.reports]}</li>
-        </ul>
-      ) : null}
-    </form>
+      <Dialog open={open} onOpenChange={toggleOpen}>
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto sm:max-w-xl"
+          showCloseButton={!save.isPending}
+        >
+          <DialogHeader>
+            <DialogTitle>Evaluation destination</DialogTitle>
+            <DialogDescription>
+              Where Eval Run reports are sent. Credentials are encrypted and masked after saving.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={submit}>
+            <fieldset disabled={save.isPending} className="grid gap-4">
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor="eval-backend">Backend</FieldLabel>
+                <NativeSelect
+                  id="eval-backend"
+                  value={backend}
+                  onChange={(e) => setBackend(e.target.value as EvalBackend)}
+                >
+                  <NativeSelectOption value="LENS">Anvia Lens</NativeSelectOption>
+                  <NativeSelectOption value="LANGFUSE">Langfuse</NativeSelectOption>
+                </NativeSelect>
+                <FieldDescription className="text-xs">
+                  Select the backend that receives your Evaluation reports.
+                </FieldDescription>
+              </Field>
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor="eval-endpoint">Endpoint</FieldLabel>
+                <Input
+                  id="eval-endpoint"
+                  type="url"
+                  required
+                  placeholder="https://your-backend.example.com/v1/traces"
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
+                />
+                <FieldDescription className="text-xs">
+                  HTTPS OTLP endpoint of your backend.
+                </FieldDescription>
+              </Field>
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor="eval-dashboard">Dashboard URL</FieldLabel>
+                <Input
+                  id="eval-dashboard"
+                  type="url"
+                  required
+                  placeholder="https://your-backend.example.com"
+                  value={dashboardUrl}
+                  onChange={(e) => setDashboardUrl(e.target.value)}
+                />
+                <FieldDescription className="text-xs">
+                  URL to open when reviewing answers, scores and traces.
+                </FieldDescription>
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field className="gap-1.5">
+                  <FieldLabel htmlFor="eval-public">{publicLabel}</FieldLabel>
+                  <Input
+                    id="eval-public"
+                    autoComplete="off"
+                    required={!saved || backend !== saved.backend}
+                    type="password"
+                    placeholder={
+                      saved && backend === saved.backend
+                        ? `••••${saved.publicKeyLastFour}`
+                        : `Enter ${publicLabel.toLowerCase()}`
+                    }
+                    value={publicKey}
+                    onChange={(e) => setPublicKey(e.target.value)}
+                  />
+                  <FieldDescription className="text-xs">
+                    Provided by your selected backend.
+                  </FieldDescription>
+                </Field>
+                <Field className="gap-1.5">
+                  <FieldLabel htmlFor="eval-secret">{secretLabel}</FieldLabel>
+                  <Input
+                    id="eval-secret"
+                    type="password"
+                    autoComplete="new-password"
+                    required={!saved || backend !== saved.backend}
+                    placeholder={
+                      saved && backend === saved.backend
+                        ? `••••${saved.secretKeyLastFour}`
+                        : `Enter ${secretLabel.toLowerCase()}`
+                    }
+                    value={secretKey}
+                    onChange={(e) => setSecretKey(e.target.value)}
+                  />
+                  <FieldDescription className="text-xs">
+                    Provided by your backend; stored securely after saving.
+                  </FieldDescription>
+                </Field>
+              </div>
+              {saved && backend === saved.backend ? (
+                <FieldDescription className="text-xs">
+                  Leave both keys empty to keep the saved credentials.
+                </FieldDescription>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={save.isPending}
+                  onClick={() => toggleOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={save.isPending}>
+                  {save.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </fieldset>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
