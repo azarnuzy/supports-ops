@@ -41,6 +41,7 @@ model Workspace {
   operatorActions     OperatorAction[]
   externalErrors       ExternalError[]
   evalDestination      EvalDestination?
+  evalDatasets         EvalDataset[]
   @@index([organizationId])
 }
 

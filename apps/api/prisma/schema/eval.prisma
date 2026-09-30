@@ -1,0 +1,40 @@
+/// A Workspace-owned collection of Eval Cases. `criteria` is the default grading rubric used
+/// by judge metrics; each Case's own expectation stays the authoritative reference.
+model EvalDataset {
+  id          String     @id
+  workspaceId String
+  name        String
+  criteria    String     @default("")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id])
+  cases       EvalCase[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, createdAt])
+}
+
+/// One code-equivalent check. `caseKey` is the stable ID that external reports show. A Case with
+/// no `metric` (or missing metric-specific expectations) is a draft; readiness is computed on read.
+/// `history`, `attachments` and `metadata` are validated at the API boundary, never executed.
+model EvalCase {
+  id                 String      @id
+  workspaceId        String
+  datasetId          String
+  caseKey            String
+  category           String      @default("")
+  message            String
+  history            Json        @default("[]")
+  clarificationCount Int         @default(0)
+  attachments        Json        @default("[]")
+  expected           String      @default("")
+  metric             String?
+  metadata           Json        @default("{}")
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  dataset            EvalDataset @relation(fields: [workspaceId, datasetId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@unique([workspaceId, id])
+  @@unique([datasetId, caseKey])
+  @@index([workspaceId, datasetId])
+}
