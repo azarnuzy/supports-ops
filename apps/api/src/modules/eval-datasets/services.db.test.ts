@@ -201,3 +201,141 @@ it("keeps every dataset and case ID inside its Workspace", async () => {
   );
   expect(await prisma.evalCase.count()).toBe(1);
 });
+
+/** One Session in `workspaceId`: customer, AI reply, customer follow-up (positions 1..3). */
+async function seedSession(workspaceId: string, tag: string) {
+  await prisma.aiAgent.create({ data: { id: `ag-${tag}`, name: "Agent", workspaceId } });
+  await prisma.channel.create({
+    data: { aiAgentId: `ag-${tag}`, id: `ch-${tag}`, name: "Web", type: "WEB", workspaceId },
+  });
+  await prisma.customerIdentity.create({
+    data: { canonicalId: tag, channelType: "WEB", id: `ci-${tag}`, name: tag, workspaceId },
+  });
+  await prisma.session.create({
+    data: { channelId: `ch-${tag}`, customerIdentityId: `ci-${tag}`, id: `s-${tag}`, workspaceId },
+  });
+  await prisma.conversation.create({
+    data: {
+      id: `cv-${tag}`,
+      metadata: {},
+      scopeKey: `session:s-${tag}`,
+      sessionId: `s-${tag}`,
+      userId: `ci-${tag}`,
+      workspaceId,
+    },
+  });
+  const turns = [
+    ["CUSTOMER", "Where is my order?"],
+    ["AI_AGENT", "It ships tomorrow."],
+    ["CUSTOMER", "Can I cancel it?"],
+  ] as const;
+  for (const [index, [senderType, content]] of turns.entries()) {
+    await prisma.message.create({
+      data: {
+        content,
+        externalMessageId: `${tag}-${index}`,
+        id: `m-${tag}-${index}`,
+        memorySessionId: `cv-${tag}`,
+        message: {},
+        position: index + 1,
+        role: senderType === "CUSTOMER" ? "user" : "assistant",
+        runId: "r",
+        senderType,
+        sessionId: `s-${tag}`,
+        turn: 1,
+        workspaceId,
+      },
+    });
+  }
+}
+
+it("imports pasted messages as drafts, previewing without saving", async () => {
+  current.userId = "admin-a1";
+  const { dataset } = await (await call("", "POST", { name: "D" })).json();
+  const body = { source: "paste", text: "first\nline\n---\n\n---\nsecond" };
+
+  const preview = (await (await call(`/${dataset.id}/import/preview`, "POST", body)).json())
+    .preview;
+  expect(preview.rows.map((r: { errors: string[] }) => r.errors)).toEqual([
+    [],
+    ["Empty message block."],
+    [],
+  ]);
+  expect((await (await call(`/${dataset.id}`)).json()).dataset.cases).toHaveLength(0);
+
+  const saved = await call(`/${dataset.id}/import`, "POST", body);
+  expect(saved.status).toBe(201);
+  const { import: result } = await saved.json();
+  expect(result.cases).toMatchObject([
+    { complete: false, message: "first\nline", metric: null },
+    { complete: false, message: "second" },
+  ]);
+  expect(result.cases[0].caseKey).not.toBe(result.cases[1].caseKey);
+});
+
+it("imports structured CSV and skips invalid rows visibly", async () => {
+  current.userId = "admin-a1";
+  const { dataset } = await (await call("", "POST", { name: "D" })).json();
+  const text = "case_id,message,metric,expected\nok,Hi,contains,hello\nbad,Yo,nonsense,";
+  const { import: result } = await (
+    await call(`/${dataset.id}/import`, "POST", { source: "csv", text })
+  ).json();
+  expect(result.cases).toMatchObject([{ caseKey: "ok", complete: true }]);
+  expect(result.rows[1]).toMatchObject({ case: null, row: 3 });
+});
+
+it("imports Session Customer messages with optional history, never an expected answer", async () => {
+  current.userId = "admin-a1";
+  await seedSession("wa1", "a");
+  const { dataset } = await (await call("", "POST", { name: "D" })).json();
+
+  const listed = (await (await call("/import-sessions")).json()).sessions;
+  expect(listed).toHaveLength(1);
+  expect(listed[0].messages.map((m: { id: string }) => m.id)).toEqual(["m-a-0", "m-a-2"]);
+
+  const { import: result } = await (
+    await call(`/${dataset.id}/import`, "POST", {
+      selections: [
+        { includeHistory: true, messageId: "m-a-2" },
+        { includeHistory: false, messageId: "m-a-0" },
+      ],
+      source: "sessions",
+    })
+  ).json();
+  expect(result.cases[0]).toMatchObject({
+    expected: "",
+    history: [
+      { content: "Where is my order?", role: "user" },
+      { content: "It ships tomorrow.", role: "assistant" },
+    ],
+    message: "Can I cancel it?",
+  });
+  expect(result.cases[1]).toMatchObject({ history: [], message: "Where is my order?" });
+});
+
+it("denies Session sources from other Workspaces and AI replies", async () => {
+  await seedSession("wb", "b");
+  await seedSession("wa1", "a");
+  current.userId = "admin-a1";
+  const { dataset } = await (await call("", "POST", { name: "D" })).json();
+  const { import: result } = await (
+    await call(`/${dataset.id}/import`, "POST", {
+      selections: [{ messageId: "m-b-0" }, { messageId: "m-a-1" }],
+      source: "sessions",
+    })
+  ).json();
+  expect(result.cases).toEqual([]);
+  expect(result.rows.every((r: { case: unknown }) => r.case === null)).toBe(true);
+  expect((await (await call("/import-sessions")).json()).sessions).toHaveLength(1);
+});
+
+it("keeps import Admin-only and scoped to the dataset's Workspace", async () => {
+  current.userId = "admin-a1";
+  const { dataset } = await (await call("", "POST", { name: "D" })).json();
+  const body = { source: "paste", text: "hi" };
+  current.userId = "agent-a1";
+  expect((await call(`/${dataset.id}/import`, "POST", body)).status).toBe(403);
+  expect((await call("/import-sessions")).status).toBe(403);
+  current.userId = "admin-b";
+  expect((await call(`/${dataset.id}/import/preview`, "POST", body)).status).toBe(404);
+});
