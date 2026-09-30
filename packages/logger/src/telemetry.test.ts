@@ -9,7 +9,7 @@ import {
   withTraceContext,
 } from "./telemetry";
 
-test("a queued job continues the producer trace after its span ends", async () => {
+test("telemetry names model turns and continues queued traces after the producer span ends", async () => {
   startTelemetry({
     config: {
       apiKeyHeader: "authorization",
@@ -20,6 +20,18 @@ test("a queued job continues the producer trace after its span ends", async () =
     serviceName: "telemetry-test",
   });
   try {
+    for (const [name, modelId, expectedName] of [
+      ["model.turn.1", "openai/gpt-4.1", "openai/gpt-4.1.turn.1"],
+      ["model.turn.2", "anthropic/claude-sonnet-4", "anthropic/claude-sonnet-4.turn.2"],
+      ["model.turn.3", "", "model.turn.3"],
+      ["tool.lookup", "openai/gpt-4.1", "tool.lookup"],
+    ] as const) {
+      const span = trace.getTracer("@anvia/otel").startSpan(name, {
+        attributes: { "anvia.generation.model_id": modelId },
+      });
+      expect(span).toHaveProperty("name", expectedName);
+      span.end();
+    }
     const queued = await withSpan(
       "enqueue",
       { "langfuse.observation.input": "private text" },

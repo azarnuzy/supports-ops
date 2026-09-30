@@ -180,6 +180,10 @@ class AgentScopeSpanProcessor implements SpanProcessor {
   constructor(private readonly inner: SpanProcessor) {}
 
   onStart(span: SdkSpan, parentContext: Context) {
+    const modelId = span.attributes["anvia.generation.model_id"];
+    if (/^model\.turn\.\d+$/.test(span.name) && typeof modelId === "string" && modelId) {
+      span.updateName(`${modelId}${span.name.slice("model".length)}`);
+    }
     for (const [key, entry] of propagation.getBaggage(parentContext)?.getAllEntries() ?? []) {
       if (carriesTraceIdentity(key)) {
         span.setAttribute(key, entry.value);
