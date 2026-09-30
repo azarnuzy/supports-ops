@@ -2,14 +2,16 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { selectionSchema } from "./schema";
+import { retryParams, selectionSchema } from "./schema";
 import {
+  DeliveryNotRetryableError,
   estimateRun,
   getRun,
   listRuns,
   RunActiveError,
   RunBlockedError,
   RunNotFoundError,
+  retryDelivery,
   RunSelectionNotFoundError,
   startRun,
 } from "./services";
@@ -27,6 +29,8 @@ async function respond(work: () => Promise<Response>, c: Answer) {
         { error: "run_active", message: "This Workspace already has a Run in progress." },
         409,
       );
+    if (error instanceof DeliveryNotRetryableError)
+      return c.json({ error: "not_retryable", message: error.message }, 409);
     if (error instanceof RunBlockedError)
       return c.json({ caseKeys: error.caseKeys, error: error.code, message: error.message }, 422);
     throw error;
@@ -48,4 +52,8 @@ export const evalRunsRouter = new Hono<{ Variables: AuthVariables }>()
   )
   .get("/:id", (c) =>
     respond(async () => c.json({ run: await getRun(c.req.param("id")) }, 200), c),
-  );
+  )
+  .post("/:id/delivery/:target/retry", zValidator("param", retryParams), (c) => {
+    const { id, target } = c.req.valid("param");
+    return respond(async () => c.json({ run: await retryDelivery(id, target) }, 200), c);
+  });
