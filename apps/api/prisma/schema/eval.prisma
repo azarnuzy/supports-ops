@@ -38,3 +38,119 @@ model EvalCase {
   @@unique([datasetId, caseKey])
   @@index([workspaceId, datasetId])
 }
+
+enum EvalRunStatus {
+  QUEUED
+  RUNNING
+  FINISHED
+  ERROR
+}
+
+enum EvalRunCaseStatus {
+  PENDING
+  RUNNING
+  /// The AI Agent ran and every metric produced an outcome (pass, fail, or invalid).
+  EVALUATED
+  /// The turn or its grading did not complete; says nothing about the AI Agent's quality.
+  EXECUTION_ERROR
+  /// Never started (Credit Exhaustion, or the Run ended first).
+  UNEXECUTED
+}
+
+enum EvalDeliveryStatus {
+  PENDING
+  DELIVERED
+  ERROR
+  NOT_CONFIGURED
+}
+
+enum EvalEvidenceTarget {
+  CENTRAL
+  WORKSPACE
+}
+
+/// One manual execution of selected Cases. Selected Case contents, the rubric, the AI Agent
+/// configuration identity and the destination are frozen at start so later edits change neither the
+/// meaning of the report nor where its evidence goes. At most one QUEUED/RUNNING Run per Workspace
+/// is enforced by the partial unique index `EvalRun_one_active_per_workspace`.
+model EvalRun {
+  id                              String             @id
+  workspaceId                     String
+  datasetId                       String
+  datasetName                     String
+  criteria                        String             @default("")
+  status                          EvalRunStatus      @default(QUEUED)
+  aiAgentId                       String
+  agentModel                      String
+  instructionsSha256              String
+  embeddingModel                  String
+  estimatedCredits                Int
+  creditExhausted                 Boolean            @default(false)
+  error                           String?
+  destinationBackend              EvalBackend
+  destinationEndpoint             String
+  destinationDashboardUrl         String
+  destinationCredentialsEncrypted String
+  centralDelivery                 EvalDeliveryStatus @default(PENDING)
+  workspaceDelivery               EvalDeliveryStatus @default(PENDING)
+  startedAt                       DateTime?
+  finishedAt                      DateTime?
+  createdAt                       DateTime           @default(now())
+  updatedAt                       DateTime           @updatedAt
+  workspace                       Workspace          @relation(fields: [workspaceId], references: [id])
+  cases                           EvalRunCase[]
+  evidence                        EvalRunEvidence[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, createdAt])
+}
+
+/// A frozen copy of one selected Case plus its execution state. `RUNNING` is claimed atomically
+/// from `PENDING`, so a redelivered job can never start the same Case twice.
+model EvalRunCase {
+  id                 String            @id
+  workspaceId        String
+  runId              String
+  sourceCaseId       String
+  position           Int
+  caseKey            String
+  category           String            @default("")
+  message            String
+  history            Json              @default("[]")
+  clarificationCount Int               @default(0)
+  attachments        Json              @default("[]")
+  expected           String            @default("")
+  metric             String
+  metadata           Json              @default("{}")
+  status             EvalRunCaseStatus @default(PENDING)
+  passed             Boolean?
+  traceId            String?
+  error              String?
+  /// Evidence limits Admins must see, e.g. a mutating Tool that was denied.
+  limitations        Json              @default("[]")
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  run                EvalRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, position])
+  @@index([workspaceId, runId])
+}
+
+/// An OTLP request body that a destination did not accept. Kept so delivery can be retried without
+/// invoking a model or charging again; `eventId` is a hash of the body, so replay is idempotent.
+model EvalRunEvidence {
+  id          String             @id
+  workspaceId String
+  runId       String
+  target      EvalEvidenceTarget
+  signal      String
+  eventId     String
+  body        String
+  attempts    Int                @default(1)
+  lastError   String
+  createdAt   DateTime           @default(now())
+  run         EvalRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, target, eventId])
+  @@index([workspaceId, runId])
+}

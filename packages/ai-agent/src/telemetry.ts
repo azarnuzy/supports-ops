@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Agent, type CompletionModel } from "@anvia/core";
 import type { AgentObserver } from "@anvia/core/observability";
 import { createOtelObserver } from "@anvia/otel";
@@ -20,13 +21,22 @@ export const captureMode = process.env.TELEMETRY_CAPTURE_MODE === "full" ? "full
 
 let observer: AgentObserver | undefined;
 
+const scopedObserver = new AsyncLocalStorage<AgentObserver>();
+
+/** Runs `fn` with every Agent it creates reporting through `scoped` instead of the process-wide
+ * observer, so one invocation (an Eval Run) can route its spans to its own destinations without
+ * touching the global provider or other work in flight. */
+export function withAgentObserver<T>(scoped: AgentObserver, fn: () => T): T {
+  return scopedObserver.run(scoped, fn);
+}
+
 /** Spread into `new Agent({...})` to export an agent's runs as spans. The
  * Session and Customer Identity group every run in the telemetry backend
  * without exporting the Customer's email address or phone number. */
 export function agentObservability(sessionId?: string, userId?: string) {
-  observer ??= createOtelObserver({ captureMode });
+  const active = scopedObserver.getStore() ?? (observer ??= createOtelObserver({ captureMode }));
   return {
-    observability: { observers: { otel: observer }, primaryTrace: "otel" },
+    observability: { observers: { otel: active }, primaryTrace: "otel" },
     ...(sessionId ? { trace: { sessionId, userId } } : {}),
   } as const;
 }

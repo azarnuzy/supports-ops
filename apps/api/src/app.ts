@@ -25,6 +25,7 @@ import { ticketsRouter } from "./modules/tickets/router";
 import { toolsRouter } from "./modules/tools/router";
 import { mcpRouter } from "./modules/mcp/router";
 import { evalDestinationRouter } from "./modules/eval-destination/router";
+import { evalRunsRouter } from "./modules/eval-runs/router";
 import { whatsAppConfigRouter } from "./modules/whatsapp-config/router";
 import { whatsAppWebhookRouter } from "./modules/whatsapp-config/webhook";
 import { operatorRouter } from "./modules/operator/router";
@@ -135,6 +136,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/mcp-servers", mcpRouter)
   .route("/tools", toolsRouter)
   .route("/eval-datasets", evalDatasetsRouter)
+  .route("/eval-runs", evalRunsRouter)
   .route("/workspaces", workspacesRouter);
 
 export type AppType = typeof app;

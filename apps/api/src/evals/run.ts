@@ -1,12 +1,5 @@
 #!/usr/bin/env node
-import {
-  answerRelevancy,
-  contains,
-  exactMatch,
-  gEval,
-  runEvalCli,
-  type AnyEvalMetric,
-} from "@anvia/core/evals";
+import { answerRelevancy, gEval, runEvalCli, type AnyEvalMetric } from "@anvia/core/evals";
 import { createOtelEvalReporter } from "@anvia/otel";
 import { createReplyModel } from "@repo/ai-agent";
 import { shutdownTelemetry, startTelemetry } from "@repo/logger/telemetry";
@@ -14,18 +7,15 @@ import { aiAgentConfig, embeddingConfig, evalConfig, telemetryConfig } from "../
 import { gatewayModelId, resolveAgentModelId } from "../modules/ai-agent/model-catalog";
 import { unscopedPrisma } from "../utils/prisma";
 import { cases, type MetricName } from "./cases";
+import { deterministicMetrics } from "./deterministic";
+import { evalReporterOptions } from "./reporter";
 import {
-  decisionMatches,
   groundedFaithfulness,
-  languageMatches,
-  normalizeText,
   negativeControl,
-  neverLeaksInternal,
   retrievalNdcg,
   retrievalPrecision,
   retrievalRecall,
   retrievalReciprocalRank,
-  toolUsage,
 } from "./metrics";
 import {
   runEvalTurn,
@@ -76,24 +66,13 @@ const suites: Array<{
   {
     key: "contains",
     metric: "contains",
-    metrics: [
-      contains<EvalTurnInput, EvalTurnOutput, string>({
-        actual: ({ output }) => normalizeText(output.output),
-        expected: ({ case: testCase }) => normalizeText(String(testCase.expected ?? "")),
-      }),
-    ],
+    metrics: deterministicMetrics.contains(),
     name: "northstar-contains",
   },
   {
     key: "exactmatch",
     metric: "exactMatch",
-    metrics: [
-      exactMatch<EvalTurnInput, EvalTurnOutput, string>({
-        actual: ({ output }: { output: EvalTurnOutput }) => normalizeText(output.output),
-        expected: ({ case: testCase }: { case: { expected?: string } }) =>
-          normalizeText(String(testCase.expected ?? "")),
-      }),
-    ],
+    metrics: deterministicMetrics.exactMatch(),
     name: "northstar-exact-match",
   },
   {
@@ -127,25 +106,25 @@ const suites: Array<{
   {
     key: "decision",
     metric: "decision",
-    metrics: [decisionMatches()],
+    metrics: deterministicMetrics.decision(),
     name: "northstar-decision",
   },
   {
     key: "tool",
     metric: "tool",
-    metrics: [toolUsage()],
+    metrics: deterministicMetrics.tool(),
     name: "northstar-tool-usage",
   },
   {
     key: "visibility",
     metric: "visibility",
-    metrics: [neverLeaksInternal()],
+    metrics: deterministicMetrics.visibility(),
     name: "northstar-visibility",
   },
   {
     key: "language",
     metric: "language",
-    metrics: [languageMatches()],
+    metrics: deterministicMetrics.language(),
     name: "northstar-language",
   },
   {
@@ -215,48 +194,7 @@ async function main() {
     )?.agentModel,
   );
   startTelemetry({ config: telemetryConfig, serviceName: "ai-agent-evals" });
-  // `includePayloads` defaults to false, which publishes outcomes with no
-  // Input/Expected/Output — a run you cannot read without re-running it
-  // locally. The payload is trimmed on the way out: a turn's raw output
-  // carries every retrieved chunk and every Tool Result verbatim, which is
-  // megabytes of noise in a detail pane. What is kept is what a person reads
-  // when a case fails.
-  const reporter = createOtelEvalReporter({
-    captureMaxBytes: 16_000,
-    includePayloads: true,
-    onMissingTrace: "emit",
-    publishInvalid: true,
-    // `transformInput` is applied to `expected`, `context`, and
-    // `retrievalContext` as well as to the input, so it has to pass anything
-    // that is not a turn input straight through — unwrapping blindly turns a
-    // case's `expected` string into undefined and Lens shows "No data
-    // captured" for it.
-    transformInput: (value) => {
-      if (typeof value !== "object" || value === null || !("message" in value)) return value;
-      const input = value as EvalTurnInput;
-      return input.attachments?.length || input.history?.length || input.clarificationCount
-        ? input
-        : input.message;
-    },
-    transformOutput: (value) => {
-      const output = value as EvalTurnOutput;
-      return {
-        reply: output.output,
-        decision: output.decision,
-        ...(output.escalationReason ? { escalationReason: output.escalationReason } : {}),
-        durationMs: Math.round(output.durationMs),
-        ...(output.ttftMs === undefined ? {} : { ttftMs: Math.round(output.ttftMs) }),
-        ...(output.ttfcMs === undefined ? {} : { ttfcMs: Math.round(output.ttfcMs) }),
-        usage: output.usage,
-        toolCalls: output.toolCalls.map((call) => ({
-          durationMs: Math.round(call.durationMs),
-          name: call.name,
-          status: call.failed ? "failed" : "succeeded",
-        })),
-        retrievedChunks: output.retrieved.length,
-      };
-    },
-  });
+  const reporter = createOtelEvalReporter(evalReporterOptions);
 
   try {
     for (const suite of suites) {

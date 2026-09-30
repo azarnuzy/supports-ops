@@ -7,6 +7,8 @@
     ".": "./src/app.ts",
     "./ai-agent-turn": "./src/modules/ai-agent/turn.ts",
     "./credits": "./src/modules/credits/services.ts",
+    "./eval-run": "./src/modules/eval-runs/execution.ts",
+    "./eval-run-queue": "./src/modules/eval-runs/queue.ts",
     "./customer-message": "./src/modules/ai-agent/customer-message.ts",
     "./secrets": "./src/modules/tools/secrets.ts",
     "./ticket-queue": "./src/modules/tickets/queue.ts",
