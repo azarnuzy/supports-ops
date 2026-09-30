@@ -20,7 +20,7 @@ export type EvalCaseMetadata = {
   decisions?: ("CLARIFY" | "ESCALATE" | "REPLY" | "RESOLVE")[];
   expectedPassages?: { fragment: string; grade?: 1 | 2; source: string }[];
   language?: "en" | "id";
-retrievalTarget?: "agent" | "retriever";
+  retrievalTarget?: "agent" | "retriever";
   tool?: string;
   toolMustNotBeCalled?: boolean;
 };
@@ -45,11 +45,18 @@ export type EvalCase = EvalCaseInput & {
 
 export type EvalDatasetInput = { criteria: string; name: string };
 export type EvalDatasetSummary = EvalDatasetInput & {
+  createdAt: string;
+  updatedAt: string;
   caseCount: number;
   id: string;
   incompleteCount: number;
 };
-export type EvalDataset = EvalDatasetInput & { cases: EvalCase[]; id: string };
+export type EvalDataset = EvalDatasetInput & {
+  cases: EvalCase[];
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 const routes = (client: ApiClient) => client["eval-datasets"];
 

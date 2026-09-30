@@ -1,5 +1,12 @@
 import { expect, it } from "vitest";
-import { keyAllocator, parseCsv, previewCsv, previewPaste } from "./import";
+import {
+  EVAL_CSV_TEMPLATE,
+  historyBefore,
+  keyAllocator,
+  parseCsv,
+  previewCsv,
+  previewPaste,
+} from "./import";
 
 it("splits paste only on a line of three hyphens and keeps multiline content", () => {
   const p = previewPaste("Line one\nstill one\n---\na --- b\n---\n\n---\nlast", keyAllocator([]));
@@ -61,4 +68,29 @@ it("reports truncation past 100 rows instead of dropping silently", () => {
   const p = previewPaste(text, keyAllocator([]));
   expect(p.rows).toHaveLength(100);
   expect(p.truncated).toEqual({ limit: 100, total: 130 });
+});
+
+it("uses the supported schema for the download template and keeps AI replies as history only", () => {
+  const preview = previewCsv(EVAL_CSV_TEMPLATE, keyAllocator([]));
+  expect(preview.error).toBeNull();
+  expect(preview.rows[0].errors).toEqual([]);
+  expect(preview.rows[0].case).toMatchObject({ metric: "contains", expected: "reset" });
+  const history = historyBefore(
+    [
+      { content: "Old question", id: "m1", position: 1, senderType: "CUSTOMER", sessionId: "s1" },
+      {
+        content: "Old AI response",
+        id: "m2",
+        position: 2,
+        senderType: "AI_AGENT",
+        sessionId: "s1",
+      },
+      { content: "New question", id: "m3", position: 3, senderType: "CUSTOMER", sessionId: "s1" },
+    ],
+    3,
+  );
+  expect(history).toEqual([
+    { content: "Old question", role: "user" },
+    { content: "Old AI response", role: "assistant" },
+  ]);
 });
