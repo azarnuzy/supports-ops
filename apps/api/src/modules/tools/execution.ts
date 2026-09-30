@@ -212,7 +212,7 @@ async function assertSafeDestination(url: URL, resolver: typeof lookup) {
   }
 }
 
-function isUnsafeAddress(address: string) {
+export function isUnsafeAddress(address: string) {
   const normalized = address.toLowerCase();
   if (normalized.startsWith("::ffff:")) return isUnsafeAddress(normalized.slice(7));
   if (isIP(normalized) === 4) {

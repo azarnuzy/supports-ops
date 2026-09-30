@@ -23,6 +23,7 @@ import { ticketCategoriesRouter } from "./modules/ticket-categories/router";
 import { ticketsRouter } from "./modules/tickets/router";
 import { toolsRouter } from "./modules/tools/router";
 import { mcpRouter } from "./modules/mcp/router";
+import { evalDestinationRouter } from "./modules/eval-destination/router";
 import { whatsAppConfigRouter } from "./modules/whatsapp-config/router";
 import { whatsAppWebhookRouter } from "./modules/whatsapp-config/webhook";
 import { operatorRouter } from "./modules/operator/router";
@@ -126,6 +127,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/users", usersRouter)
   .route("/widget-config", widgetConfigRouter)
   .route("/whatsapp-config", whatsAppConfigRouter)
+  .route("/eval-destination", evalDestinationRouter)
   .route("/ai-settings", aiSettingsRouter)
   .route("/ai-usage", aiUsageRouter)
   .route("/billing", billingRouter)
