@@ -19,6 +19,7 @@ import { aiSettingsRouter } from "./modules/ai-settings/router";
 import { aiUsageRouter } from "./modules/ai-usage/router";
 import { billingRouter, mayarWebhookRouter } from "./modules/billing/router";
 import { analyticsRouter } from "./modules/analytics/router";
+import { evalDatasetsRouter } from "./modules/eval-datasets/router";
 import { ticketCategoriesRouter } from "./modules/ticket-categories/router";
 import { ticketsRouter } from "./modules/tickets/router";
 import { toolsRouter } from "./modules/tools/router";
@@ -131,6 +132,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/billing", billingRouter)
   .route("/mcp-servers", mcpRouter)
   .route("/tools", toolsRouter)
+  .route("/eval-datasets", evalDatasetsRouter)
   .route("/workspaces", workspacesRouter);
 
 export type AppType = typeof app;
