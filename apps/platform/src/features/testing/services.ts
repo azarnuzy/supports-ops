@@ -19,6 +19,7 @@ import {
   previewEvalImport,
   type EvalImportSource,
   listEvalDatasets,
+  listConversations,
   saveEvalDestination,
   updateEvalCase,
   updateEvalDataset,
@@ -50,11 +51,33 @@ export const saveDestination = (input: EvalDestinationInput) =>
   saveEvalDestination(apiClient, input);
 export const checkDestination = () => checkEvalDestination(apiClient);
 
-export const getImportSessions = () => listEvalImportSessions(apiClient);
-export const previewImport = ({ datasetId, source }: { datasetId: string; source: EvalImportSource }) =>
-  previewEvalImport(apiClient, datasetId, source);
-export const importCases = ({ datasetId, source }: { datasetId: string; source: EvalImportSource }) =>
-  importEvalCases(apiClient, datasetId, source);
+export async function getImportSessions() {
+  const [imports, conversations] = await Promise.all([
+    listEvalImportSessions(apiClient),
+    listConversations(apiClient, { limit: 100 }),
+  ]);
+  const byId = new Map(conversations.conversations.map((item) => [item.id, item]));
+  return {
+    sessions: imports.sessions.map((session) => ({
+      ...session,
+      conversation: byId.get(session.id),
+    })),
+  };
+}
+export const previewImport = ({
+  datasetId,
+  source,
+}: {
+  datasetId: string;
+  source: EvalImportSource;
+}) => previewEvalImport(apiClient, datasetId, source);
+export const importCases = ({
+  datasetId,
+  source,
+}: {
+  datasetId: string;
+  source: EvalImportSource;
+}) => importEvalCases(apiClient, datasetId, source);
 
 export const estimateRun = (selection: EvalRunSelection) => estimateEvalRun(apiClient, selection);
 export const startRun = (selection: EvalRunSelection) => startEvalRun(apiClient, selection);
