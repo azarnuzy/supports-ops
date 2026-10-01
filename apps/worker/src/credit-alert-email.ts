@@ -13,7 +13,10 @@ export async function sendCreditAlertEmail({
   workspaceId,
 }: CreditAlertEmailJob) {
   const [organization, admins] = await Promise.all([
-    prisma.organization.findUniqueOrThrow({ select: { name: true }, where: { id: organizationId } }),
+    prisma.organization.findUniqueOrThrow({
+      select: { name: true },
+      where: { id: organizationId },
+    }),
     prisma.user.findMany({
       select: { email: true },
       where: { deletedAt: null, isOrganizationAdmin: true, organizationId },

@@ -160,10 +160,16 @@ export async function extractAttachment(storageKey: string, mimeType: string) {
   if (mimeType.startsWith("audio/")) return transcribe(storageKey, mimeType);
   if (!mimeType.startsWith("image/") && !readableDocumentTypes.has(mimeType))
     throw new Error("This file type cannot be read automatically.");
-  if (mimeType.endsWith("wordprocessingml.document") || mimeType.endsWith("presentationml.presentation")) {
+  if (
+    mimeType.endsWith("wordprocessingml.document") ||
+    mimeType.endsWith("presentationml.presentation")
+  ) {
     const object = await createStorage(storageConfig).getObject(storageKey);
     if (!object.Body) throw new Error("Attachment file is missing.");
-    const { text, visual } = await readOffice(new Uint8Array(await object.Body.transformToByteArray()), mimeType.endsWith("presentationml.presentation") ? "pptx" : "docx");
+    const { text, visual } = await readOffice(
+      new Uint8Array(await object.Body.transformToByteArray()),
+      mimeType.endsWith("presentationml.presentation") ? "pptx" : "docx",
+    );
     if (text.trim() && !visual) return text;
     const url = await createStorage(storageConfig).getSignedGetObjectUrl({ key: storageKey });
     const visualText = await extractWithOpenRouter(url, mimeType);
@@ -173,18 +179,31 @@ export async function extractAttachment(storageKey: string, mimeType: string) {
   return extractWithOpenRouter(url, mimeType);
 }
 
-function readOffice(data: Uint8Array, kind: "docx" | "pptx"): Promise<{ text: string; visual: boolean }> {
+function readOffice(
+  data: Uint8Array,
+  kind: "docx" | "pptx",
+): Promise<{ text: string; visual: boolean }> {
   return new Promise((resolve, reject) => {
-    const process = spawn("python3", [new URL("./office-text.py", import.meta.url).pathname, kind], { stdio: ["pipe", "pipe", "pipe"] });
+    const process = spawn(
+      "python3",
+      [new URL("./office-text.py", import.meta.url).pathname, kind],
+      { stdio: ["pipe", "pipe", "pipe"] },
+    );
     const output: Buffer[] = [];
     const errors: Buffer[] = [];
     process.stdout.on("data", (chunk: Buffer) => output.push(chunk));
     process.stderr.on("data", (chunk: Buffer) => errors.push(chunk));
     process.on("error", reject);
     process.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`Office extraction failed: ${Buffer.concat(errors).toString().trim()}`));
-      try { resolve(JSON.parse(Buffer.concat(output).toString()) as { text: string; visual: boolean }); }
-      catch (error) { reject(error); }
+      if (code !== 0)
+        return reject(
+          new Error(`Office extraction failed: ${Buffer.concat(errors).toString().trim()}`),
+        );
+      try {
+        resolve(JSON.parse(Buffer.concat(output).toString()) as { text: string; visual: boolean });
+      } catch (error) {
+        reject(error);
+      }
     });
     process.stdin.end(data);
   });
@@ -198,38 +217,38 @@ export async function extractDocument(url: string, mimeType: string) {
     : { document_url: url, type: "document_url" };
   try {
     return await withSpan(
-    "external.mistral.ocr",
-    {
-      "external.provider": "MISTRAL",
-      "external.operation": "OCR",
-      "external.model_id": "mistral-ocr-latest",
-    },
-    async () => {
-      const response = await fetchWithRetry("https://api.mistral.ai/v1/ocr", {
-        body: JSON.stringify({ document, model: "mistral-ocr-latest" }),
-        headers: {
-          Authorization: `Bearer ${ingestionConfig.mistralApiKey}`,
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      }).catch((error: unknown) => {
-        throw tagExternalError(error, "MISTRAL");
-      });
-      if (!response.ok) {
-        const body = await response.text();
-        throw tagExternalError(
-          new Error(`OCR failed: ${body}`),
-          "MISTRAL",
-          response.status,
-          externalResponseCode(body),
-        );
-      }
-      const body = (await response.json().catch((error: unknown) => {
-        throw tagExternalError(error, "MISTRAL");
-      })) as { pages?: Array<{ markdown?: string }> };
-      return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
-    },
-    false,
+      "external.mistral.ocr",
+      {
+        "external.provider": "MISTRAL",
+        "external.operation": "OCR",
+        "external.model_id": "mistral-ocr-latest",
+      },
+      async () => {
+        const response = await fetchWithRetry("https://api.mistral.ai/v1/ocr", {
+          body: JSON.stringify({ document, model: "mistral-ocr-latest" }),
+          headers: {
+            Authorization: `Bearer ${ingestionConfig.mistralApiKey}`,
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+        }).catch((error: unknown) => {
+          throw tagExternalError(error, "MISTRAL");
+        });
+        if (!response.ok) {
+          const body = await response.text();
+          throw tagExternalError(
+            new Error(`OCR failed: ${body}`),
+            "MISTRAL",
+            response.status,
+            externalResponseCode(body),
+          );
+        }
+        const body = (await response.json().catch((error: unknown) => {
+          throw tagExternalError(error, "MISTRAL");
+        })) as { pages?: Array<{ markdown?: string }> };
+        return body.pages?.map((page) => page.markdown ?? "").join("\n\n") ?? "";
+      },
+      false,
     );
   } catch (error) {
     if (!shouldFallback(error) || !ingestionConfig.openRouterApiKey) throw error;
@@ -238,7 +257,12 @@ export async function extractDocument(url: string, mimeType: string) {
 }
 
 function shouldFallback(error: unknown) {
-  if (!(error instanceof Error) || !("externalProvider" in error) || error.externalProvider !== "MISTRAL") return false;
+  if (
+    !(error instanceof Error) ||
+    !("externalProvider" in error) ||
+    error.externalProvider !== "MISTRAL"
+  )
+    return false;
   const status = externalHttpStatus(error);
   return status === 429 || (status !== undefined && status >= 500) || status === undefined;
 }
@@ -247,33 +271,71 @@ async function extractWithOpenRouter(url: string, mimeType: string) {
   if (!ingestionConfig.openRouterApiKey)
     throw new Error("Configure OPENROUTER_API_KEY to process chat attachments.");
   const model = ingestionConfig.attachmentFallbackModel;
-  return withSpan("external.openrouter.document", {
-    "external.provider": "OPENROUTER",
-    "external.operation": "ATTACHMENT_READ",
-    "external.model_id": model,
-  }, async () => {
-    const file = mimeType.startsWith("image/")
-      ? { type: "image_url", image_url: { url } }
-      : { type: "file", file: { filename: mimeType === "application/pdf" ? "document.pdf" : mimeType.endsWith("presentationml.presentation") ? "document.pptx" : "document.docx", file_data: url } };
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${ingestionConfig.openRouterApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: [
-          { type: "text", text: "Transcribe all readable content faithfully in reading order. Preserve headings, tables, and slide or page boundaries as Markdown. Do not summarize or invent missing text." },
-          file,
-        ] }],
-        ...(mimeType === "application/pdf" ? { plugins: [{ id: "file-parser", pdf: { engine: "native" } }] } : {}),
-      }),
-    }).catch((error: unknown) => { throw tagExternalError(error, "OPENROUTER"); });
-    if (!response.ok) {
-      const body = await response.text();
-      throw tagExternalError(new Error(`Document extraction failed: ${body}`), "OPENROUTER", response.status, externalResponseCode(body));
-    }
-    const body = await response.json().catch((error: unknown) => { throw tagExternalError(error, "OPENROUTER"); }) as { choices?: Array<{ message?: { content?: string } }> };
-    return body.choices?.[0]?.message?.content ?? "";
-  }, false);
+  return withSpan(
+    "external.openrouter.document",
+    {
+      "external.provider": "OPENROUTER",
+      "external.operation": "ATTACHMENT_READ",
+      "external.model_id": model,
+    },
+    async () => {
+      const file = mimeType.startsWith("image/")
+        ? { type: "image_url", image_url: { url } }
+        : {
+            type: "file",
+            file: {
+              filename:
+                mimeType === "application/pdf"
+                  ? "document.pdf"
+                  : mimeType.endsWith("presentationml.presentation")
+                    ? "document.pptx"
+                    : "document.docx",
+              file_data: url,
+            },
+          };
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ingestionConfig.openRouterApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Transcribe all readable content faithfully in reading order. Preserve headings, tables, and slide or page boundaries as Markdown. Do not summarize or invent missing text.",
+                },
+                file,
+              ],
+            },
+          ],
+          ...(mimeType === "application/pdf"
+            ? { plugins: [{ id: "file-parser", pdf: { engine: "native" } }] }
+            : {}),
+        }),
+      }).catch((error: unknown) => {
+        throw tagExternalError(error, "OPENROUTER");
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        throw tagExternalError(
+          new Error(`Document extraction failed: ${body}`),
+          "OPENROUTER",
+          response.status,
+          externalResponseCode(body),
+        );
+      }
+      const body = (await response.json().catch((error: unknown) => {
+        throw tagExternalError(error, "OPENROUTER");
+      })) as { choices?: Array<{ message?: { content?: string } }> };
+      return body.choices?.[0]?.message?.content ?? "";
+    },
+    false,
+  );
 }
 
 async function transcribe(storageKey: string, mimeType: string) {
@@ -290,22 +352,40 @@ async function transcribe(storageKey: string, mimeType: string) {
     new Blob([new Uint8Array(await object.Body.transformToByteArray())], { type: mimeType }),
     `voice-note.${extension}`,
   );
-  return withSpan("external.openrouter.transcription", {
+  return withSpan(
+    "external.openrouter.transcription",
+    {
       "external.provider": "OPENROUTER",
       "external.operation": "TRANSCRIPTION",
       "external.model_id": ingestionConfig.audioFallbackModel,
-    }, async () => {
+    },
+    async () => {
       const response = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
         body: form,
         headers: { Authorization: `Bearer ${ingestionConfig.openRouterApiKey}` },
         method: "POST",
-      }).catch((failure: unknown) => { throw tagExternalError(failure, "OPENROUTER"); });
+      }).catch((failure: unknown) => {
+        throw tagExternalError(failure, "OPENROUTER");
+      });
       if (!response.ok) {
         const body = await response.text();
-        throw tagExternalError(new Error(`Transcription failed: ${body}`), "OPENROUTER", response.status, externalResponseCode(body));
+        throw tagExternalError(
+          new Error(`Transcription failed: ${body}`),
+          "OPENROUTER",
+          response.status,
+          externalResponseCode(body),
+        );
       }
-      return ((await response.json().catch((failure: unknown) => { throw tagExternalError(failure, "OPENROUTER"); })) as { text?: string }).text ?? "";
-    }, false);
+      return (
+        (
+          (await response.json().catch((failure: unknown) => {
+            throw tagExternalError(failure, "OPENROUTER");
+          })) as { text?: string }
+        ).text ?? ""
+      );
+    },
+    false,
+  );
 }
 
 async function requestReply(ticketId: string, workspaceId: string) {

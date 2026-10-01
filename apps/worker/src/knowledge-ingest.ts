@@ -196,11 +196,12 @@ export async function processKnowledgeIngestJob(job: { data: KnowledgeIngestJob 
       await recordExternalError(prisma, {
         provider: error.externalProvider,
         operation: job.data.kind === "PDF" ? "KNOWLEDGE_OCR" : "KNOWLEDGE_CRAWL",
-        modelId: job.data.kind === "PDF"
-          ? error.externalProvider === "OPENROUTER"
-            ? ingestionConfig.attachmentFallbackModel
-            : "mistral-ocr-latest"
-          : undefined,
+        modelId:
+          job.data.kind === "PDF"
+            ? error.externalProvider === "OPENROUTER"
+              ? ingestionConfig.attachmentFallbackModel
+              : "mistral-ocr-latest"
+            : undefined,
         workspaceId,
         resourceType: "KNOWLEDGE_SOURCE",
         resourceId: knowledgeSourceId,
