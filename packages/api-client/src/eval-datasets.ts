@@ -50,9 +50,13 @@ export type EvalDatasetSummary = EvalDatasetInput & {
   caseCount: number;
   id: string;
   incompleteCount: number;
+  lastRunAt: string | null;
 };
 export type EvalDataset = EvalDatasetInput & {
   cases: EvalCase[];
+  caseIndex: Pick<EvalCase, "id" | "caseKey" | "complete">[];
+  page: number;
+  total: number;
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -63,7 +67,7 @@ const routes = (client: ApiClient) => client["eval-datasets"];
 async function fail(response: Response, fallback: string): Promise<never> {
   const body = (await response.json().catch(() => null)) as { error?: string } | null;
   if (body?.error === "duplicate_case_key")
-    throw new Error("Another case in this Workspace already uses that ID.");
+    throw new Error("Another case in this dataset already uses that ID.");
   throw new Error(fallback);
 }
 
@@ -73,8 +77,23 @@ export async function listEvalDatasets(client: ApiClient) {
   return (await response.json()) as unknown as { datasets: EvalDatasetSummary[] };
 }
 
-export async function getEvalDataset(client: ApiClient, id: string) {
-  const response = await routes(client)[":id"].$get({ param: { id } });
+export type EvalCaseFilters = {
+  page: number;
+  search: string;
+  status: "all" | "ready" | "draft";
+  sortBy?: "caseKey" | "message" | "category" | "metric" | "complete";
+  sortDirection?: "asc" | "desc";
+};
+
+export async function getEvalDataset(
+  client: ApiClient,
+  id: string,
+  filters: EvalCaseFilters = { page: 1, search: "", status: "all" },
+) {
+  const response = await routes(client)[":id"].$get({
+    param: { id },
+    query: { ...filters, page: String(filters.page) },
+  });
   if (!response.ok) throw new Error("Failed to load the Eval Dataset.");
   return (await response.json()) as unknown as { dataset: EvalDataset };
 }
@@ -167,4 +186,51 @@ export async function importEvalCases(
   });
   if (!response.ok) return fail(response, "Failed to import the cases.");
   return (await response.json()) as unknown as { import: EvalImportPreview };
+}
+
+export type EvalImportMessage = {
+  id: string;
+  content: string;
+  createdAt: string;
+  position: number;
+  session: {
+    channel: { name: string; type: "WEB" | "WHATSAPP" };
+    customerIdentity: { name: string; email: string | null; phoneE164: string | null };
+  };
+};
+export type EvalMessageFilters = {
+  page: number;
+  search: string;
+  channel: "all" | "WEB" | "WHATSAPP";
+  since: "all" | "7" | "30" | "90";
+};
+export async function listEvalImportMessages(client: ApiClient, filters: EvalMessageFilters) {
+  const response = await routes(client)["import-messages"].$get({
+    query: { ...filters, page: String(filters.page) },
+  });
+  if (!response.ok) throw new Error("Failed to load Customer Messages.");
+  return (await response.json()) as { messages: EvalImportMessage[]; page: number; total: number };
+}
+
+export async function updateEvalCaseExpectations(
+  client: ApiClient,
+  datasetId: string,
+  input: Pick<EvalCaseInput, "expected" | "metric" | "metadata"> & { caseIds: string[] },
+) {
+  const response = await routes(client)[":id"].cases.$put({
+    param: { id: datasetId },
+    json: input,
+  });
+  if (!response.ok)
+    return fail(response, "Failed to update case expectations. Your selection is kept for retry.");
+}
+
+export async function getEvalImportMessageContext(client: ApiClient, messageId: string) {
+  const response = await routes(client)["import-messages"][":messageId"].context.$get({
+    param: { messageId },
+  });
+  if (!response.ok) throw new Error("Unable to load the preceding conversation context.");
+  return (await response.json()) as {
+    history: { id: string; content: string; role: "user" | "assistant" }[];
+  };
 }

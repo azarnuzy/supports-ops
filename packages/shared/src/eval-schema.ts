@@ -16,6 +16,20 @@ export const evalMetrics = [
 ] as const;
 export type EvalMetric = (typeof evalMetrics)[number];
 
+export const evalMetricLabels: Record<EvalMetric, string> = {
+  contains: "Contains",
+  decision: "Decision",
+  exactMatch: "Exact match",
+  faithfulness: "Faithfulness",
+  gEval: "gEval",
+  language: "Language",
+  negativeControl: "Negative control",
+  relevancy: "Relevance",
+  retrieval: "Retrieval",
+  tool: "Tool",
+  visibility: "Visibility",
+};
+
 /** Metric-specific expectations, mirroring `AgentEvalCase["metadata"]`. Unknown keys are dropped,
  * so a Case can never carry an executable script or free-form prompt. */
 export const evalCaseMetadataSchema = z.object({
@@ -63,12 +77,12 @@ export const caseSchema = z.object({
     .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/, "Use letters, digits, '.', '_', ':' or '-'."),
   category: z.string().trim().max(60).default(""),
   clarificationCount: z.number().int().min(0).max(10).default(0),
-  expected: z.string().trim().max(4000).default(""),
+  expected: z.string().trim().default(""),
   history: z
-    .array(z.object({ content: z.string().min(1).max(4000), role: z.enum(["assistant", "user"]) }))
+    .array(z.object({ content: z.string().min(1), role: z.enum(["assistant", "user"]) }))
     .max(50)
     .default([]),
-  message: z.string().trim().min(1).max(4000),
+  message: z.string().trim().min(1),
   metadata: evalCaseMetadataSchema.default({}),
   metric: z.enum(evalMetrics).nullable().default(null),
 });
@@ -83,7 +97,7 @@ export function caseIssues(input: {
   const { expected, metadata, metric } = input;
   switch (metric) {
     case null:
-      return ["Choose a metric."];
+      return ["Choose an evaluation type."];
     case "contains":
     case "exactMatch":
     case "gEval":

@@ -63,11 +63,13 @@ it("keeps structured fields and reports row-level errors", () => {
   expect(p.rows[3].errors).toEqual(["history is not valid JSON."]);
 });
 
-it("reports truncation past 100 rows instead of dropping silently", () => {
+it("keeps every row past 100 and preserves messages longer than 4,000 characters", () => {
   const text = Array.from({ length: 130 }, (_, i) => `m${i}`).join("\n---\n");
   const p = previewPaste(text, keyAllocator([]));
-  expect(p.rows).toHaveLength(100);
-  expect(p.truncated).toEqual({ limit: 100, total: 130 });
+  expect(p.rows).toHaveLength(130);
+  expect(p.truncated).toBeNull();
+  const long = "x".repeat(8000);
+  expect(previewPaste(long, keyAllocator([])).rows[0].case?.message).toBe(long);
 });
 
 it("uses the supported schema for the download template and keeps AI replies as history only", () => {
@@ -93,4 +95,19 @@ it("uses the supported schema for the download template and keeps AI replies as 
     { content: "Old question", role: "user" },
     { content: "Old AI response", role: "assistant" },
   ]);
+});
+
+it("validates flat spreadsheet options and keeps metadata JSON for advanced expectations", () => {
+  const p = previewCsv(
+    "message,metric,decision,language,retrievalTarget,toolMustNotBeCalled\nHi,decision,ESCALATE,id,agent,false\nHi,decision,TYPO,,,maybe",
+    keyAllocator([]),
+  );
+  expect(p.rows[0].case?.metadata).toEqual({
+    decisions: ["ESCALATE"],
+    language: "id",
+    retrievalTarget: "agent",
+    toolMustNotBeCalled: false,
+  });
+  expect(p.rows[1].case).toBeNull();
+  expect(p.rows[1].errors).toContain("toolMustNotBeCalled must be true or false.");
 });

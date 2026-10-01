@@ -104,7 +104,7 @@ it("persists a dataset and its cases, reporting drafts as incomplete", async () 
   expect(draft.status).toBe(201);
   expect((await draft.json()).case).toMatchObject({
     complete: false,
-    issues: ["Choose a metric."],
+    issues: ["Choose an evaluation type."],
   });
 
   const complete = await call(`/${dataset.id}/cases`, "POST", {
@@ -338,4 +338,109 @@ it("keeps import Admin-only and scoped to the dataset's Workspace", async () => 
   expect((await call("/import-sessions")).status).toBe(403);
   current.userId = "admin-b";
   expect((await call(`/${dataset.id}/import/preview`, "POST", body)).status).toBe(404);
+});
+
+it("imports every row and pages/searches cases while bulk expectations preserve messages", async () => {
+  current.userId = "admin-a1";
+  const { dataset } = await (await call("", "POST", { name: "Large dataset" })).json();
+  const text = Array.from({ length: 130 }, (_, index) =>
+    index === 0 ? "x".repeat(8000) : `Question ${index}`,
+  ).join("\n---\n");
+  const saved = await (
+    await call(`/${dataset.id}/import`, "POST", { source: "paste", text })
+  ).json();
+  expect(saved.import.cases).toHaveLength(130);
+  expect(saved.import.truncated).toBeNull();
+  const first = (await (await call(`/${dataset.id}?page=1`)).json()).dataset;
+  const second = (await (await call(`/${dataset.id}?page=2`)).json()).dataset;
+  expect(first.cases).toHaveLength(25);
+  expect(first.caseIndex).toHaveLength(130);
+  expect(first.total).toBe(130);
+  expect(
+    second.cases.every(
+      (item: { id: string }) => !first.cases.some((other: { id: string }) => other.id === item.id),
+    ),
+  ).toBe(true);
+  const ids = first.cases.slice(0, 2).map((item: { id: string }) => item.id);
+  expect(
+    (
+      await call(`/${dataset.id}/cases`, "PUT", {
+        caseIds: ids,
+        metric: "faithfulness",
+        expected: "",
+        metadata: {},
+      })
+    ).status,
+  ).toBe(200);
+  const ready = (await (await call(`/${dataset.id}?status=ready`)).json()).dataset;
+  expect(ready.total).toBe(2);
+  expect(ready.cases.every((item: { complete: boolean }) => item.complete)).toBe(true);
+  expect(first.cases[0].message).toBe(
+    saved.import.cases.find((item: { id: string }) => item.id === first.cases[0].id).message,
+  );
+  const search = (await (await call(`/${dataset.id}?search=Question%20129`)).json()).dataset;
+  expect(search.cases).toHaveLength(1);
+  expect(search.cases[0].message).toBe("Question 129");
+  const sorted = (await (await call(
+    `/${dataset.id}?sortBy=message&sortDirection=desc&search=Question`,
+  )).json()).dataset;
+  expect(sorted.cases[0].message).toBe("Question 129");
+  expect(sorted.cases[24].message).toBe("Question 105");
+  const sortedReady = (await (await call(
+    `/${dataset.id}?sortBy=complete&sortDirection=desc`,
+  )).json()).dataset;
+  expect(sortedReady.cases.slice(0, 2).every((item: { complete: boolean }) => item.complete)).toBe(true);
+  expect(sortedReady.cases[2].complete).toBe(false);
+  expect((await call(`/${dataset.id}?sortBy=unknown`)).status).toBe(400);
+  const before = ready.cases[0];
+  expect(
+    (
+      await call(`/${dataset.id}/cases`, "PUT", {
+        caseIds: [before.id, "other-workspace-case"],
+        metric: "language",
+        metadata: { language: "id" },
+      })
+    ).status,
+  ).toBe(404);
+  expect((await (await call(`/${dataset.id}?status=ready`)).json()).dataset.cases[0].metric).toBe(
+    "faithfulness",
+  );
+});
+
+it("pages and filters Customer Messages directly without exposing other Workspaces", async () => {
+  await seedSession("wa1", "a");
+  await seedSession("wb", "b");
+  for (let index = 0; index < 23; index++)
+    await prisma.message.create({
+      data: {
+        id: `extra-${index}`,
+        workspaceId: "wa1",
+        sessionId: "s-a",
+        memorySessionId: "cv-a",
+        runId: "r",
+        turn: 1,
+        position: index + 4,
+        role: "user",
+        senderType: "CUSTOMER",
+        content: `Need help ${index}`,
+        message: {},
+        externalMessageId: `extra-${index}`,
+      },
+    });
+  current.userId = "admin-a1";
+  const first = await (await call("/import-messages?page=1")).json();
+  const second = await (await call("/import-messages?page=2")).json();
+  expect(first.total).toBe(25);
+  expect(first.messages).toHaveLength(20);
+  expect(second.messages).toHaveLength(5);
+  expect(
+    new Set([...first.messages, ...second.messages].map((item: { id: string }) => item.id)).size,
+  ).toBe(25);
+  expect(first.messages[0].session.customerIdentity.name).toBe("a");
+  expect((await (await call("/import-messages?search=Need%20help&channel=WEB")).json()).total).toBe(
+    23,
+  );
+  expect((await (await call("/import-messages?channel=WHATSAPP")).json()).total).toBe(0);
+  current.userId = "agent-a1";
+  expect((await call("/import-messages")).status).toBe(403);
 });

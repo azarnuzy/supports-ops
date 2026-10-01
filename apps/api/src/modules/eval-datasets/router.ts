@@ -3,7 +3,13 @@ import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
 import { importSourceSchema } from "./import";
-import { caseSchema, datasetSchema } from "./schema";
+import {
+  caseSchema,
+  datasetSchema,
+  importMessagesQuery,
+  datasetCaseQuery,
+  bulkCaseSchema,
+} from "./schema";
 import {
   CaseNotFoundError,
   createCase,
@@ -14,9 +20,12 @@ import {
   getDataset,
   importCases,
   listImportSessions,
+  listImportMessages,
+  getImportMessageContext,
   previewImport,
   listDatasets,
   updateCase,
+  updateCaseExpectations,
   updateDataset,
 } from "./services";
 
@@ -45,9 +54,22 @@ export const evalDatasetsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/", zValidator("json", datasetSchema), async (c) =>
     c.json({ dataset: await createDataset(c.req.valid("json")) }, 201),
   )
+  .get("/import-messages", zValidator("query", importMessagesQuery), async (c) =>
+    c.json(await listImportMessages(c.req.valid("query")), 200),
+  )
+  .get("/import-messages/:messageId/context", (c) =>
+    respond(
+      async () => c.json({ history: await getImportMessageContext(c.req.param("messageId")) }, 200),
+      c,
+    ),
+  )
   .get("/import-sessions", async (c) => c.json({ sessions: await listImportSessions() }, 200))
-  .get("/:id", (c) =>
-    respond(async () => c.json({ dataset: await getDataset(c.req.param("id")) }, 200), c),
+  .get("/:id", zValidator("query", datasetCaseQuery), (c) =>
+    respond(
+      async () =>
+        c.json({ dataset: await getDataset(c.req.param("id"), c.req.valid("query")) }, 200),
+      c,
+    ),
   )
   .put("/:id", zValidator("json", datasetSchema), (c) =>
     respond(
@@ -67,6 +89,12 @@ export const evalDatasetsRouter = new Hono<{ Variables: AuthVariables }>()
     respond(
       async () =>
         c.json({ import: await importCases(c.req.param("id"), c.req.valid("json")) }, 201),
+      c,
+    ),
+  )
+  .put("/:id/cases", zValidator("json", bulkCaseSchema), (c) =>
+    respond(
+      async () => c.json(await updateCaseExpectations(c.req.param("id"), c.req.valid("json")), 200),
       c,
     ),
   )

@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { type CaseInput, caseSchema } from "./eval-schema";
 
-/** Imports beyond this many rows are cut and reported, never silently dropped. */
-export const IMPORT_ROW_LIMIT = 100;
-
 /** Max preceding turns copied from a Session (the case schema allows 50). */
 const HISTORY_LIMIT = 20;
 
@@ -19,7 +16,7 @@ export type ImportRow = {
 
 export type ImportPreview = {
   rows: ImportRow[];
-  /** Set when the source had more than IMPORT_ROW_LIMIT rows; rows past the limit are not listed. */
+  /** Compatibility with older clients. New imports include all rows. */
   truncated: { limit: number; total: number } | null;
   /** Source-level problem (no rows, no message column, malformed CSV). */
   error: string | null;
@@ -31,8 +28,7 @@ export const importSourceSchema = z.discriminatedUnion("source", [
   z.object({
     selections: z
       .array(z.object({ includeHistory: z.boolean().default(false), messageId: z.string().min(1) }))
-      .min(1)
-      .max(500),
+      .min(1),
     source: z.literal("sessions"),
   }),
 ]);
@@ -133,44 +129,42 @@ export function validate(row: number, candidate: unknown, alloc: ReturnType<type
   return { case: parsed.data, errors: [], row } satisfies ImportRow;
 }
 
-function finish(rows: ImportRow[], total: number, error: string | null = null): ImportPreview {
+function finish(rows: ImportRow[], error: string | null = null): ImportPreview {
   return {
     error,
-    rows: rows.slice(0, IMPORT_ROW_LIMIT),
-    truncated: total > IMPORT_ROW_LIMIT ? { limit: IMPORT_ROW_LIMIT, total } : null,
+    rows,
+    truncated: null,
   };
 }
 
 export function previewPaste(text: string, alloc: ReturnType<typeof keyAllocator>): ImportPreview {
   const { blocks } = parsePaste(text);
   if (blocks.every((b) => !b.message))
-    return finish([], 0, "Paste at least one message. Separate messages with a line of ---.");
-  // Empty blocks are reported, not silently skipped; only the first rows are validated.
-  const rows = blocks
-    .slice(0, IMPORT_ROW_LIMIT)
-    .map((b) =>
-      b.message
-        ? validate(b.row, { caseKey: alloc.fresh(), message: b.message }, alloc)
-        : { case: null, errors: ["Empty message block."], row: b.row },
-    );
-  return finish(rows, blocks.length);
+    return finish([], "Paste at least one message. Separate messages with a line of ---.");
+  // Empty blocks are reported, not silently skipped; all rows are validated.
+  const rows = blocks.map((b) =>
+    b.message
+      ? validate(b.row, { caseKey: alloc.fresh(), message: b.message }, alloc)
+      : { case: null, errors: ["Empty message block."], row: b.row },
+  );
+  return finish(rows);
 }
 
 export function previewCsv(text: string, alloc: ReturnType<typeof keyAllocator>): ImportPreview {
   const table = parseCsv(text);
-  if (!table) return finish([], 0, "Malformed CSV: check for an unclosed or misplaced quote.");
-  if (!table.length) return finish([], 0, "The CSV file is empty.");
+  if (!table) return finish([], "Malformed CSV: check for an unclosed or misplaced quote.");
+  if (!table.length) return finish([], "The CSV file is empty.");
 
   const header = table[0].map((h) => h.trim());
   const lower = header.map((h) => h.toLowerCase());
   const messageIndex = lower.findIndex((h) => MESSAGE_COLUMNS.includes(h));
   const singleColumn = header.length === 1 && messageIndex === -1;
   if (messageIndex === -1 && !singleColumn)
-    return finish([], 0, `Add a message column named one of: ${MESSAGE_COLUMNS.join(", ")}.`);
+    return finish([], `Add a message column named one of: ${MESSAGE_COLUMNS.join(", ")}.`);
 
   // A single unnamed column is plain input, so its first line is data, not a header.
   const dataRows = singleColumn ? table : table.slice(1);
-  const rows = dataRows.slice(0, IMPORT_ROW_LIMIT).map((cells, index): ImportRow => {
+  const rows = dataRows.map((cells, index): ImportRow => {
     const row = index + (singleColumn ? 1 : 2);
     if (singleColumn) {
       return validate(row, { caseKey: alloc.fresh(), message: cells[0]?.trim() ?? "" }, alloc);
@@ -190,6 +184,20 @@ export function previewCsv(text: string, alloc: ReturnType<typeof keyAllocator>)
     const history = json(["history"], [], "history");
     const attachments = json(["attachments"], [], "attachments");
     const metadata = json(["metadata"], {}, "metadata");
+    // Flat spreadsheet columns make common expectations editable without JSON.
+    if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+      const flat = metadata as Record<string, unknown>;
+      if (cell(record, "decision")) flat.decisions = [cell(record, "decision")];
+      if (cell(record, "language")) flat.language = cell(record, "language");
+      if (cell(record, "retrievaltarget")) flat.retrievalTarget = cell(record, "retrievaltarget");
+      if (cell(record, "tool")) flat.tool = cell(record, "tool");
+      if (cell(record, "toolmustnotbecalled")) {
+        const value = cell(record, "toolmustnotbecalled").toLowerCase();
+        if (!["true", "false"].includes(value))
+          errors.push("toolMustNotBeCalled must be true or false.");
+        else flat.toolMustNotBeCalled = value === "true";
+      }
+    }
     if (errors.length) return { case: null, errors, row };
 
     const clarification = cell(record, "clarificationcount", "clarification_count");
@@ -206,7 +214,7 @@ export function previewCsv(text: string, alloc: ReturnType<typeof keyAllocator>)
     };
     return validate(row, candidate, alloc);
   });
-  return finish(rows, dataRows.length);
+  return finish(rows);
 }
 
 export type SessionMessageRow = {
@@ -228,7 +236,7 @@ export function historyBefore(
     if (m.position >= position || !m.content.trim()) continue;
     const role =
       m.senderType === "CUSTOMER" ? "user" : m.senderType === "AI_AGENT" ? "assistant" : null;
-    if (role) turns.push({ content: m.content.slice(0, 4000), role });
+    if (role) turns.push({ content: m.content, role });
   }
   return turns.slice(-HISTORY_LIMIT);
 }
