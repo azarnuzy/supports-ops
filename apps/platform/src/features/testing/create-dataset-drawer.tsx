@@ -552,8 +552,12 @@ export function CreateDatasetDrawer({
                                       {formatTestingDate(message.createdAt)}
                                     </p>
                                     {selected[message.id] !== undefined && (
-                                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                                      <label
+                                        htmlFor={`context-${message.id}`}
+                                        className="flex items-start gap-2 text-xs text-muted-foreground"
+                                      >
                                         <Checkbox
+                                          id={`context-${message.id}`}
                                           checked={selected[message.id]}
                                           onCheckedChange={(checked) =>
                                             edit(setSelected)({

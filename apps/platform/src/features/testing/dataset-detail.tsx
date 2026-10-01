@@ -93,12 +93,12 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
   const [confirming, setConfirming] = useState(false);
   const [runVersion, setRunVersion] = useState(0);
 
+  const savedName = dataset?.name;
+  const savedCriteria = dataset?.criteria;
   useEffect(() => {
-    if (dataset) {
-      setName(dataset.name);
-      setCriteria(dataset.criteria);
-    }
-  }, [dataset?.name, dataset?.criteria]);
+    if (savedName !== undefined) setName(savedName);
+    if (savedCriteria !== undefined) setCriteria(savedCriteria);
+  }, [savedName, savedCriteria]);
 
   const cases = dataset?.cases ?? [];
   const caseIndex = dataset?.caseIndex ?? [];
@@ -446,6 +446,7 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
                             </TableCell>
                             <TableCell>
                               <button
+                                type="button"
                                 className="block w-full truncate text-left hover:underline"
                                 aria-expanded={expanded.includes(item.id)}
                                 aria-controls={`case-detail-${item.id}`}

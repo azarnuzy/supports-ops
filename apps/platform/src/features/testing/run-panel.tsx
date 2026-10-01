@@ -13,7 +13,12 @@ import {
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { toast } from "@repo/ui/components/sonner";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@repo/ui/components/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@repo/ui/components/tooltip";
 import {
   ExternalLinkIcon,
   RotateCcwIcon,
@@ -298,9 +303,12 @@ function RunCaseResults({
   page: number;
   setPage: (page: number) => void;
 }) {
-  const [sort, setSort] = useState<
-    TableSort<"caseKey" | "message" | "category" | "expected" | "result" | "metric" | "runCreatedAt">
-  >(null);
+  const [sort, setSort] =
+    useState<
+      TableSort<
+        "caseKey" | "message" | "category" | "expected" | "result" | "metric" | "runCreatedAt"
+      >
+    >(null);
   function sortBy(column: NonNullable<typeof sort>["column"]) {
     setSort(nextSort(sort, column));
     setPage(1);
@@ -325,12 +333,17 @@ function RunCaseResults({
   const resultLabel = (item: EvalRun["cases"][number]) => {
     if (item.status !== "EVALUATED") return caseLabels[item.status];
     if (item.evaluatorHealth) return item.passed ? "Evaluator working" : "Evaluator check failed";
-    return item.passed === true ? "Passed" : item.passed === false ? "Failed" : caseLabels[item.status];
+    return item.passed === true
+      ? "Passed"
+      : item.passed === false
+        ? "Failed"
+        : caseLabels[item.status];
   };
   const items = sortRows(filtered, sort, (item) => {
     if (sort?.column === "runCreatedAt") return new Date(item.runCreatedAt).getTime();
     if (sort?.column === "result") return resultLabel(item);
-    if (sort?.column === "metric") return metricLabels[item.metric as keyof typeof metricLabels] ?? item.metric;
+    if (sort?.column === "metric")
+      return metricLabels[item.metric as keyof typeof metricLabels] ?? item.metric;
     return item[sort?.column ?? "caseKey"] || null;
   });
   const currentPage = Math.min(page, Math.max(1, Math.ceil(items.length / 10)));
@@ -417,6 +430,7 @@ function RunCaseResults({
                     </TableCell>
                     <TableCell>
                       <button
+                        type="button"
                         className="block w-full truncate text-left hover:underline"
                         aria-expanded={expanded.includes(item.id)}
                         aria-controls={`result-detail-${item.id}`}
@@ -569,8 +583,8 @@ function RunCaseResults({
                               </dd>
                             </div>
                           )}
-                          {item.result.checks?.map((check, index) => (
-                            <div key={`${check.name}-${index}`}>
+                          {item.result.checks?.map((check) => (
+                            <div key={check.name}>
                               <dt className="text-xs font-semibold text-muted-foreground">
                                 {check.name} · {check.outcome}
                                 {check.score !== null ? ` · score: ${check.score}` : ""}
@@ -629,9 +643,15 @@ function RunHistory({ runs }: { runs: EvalRun[] }) {
         <TableHeader>
           <TableRow>
             {[
-              "Run time / Duration", "Status / Progress", "Results",
-              "Evaluator checks", "Credits / Usage", "Destination",
-            ].map((label) => <TableHead key={label}>{label}</TableHead>)}
+              "Run time / Duration",
+              "Status / Progress",
+              "Results",
+              "Evaluator checks",
+              "Credits / Usage",
+              "Destination",
+            ].map((label) => (
+              <TableHead key={label}>{label}</TableHead>
+            ))}
             <TableHead>
               <span className="inline-flex items-center gap-1.5">
                 Destination delivery
@@ -644,14 +664,17 @@ function RunHistory({ runs }: { runs: EvalRun[] }) {
                       <InfoIcon className="size-3.5" aria-hidden="true" />
                     </TooltipTrigger>
                     <TooltipContent className="max-w-64">
-                      Delivered means accepted by your destination; it can take a moment to appear in the report.
+                      Delivered means accepted by your destination; it can take a moment to appear
+                      in the report.
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </span>
             </TableHead>
             <TableHead>SupportOps tracing</TableHead>
-            <TableHead className="w-12 text-right"><span className="sr-only">Report</span></TableHead>
+            <TableHead className="w-12 text-right">
+              <span className="sr-only">Report</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -671,7 +694,9 @@ function RunHistory({ runs }: { runs: EvalRun[] }) {
                   <span className="mt-1 block text-muted-foreground">
                     {duration !== null && Number.isFinite(duration)
                       ? `${(Math.max(0, duration) / 1000).toFixed(1)}s`
-                      : active ? "In progress" : "—"}
+                      : active
+                        ? "In progress"
+                        : "—"}
                   </span>
                 </TableCell>
                 <TableCell className="max-w-64 whitespace-normal">
@@ -681,8 +706,8 @@ function RunHistory({ runs }: { runs: EvalRun[] }) {
                   </span>
                   {run.creditExhausted && (
                     <p className="mt-1 text-destructive">
-                      Credits ran out; remaining cases were not executed or not graded.
-                      Answers already generated are kept in the report.
+                      Credits ran out; remaining cases were not executed or not graded. Answers
+                      already generated are kept in the report.
                     </p>
                   )}
                   {run.error && <p className="mt-1 break-words text-destructive">{run.error}</p>}
@@ -754,15 +779,15 @@ function RunHistory({ runs }: { runs: EvalRun[] }) {
       </Table>
       {runs.length ? (
         <p className="border-t px-4 py-2 text-xs text-muted-foreground">
-          Passed and failed count AI Agent results only. Execution errors and evaluator checks
-          are counted separately. Evaluator checks must fail to confirm the evaluator works.
+          Passed and failed count AI Agent results only. Execution errors and evaluator checks are
+          counted separately. Evaluator checks must fail to confirm the evaluator works.
         </p>
       ) : (
         <p className="p-6 text-center text-sm text-muted-foreground">No evaluation history yet.</p>
       )}
       <div className="border-t px-4 py-2 text-xs text-muted-foreground">
-        {runs.length ? (currentPage - 1) * 10 + 1 : 0}–{Math.min(currentPage * 10, runs.length)}{" "}
-        of {runs.length} runs · 10 per page
+        {runs.length ? (currentPage - 1) * 10 + 1 : 0}–{Math.min(currentPage * 10, runs.length)} of{" "}
+        {runs.length} runs · 10 per page
       </div>
       <div className="[&_[data-slot=pagination]]:py-2 [&_button]:h-7 [&_button]:text-xs [&_p]:text-xs">
         <ResourcePagination
@@ -827,8 +852,9 @@ export function RunsPanel({
               running={running}
               onStarted={showLatest}
               rerunIds={cases
-                .filter((item) =>
-                  item.complete && latest.cases.some((ran) => ran.sourceCaseId === item.id),
+                .filter(
+                  (item) =>
+                    item.complete && latest.cases.some((ran) => ran.sourceCaseId === item.id),
                 )
                 .slice(0, 100)
                 .map((item) => item.id)}
@@ -841,7 +867,10 @@ export function RunsPanel({
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">
           <TabsList variant="line" className="shrink-0">
             <TabsTrigger value="cases">
-              Cases <Badge variant="secondary" className="px-1.5 text-[11px]">{cases.length}</Badge>
+              Cases{" "}
+              <Badge variant="secondary" className="px-1.5 text-[11px]">
+                {cases.length}
+              </Badge>
             </TabsTrigger>
             <TabsTrigger value="results">
               Evaluation results{" "}
@@ -850,10 +879,15 @@ export function RunsPanel({
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="history">
-              History <Badge variant="secondary" className="px-1.5 text-[11px]">{runs.length}</Badge>
+              History{" "}
+              <Badge variant="secondary" className="px-1.5 text-[11px]">
+                {runs.length}
+              </Badge>
             </TabsTrigger>
           </TabsList>
-          {tab === "cases" ? caseToolbar : tab === "results" ? (
+          {tab === "cases" ? (
+            caseToolbar
+          ) : tab === "results" ? (
             <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
               <Input
                 aria-label="Search evaluation results"
@@ -887,13 +921,22 @@ export function RunsPanel({
           {children}
         </TabsContent>
         {(["results", "history"] as const).map((value) => (
-          <TabsContent key={value} value={value} forceMount className="data-[state=inactive]:hidden">
+          <TabsContent
+            key={value}
+            value={value}
+            forceMount
+            className="data-[state=inactive]:hidden"
+          >
             {query.isPending ? (
-              <p role="status" className="p-4 text-sm text-muted-foreground">Loading evaluations…</p>
+              <p role="status" className="p-4 text-sm text-muted-foreground">
+                Loading evaluations…
+              </p>
             ) : query.isError ? (
               <div className="flex items-center justify-between rounded-lg border p-4 text-sm text-destructive">
                 Unable to load evaluations.
-                <Button size="sm" variant="outline" onClick={() => void query.refetch()}>Retry</Button>
+                <Button size="sm" variant="outline" onClick={() => void query.refetch()}>
+                  Retry
+                </Button>
               </div>
             ) : value === "history" ? (
               <RunHistory runs={runs} />
