@@ -28,6 +28,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { addLangfuseIoAttributes, nameModelTurn } from "./telemetry";
 
 const caseAttributes = new AsyncLocalStorage<Attributes>();
+const caseContext = new AsyncLocalStorage<Context>();
 
 /** Preserve evaluation content while removing credential fields, including JSON Tool payloads. */
 export function redactEvalPayload(value: unknown): unknown {
@@ -73,6 +74,9 @@ class ModelTurnSpanProcessor extends BatchSpanProcessor {
       for (const [key, value] of Object.entries(event.attributes)) {
         if (typeof value === "string") event.attributes[key] = String(redactEvalPayload(value));
       }
+    }
+    if (typeof attributes["anvia.tool.name"] === "string") {
+      attributes["langfuse.observation.type"] = "tool";
     }
     const model = attributes["anvia.generation.model_id"];
     if (
@@ -178,6 +182,33 @@ export function createIsolatedTelemetry(options: {
 
   const tracer = tracerProvider.getTracer("@anvia/otel") as Tracer;
   return {
+    /** Explicit evaluation work uses the same item trace and destinations as Agent spans. */
+    async runSpan<T>(
+      name: string,
+      attributes: Attributes,
+      input: unknown,
+      fn: (span: ReturnType<Tracer["startSpan"]>) => Promise<T>,
+    ): Promise<T> {
+      const span = tracer.startSpan(
+        name,
+        { attributes },
+        caseContext.getStore() ?? context.active(),
+      );
+      span.setAttribute("langfuse.observation.input", JSON.stringify(redactEvalPayload(input)));
+      try {
+        const output = await fn(span);
+        span.setAttribute("langfuse.observation.output", JSON.stringify(redactEvalPayload(output)));
+        span.setStatus({ code: SpanStatusCode.OK });
+        return output;
+      } catch (error) {
+        const message = String(redactEvalPayload(String(error)));
+        span.setStatus({ code: SpanStatusCode.ERROR, message });
+        span.setAttribute("langfuse.observation.output", JSON.stringify({ error: message }));
+        throw error;
+      } finally {
+        span.end();
+      }
+    },
     /** One local-data experiment item, including cases without an Agent model call. */
     async runCase<T>(
       attributes: Attributes,
@@ -204,23 +235,25 @@ export function createIsolatedTelemetry(options: {
           "langfuse.experiment.item.expected_output": JSON.stringify(redactEvalPayload(expected)),
         });
         try {
-          return await caseAttributes.run(itemAttributes, () =>
-            context.with(trace.setSpan(ROOT_CONTEXT, span), () =>
-              fn({
-                traceId,
-                observationId: spanId,
-                setOutput: (output) =>
-                  span.setAttribute(
-                    "langfuse.observation.output",
-                    JSON.stringify(redactEvalPayload(output)),
-                  ),
-                setAttributes: (values) => span.setAttributes(values),
-                setError: (error) =>
-                  span.setStatus({
-                    code: SpanStatusCode.ERROR,
-                    message: String(redactEvalPayload(String(error))),
-                  }),
-              }),
+          return await caseContext.run(trace.setSpan(ROOT_CONTEXT, span), () =>
+            caseAttributes.run(itemAttributes, () =>
+              context.with(trace.setSpan(ROOT_CONTEXT, span), () =>
+                fn({
+                  traceId,
+                  observationId: spanId,
+                  setOutput: (output) =>
+                    span.setAttribute(
+                      "langfuse.observation.output",
+                      JSON.stringify(redactEvalPayload(output)),
+                    ),
+                  setAttributes: (values) => span.setAttributes(values),
+                  setError: (error) =>
+                    span.setStatus({
+                      code: SpanStatusCode.ERROR,
+                      message: String(redactEvalPayload(String(error))),
+                    }),
+                }),
+              ),
             ),
           );
         } catch (error) {

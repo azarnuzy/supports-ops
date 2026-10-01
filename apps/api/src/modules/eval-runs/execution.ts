@@ -249,6 +249,28 @@ async function executeCase(params: {
       const metered = meterJudge(createJudgeBaseModel(), {
         // Credit Exhaustion stops Judge work as it stops AI Turns.
         canCall: async () => !(await creditsExhausted(run.workspaceId)),
+        traceCompletion: (request, call, complete) =>
+          params.telemetry.runSpan(
+            `judge.${judgeModelId()}.call.${call}`,
+            {
+              "anvia.generation.model_id": judgeModelId(),
+              "anvia.generation.turn": call,
+              "anvia.generation.input": JSON.stringify(redactEvalPayload(request)),
+              "supportops.eval.role": "judge",
+              "supportops.eval.metric": metric,
+            },
+            request,
+            async (span) => {
+              const response = await complete();
+              span.setAttributes({
+                "anvia.generation.output": JSON.stringify(redactEvalPayload(response.choice)),
+                "anvia.usage.input_tokens": response.usage.inputTokens,
+                "anvia.usage.output_tokens": response.usage.outputTokens,
+                "gen_ai.usage.cache_read.input_tokens": response.usage.cachedInputTokens,
+              });
+              return response;
+            },
+          ),
         charge: (usage) =>
           db.$transaction((tx) =>
             spendForJudgeCall(tx, {
@@ -329,7 +351,12 @@ async function executeCase(params: {
                 output = plan.agentTurn
                   ? await params.target.runTurn(input)
                   : plan.retriever
-                    ? await runRetriever(run.workspaceId, input)
+                    ? await params.telemetry.runSpan(
+                        "retrieval.searchKnowledge",
+                        { "langfuse.observation.type": "retriever" },
+                        input,
+                        () => runRetriever(run.workspaceId, input),
+                      )
                     : { ...emptyOutput };
                 output.trace = {
                   observer: "otel",

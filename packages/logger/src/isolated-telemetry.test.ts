@@ -163,3 +163,80 @@ it("exports full evaluation items and maps child payloads, tokens and secrets fo
     await telemetry.shutdown();
   }
 });
+
+it("keeps Judge and retrieval spans under their case and exports failed calls", async () => {
+  const destination = sink("workspace");
+  const telemetry = createIsolatedTelemetry({
+    onFailure: () => {},
+    serviceName: "supportops-evals",
+    sinks: [destination.value],
+  });
+  let rootId = "";
+  let traceId = "";
+  try {
+    await telemetry.runCase(
+      { "langfuse.experiment.id": "run1" },
+      "question",
+      "expected",
+      async (root) => {
+        rootId = root.observationId;
+        traceId = root.traceId;
+        await telemetry.runSpan(
+          "judge.call.1",
+          {
+            "anvia.generation.model_id": "test-model",
+            "anvia.generation.turn": 1,
+          },
+          { question: "question", apiKey: "secret-value" },
+          async (span) => {
+            span.setAttribute("anvia.usage.input_tokens", 10);
+            return { answer: "pass" };
+          },
+        );
+        await expect(
+          telemetry.runSpan("judge.call.2", {}, "question", async () => {
+            throw new Error("Judge unavailable");
+          }),
+        ).rejects.toThrow("Judge unavailable");
+        await telemetry.runSpan(
+          "retrieval.searchKnowledge",
+          { "langfuse.observation.type": "retriever" },
+          "question",
+          async () => ["passage"],
+        );
+      },
+    );
+    await telemetry.flush();
+    const request = destination.sent.find((request) => request.signal === "traces");
+    if (!request) throw new Error("No traces exported");
+    const payload = JSON.parse(request.body) as {
+      resourceSpans: Array<{
+        scopeSpans: Array<{
+          spans: Array<{
+            name: string;
+            traceId: string;
+            parentSpanId?: string;
+            status: { code?: number; message?: string };
+          }>;
+        }>;
+      }>;
+    };
+    const spans = payload.resourceSpans.flatMap((resource) =>
+      resource.scopeSpans.flatMap((scope) => scope.spans),
+    );
+    const children = spans.filter((span) => span.name !== "eval.case");
+    expect(children).toHaveLength(3);
+    for (const child of children) {
+      expect(child.parentSpanId).toBe(rootId);
+      expect(child.traceId).toBe(traceId);
+    }
+    expect(children.find((span) => span.name === "judge.call.2")?.status).toMatchObject({
+      code: 2,
+      message: "Error: Judge unavailable",
+    });
+    expect(request.body).toContain("passage");
+    expect(request.body).not.toContain("secret-value");
+  } finally {
+    await telemetry.shutdown();
+  }
+});

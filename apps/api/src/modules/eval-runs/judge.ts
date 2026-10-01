@@ -38,6 +38,11 @@ export function meterJudge(
   model: CompletionModel,
   hooks: {
     canCall: () => Promise<boolean>;
+    traceCompletion?: (
+      request: Parameters<CompletionModel["completion"]>[0],
+      call: number,
+      complete: () => ReturnType<CompletionModel["completion"]>,
+    ) => ReturnType<CompletionModel["completion"]>;
     charge: (usage: {
       cachedInputTokens: number;
       inputTokens: number;
@@ -46,6 +51,7 @@ export function meterJudge(
   },
 ) {
   const meter: JudgeMeter = { calls: 0, exhausted: false, failed: false };
+  let attempts = 0;
   const metered = new Proxy(model, {
     get(target, property) {
       if (property !== "completion") {
@@ -59,7 +65,11 @@ export function meterJudge(
         }
         let response: Awaited<ReturnType<CompletionModel["completion"]>>;
         try {
-          response = await target.completion(...args);
+          const complete = () => target.completion(...args);
+          attempts += 1;
+          response = await (hooks.traceCompletion
+            ? hooks.traceCompletion(args[0], attempts, complete)
+            : complete());
         } catch (error) {
           meter.failed = true;
           throw error;

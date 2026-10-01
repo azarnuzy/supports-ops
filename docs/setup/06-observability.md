@@ -94,3 +94,23 @@ to the item root, so cases without a model call also have a trace to inspect.
 Inspect new Runs under Langfuse Experiments, then open an item trace to inspect its
 model and Tool calls. Existing Runs are not backfilled. Evaluation and delivery remain
 separate: retrying a refused export does not repeat the AI Agent or Judge calls.
+
+Judge completions appear as `judge.<model>.call.<n>` child generations under
+`eval.case`, with full input/output, usage, and failed attempts. Their duration
+covers the model call; Credit checks and charging remain outside that span.
+Retriever-only Cases have a `retrieval.searchKnowledge` child span containing
+the query and retrieved results. Agent Tool calls (including `searchKnowledge`)
+and model turns are emitted by the existing Anvia observer only when executed.
+
+To reproduce a central-only delivery failure locally, keep a valid Workspace
+destination and point the worker's central `TELEMETRY_EXPORTER_OTLP_ENDPOINT`
+at an unreachable local OTLP endpoint, with telemetry enabled and exporter
+`otlp`. Restart the worker and start one Eval Case. The Workspace destination
+can be Delivered while SupportOps tracing is PENDING and retrying. Inspect
+`EvalRunEvidence` rows for that Run with target CENTRAL: `signal`, `lastError`,
+`attempts`, `deliveredAt`, and `failedAt` identify the failed delivery, without
+opening its payload. Restore the central endpoint and restart the worker;
+retries replay evidence without new model calls. After retries are exhausted,
+use the existing retry action. This reproduces the status, not necessarily
+the original error: an HTTP error for logs can instead indicate that the
+central destination does not accept Anvia's OTLP log records.
