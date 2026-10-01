@@ -14,6 +14,48 @@ const sink = (name: string, fail = false) => {
   return { sent, value };
 };
 
+it("exports actual model names and turn numbers to every eval destination", async () => {
+  const central = sink("central");
+  const workspace = sink("workspace");
+  const telemetry = createIsolatedTelemetry({
+    onFailure: () => {},
+    serviceName: "supportops-evals",
+    sinks: [central.value, workspace.value],
+  });
+  try {
+    for (const [name, modelId] of [
+      ["model.turn.1", "openai/gpt-5.6-luna"],
+      ["model.turn.2", "anthropic/claude-sonnet-4"],
+      ["model.turn.3", ""],
+      ["tool.searchKnowledge", "openai/gpt-5.6-luna"],
+    ] as const) {
+      telemetry.tracer
+        .startSpan(name, {
+          attributes: { "anvia.generation.model_id": modelId },
+        })
+        .end();
+    }
+    await telemetry.flush();
+    for (const destination of [central, workspace]) {
+      const body = JSON.parse(
+        destination.sent.find((request) => request.signal === "traces")!.body,
+      );
+      const names = body.resourceSpans.flatMap(
+        (resource: { scopeSpans: Array<{ spans: Array<{ name: string }> }> }) =>
+          resource.scopeSpans.flatMap((scope) => scope.spans.map((span) => span.name)),
+      );
+      expect(names).toEqual([
+        "openai/gpt-5.6-luna.turn.1",
+        "anthropic/claude-sonnet-4.turn.2",
+        "model.turn.3",
+        "tool.searchKnowledge",
+      ]);
+    }
+  } finally {
+    await telemetry.shutdown();
+  }
+});
+
 it("sends a span and a log to every sink, keeps refused requests, and leaves the global provider alone", async () => {
   const good = sink("central");
   const bad = sink("workspace", true);

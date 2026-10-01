@@ -1,4 +1,4 @@
-import type { Tracer } from "@opentelemetry/api";
+import type { Context, Tracer } from "@opentelemetry/api";
 import type { Logger } from "@opentelemetry/api-logs";
 import { ExportResultCode, type ExportResult } from "@opentelemetry/core";
 import { JsonLogsSerializer, JsonTraceSerializer } from "@opentelemetry/otlp-transformer";
@@ -13,8 +13,17 @@ import {
   BasicTracerProvider,
   BatchSpanProcessor,
   type ReadableSpan,
+  type Span,
   type SpanExporter,
 } from "@opentelemetry/sdk-trace-base";
+import { nameModelTurn } from "./telemetry";
+
+class ModelTurnSpanProcessor extends BatchSpanProcessor {
+  override onStart(span: Span, parentContext: Context) {
+    nameModelTurn(span);
+    super.onStart(span, parentContext);
+  }
+}
 
 export type TelemetrySignal = "logs" | "traces";
 
@@ -68,7 +77,7 @@ export function createIsolatedTelemetry(options: {
     resource,
     spanProcessors: options.sinks.map(
       (sink) =>
-        new BatchSpanProcessor({
+        new ModelTurnSpanProcessor({
           export: (spans: ReadableSpan[], done: (result: ExportResult) => void) => {
             deliver(sink, "traces", decode(JsonTraceSerializer.serializeRequest(spans))).then(done);
           },

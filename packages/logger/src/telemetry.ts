@@ -175,15 +175,19 @@ export function addLangfuseIoAttributes(span: {
   }
 }
 
+export function nameModelTurn(span: SdkSpan) {
+  const modelId = span.attributes["anvia.generation.model_id"];
+  if (/^model\.turn\.\d+$/.test(span.name) && typeof modelId === "string" && modelId) {
+    span.updateName(`${modelId}${span.name.slice("model".length)}`);
+  }
+}
+
 /** Passes a span to `inner` only when an allowed tracer created it. */
 class AgentScopeSpanProcessor implements SpanProcessor {
   constructor(private readonly inner: SpanProcessor) {}
 
   onStart(span: SdkSpan, parentContext: Context) {
-    const modelId = span.attributes["anvia.generation.model_id"];
-    if (/^model\.turn\.\d+$/.test(span.name) && typeof modelId === "string" && modelId) {
-      span.updateName(`${modelId}${span.name.slice("model".length)}`);
-    }
+    nameModelTurn(span);
     for (const [key, entry] of propagation.getBaggage(parentContext)?.getAllEntries() ?? []) {
       if (carriesTraceIdentity(key)) {
         span.setAttribute(key, entry.value);
