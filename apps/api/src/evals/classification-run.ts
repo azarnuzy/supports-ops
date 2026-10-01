@@ -219,11 +219,11 @@ async function main() {
           metadata: { caseId: testCase.id, critical: testCase.critical ?? false, repeat: index + 1 },
         })),
       ).flat();
-      await runEvalCli({
+      await runEvalCli<Input, Result, Expected>({
         name: `supportops-classification ${model}`,
         cases,
         concurrency: 1,
-        metrics: metrics as never,
+        metrics,
         reporters: [reporter],
         maxValueLength: 2_000,
         run: {
