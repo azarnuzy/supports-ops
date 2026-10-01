@@ -16,7 +16,7 @@ export function activeWorkspaceId() {
 export function createApiClient(baseUrl: string) {
   return hc<AppType>(baseUrl, {
     init: { credentials: "include" },
-    headers: () => {
+    headers: (): Record<string, string> => {
       const workspaceId = activeWorkspaceId();
       return workspaceId ? { "X-Workspace-Id": workspaceId } : {};
     },
