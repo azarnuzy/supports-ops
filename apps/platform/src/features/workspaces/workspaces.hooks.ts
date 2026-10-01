@@ -19,7 +19,11 @@ export const workspacesQueryOptions = queryOptions({
 /** Open the first available Workspace on a new tab. */
 export function useActiveWorkspaceId() {
   const workspaces = useQuery(workspacesQueryOptions);
-  const selected = useSyncExternalStore(subscribeToWorkspaceChange, getActiveWorkspaceId, () => null);
+  const selected = useSyncExternalStore(
+    subscribeToWorkspaceChange,
+    getActiveWorkspaceId,
+    () => null,
+  );
   return selected ?? workspaces.data?.[0]?.id ?? null;
 }
 
@@ -28,7 +32,12 @@ export function useSwitchWorkspace() {
   const navigate = useNavigate();
 
   return async (workspaceId: string) => {
-    const scopedQueryKeys = [["workspace"], ["ticket-categories"], ["tool-calls"], queryKeys.auth.me] as const;
+    const scopedQueryKeys = [
+      ["workspace"],
+      ["ticket-categories"],
+      ["tool-calls"],
+      queryKeys.auth.me,
+    ] as const;
     await Promise.all(scopedQueryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })));
     switchToWorkspace(workspaceId);
     await Promise.all(scopedQueryKeys.map((queryKey) => queryClient.resetQueries({ queryKey })));

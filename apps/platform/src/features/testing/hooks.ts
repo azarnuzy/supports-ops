@@ -57,7 +57,11 @@ export const useSaveDestinationMutation = () => {
 export const useCheckDestinationMutation = () => useMutation({ mutationFn: checkDestination });
 
 export const useImportSessionsQuery = (enabled: boolean) =>
-  useQuery({ enabled, queryFn: getImportSessions, queryKey: ["workspace", "eval-import-sessions"] });
+  useQuery({
+    enabled,
+    queryFn: getImportSessions,
+    queryKey: ["workspace", "eval-import-sessions"],
+  });
 
 export const usePreviewImportMutation = () => useMutation({ mutationFn: previewImport });
 export const useImportCasesMutation = () => useMutate(importCases);
@@ -71,7 +75,9 @@ export const useRunsQuery = (datasetId: string) =>
     queryKey: runsKey(datasetId),
     refetchInterval: (query) =>
       query.state.data?.runs.some((r) => r.status === "QUEUED" || r.status === "RUNNING") ||
-      query.state.data?.runs.some((r) => r.centralDelivery === "PENDING" || r.workspaceDelivery === "PENDING")
+      query.state.data?.runs.some(
+        (r) => r.centralDelivery === "PENDING" || r.workspaceDelivery === "PENDING",
+      )
         ? 3_000
         : false,
   });
