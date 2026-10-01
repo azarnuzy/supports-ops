@@ -37,6 +37,7 @@ import {
   organizationAiUsageSummaryQueryOptions,
   useCreditLedgerQuery,
 } from "./ai-usage.hooks";
+import { getAiUsageSummary, getOrganizationAiUsageSummary } from "./ai-usage.services";
 import {
   channelLabels,
   formatCredits,
@@ -92,7 +93,11 @@ function EmptyRange({ title, description }: { title: string; description: string
 }
 
 function OverviewPanel({ range, filters, organization }: { range: DashboardRange; filters: AiUsageFilters; organization: boolean }) {
-  const summary = useQuery(organization ? organizationAiUsageSummaryQueryOptions(range, filters) : aiUsageSummaryQueryOptions(range, filters));
+  const options = organization ? organizationAiUsageSummaryQueryOptions(range, filters) : aiUsageSummaryQueryOptions(range, filters);
+  const summary = useQuery({
+    queryKey: [...options.queryKey],
+    queryFn: () => organization ? getOrganizationAiUsageSummary(range, filters) : getAiUsageSummary(range, filters),
+  });
   if (summary.isPending) return <PanelSkeleton />;
   if (summary.isError) return <LoadState error={summary.error} onRetry={() => summary.refetch()} />;
 
