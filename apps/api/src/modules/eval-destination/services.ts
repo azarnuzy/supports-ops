@@ -52,12 +52,12 @@ export type ReadinessResult = {
   credentials: "configured";
   /** Did the trace endpoint accept an authenticated, empty OTLP request? */
   endpoint: "accepted" | "unauthorized" | "rejected" | "unreachable" | "blocked";
-  /** Does the same destination ingest evaluation evidence (OTLP logs), not just traces? */
+  /** Does the destination expose its evaluation API, not just trace ingestion? */
   reports: "compatible" | "unsupported" | "unchecked";
 };
 
-/** Sends empty OTLP requests, so nothing is stored at the backend and no LLM is called. Never
- * follows redirects: the Authorization header must not leave the configured host. */
+/** Sends empty OTLP requests and reads Langfuse score configs without storing data or calling an LLM.
+ * Never follows redirects: the Authorization header must not leave the configured host. */
 export async function checkEvalDestination(
   request: typeof fetch = fetch,
 ): Promise<ReadinessResult> {
@@ -69,15 +69,16 @@ export async function checkEvalDestination(
   const headers = {
     authorization: `Basic ${Buffer.from(`${publicKey}:${secretKey}`).toString("base64")}`,
     "content-type": "application/json",
+    "x-langfuse-ingestion-version": "4",
   };
   const { traces, logs } = otlpUrls(destination.endpoint);
 
-  const post = async (url: string, body: object) => {
+  const probe = async (url: string, body?: object) => {
     await assertSafeDestination(url);
     return request(url, {
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       headers,
-      method: "POST",
+      method: body === undefined ? "GET" : "POST",
       redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });
@@ -85,7 +86,7 @@ export async function checkEvalDestination(
 
   let endpoint: ReadinessResult["endpoint"];
   try {
-    const response = await post(traces, { resourceSpans: [] });
+    const response = await probe(traces, { resourceSpans: [] });
     endpoint = response.ok
       ? "accepted"
       : response.status === 401 || response.status === 403
@@ -97,7 +98,10 @@ export async function checkEvalDestination(
   if (endpoint !== "accepted") return { credentials: "configured", endpoint, reports: "unchecked" };
 
   try {
-    const response = await post(logs, { resourceLogs: [] });
+    const response =
+      destination.backend === "LANGFUSE"
+        ? await probe(`${langfuseApiUrl(destination.endpoint, "score-configs")}?limit=1`)
+        : await probe(logs, { resourceLogs: [] });
     return {
       credentials: "configured",
       endpoint,
@@ -113,6 +117,20 @@ export async function checkEvalDestination(
 export function otlpUrls(endpoint: string) {
   const base = endpoint.replace(/\/+$/, "").replace(/\/v1\/traces$/, "");
   return { logs: `${base}/v1/logs`, traces: `${base}/v1/traces` };
+}
+
+/** Preserve self-hosted path prefixes and the configured host when selecting a public API. */
+export function langfuseApiUrl(endpoint: string, resource: "scores" | "score-configs") {
+  const url = new URL(endpoint);
+  if (!/\/api\/public\/otel(?:\/v1\/traces)?\/*$/.test(url.pathname)) {
+    throw new Error(
+      "Langfuse requires an /api/public/otel or /api/public/otel/v1/traces endpoint.",
+    );
+  }
+  url.pathname = url.pathname.replace(/\/otel(?:\/v1\/traces)?\/*$/, `/${resource}`);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 function toDto(destination: {

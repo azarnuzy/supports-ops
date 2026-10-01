@@ -54,6 +54,7 @@ export async function processEvalRun({ data }: { data: EvalRunJob }) {
   if (central) sinks.push(central);
   sinks.push(
     workspaceSink({
+      backend: run.destinationBackend,
       credentialsEncrypted: run.destinationCredentialsEncrypted,
       endpoint: run.destinationEndpoint,
     }),

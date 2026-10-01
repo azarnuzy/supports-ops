@@ -123,11 +123,30 @@ describe("saveEvalDestination", () => {
 
 describe("checkEvalDestination", () => {
   const stored = () => ({
+    backend: "LENS",
     credentialsEncrypted: encryptToolSecret(
       JSON.stringify({ publicKey: "pk", secretKey: "sk" }),
       key,
     ),
     endpoint: "https://8.8.8.8/api/public/otel",
+  });
+
+  it("checks Langfuse score configs without writing a score or probing OTLP logs", async () => {
+    mocks.find.mockResolvedValue({
+      ...stored(),
+      backend: "LANGFUSE",
+      endpoint: "https://8.8.8.8/api/public/otel/v1/traces/",
+    });
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response("{}"));
+    await expect(checkEvalDestination(request)).resolves.toEqual({
+      credentials: "configured",
+      endpoint: "accepted",
+      reports: "compatible",
+    });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[0]).toBe("https://8.8.8.8/api/public/score-configs?limit=1");
+    expect(request.mock.calls[1]?.[1]).toMatchObject({ method: "GET", redirect: "manual" });
+    expect(request.mock.calls[1]?.[1]?.body).toBeUndefined();
   });
 
   it("separates trace acceptance from evaluation-evidence compatibility, without redirects", async () => {

@@ -29,6 +29,7 @@ export async function processEvalDelivery(job: Job<EvalDeliveryJob>) {
     target === "CENTRAL"
       ? centralSink()
       : workspaceSink({
+          backend: run.destinationBackend,
           credentialsEncrypted: run.destinationCredentialsEncrypted,
           endpoint: run.destinationEndpoint,
         });

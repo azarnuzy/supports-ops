@@ -9,9 +9,10 @@ A successful OTLP response is not enough. Confirm each item below in the backend
 ## Setup
 
 1. In **Testing**, configure the Workspace destination (Lens project ingestion credentials, or
-   Langfuse public/secret keys) and confirm the readiness check reports `reports: accepted`. A
-   `reports: unsupported` result means the backend accepts traces but not OTLP logs, so scores
-   will not arrive: stop and record it, do not assume it works.
+   Langfuse public/secret keys) and confirm the readiness check reports `reports: compatible`.
+   Lens receives reports through OTLP logs; Langfuse receives scores through `POST /api/public/scores`.
+   For Langfuse, readiness reads score configs without creating a score; it does not verify a score
+   write. A `reports: unsupported` result means the report API probe failed: stop and record it.
 2. Create a small dataset with a rubric, and one Case of each kind:
    - `contains` (deterministic, no Judge)
    - `gEval` with an expected answer (2 Judge calls)
