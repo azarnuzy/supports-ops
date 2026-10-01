@@ -12,7 +12,11 @@ export const workspacesRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "forbidden" }, 403);
     }
 
-    const workspaces = await listOrganizationWorkspaces(admin.organizationId, admin.id, admin.isOrganizationAdmin);
+    const workspaces = await listOrganizationWorkspaces(
+      admin.organizationId,
+      admin.id,
+      admin.isOrganizationAdmin,
+    );
 
     return c.json({ workspaces }, 200);
   })

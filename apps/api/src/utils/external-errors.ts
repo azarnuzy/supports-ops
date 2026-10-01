@@ -98,9 +98,10 @@ export async function fetchWithRetry(
       const response = await fetch(input, init);
       if (response.status !== 429 || attempt >= maxAttempts) return response;
       const retryAfterSeconds = Number(response.headers.get("retry-after"));
-      const delayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-        ? retryAfterSeconds * 1000
-        : 2 ** attempt * 1000;
+      const delayMs =
+        Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+          ? retryAfterSeconds * 1000
+          : 2 ** attempt * 1000;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   });
