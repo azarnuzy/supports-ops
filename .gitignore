@@ -45,3 +45,8 @@ _local/
 /docs/references/
 /docs/research/assets/*
 !/docs/research/assets/support-ops-logo.png
+
+# Personal agent tooling config
+.omp/
+/docs/knowledge/
+/docs/research/cost-runs/

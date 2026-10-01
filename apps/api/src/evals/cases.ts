@@ -9,7 +9,7 @@ import type { EvalTurnInput } from "./target";
  * by `run.ts`.
  *
  * Expectations come from the Workspace's eight PUBLISHED Knowledge Sources
- * (Northstar Outfitters, docs/knowledge/01–08), the live Shopify catalog, or
+ * (Northstar Outfitters demo documents, not included in this repo), the live Shopify catalog, or
  * SupportOps' conversation contract for clarification, Escalation and Resolution.
  * Nothing about the merchant's products or policies is invented.
  */
