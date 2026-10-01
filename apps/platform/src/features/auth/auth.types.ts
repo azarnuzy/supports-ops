@@ -9,6 +9,7 @@ export type AuthUser = {
   name: string;
   role: Role;
   updatedAt: string;
+  workspaceId?: string;
 };
 export type LoginInput = { email: string; password: string };
 export type RegisterInput = { email: string; password: string; name: string };
