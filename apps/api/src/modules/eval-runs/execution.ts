@@ -204,6 +204,16 @@ type CaseOutcome = {
   judgeCalls?: number;
   limitations?: string[];
   passed?: boolean;
+  result?: {
+    answer: string | null;
+    decision: string | null;
+    checks: {
+      name: string;
+      outcome: string;
+      explanation: string;
+      score: string | number | boolean | null;
+    }[];
+  };
   status: "EVALUATED" | "EXECUTION_ERROR" | "INVALID" | "UNGRADED";
   traceId?: string | null;
 };
@@ -322,7 +332,7 @@ async function executeCase(params: {
               }),
           },
           () =>
-            runEvalSuite({
+            runEvalSuite<EvalTurnInput, EvalTurnOutput, string>({
               cases: [evalCase],
               concurrency: 1,
               metrics: metricsFor(item, {
@@ -392,6 +402,24 @@ async function executeCase(params: {
       evaluatorHealth: plan.evaluatorHealth,
       judgeCalls: judgeCaseCalls(),
       limitations: output?.limitations ?? [],
+      result: {
+        answer: plan.agentTurn ? (output?.output ?? null) : null,
+        decision: plan.agentTurn ? (output?.decision ?? null) : null,
+        checks: (result?.metrics ?? []).map((check) => ({
+          name: check.metricName,
+          outcome: check.outcome.outcome,
+          explanation:
+            check.outcome.comment ??
+            (check.outcome.outcome === "invalid" ? check.outcome.reason : "") ??
+            "",
+          score:
+            typeof check.outcome.score === "number" ||
+            typeof check.outcome.score === "string" ||
+            typeof check.outcome.score === "boolean"
+              ? check.outcome.score
+              : null,
+        })),
+      },
       traceId: caseTraceId ?? output?.trace?.traceId ?? null,
     };
     if (!result || result.targetStatus === "failed") {
@@ -432,6 +460,11 @@ async function executeCase(params: {
       traceId: caseTraceId ?? null,
       judgeCalls: judgeCaseCalls(),
       limitations: output?.limitations ?? [],
+      result: {
+        answer: plan.agentTurn ? (output?.output ?? null) : null,
+        decision: plan.agentTurn ? (output?.decision ?? null) : null,
+        checks: [],
+      },
       status: "EXECUTION_ERROR" as const,
     };
   }

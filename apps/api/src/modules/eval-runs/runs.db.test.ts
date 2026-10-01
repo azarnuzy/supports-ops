@@ -396,6 +396,15 @@ it("runs only the selected Cases once, charges them, and reports to both destina
     ["b", "EVALUATED"],
     ["boom", "EXECUTION_ERROR"],
   ]);
+  expect(finished.cases[0]).toMatchObject({
+    sourceCaseId: "case-wa1-a",
+    message: "question a",
+    expected: "5 days",
+    result: { decision: "REPLY" },
+  });
+  expect(typeof finished.cases[0].result.answer).toBe("string");
+  expect(finished.cases[0].result.checks.length).toBeGreaterThan(0);
+  expect(finished.cases[0].result.checks[0]).toMatchObject({ outcome: "pass" });
   expect(mocks.turn).toHaveBeenCalledTimes(3);
   expect(mocks.turn.mock.calls.map(([params]) => params.customerMessage)).toEqual([
     "question a",

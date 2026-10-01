@@ -43,6 +43,20 @@ export type EvalRun = {
   centralExpiresAt: string | null;
   centralRetryable: boolean;
   cases: {
+    sourceCaseId: string;
+    message: string;
+    expected: string;
+    metadata: import("./eval-datasets").EvalCaseMetadata;
+    result: {
+      answer?: string | null;
+      decision?: string | null;
+      checks?: {
+        name: string;
+        outcome: string;
+        explanation: string;
+        score: string | number | boolean | null;
+      }[];
+    };
     caseKey: string;
     category: string;
     error: string | null;
@@ -114,10 +128,12 @@ export async function getEvalRun(client: ApiClient, id: string) {
   return (await response.json()) as unknown as { run: EvalRun };
 }
 
-export async function listEvalRuns(client: ApiClient, datasetId: string) {
-  const response = await routes(client).$get({ query: { datasetId } });
+export async function listEvalRuns(client: ApiClient, datasetId: string, page = 1, pageSize = 1) {
+  const response = await routes(client).$get({
+    query: { datasetId, page: String(page), pageSize: String(pageSize) },
+  });
   if (!response.ok) throw new Error("Failed to load Runs.");
-  return (await response.json()) as unknown as { runs: EvalRun[] };
+  return (await response.json()) as unknown as { runs: EvalRun[]; total: number; page: number };
 }
 
 export async function retryEvalRunDelivery(

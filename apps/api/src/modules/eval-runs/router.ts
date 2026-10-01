@@ -2,12 +2,13 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { retryParams, selectionSchema } from "./schema";
+import { retryParams, selectionSchema, runListQuery } from "./schema";
 import {
   DeliveryNotRetryableError,
   estimateRun,
   getRun,
   listRuns,
+  countRuns,
   RunActiveError,
   RunBlockedError,
   RunNotFoundError,
@@ -43,7 +44,15 @@ export const evalRunsRouter = new Hono<{ Variables: AuthVariables }>()
     if (!requireAdmin(c)) return c.json({ error: "forbidden" }, 403);
     await next();
   })
-  .get("/", async (c) => c.json({ runs: await listRuns(c.req.query("datasetId")) }, 200))
+  .get("/", zValidator("query", runListQuery), async (c) => {
+    const input = c.req.valid("query");
+    const total = await countRuns(input.datasetId);
+    const page = Math.min(input.page, Math.max(1, Math.ceil(total / input.pageSize)));
+    return c.json(
+      { runs: await listRuns(input.datasetId, page, input.pageSize), total, page },
+      200,
+    );
+  })
   .post("/estimate", zValidator("json", selectionSchema), (c) =>
     respond(async () => c.json({ estimate: await estimateRun(c.req.valid("json")) }, 200), c),
   )

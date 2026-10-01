@@ -16,3 +16,9 @@ export const retryParams = z.object({
   id: z.string().min(1),
   target: z.enum(["CENTRAL", "WORKSPACE"]),
 });
+
+export const runListQuery = z.object({
+  datasetId: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(20).default(20),
+});

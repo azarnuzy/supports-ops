@@ -239,6 +239,11 @@ export async function getRun(id: string) {
         position,
         status,
         traceId,
+        message,
+        expected,
+        metadata,
+        result,
+        sourceCaseId,
       }) => ({
         caseKey,
         category,
@@ -252,6 +257,11 @@ export async function getRun(id: string) {
         position,
         status,
         traceId,
+        message,
+        expected,
+        metadata,
+        result,
+        sourceCaseId,
       }),
     ),
     agentCharged: chargedFor("AI_TURN"),
@@ -278,11 +288,12 @@ export async function getRun(id: string) {
   };
 }
 
-export async function listRuns(datasetId?: string) {
+export async function listRuns(datasetId?: string, page = 1, pageSize = 20) {
   const runs = await prisma.evalRun.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { id: true },
-    take: 20,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
     where: datasetId ? { datasetId } : {},
   });
   return Promise.all(runs.map((run) => getRun(run.id)));
@@ -307,3 +318,6 @@ export async function retryDelivery(id: string, target: "CENTRAL" | "WORKSPACE")
   await enqueueEvalDelivery({ runId: id, target, workspaceId });
   return getRun(id);
 }
+
+export const countRuns = (datasetId?: string) =>
+  prisma.evalRun.count({ where: datasetId ? { datasetId } : {} });
