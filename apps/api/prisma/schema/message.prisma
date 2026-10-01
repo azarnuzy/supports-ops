@@ -53,4 +53,5 @@ model Message {
   @@index([ticketId, position])
   @@index([memorySessionId, position])
   @@index([runId])
+  @@index([workspaceId, createdAt, id])
 }
