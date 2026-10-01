@@ -1,9 +1,10 @@
 import type { CompletionModel } from "@anvia/core";
 import { runEvalSuite, type EvalCase } from "@anvia/core/evals";
 import { createOtelEvalReporter, createOtelObserver } from "@anvia/otel";
-import { captureMode, withAgentObserver } from "@repo/ai-agent";
+import { withAgentObserver } from "@repo/ai-agent";
 import {
   createIsolatedTelemetry,
+  redactEvalPayload,
   type TelemetryExportFailure,
   type TelemetrySink,
 } from "@repo/logger/isolated-telemetry";
@@ -64,9 +65,17 @@ export async function processEvalRun({ data }: { data: EvalRunJob }) {
     serviceName: "supportops-evals",
     sinks,
   });
-  const observer = createOtelObserver({ captureMode, tracer: telemetry.tracer });
+  const observer = createOtelObserver({
+    captureMode: "full",
+    tracer: telemetry.tracer,
+    transformInput: redactEvalPayload,
+    transformOutput: redactEvalPayload,
+  });
   const reporter = createOtelEvalReporter<EvalTurnInput, EvalTurnOutput, string>({
     ...evalReporterOptions,
+    captureMaxBytes: undefined,
+    transformInput: (value) => redactEvalPayload(evalReporterOptions.transformInput(value)),
+    transformOutput: (value) => redactEvalPayload(evalReporterOptions.transformOutput(value)),
     logger: telemetry.logger,
   });
 
@@ -106,6 +115,7 @@ export async function processEvalRun({ data }: { data: EvalRunJob }) {
         run,
         target,
         telemetryRunId: runId,
+        telemetry,
       });
       await db.evalRunCase.update({
         data: { ...outcome, finishedAt: new Date() },
@@ -205,6 +215,7 @@ async function executeCase(params: {
   run: NonNullable<Awaited<ReturnType<typeof db.evalRun.findFirst>>>;
   target: ReturnType<typeof createEvalTarget>;
   telemetryRunId: string;
+  telemetry: ReturnType<typeof createIsolatedTelemetry>;
 }): Promise<CaseOutcome> {
   const { item, run } = params;
   const metric = item.metric;
@@ -229,6 +240,7 @@ async function executeCase(params: {
     },
   };
   let output: EvalTurnOutput | undefined;
+  let caseTraceId: string | undefined;
   let meter: ReturnType<typeof meterJudge>["meter"] | undefined;
   const judgeCaseCalls = () => meter?.calls ?? 0;
   try {
@@ -253,48 +265,88 @@ async function executeCase(params: {
     }
     // One suite per Case, all sharing the Run's id, so a Case can be started, skipped or stopped
     // on its own terms while the report still groups under the Run.
-    const suite = await withAgentObserver(params.observer, () =>
-      runEvalSuite({
-        cases: [evalCase],
-        concurrency: 1,
-        metrics: metricsFor(item, {
-          criteria: run.criteria,
-          judge,
-          workspaceId: run.workspaceId,
-        }) as never,
-        name: run.datasetName,
-        reporters: [params.reporter as never],
-        run: {
-          datasetName: run.datasetName,
-          datasetVersion: params.telemetryRunId,
-          id: params.telemetryRunId,
-          metadata: {
-            agentModel: run.agentModel,
-            aiAgentId: run.aiAgentId,
-            datasetId: run.datasetId,
-            embeddingModel: run.embeddingModel,
-            instructionsSha256: run.instructionsSha256,
-            ...(plan.judgeCalls[1] > 0 ? { judgeModel: judgeModelId() } : {}),
-            runId: run.id,
+    const suite = await params.telemetry.runCase({
+      "langfuse.experiment.id": run.id,
+      "langfuse.experiment.name": `${run.datasetName} / ${run.id}`,
+      "langfuse.experiment.dataset.id": run.datasetId,
+      "langfuse.experiment.metadata.workspaceId": run.workspaceId,
+      "langfuse.experiment.metadata.datasetName": run.datasetName,
+      "langfuse.experiment.metadata.embeddingModel": run.embeddingModel,
+      "langfuse.experiment.metadata.agentModel": run.agentModel,
+      "langfuse.experiment.metadata.instructionsSha256": run.instructionsSha256,
+      "langfuse.experiment.item.id": `${run.datasetId}:${item.caseKey}`,
+      "langfuse.experiment.item.metadata.caseKey": item.caseKey,
+      "langfuse.experiment.item.metadata.metric": metric,
+      "langfuse.experiment.item.metadata.category": item.category,
+      "langfuse.experiment.item.metadata.evaluatorHealth": plan.evaluatorHealth,
+      "langfuse.session.id": `eval-run-${run.id}`,
+      "anvia.trace.session_id": `eval-run-${run.id}`,
+    }, evalCase.input, evalCase.expected, async (root) => {
+      caseTraceId = root.traceId;
+      const suite = await withAgentObserver({
+        startRun: (args) => params.observer.startRun({
+          ...args,
+          trace: { ...args.trace, traceId: root.traceId, parentObservationId: root.observationId },
+        }),
+      }, () =>
+        runEvalSuite({
+          cases: [evalCase],
+          concurrency: 1,
+          metrics: metricsFor(item, {
+            criteria: run.criteria,
+            judge,
             workspaceId: run.workspaceId,
+          }) as never,
+          name: run.datasetName,
+          reporters: [params.reporter as never],
+          run: {
+            datasetName: run.datasetName,
+            datasetVersion: params.telemetryRunId,
+            id: params.telemetryRunId,
+            metadata: {
+              agentModel: run.agentModel,
+              aiAgentId: run.aiAgentId,
+              datasetId: run.datasetId,
+              embeddingModel: run.embeddingModel,
+              instructionsSha256: run.instructionsSha256,
+              ...(plan.judgeCalls[1] > 0 ? { judgeModel: judgeModelId() } : {}),
+              runId: run.id,
+              workspaceId: run.workspaceId,
+            },
           },
-        },
-        target: async (input) => {
-          output = plan.agentTurn
-            ? await params.target.runTurn(input)
-            : plan.retriever
-              ? await runRetriever(run.workspaceId, input)
-              : emptyOutput;
-          return output;
-        },
-      }),
-    );
+          target: async (input) => {
+            output = plan.agentTurn
+              ? await params.target.runTurn(input)
+              : plan.retriever
+                ? await runRetriever(run.workspaceId, input)
+                : { ...emptyOutput };
+            output.trace = { observer: "otel", traceId: root.traceId, observationId: root.observationId };
+            root.setOutput(output);
+            return output;
+          },
+        }),
+      );
+      const result = suite.results[0];
+      if (result?.targetStatus === "failed") root.setError(result.targetError ?? "The turn did not complete.");
+      root.setAttributes({
+        "supportops.eval.outcome": result?.outcome ?? "unknown",
+        "supportops.eval.target_status": result?.targetStatus ?? "unknown",
+        ...(result?.targetError ? { "supportops.eval.error": message(result.targetError) } : {}),
+        "langfuse.observation.output": JSON.stringify(redactEvalPayload({
+          ...output,
+          outcome: result?.outcome,
+          metrics: result?.metrics,
+          ...(result?.targetError ? { error: message(result.targetError) } : {}),
+        })),
+      });
+      return suite;
+    });
     const result = suite.results[0];
     const base = {
       evaluatorHealth: plan.evaluatorHealth,
       judgeCalls: judgeCaseCalls(),
       limitations: output?.limitations ?? [],
-      traceId: output?.trace?.traceId ?? null,
+      traceId: caseTraceId ?? output?.trace?.traceId ?? null,
     };
     if (!result || result.targetStatus === "failed") {
       return {
@@ -331,6 +383,7 @@ async function executeCase(params: {
   } catch (error) {
     return {
       error: message(error),
+      traceId: caseTraceId ?? null,
       judgeCalls: judgeCaseCalls(),
       limitations: output?.limitations ?? [],
       status: "EXECUTION_ERROR" as const,

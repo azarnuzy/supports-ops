@@ -84,3 +84,60 @@ it("sends a span and a log to every sink, keeps refused requests, and leaves the
   globalTracer.startSpan("production.span").end();
   expect(JSON.stringify(good.sent)).not.toContain("production.span");
 });
+
+
+it("exports full evaluation items and maps child payloads, tokens and secrets for Langfuse", async () => {
+  const destination = sink("workspace");
+  const telemetry = createIsolatedTelemetry({
+    onFailure: () => {},
+    serviceName: "supportops-evals",
+    sinks: [destination.value],
+  });
+  try {
+    await telemetry.runCase({
+      "langfuse.experiment.id": "run1",
+      "langfuse.experiment.item.id": "case1",
+    }, { message: "question" }, "expected", async (root) => {
+      const child = telemetry.tracer.startSpan("model.turn.1", {
+        attributes: {
+          "anvia.generation.turn": 1,
+          "anvia.generation.model_id": "openai/test",
+          "anvia.generation.input": JSON.stringify({ message: "question", apiKey: "private-key" }),
+          "anvia.generation.output_text": "answer",
+          "anvia.usage.input_tokens": 12,
+          "anvia.usage.output_tokens": 3,
+        },
+      });
+      child.end();
+      root.setOutput({ reply: "answer", authorization: "Bearer private-token" });
+    });
+    await telemetry.flush();
+    const body = destination.sent.find((request) => request.signal === "traces")!.body;
+    const spans = JSON.parse(body).resourceSpans.flatMap(
+      (resource: { scopeSpans: Array<{ spans: Array<{ name: string; spanId: string; attributes: Array<{ key: string; value: { stringValue?: string; intValue?: string } }> }> }> }) =>
+        resource.scopeSpans.flatMap((scope) => scope.spans),
+    );
+    const attributes = (name: string) => Object.fromEntries(
+      spans.find((span: { name: string }) => span.name === name)!.attributes.map(
+        ({ key, value }: { key: string; value: { stringValue?: string; intValue?: string } }) => [key, value.stringValue ?? value.intValue],
+      ),
+    );
+    expect(attributes("eval.case")).toMatchObject({
+      "langfuse.experiment.item.expected_output": '"expected"',
+      "langfuse.observation.input": '{"message":"question"}',
+    });
+    expect(attributes("openai/test.turn.1")).toMatchObject({
+      "langfuse.experiment.id": "run1",
+      "langfuse.experiment.item.id": "case1",
+      "langfuse.observation.output": "answer",
+      "langfuse.observation.model.name": "openai/test",
+
+    });
+    expect(String(attributes("openai/test.turn.1")["gen_ai.usage.input_tokens"])).toBe("12");
+    expect(body).not.toContain("private-key");
+    expect(body).not.toContain("private-token");
+    expect(body).toContain("[redacted]");
+  } finally {
+    await telemetry.shutdown();
+  }
+});

@@ -2,7 +2,7 @@
 
 The AI Agent's Telemetry — spans, token counts, latency — is exported over OpenTelemetry to an OTLP endpoint (`ENABLE_TELEMETRY` and the `TELEMETRY_*` variables configure it). Only explicit AI Agent, model, retrieval, Tool, and conversation service spans are exported: automatic instrumentation is disabled, and because a library can instrument itself against the global tracer once the SDK starts (better-auth emits HTTP, handler, and database spans of its own), the exporter takes spans from two tracers only — `@repo/logger` and `@anvia/otel`. Anything else is dropped in `startTelemetry`. See [ADR-0010](../adr/0010-otlp-observability-and-manual-evals.md) for why the backend is configuration, not architecture.
 
-Token counts are exported under Anvia's own attribute names (`anvia.usage.input_tokens`, `anvia.generation.model_id`). A backend that reads those — Anvia Lens — reports tokens per run; one that expects the OpenTelemetry GenAI convention (`gen_ai.usage.*`), as Langfuse does, will show the spans without token or cost figures.
+Evaluation traces preserve Anvia attributes and also map model names, token usage, and input/output to Langfuse attributes. Langfuse can calculate costs when it recognizes the model and has pricing configured; SupportOps does not invent missing costs.
 
 Telemetry is a developer tool and is captured in redacted ("safe") form by default: prompt and response bodies never leave the process, so Internal-Only material that reached a prompt is not exported in raw form. It is not the audit trail — AI Activity remains the product record behind the Activity Timeline, is written to our own database, and is unaffected by any of this. Telemetry backends are free to expire data; nothing here is a substitute for Messages or AI Activity.
 
@@ -35,7 +35,7 @@ Both `apps/api` (classification, reply generation, Business Tool calls) and `app
 
 ## Seeing prompts and answers (`TELEMETRY_CAPTURE_MODE`)
 
-`safe` (the default, and the only value production may use) exports the shape of a run — spans, durations, token counts, decisions — but no prompt or response bodies. Missing Input/Output fields in Langfuse are filled with JSON summaries of the span's operation, outcome, and allowlisted error metadata. Lens shows the same fallback under `supportops.span.input_summary` and `supportops.span.output_summary`. These summaries never contain message text or provider response bodies.
+`safe` (the default for production conversations) exports the shape of a run — spans, durations, token counts, decisions — but no prompt or response bodies. Missing Input/Output fields in Langfuse are filled with JSON summaries of the span's operation, outcome, and allowlisted error metadata. Lens shows the same fallback under `supportops.span.input_summary` and `supportops.span.output_summary`. These summaries never contain message text or provider response bodies.
 
 `TELEMETRY_CAPTURE_MODE="full"` exports those bodies, which is how a development run shows what the AI Agent was actually asked, what each Tool returned, and what it answered. A prompt or Tool result can contain Internal-Only Knowledge and Customer data; `full` sends both verbatim to the configured telemetry backend.
 
@@ -76,3 +76,21 @@ later step succeeds. Meta delivery callbacks arrive independently, so each has
 its own trace under the same Session and Message IDs. External error events
 contain provider, operation, status/code, and resource IDs, never raw provider
 responses. Queue context carries trace IDs only, without baggage or message text.
+
+## Workspace evaluation reports
+
+Workspace Eval Runs always capture full Agent/model/Tool payloads, independently of
+`TELEMETRY_CAPTURE_MODE`. Credential fields and Basic/Bearer credentials are redacted;
+Customer and Knowledge content remains visible in the configured evaluation destinations.
+The evaluation observer and reporter impose no internal byte cap. Destination limits
+still apply, and rejected deliveries use the existing evidence retry mechanism.
+
+Each executed Case has an `eval.case` root with input, expected output, actual output,
+metric results, and execution errors. Child Agent/model/Tool spans retain their native
+Anvia attributes. Langfuse experiment attributes group these item traces by the
+SupportOps Run ID and local Dataset ID, with stable Case IDs across runs. Scores refer
+to the item root, so cases without a model call also have a trace to inspect.
+
+Inspect new Runs under Langfuse Experiments, then open an item trace to inspect its
+model and Tool calls. Existing Runs are not backfilled. Evaluation and delivery remain
+separate: retrying a refused export does not repeat the AI Agent or Judge calls.
