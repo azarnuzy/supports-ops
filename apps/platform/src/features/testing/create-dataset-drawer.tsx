@@ -264,10 +264,8 @@ export function CreateDatasetDrawer({
           </ol>
         </DialogHeader>
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-          <fieldset
-            disabled={busy}
-            className="grid min-h-0 content-start gap-4 overflow-y-auto p-5"
-          >
+          <div className="min-h-0 flex-1 overflow-y-auto">
+          <fieldset disabled={busy} className="grid min-w-0 content-start gap-4 p-5">
             {datasetId && (
               <p className="rounded-lg border p-3 text-sm text-muted-foreground">
                 The dataset has been created. Retry to finish importing your cases; Cancel keeps the
@@ -581,7 +579,8 @@ export function CreateDatasetDrawer({
               </>
             )}
           </fieldset>
-          <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
+          </div>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-background px-5 py-3">
             <Button disabled={busy} type="button" variant="ghost" onClick={() => close(false)}>
               Cancel
             </Button>
