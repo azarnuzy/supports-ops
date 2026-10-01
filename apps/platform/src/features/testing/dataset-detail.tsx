@@ -212,6 +212,7 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
             </Sheet>
             <RunsPanel
               key={runVersion}
+              initialTab={runVersion > 0 ? "results" : "cases"}
               datasetId={datasetId}
               cases={caseIndex}
               header={

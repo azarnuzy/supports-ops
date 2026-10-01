@@ -13,6 +13,7 @@ import {
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { toast } from "@repo/ui/components/sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@repo/ui/components/tooltip";
 import {
   ExternalLinkIcon,
   RotateCcwIcon,
@@ -21,9 +22,7 @@ import {
   ClockIcon,
   AlertCircleIcon,
   ChevronDownIcon,
-  DatabaseIcon,
-  UsersIcon,
-  CoinsIcon,
+  InfoIcon,
 } from "lucide-react";
 import { Input } from "@repo/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@repo/ui/components/native-select";
@@ -44,7 +43,7 @@ import { formatTestingDate, runResults } from "./format";
 import {
   useEstimateRunQuery,
   useRetryDeliveryMutation,
-  useRunsQuery,
+  useAllRunsQuery,
   useStartRunMutation,
 } from "./hooks";
 
@@ -171,14 +170,12 @@ export function RunConfirmDialog({
 
 function DeliveryLine({
   expiresAt,
-  label,
   retryable,
   runId,
   status,
   target,
 }: {
   expiresAt: string | null;
-  label: string;
   retryable: boolean;
   runId: string;
   status: EvalDeliveryStatus;
@@ -188,7 +185,7 @@ function DeliveryLine({
   const expired = status === "ERROR" && !retryable;
   return (
     <span className="flex flex-wrap items-center gap-2">
-      {label} — {expired ? "Delivery failed and can no longer be retried" : deliveryLabels[status]}
+      {expired ? "Delivery failed and can no longer be retried" : deliveryLabels[status]}
       {expiresAt && status !== "DELIVERED"
         ? ` · kept until ${new Date(expiresAt).toLocaleDateString()}`
         : ""}
@@ -288,252 +285,50 @@ function RunActions({
   );
 }
 
-function RunCard({ run, title }: { run: EvalRun; title: string }) {
-  const results = runResults(run);
-  const { progress } = run;
-  const active = run.status === "QUEUED" || run.status === "RUNNING";
-  const done =
-    progress.evaluated +
-    progress.executionErrors +
-    progress.unexecuted +
-    progress.ungraded +
-    progress.invalid;
-  return (
-    <div className="grid gap-2">
-      <div className="rounded-lg border bg-card px-4 py-3">
-        <h2 className="mb-3 text-sm font-semibold">{title}</h2>
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[1140px] grid-cols-[minmax(340px,2fr)_repeat(4,minmax(180px,1fr))] items-center divide-x">
-            <div className="flex h-24 items-center gap-5 pr-5">
-              <div
-                className="relative size-24 shrink-0"
-                role="progressbar"
-                aria-label="Evaluation progress"
-                aria-valuenow={done}
-                aria-valuemin={0}
-                aria-valuemax={Math.max(progress.total, 1)}
-                aria-valuetext={`${done} of ${progress.total} cases completed`}
-              >
-                <svg viewBox="0 0 100 100" className="size-full -rotate-90" aria-hidden="true">
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="43"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="10"
-                    className="text-muted"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="43"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="10"
-                    pathLength="100"
-                    strokeDasharray={`${Math.min(100, (done / Math.max(progress.total, 1)) * 100)} 100`}
-                    className="text-emerald-500"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-semibold tabular-nums">{done}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    of {progress.total} cases
-                  </span>
-                </div>
-              </div>
-              <dl className="grid flex-1 grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 text-xs">
-                <dt className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-emerald-500" />
-                  Passed
-                </dt>
-                <dd className="text-right font-medium tabular-nums">{results.passed}</dd>
-                <dt className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-red-500" />
-                  Failed
-                </dt>
-                <dd className="text-right font-medium tabular-nums">{results.failed}</dd>
-                <dt className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-amber-500" />
-                  Not evaluated
-                </dt>
-                <dd className="text-right font-medium tabular-nums">
-                  {progress.executionErrors +
-                    progress.invalid +
-                    progress.ungraded +
-                    progress.unexecuted}
-                </dd>
-              </dl>
-            </div>
-            <div className="flex h-24 items-center gap-3 px-4">
-              <span className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400">
-                <DatabaseIcon className="size-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Destination</p>
-                <p
-                  className={`mt-1 text-sm font-medium ${run.workspaceDelivery === "ERROR" ? "text-destructive" : run.workspaceDelivery === "DELIVERED" ? "text-emerald-600 dark:text-emerald-400" : ""}`}
-                >
-                  {
-                    {
-                      DELIVERED: "Delivered",
-                      ERROR: "Delivery failed",
-                      NOT_CONFIGURED: "Not configured",
-                      PENDING: "Pending",
-                    }[run.workspaceDelivery]
-                  }
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {run.destinationBackend === "LANGFUSE" ? "Langfuse" : "Anvia Lens"}
-                </p>
-              </div>
-            </div>
-            <div className="flex h-24 items-center gap-3 px-4">
-              <span className="rounded-lg bg-muted p-2">
-                <UsersIcon className="size-4" />
-              </span>
-              <div>
-                <p className="whitespace-nowrap text-xs text-muted-foreground">Evaluator usage</p>
-                <p className="mt-1 whitespace-nowrap text-sm font-medium tabular-nums">
-                  {run.agentCharged} AI Agent Credits
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {run.judgeCallsCharged} Judge calls
-                </p>
-              </div>
-            </div>
-            <div className="flex h-24 items-center gap-3 px-4">
-              <span className="rounded-lg bg-primary/10 p-2 text-primary">
-                <CoinsIcon className="size-4" />
-              </span>
-              <div>
-                <p className="whitespace-nowrap text-xs text-muted-foreground">Credits charged</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">{run.chargedCredits}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {run.judgeCharged} Judge Credits
-                </p>
-              </div>
-            </div>
-            <div className="flex h-24 items-center gap-3 pl-4">
-              <span className="rounded-lg bg-primary/10 p-2 text-primary">
-                <ClockIcon className="size-4" />
-              </span>
-              <div>
-                <p className="whitespace-nowrap text-xs text-muted-foreground">Evaluation time</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums">
-                  {run.finishedAt &&
-                  Number.isFinite(
-                    new Date(run.finishedAt).getTime() - new Date(run.createdAt).getTime(),
-                  )
-                    ? `${Math.max(0, (new Date(run.finishedAt).getTime() - new Date(run.createdAt).getTime()) / 1000).toFixed(1)}s`
-                    : active
-                      ? "In progress"
-                      : "—"}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">Total run duration</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {progress.evaluatorChecks > 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Evaluator checks: {progress.evaluatorHealthy} of {progress.evaluatorChecks} failed as they
-          should. These are not AI Agent results.
-        </p>
-      ) : null}
-      {run.creditExhausted ? (
-        <p className="text-sm text-destructive">
-          Credits ran out; remaining cases were not executed or not graded. Answers already
-          generated are kept in the report.
-        </p>
-      ) : null}
-      {run.error ? <p className="text-sm text-destructive">{run.error}</p> : null}
-      <details className="text-xs text-muted-foreground">
-        <summary className="cursor-pointer font-medium">
-          Evaluation details · Report delivery · Credits
-        </summary>
-        <div className="mt-2 grid gap-2">
-          <p className="text-xs text-muted-foreground">
-            {done} of {progress.total} cases done · {progress.evaluated} evaluated
-            {progress.executionErrors > 0 ? ` · ${progress.executionErrors} execution errors` : ""}
-            {progress.ungraded > 0 ? ` · ${progress.ungraded} not graded` : ""}
-            {progress.invalid > 0 ? ` · ${progress.invalid} invalid` : ""}
-            {progress.unexecuted > 0 ? ` · ${progress.unexecuted} not executed` : ""}
-          </p>
-
-          <p className="text-xs text-muted-foreground">
-            Passed and failed count AI Agent results only. Execution errors and evaluator checks are
-            counted separately.
-          </p>
-
-          <p>
-            {run.chargedCredits} Credits charged · {run.agentCharged} AI Agent · {run.judgeCharged}{" "}
-            Judge
-          </p>
-          <DeliveryLine
-            expiresAt={run.workspaceExpiresAt}
-            label="Your destination"
-            retryable={run.workspaceRetryable}
-            runId={run.id}
-            status={run.workspaceDelivery}
-            target="WORKSPACE"
-          />
-          <DeliveryLine
-            expiresAt={run.centralExpiresAt}
-            label="SupportOps tracing"
-            retryable={run.centralRetryable}
-            runId={run.id}
-            status={run.centralDelivery}
-            target="CENTRAL"
-          />
-          {run.workspaceDelivery === "DELIVERED" ? (
-            <span>Accepted by your destination; it can take a moment to appear in the report.</span>
-          ) : null}
-        </div>
-      </details>
-    </div>
-  );
-}
-
 function RunCaseResults({
-  run,
+  runs,
   search,
   filter,
   page,
   setPage,
 }: {
-  run: EvalRun;
+  runs: EvalRun[];
   search: string;
   filter: string;
   page: number;
   setPage: (page: number) => void;
 }) {
-  const [sort, setSort] = useState<TableSort<"caseKey" | "message" | "category" | "expected" | "result" | "metric">>(null);
+  const [sort, setSort] = useState<
+    TableSort<"caseKey" | "message" | "category" | "expected" | "result" | "metric" | "runCreatedAt">
+  >(null);
   function sortBy(column: NonNullable<typeof sort>["column"]) {
     setSort(nextSort(sort, column));
     setPage(1);
   }
   const [expanded, setExpanded] = useState<string[]>([]);
-  const filtered = run.cases.filter(
-    (item) =>
-      `${item.caseKey} ${item.message}`.toLowerCase().includes(search.toLowerCase()) &&
-      (filter === "all" ||
-        (filter === "failed"
-          ? !item.evaluatorHealth && item.passed === false
-          : filter === "passed"
-            ? !item.evaluatorHealth && item.passed === true
-            : item.status !== "EVALUATED" &&
-              item.status !== "PENDING" &&
-              item.status !== "RUNNING")),
-  );
+  const filtered = runs
+    .flatMap((run) =>
+      run.cases.map((item) => ({ ...item, runCreatedAt: run.createdAt, runId: run.id })),
+    )
+    .filter(
+      (item) =>
+        `${item.caseKey} ${item.message}`.toLowerCase().includes(search.toLowerCase()) &&
+        (filter === "all" ||
+          (filter === "failed"
+            ? !item.evaluatorHealth && item.passed === false
+            : filter === "passed"
+              ? !item.evaluatorHealth && item.passed === true
+              : item.status !== "EVALUATED" &&
+                item.status !== "PENDING" &&
+                item.status !== "RUNNING")),
+    );
   const resultLabel = (item: EvalRun["cases"][number]) => {
     if (item.status !== "EVALUATED") return caseLabels[item.status];
     if (item.evaluatorHealth) return item.passed ? "Evaluator working" : "Evaluator check failed";
     return item.passed === true ? "Passed" : item.passed === false ? "Failed" : caseLabels[item.status];
   };
   const items = sortRows(filtered, sort, (item) => {
+    if (sort?.column === "runCreatedAt") return new Date(item.runCreatedAt).getTime();
     if (sort?.column === "result") return resultLabel(item);
     if (sort?.column === "metric") return metricLabels[item.metric as keyof typeof metricLabels] ?? item.metric;
     return item[sort?.column ?? "caseKey"] || null;
@@ -545,7 +340,7 @@ function RunCaseResults({
         <p className="p-4 text-sm text-muted-foreground">No results match this filter.</p>
       )}
       <div className="max-h-[65vh] overflow-auto [&_[data-slot=table-container]]:overflow-visible">
-        <Table className="min-w-[980px] table-fixed text-xs">
+        <Table className="min-w-[1180px] table-fixed text-xs">
           <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow>
               <SortableHead
@@ -595,6 +390,14 @@ function RunCaseResults({
                 onSort={() => sortBy("metric")}
               >
                 Scores / Evaluation
+              </SortableHead>
+              <SortableHead
+                className="w-48"
+                column="runCreatedAt"
+                sort={sort}
+                onSort={() => sortBy("runCreatedAt")}
+              >
+                Run time
               </SortableHead>
               <TableHead className="w-16 pr-4">Details</TableHead>
             </TableRow>
@@ -678,6 +481,7 @@ function RunCaseResults({
                         </span>
                       )}
                     </TableCell>
+                    <TableCell title={item.runId}>{formatTestingDate(item.runCreatedAt)}</TableCell>
                     <TableCell>
                       <Button
                         size="icon"
@@ -702,7 +506,7 @@ function RunCaseResults({
                   </TableRow>
                   {expanded.includes(item.id) && (
                     <TableRow id={`result-detail-${item.id}`}>
-                      <TableCell colSpan={7} className="whitespace-normal p-3">
+                      <TableCell colSpan={8} className="whitespace-normal p-3">
                         <dl className="grid min-w-0 gap-3 rounded-lg bg-muted/30 p-3 sm:grid-cols-2">
                           <div>
                             <dt className="mb-1 text-xs font-semibold text-muted-foreground">
@@ -816,6 +620,161 @@ function RunCaseResults({
   );
 }
 
+function RunHistory({ runs }: { runs: EvalRun[] }) {
+  const [page, setPage] = useState(1);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(runs.length / 10)));
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card">
+      <Table className="min-w-[1500px] text-xs">
+        <TableHeader>
+          <TableRow>
+            {[
+              "Run time / Duration", "Status / Progress", "Results",
+              "Evaluator checks", "Credits / Usage", "Destination",
+            ].map((label) => <TableHead key={label}>{label}</TableHead>)}
+            <TableHead>
+              <span className="inline-flex items-center gap-1.5">
+                Destination delivery
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger
+                      aria-label="About destination delivery"
+                      className="inline-flex cursor-help rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      <InfoIcon className="size-3.5" aria-hidden="true" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-64">
+                      Delivered means accepted by your destination; it can take a moment to appear in the report.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </span>
+            </TableHead>
+            <TableHead>SupportOps tracing</TableHead>
+            <TableHead className="w-12 text-right"><span className="sr-only">Report</span></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {runs.slice((currentPage - 1) * 10, currentPage * 10).map((run) => {
+            const results = runResults(run);
+            const p = run.progress;
+            const notEvaluated = p.executionErrors + p.invalid + p.ungraded + p.unexecuted;
+            const done = p.evaluated + notEvaluated;
+            const active = run.status === "QUEUED" || run.status === "RUNNING";
+            const duration = run.finishedAt
+              ? new Date(run.finishedAt).getTime() - new Date(run.createdAt).getTime()
+              : null;
+            return (
+              <TableRow key={run.id} className="[&>td]:align-top">
+                <TableCell title={run.id}>
+                  {formatTestingDate(run.createdAt)}
+                  <span className="mt-1 block text-muted-foreground">
+                    {duration !== null && Number.isFinite(duration)
+                      ? `${(Math.max(0, duration) / 1000).toFixed(1)}s`
+                      : active ? "In progress" : "—"}
+                  </span>
+                </TableCell>
+                <TableCell className="max-w-64 whitespace-normal">
+                  <span>{runLabels[run.status]}</span>
+                  <span className="mt-1 block text-muted-foreground">
+                    {done} / {p.total} completed · {p.evaluated} evaluated
+                  </span>
+                  {run.creditExhausted && (
+                    <p className="mt-1 text-destructive">
+                      Credits ran out; remaining cases were not executed or not graded.
+                      Answers already generated are kept in the report.
+                    </p>
+                  )}
+                  {run.error && <p className="mt-1 break-words text-destructive">{run.error}</p>}
+                </TableCell>
+                <TableCell>
+                  {results.passed} passed · {results.failed} failed
+                  <span className="mt-1 block text-muted-foreground">
+                    {notEvaluated} not evaluated
+                  </span>
+                  {notEvaluated > 0 && (
+                    <div className="mt-1 text-muted-foreground">
+                      {p.executionErrors > 0 && <p>{p.executionErrors} execution errors</p>}
+                      {p.invalid > 0 && <p>{p.invalid} invalid cases</p>}
+                      {p.ungraded > 0 && <p>{p.ungraded} not graded</p>}
+                      {p.unexecuted > 0 && <p>{p.unexecuted} not executed</p>}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {p.evaluatorChecks > 0
+                    ? `${p.evaluatorHealthy} / ${p.evaluatorChecks} failed as expected`
+                    : "—"}
+                </TableCell>
+                <TableCell>
+                  {run.chargedCredits} Credits charged
+                  <span className="mt-1 block text-muted-foreground">
+                    {run.agentCharged} AI Agent · {run.judgeCharged} Judge
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {run.destinationBackend === "LANGFUSE" ? "Langfuse" : "Anvia Lens"}
+                </TableCell>
+                <TableCell className="max-w-64 whitespace-normal">
+                  <DeliveryLine
+                    expiresAt={run.workspaceExpiresAt}
+                    retryable={run.workspaceRetryable}
+                    runId={run.id}
+                    status={run.workspaceDelivery}
+                    target="WORKSPACE"
+                  />
+                </TableCell>
+                <TableCell className="max-w-64 whitespace-normal">
+                  <DeliveryLine
+                    expiresAt={run.centralExpiresAt}
+                    retryable={run.centralRetryable}
+                    runId={run.id}
+                    status={run.centralDelivery}
+                    target="CENTRAL"
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  {run.workspaceDelivery === "DELIVERED" || run.status === "FINISHED" ? (
+                    <a
+                      className="inline-flex size-7 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                      href={run.destinationDashboardUrl}
+                      aria-label="Open report"
+                      title="Open report"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <ExternalLinkIcon className="size-3.5" aria-hidden="true" />
+                    </a>
+                  ) : null}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      {runs.length ? (
+        <p className="border-t px-4 py-2 text-xs text-muted-foreground">
+          Passed and failed count AI Agent results only. Execution errors and evaluator checks
+          are counted separately. Evaluator checks must fail to confirm the evaluator works.
+        </p>
+      ) : (
+        <p className="p-6 text-center text-sm text-muted-foreground">No evaluation history yet.</p>
+      )}
+      <div className="border-t px-4 py-2 text-xs text-muted-foreground">
+        {runs.length ? (currentPage - 1) * 10 + 1 : 0}–{Math.min(currentPage * 10, runs.length)}{" "}
+        of {runs.length} runs · 10 per page
+      </div>
+      <div className="[&_[data-slot=pagination]]:py-2 [&_button]:h-7 [&_button]:text-xs [&_p]:text-xs">
+        <ResourcePagination
+          page={currentPage}
+          pageCount={Math.ceil(runs.length / 10)}
+          onPageChange={setPage}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function RunsPanel({
   datasetId,
   cases,
@@ -823,6 +782,7 @@ export function RunsPanel({
   header,
   datasetActions,
   caseToolbar,
+  initialTab = "cases",
 }: {
   header: ReactNode;
   datasetActions: ReactNode;
@@ -830,19 +790,18 @@ export function RunsPanel({
   datasetId: string;
   children: ReactNode;
   cases: Pick<EvalCase, "id" | "caseKey" | "complete">[];
+  initialTab?: "cases" | "results";
 }) {
-  const [page, setPage] = useState(1);
-  const [tab, setTab] = useState("cases");
+  const [tab, setTab] = useState<string>(initialTab);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [resultPage, setResultPage] = useState(1);
-  const latest = useRunsQuery(datasetId);
-  const query = useRunsQuery(datasetId, page);
-  const runs = query.data?.runs ?? [];
-  const running =
-    latest.data?.runs.some((run) => run.status === "QUEUED" || run.status === "RUNNING") ?? false;
+  const query = useAllRunsQuery(datasetId);
+  const runs = query.data ?? [];
+  const latest = runs[0];
+  const running = runs.some((run) => run.status === "QUEUED" || run.status === "RUNNING");
   function showLatest() {
-    setPage(1);
+    setTab("results");
     setResultPage(1);
     setSearch("");
     setFilter("all");
@@ -862,96 +821,39 @@ export function RunsPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {header}
         <div className="flex flex-wrap items-center gap-2">
-          {runs.map((run) => (
+          {latest && (
             <RunActions
-              key={run.id}
-              run={run}
+              run={latest}
               running={running}
               onStarted={showLatest}
               rerunIds={cases
-                .filter(
-                  (item) => item.complete && run.cases.some((ran) => ran.sourceCaseId === item.id),
+                .filter((item) =>
+                  item.complete && latest.cases.some((ran) => ran.sourceCaseId === item.id),
                 )
                 .slice(0, 100)
                 .map((item) => item.id)}
             />
-          ))}
+          )}
           {datasetActions}
-        </div>
-      </div>
-      {page > 1 && (
-        <Button
-          size="sm"
-          className="h-8 justify-self-end text-xs"
-          variant="outline"
-          onClick={showLatest}
-        >
-          {running ? "View running evaluation" : "View latest evaluation"}
-        </Button>
-      )}
-      <div className="min-w-0">
-        {query.isPending && (
-          <p role="status" className="p-4 text-sm text-muted-foreground">
-            Loading evaluations…
-          </p>
-        )}
-        {query.isError && (
-          <div className="flex items-center justify-between p-4 text-sm text-destructive">
-            Unable to load evaluations.
-            <Button
-              size="sm"
-              className="h-8 text-xs"
-              variant="outline"
-              onClick={() => void query.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
-        )}
-        {!query.isPending && !query.isError && !runs.length && (
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            No evaluations yet. Select ready cases below and start your first run.
-          </p>
-        )}
-        {runs.map((run) => (
-          <RunCard
-            key={run.id}
-            run={run}
-            title={page === 1 ? "Latest evaluation" : "Evaluation history"}
-          />
-        ))}
-        <div className="[&_[data-slot=pagination]]:py-2 [&_button]:h-7 [&_button]:text-xs [&_p]:text-xs">
-          <ResourcePagination
-            page={query.data?.page ?? page}
-            pageCount={query.data?.total ?? 0}
-            onPageChange={(page) => {
-              setPage(page);
-              setResultPage(1);
-              setSearch("");
-              setFilter("all");
-            }}
-          />
         </div>
       </div>
       <Tabs value={tab} onValueChange={setTab} className="min-w-0 gap-0">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">
           <TabsList variant="line" className="shrink-0">
             <TabsTrigger value="cases">
-              Cases{" "}
-              <Badge variant="secondary" className="px-1.5 text-[11px]">
-                {cases.length}
-              </Badge>
+              Cases <Badge variant="secondary" className="px-1.5 text-[11px]">{cases.length}</Badge>
             </TabsTrigger>
             <TabsTrigger value="results">
               Evaluation results{" "}
               <Badge variant="secondary" className="px-1.5 text-[11px]">
-                {runs[0]?.cases.length ?? 0}
+                {runs.reduce((count, run) => count + run.cases.length, 0)}
               </Badge>
             </TabsTrigger>
+            <TabsTrigger value="history">
+              History <Badge variant="secondary" className="px-1.5 text-[11px]">{runs.length}</Badge>
+            </TabsTrigger>
           </TabsList>
-          {tab === "cases" ? (
-            caseToolbar
-          ) : (
+          {tab === "cases" ? caseToolbar : tab === "results" ? (
             <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
               <Input
                 aria-label="Search evaluation results"
@@ -979,46 +881,37 @@ export function RunsPanel({
                 <NativeSelectOption value="errors">Not evaluated</NativeSelectOption>
               </NativeSelect>
             </div>
-          )}
+          ) : null}
         </div>
-
         <TabsContent value="cases" forceMount className="grid gap-2 data-[state=inactive]:hidden">
           {children}
         </TabsContent>
-        <TabsContent value="results" forceMount className="data-[state=inactive]:hidden">
-          {query.isPending ? (
-            <p role="status" className="p-4 text-sm text-muted-foreground">
-              Loading evaluation results…
-            </p>
-          ) : query.isError ? (
-            <div className="flex items-center justify-between rounded-lg border p-4 text-sm text-destructive">
-              Unable to load evaluation results.
-              <Button
-                size="sm"
-                className="h-8 text-xs"
-                variant="outline"
-                onClick={() => void query.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : !runs.length ? (
-            <p className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
-              No evaluation results yet. Select ready cases in Cases to start a run.
-            </p>
-          ) : (
-            runs.map((run) => (
+        {(["results", "history"] as const).map((value) => (
+          <TabsContent key={value} value={value} forceMount className="data-[state=inactive]:hidden">
+            {query.isPending ? (
+              <p role="status" className="p-4 text-sm text-muted-foreground">Loading evaluations…</p>
+            ) : query.isError ? (
+              <div className="flex items-center justify-between rounded-lg border p-4 text-sm text-destructive">
+                Unable to load evaluations.
+                <Button size="sm" variant="outline" onClick={() => void query.refetch()}>Retry</Button>
+              </div>
+            ) : value === "history" ? (
+              <RunHistory runs={runs} />
+            ) : !runs.length ? (
+              <p className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+                No evaluation results yet. Select ready cases in Cases to start a run.
+              </p>
+            ) : (
               <RunCaseResults
-                key={run.id}
-                run={run}
+                runs={runs}
                 search={search}
                 filter={filter}
                 page={resultPage}
                 setPage={setResultPage}
               />
-            ))
-          )}
-        </TabsContent>
+            )}
+          </TabsContent>
+        ))}
       </Tabs>
     </section>
   );
