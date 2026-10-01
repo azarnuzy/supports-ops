@@ -97,7 +97,8 @@ const TestingView = () => {
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<TableSort<"name" | "caseCount" | "lastRunAt" | "updatedAt">>(null);
+  const [sort, setSort] =
+    useState<TableSort<"name" | "caseCount" | "lastRunAt" | "updatedAt">>(null);
   function sortBy(column: NonNullable<typeof sort>["column"]) {
     setSort(nextSort(sort, column));
     setPage(1);
@@ -107,7 +108,8 @@ const TestingView = () => {
     items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase())),
     sort,
     (item) => {
-      if (sort?.column === "lastRunAt") return item.lastRunAt ? new Date(item.lastRunAt).getTime() : null;
+      if (sort?.column === "lastRunAt")
+        return item.lastRunAt ? new Date(item.lastRunAt).getTime() : null;
       if (sort?.column === "updatedAt") return new Date(item.updatedAt).getTime();
       return sort?.column === "caseCount" ? item.caseCount : item.name;
     },
@@ -170,32 +172,16 @@ const TestingView = () => {
             <Table aria-label="Eval Datasets">
               <TableHeader>
                 <TableRow>
-                  <SortableHead
-                    column="name"
-                    sort={sort}
-                    onSort={() => sortBy("name")}
-                  >
+                  <SortableHead column="name" sort={sort} onSort={() => sortBy("name")}>
                     Dataset
                   </SortableHead>
-                  <SortableHead
-                    column="caseCount"
-                    sort={sort}
-                    onSort={() => sortBy("caseCount")}
-                  >
+                  <SortableHead column="caseCount" sort={sort} onSort={() => sortBy("caseCount")}>
                     Cases
                   </SortableHead>
-                  <SortableHead
-                    column="lastRunAt"
-                    sort={sort}
-                    onSort={() => sortBy("lastRunAt")}
-                  >
+                  <SortableHead column="lastRunAt" sort={sort} onSort={() => sortBy("lastRunAt")}>
                     Last Evaluation
                   </SortableHead>
-                  <SortableHead
-                    column="updatedAt"
-                    sort={sort}
-                    onSort={() => sortBy("updatedAt")}
-                  >
+                  <SortableHead column="updatedAt" sort={sort} onSort={() => sortBy("updatedAt")}>
                     Updated
                   </SortableHead>
                   <TableHead className="text-right">

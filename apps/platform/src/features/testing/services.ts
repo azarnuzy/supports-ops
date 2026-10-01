@@ -31,10 +31,8 @@ import {
 const apiClient = createApiClient(import.meta.env.VITE_API_URL ?? "http://localhost:8000");
 
 export const getDatasets = () => listEvalDatasets(apiClient);
-export const getDataset = (
-  id: string,
-  filters: EvalCaseFilters,
-) => getEvalDataset(apiClient, id, filters);
+export const getDataset = (id: string, filters: EvalCaseFilters) =>
+  getEvalDataset(apiClient, id, filters);
 export const createDataset = (input: EvalDatasetInput) => createEvalDataset(apiClient, input);
 export const updateDataset = ({ id, input }: { id: string; input: EvalDatasetInput }) =>
   updateEvalDataset(apiClient, id, input);

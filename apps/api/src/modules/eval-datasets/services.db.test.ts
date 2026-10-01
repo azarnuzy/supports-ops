@@ -381,15 +381,17 @@ it("imports every row and pages/searches cases while bulk expectations preserve 
   const search = (await (await call(`/${dataset.id}?search=Question%20129`)).json()).dataset;
   expect(search.cases).toHaveLength(1);
   expect(search.cases[0].message).toBe("Question 129");
-  const sorted = (await (await call(
-    `/${dataset.id}?sortBy=message&sortDirection=desc&search=Question`,
-  )).json()).dataset;
+  const sorted = (
+    await (await call(`/${dataset.id}?sortBy=message&sortDirection=desc&search=Question`)).json()
+  ).dataset;
   expect(sorted.cases[0].message).toBe("Question 129");
   expect(sorted.cases[24].message).toBe("Question 105");
-  const sortedReady = (await (await call(
-    `/${dataset.id}?sortBy=complete&sortDirection=desc`,
-  )).json()).dataset;
-  expect(sortedReady.cases.slice(0, 2).every((item: { complete: boolean }) => item.complete)).toBe(true);
+  const sortedReady = (
+    await (await call(`/${dataset.id}?sortBy=complete&sortDirection=desc`)).json()
+  ).dataset;
+  expect(sortedReady.cases.slice(0, 2).every((item: { complete: boolean }) => item.complete)).toBe(
+    true,
+  );
   expect(sortedReady.cases[2].complete).toBe(false);
   expect((await call(`/${dataset.id}?sortBy=unknown`)).status).toBe(400);
   const before = ready.cases[0];

@@ -27,10 +27,7 @@ const datasetsKey = ["workspace", "eval-datasets"] as const;
 
 export const useDatasetsQuery = () => useQuery({ queryFn: getDatasets, queryKey: datasetsKey });
 
-export const useDatasetQuery = (
-  id: string,
-  filters: EvalCaseFilters,
-) =>
+export const useDatasetQuery = (id: string, filters: EvalCaseFilters) =>
   useQuery({
     queryFn: () => getDataset(id, filters),
     placeholderData: keepPreviousData,
@@ -111,8 +108,10 @@ export const useAllRunsQuery = (datasetId: string) =>
     refetchInterval: (query) =>
       query.state.data?.some(
         (run) =>
-          run.status === "QUEUED" || run.status === "RUNNING" ||
-          run.centralDelivery === "PENDING" || run.workspaceDelivery === "PENDING",
+          run.status === "QUEUED" ||
+          run.status === "RUNNING" ||
+          run.centralDelivery === "PENDING" ||
+          run.workspaceDelivery === "PENDING",
       )
         ? 3_000
         : false,

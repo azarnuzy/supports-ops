@@ -74,7 +74,10 @@ export async function listDatasets() {
   });
 }
 
-export async function getDataset(id: string, input: Partial<z.output<typeof datasetCaseQuery>> = {}) {
+export async function getDataset(
+  id: string,
+  input: Partial<z.output<typeof datasetCaseQuery>> = {},
+) {
   const { page: requestedPage = 1, search = "", status = "all" } = input;
   const dataset = await prisma.evalDataset.findFirst({ where: { id } });
   if (!dataset) throw new DatasetNotFoundError();
@@ -83,7 +86,15 @@ export async function getDataset(id: string, input: Partial<z.output<typeof data
   const index = await prisma.evalCase.findMany({
     where: { datasetId: id },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, caseKey: true, message: true, category: true, expected: true, metadata: true, metric: true },
+    select: {
+      id: true,
+      caseKey: true,
+      message: true,
+      category: true,
+      expected: true,
+      metadata: true,
+      metric: true,
+    },
   });
   const caseIndex = index.map((item) => ({
     id: item.id,
@@ -91,20 +102,40 @@ export async function getDataset(id: string, input: Partial<z.output<typeof data
     complete:
       caseIssues({ ...item, metadata: evalCaseMetadataSchema.parse(item.metadata) }).length === 0,
   }));
-  const matching = index.filter((item, position) =>
-    (status === "all" || caseIndex[position]!.complete === (status === "ready")) &&
-    (!search || [item.message, item.caseKey, item.category].some((value) =>
-      value.toLowerCase().includes(search.toLowerCase()),
-    )),
+  const matching = index.filter(
+    (item, position) =>
+      (status === "all" || caseIndex[position]!.complete === (status === "ready")) &&
+      (!search ||
+        [item.message, item.caseKey, item.category].some((value) =>
+          value.toLowerCase().includes(search.toLowerCase()),
+        )),
   );
   const readiness = new Map(caseIndex.map((item) => [item.id, item.complete]));
-  const sorted = sortRows(matching, input.sortBy ? {
-    column: input.sortBy, direction: input.sortDirection ?? "asc",
-  } : null, (item) => {
-    if (input.sortBy === "complete") return readiness.get(item.id) ? "Ready" : "Needs setup";
-    if (input.sortBy === "metric") return item.metric ? evalMetricLabels[item.metric as keyof typeof evalMetricLabels] ?? item.metric : null;
-    return item[input.sortBy === "message" ? "message" : input.sortBy === "category" ? "category" : "caseKey"] || null;
-  });
+  const sorted = sortRows(
+    matching,
+    input.sortBy
+      ? {
+          column: input.sortBy,
+          direction: input.sortDirection ?? "asc",
+        }
+      : null,
+    (item) => {
+      if (input.sortBy === "complete") return readiness.get(item.id) ? "Ready" : "Needs setup";
+      if (input.sortBy === "metric")
+        return item.metric
+          ? (evalMetricLabels[item.metric as keyof typeof evalMetricLabels] ?? item.metric)
+          : null;
+      return (
+        item[
+          input.sortBy === "message"
+            ? "message"
+            : input.sortBy === "category"
+              ? "category"
+              : "caseKey"
+        ] || null
+      );
+    },
+  );
   const total = sorted.length;
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / 25)));
   const pageIds = sorted.slice((page - 1) * 25, page * 25).map((item) => item.id);

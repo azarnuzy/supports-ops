@@ -3,7 +3,13 @@ import { TableHead } from "@repo/ui/components/table";
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from "lucide-react";
 import type { TableSort } from "@repo/shared/table-sort";
 
-export function SortableHead({ column, sort, onSort, children, ...props }: ComponentProps<typeof TableHead> & {
+export function SortableHead({
+  column,
+  sort,
+  onSort,
+  children,
+  ...props
+}: ComponentProps<typeof TableHead> & {
   column: string;
   sort: TableSort;
   onSort: () => void;
