@@ -66,14 +66,20 @@ const topUpSchema = z.object({
 const unlimitedPeriodSchema = z.object({ endDate: z.iso.date().nullable() });
 
 async function organizationForWorkspace(workspaceId: string) {
-  const workspace = await unscopedPrisma.workspace.findUnique({ where: { id: workspaceId }, select: { organizationId: true } });
+  const workspace = await unscopedPrisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { organizationId: true },
+  });
   return workspace?.organizationId ?? workspaceId;
 }
 
 function unlimitedPeriodError(c: Context<{ Variables: OperatorVariables }>, error: unknown) {
-  if (error instanceof WorkspaceNotFoundError) return c.json({ error: "organization_not_found" }, 404);
-  if (error instanceof OverlappingUnlimitedPeriodError) return c.json({ error: "overlapping_unlimited_period" }, 409);
-  if (error instanceof NoActiveUnlimitedPeriodError) return c.json({ error: "no_active_unlimited_period" }, 404);
+  if (error instanceof WorkspaceNotFoundError)
+    return c.json({ error: "organization_not_found" }, 404);
+  if (error instanceof OverlappingUnlimitedPeriodError)
+    return c.json({ error: "overlapping_unlimited_period" }, 409);
+  if (error instanceof NoActiveUnlimitedPeriodError)
+    return c.json({ error: "no_active_unlimited_period" }, 404);
   throw error;
 }
 
@@ -81,34 +87,76 @@ export const operatorRouter = new Hono<{ Variables: OperatorVariables }>()
   .use("*", loadOperatorSession)
   .use("*", requireOperator)
   .get("/session", (c) => c.json({ operator: c.get("operator") }))
-  .get("/organizations", zValidator("query", z.object({ search: z.string().trim().optional() })), async (c) =>
-    c.json({ organizations: await listOrganizations(c.req.valid("query").search) }),
+  .get(
+    "/organizations",
+    zValidator("query", z.object({ search: z.string().trim().optional() })),
+    async (c) => c.json({ organizations: await listOrganizations(c.req.valid("query").search) }),
   )
   .get("/organizations/:id", async (c) => {
     const detail = await getOrganizationDetail(c.req.param("id"));
     return detail ? c.json(detail) : c.json({ error: "not_found" }, 404);
   })
-  .post("/organizations/:id/top-ups", zValidator("json", topUpSchema, (result, c) => {
-    if (!result.success) return c.json({ error: "invalid_top_up" }, 400);
-  }), async (c) => {
-    const { credits, note } = c.req.valid("json");
-    const result = await topUpOrganization(currentOperator(c).id, c.req.param("id"), credits, note);
-    return result ? c.json(result, 201) : c.json({ error: "organization_not_found" }, 404);
-  })
-  .post("/organizations/:id/unlimited-period", zValidator("json", unlimitedPeriodSchema), async (c) => {
-    try {
-      return c.json({ period: await grantUnlimitedPeriod(currentOperator(c).id, c.req.param("id"), c.req.valid("json").endDate) }, 201);
-    } catch (error) { return unlimitedPeriodError(c, error); }
-  })
-  .patch("/organizations/:id/unlimited-period", zValidator("json", unlimitedPeriodSchema), async (c) => {
-    try {
-      return c.json({ period: await extendUnlimitedPeriod(currentOperator(c).id, c.req.param("id"), c.req.valid("json").endDate) });
-    } catch (error) { return unlimitedPeriodError(c, error); }
-  })
+  .post(
+    "/organizations/:id/top-ups",
+    zValidator("json", topUpSchema, (result, c) => {
+      if (!result.success) return c.json({ error: "invalid_top_up" }, 400);
+    }),
+    async (c) => {
+      const { credits, note } = c.req.valid("json");
+      const result = await topUpOrganization(
+        currentOperator(c).id,
+        c.req.param("id"),
+        credits,
+        note,
+      );
+      return result ? c.json(result, 201) : c.json({ error: "organization_not_found" }, 404);
+    },
+  )
+  .post(
+    "/organizations/:id/unlimited-period",
+    zValidator("json", unlimitedPeriodSchema),
+    async (c) => {
+      try {
+        return c.json(
+          {
+            period: await grantUnlimitedPeriod(
+              currentOperator(c).id,
+              c.req.param("id"),
+              c.req.valid("json").endDate,
+            ),
+          },
+          201,
+        );
+      } catch (error) {
+        return unlimitedPeriodError(c, error);
+      }
+    },
+  )
+  .patch(
+    "/organizations/:id/unlimited-period",
+    zValidator("json", unlimitedPeriodSchema),
+    async (c) => {
+      try {
+        return c.json({
+          period: await extendUnlimitedPeriod(
+            currentOperator(c).id,
+            c.req.param("id"),
+            c.req.valid("json").endDate,
+          ),
+        });
+      } catch (error) {
+        return unlimitedPeriodError(c, error);
+      }
+    },
+  )
   .post("/organizations/:id/unlimited-period/end", async (c) => {
     try {
-      return c.json({ period: await endUnlimitedPeriodEarly(currentOperator(c).id, c.req.param("id")) });
-    } catch (error) { return unlimitedPeriodError(c, error); }
+      return c.json({
+        period: await endUnlimitedPeriodEarly(currentOperator(c).id, c.req.param("id")),
+      });
+    } catch (error) {
+      return unlimitedPeriodError(c, error);
+    }
   })
   .post(
     "/workspaces/:workspaceId/top-ups",

@@ -31,7 +31,8 @@ export async function grantUnlimitedPeriod(
   return unscopedPrisma.$transaction(async (tx) => {
     // Serialize grants for the Organization before checking for an active period.
     const organization = await tx.organization.updateMany({
-      where: { id: organizationId }, data: { updatedAt: new Date() },
+      where: { id: organizationId },
+      data: { updatedAt: new Date() },
     });
     if (!organization.count) throw new WorkspaceNotFoundError();
     const workspace = await tx.workspace.findFirst({
@@ -52,7 +53,11 @@ export async function grantUnlimitedPeriod(
         operatorId,
         workspaceId: workspace.id,
         type: "UNLIMITED_PERIOD_GRANTED",
-        payload: { organizationId, unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
+        payload: {
+          organizationId,
+          unlimitedPeriodId: period.id,
+          endAt: endAt?.toISOString() ?? null,
+        },
       },
     });
     return period;
@@ -67,7 +72,10 @@ export async function extendUnlimitedPeriod(
   return unscopedPrisma.$transaction(async (tx) => {
     const active = await findActivePeriod(tx, organizationId);
     if (!active) throw new NoActiveUnlimitedPeriodError();
-    const workspace = await tx.workspace.findFirstOrThrow({ where: { organizationId }, select: { id: true } });
+    const workspace = await tx.workspace.findFirstOrThrow({
+      where: { organizationId },
+      select: { id: true },
+    });
 
     const endAt = endDate ? endOfDayJakarta(endDate) : null;
     const period = await tx.unlimitedPeriod.update({ where: { id: active.id }, data: { endAt } });
@@ -77,7 +85,11 @@ export async function extendUnlimitedPeriod(
         operatorId,
         workspaceId: workspace.id,
         type: "UNLIMITED_PERIOD_EXTENDED",
-        payload: { organizationId, unlimitedPeriodId: period.id, endAt: endAt?.toISOString() ?? null },
+        payload: {
+          organizationId,
+          unlimitedPeriodId: period.id,
+          endAt: endAt?.toISOString() ?? null,
+        },
       },
     });
     return period;
@@ -88,7 +100,10 @@ export async function endUnlimitedPeriodEarly(operatorId: string, organizationId
   return unscopedPrisma.$transaction(async (tx) => {
     const active = await findActivePeriod(tx, organizationId);
     if (!active) throw new NoActiveUnlimitedPeriodError();
-    const workspace = await tx.workspace.findFirstOrThrow({ where: { organizationId }, select: { id: true } });
+    const workspace = await tx.workspace.findFirstOrThrow({
+      where: { organizationId },
+      select: { id: true },
+    });
 
     const now = new Date();
     const period = await tx.unlimitedPeriod.update({

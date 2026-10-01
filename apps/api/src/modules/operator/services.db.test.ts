@@ -18,7 +18,9 @@ beforeAll(async () => {
   ({ getModelMargin } = await import("./services"));
   ({ getOperatorOverview } = await import("./services"));
   ({ topUpWorkspace } = await import("./services"));
-  ({ getOrganizationDetail, listOrganizations, topUpOrganization } = await import("./organizations"));
+  ({ getOrganizationDetail, listOrganizations, topUpOrganization } = await import(
+    "./organizations"
+  ));
 }, 60_000);
 
 afterAll(async () => {
@@ -30,7 +32,9 @@ it("records one Operator Action and one Top-Up in the same transaction", async (
   const workspaceId = randomUUID();
   const operatorId = randomUUID();
   await prisma.organization.create({ data: { id: workspaceId, name: "Acme" } });
-  await prisma.workspace.create({ data: { id: workspaceId, organizationId: workspaceId, name: "Acme", slug: workspaceId } });
+  await prisma.workspace.create({
+    data: { id: workspaceId, organizationId: workspaceId, name: "Acme", slug: workspaceId },
+  });
   await prisma.operator.create({
     data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` },
   });
@@ -53,14 +57,38 @@ it("groups two Workspaces under one financial Organization and audits its Top-Up
   const workspaceIds = [randomUUID(), randomUUID()];
   const operatorId = randomUUID();
   await prisma.organization.create({ data: { id: organizationId, name: "Acme" } });
-  await prisma.workspace.createMany({ data: workspaceIds.map((id) => ({ id, organizationId, name: id, slug: id })) });
-  await prisma.operator.create({ data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` } });
-  await prisma.user.create({ data: { id: randomUUID(), name: "Admin", email: `${randomUUID()}@example.com`, organizationId, role: "ADMIN", isOrganizationAdmin: true } });
+  await prisma.workspace.createMany({
+    data: workspaceIds.map((id) => ({ id, organizationId, name: id, slug: id })),
+  });
+  await prisma.operator.create({
+    data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` },
+  });
+  await prisma.user.create({
+    data: {
+      id: randomUUID(),
+      name: "Admin",
+      email: `${randomUUID()}@example.com`,
+      organizationId,
+      role: "ADMIN",
+      isOrganizationAdmin: true,
+    },
+  });
   const result = await topUpOrganization(operatorId, organizationId, 25, "Invoice 42");
   expect(result?.balance).toBe(25);
-  expect((await listOrganizations()).filter((row) => row.id === organizationId)).toMatchObject([{ balance: 25, workspaces: expect.arrayContaining(workspaceIds.map((id) => expect.objectContaining({ id }))) }]);
-  expect(await getOrganizationDetail(organizationId)).toMatchObject({ balance: 25, users: [{ name: "Admin" }], ledger: [{ credits: 25, type: "TOP_UP" }] });
-  expect(await prisma.creditLedgerEntry.count({ where: { organizationId, type: "TOP_UP" } })).toBe(1);
+  expect((await listOrganizations()).filter((row) => row.id === organizationId)).toMatchObject([
+    {
+      balance: 25,
+      workspaces: expect.arrayContaining(workspaceIds.map((id) => expect.objectContaining({ id }))),
+    },
+  ]);
+  expect(await getOrganizationDetail(organizationId)).toMatchObject({
+    balance: 25,
+    users: [{ name: "Admin" }],
+    ledger: [{ credits: 25, type: "TOP_UP" }],
+  });
+  expect(await prisma.creditLedgerEntry.count({ where: { organizationId, type: "TOP_UP" } })).toBe(
+    1,
+  );
   expect(await prisma.operatorAction.count({ where: { operatorId, type: "TOP_UP" } })).toBe(1);
 });
 
@@ -72,7 +100,12 @@ it("reconciles charged Credits across Workspaces and excludes unlimited turns fr
   const workspaces = [randomUUID(), randomUUID()];
   await prisma.organization.createMany({ data: workspaces.map((id) => ({ id, name: id })) });
   await prisma.workspace.createMany({
-    data: workspaces.map((id, index) => ({ id, organizationId: id, name: `Workspace ${index}`, slug: id })),
+    data: workspaces.map((id, index) => ({
+      id,
+      organizationId: id,
+      name: `Workspace ${index}`,
+      slug: id,
+    })),
   });
   const spend = (
     workspaceId: string,
@@ -222,8 +255,22 @@ it("adds two Workspace figures without exposing customer content", async () => {
     });
     await prisma.creditLedgerEntry.createMany({
       data: [
-        { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TRIAL_GRANT", credits: 500, createdAt: now },
-        { id: randomUUID(), organizationId: workspaceId, workspaceId, type: "TOP_UP", credits: 100, createdAt: now },
+        {
+          id: randomUUID(),
+          organizationId: workspaceId,
+          workspaceId,
+          type: "TRIAL_GRANT",
+          credits: 500,
+          createdAt: now,
+        },
+        {
+          id: randomUUID(),
+          organizationId: workspaceId,
+          workspaceId,
+          type: "TOP_UP",
+          credits: 100,
+          createdAt: now,
+        },
         {
           id: randomUUID(),
           organizationId: workspaceId,

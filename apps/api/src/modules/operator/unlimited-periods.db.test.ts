@@ -27,7 +27,9 @@ beforeEach(async () => {
   organizationId = randomUUID();
   operatorId = randomUUID();
   await prisma.organization.create({ data: { id: organizationId, name: "Acme" } });
-  await prisma.workspace.create({ data: { id: workspaceId, organizationId, name: "Acme", slug: workspaceId } });
+  await prisma.workspace.create({
+    data: { id: workspaceId, organizationId, name: "Acme", slug: workspaceId },
+  });
   await prisma.operator.create({
     data: { id: operatorId, name: "Operator", email: `${operatorId}@example.com` },
   });
@@ -39,7 +41,11 @@ it("resolves the end date to 23:59 Asia/Jakarta (16:59 UTC)", () => {
 });
 
 it("grants a period and records one Operator Action", async () => {
-  const period = await unlimitedPeriods.grantUnlimitedPeriod(operatorId, organizationId, "2026-10-05");
+  const period = await unlimitedPeriods.grantUnlimitedPeriod(
+    operatorId,
+    organizationId,
+    "2026-10-05",
+  );
 
   expect(period.endAt?.toISOString()).toBe("2026-10-05T16:59:59.999Z");
   const actions = await prisma.operatorAction.findMany({ where: { workspaceId } });
@@ -49,7 +55,9 @@ it("grants a period and records one Operator Action", async () => {
 
 it("rejects an overlapping grant", async () => {
   await unlimitedPeriods.grantUnlimitedPeriod(operatorId, organizationId, "2026-10-05");
-  await prisma.workspace.create({ data: { id: randomUUID(), organizationId, name: "Second", slug: randomUUID() } });
+  await prisma.workspace.create({
+    data: { id: randomUUID(), organizationId, name: "Second", slug: randomUUID() },
+  });
 
   await expect(
     unlimitedPeriods.grantUnlimitedPeriod(operatorId, organizationId, "2026-10-10"),
@@ -63,7 +71,11 @@ it("keeps an undated period active until ended or given an end date", async () =
     unlimitedPeriods.grantUnlimitedPeriod(operatorId, organizationId, null),
   ).rejects.toBeInstanceOf(unlimitedPeriods.OverlappingUnlimitedPeriodError);
 
-  const dated = await unlimitedPeriods.extendUnlimitedPeriod(operatorId, organizationId, "2026-10-12");
+  const dated = await unlimitedPeriods.extendUnlimitedPeriod(
+    operatorId,
+    organizationId,
+    "2026-10-12",
+  );
   expect(dated.endAt?.toISOString()).toBe("2026-10-12T16:59:59.999Z");
   await unlimitedPeriods.extendUnlimitedPeriod(operatorId, organizationId, null);
   await unlimitedPeriods.endUnlimitedPeriodEarly(operatorId, organizationId);

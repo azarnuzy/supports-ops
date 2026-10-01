@@ -70,8 +70,7 @@ export async function getAttentionDetails(ids: string[]): Promise<Map<string, At
     const organizationId = workspaces.find((workspace) => workspace.id === id)?.organizationId;
     const balance =
       balances.find((row) => row.organizationId === organizationId)?._sum.credits ?? 0;
-    const activePeriod =
-      activePeriods.find((row) => row.organizationId === organizationId) ?? null;
+    const activePeriod = activePeriods.find((row) => row.organizationId === organizationId) ?? null;
     const lastCustomerActivityAt =
       activity.find((row) => row.workspaceId === id)?._max.customerLastMessageAt ?? null;
 
@@ -100,7 +99,9 @@ export async function getAttentionDetails(ids: string[]): Promise<Map<string, At
  * that must link a Workspace back to the Organization it belongs to. */
 export async function getAttentionDetailsWithOrganization(ids: string[]) {
   const details = await getAttentionDetails(ids);
-  const names = await getOrganizationNames([...details.values()].map((info) => info.organizationId));
+  const names = await getOrganizationNames(
+    [...details.values()].map((info) => info.organizationId),
+  );
   return new Map(
     [...details.entries()].map(([id, info]) => [
       id,

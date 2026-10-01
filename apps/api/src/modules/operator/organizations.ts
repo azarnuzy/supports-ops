@@ -60,23 +60,49 @@ export async function getOrganizationDetail(id: string) {
     }),
     unscopedPrisma.topUpPayment.findMany({
       where: { organizationId: id },
-      select: { id: true, credits: true, amountIdr: true, status: true, paidAt: true, createdAt: true },
+      select: {
+        id: true,
+        credits: true,
+        amountIdr: true,
+        status: true,
+        paidAt: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
     unscopedPrisma.creditLedgerEntry.findMany({
       where: { organizationId: id },
-      select: { id: true, type: true, credits: true, note: true, createdAt: true, workspaceId: true },
+      select: {
+        id: true,
+        type: true,
+        credits: true,
+        note: true,
+        createdAt: true,
+        workspaceId: true,
+      },
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
     currentOrLastUnlimitedPeriod(id),
   ]);
-  return { ...organization, balance: balance._sum.credits ?? 0, payments, ledger,
-    unlimitedPeriod: unlimitedPeriod ? { endAt: unlimitedPeriod.endAt, endedEarlyAt: unlimitedPeriod.endedEarlyAt } : null };
+  return {
+    ...organization,
+    balance: balance._sum.credits ?? 0,
+    payments,
+    ledger,
+    unlimitedPeriod: unlimitedPeriod
+      ? { endAt: unlimitedPeriod.endAt, endedEarlyAt: unlimitedPeriod.endedEarlyAt }
+      : null,
+  };
 }
 
-export async function topUpOrganization(operatorId: string, organizationId: string, credits: number, note: string) {
+export async function topUpOrganization(
+  operatorId: string,
+  organizationId: string,
+  credits: number,
+  note: string,
+) {
   const workspace = await unscopedPrisma.workspace.findFirst({
     where: { organizationId, deletedAt: null },
     select: { id: true },

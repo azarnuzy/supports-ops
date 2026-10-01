@@ -44,7 +44,12 @@ it("counts an Organization once in the balance distribution regardless of Worksp
   const overview = await billing.getBillingOverview({});
 
   expect(overview.organizationCount).toBe(1);
-  expect(overview.distribution).toMatchObject({ over1000: 1, from100To1000: 0, from1To100: 0, zeroOrLess: 0 });
+  expect(overview.distribution).toMatchObject({
+    over1000: 1,
+    from100To1000: 0,
+    from1To100: 0,
+    zeroOrLess: 0,
+  });
 });
 
 it("only attaches a Workspace to Spend rows, never to Top-Ups or Trial Grants", async () => {
