@@ -92,9 +92,16 @@ export function CaseEditor({
   const [caseKey, setCaseKey] = useState(existing?.caseKey ?? nextKey);
   const [category, setCategory] = useState(existing?.category ?? "");
   const [message, setMessage] = useState(existing?.message ?? "");
-  const [history, setHistory] = useState(existing?.history ?? []);
+  const [history, setHistory] = useState(() =>
+    (existing?.history ?? []).map((turn) => ({ ...turn, key: crypto.randomUUID() })),
+  );
   const [clarificationCount, setClarificationCount] = useState(existing?.clarificationCount ?? 0);
-  const [attachments, setAttachments] = useState(existing?.attachments ?? []);
+  const [attachments, setAttachments] = useState(() =>
+    (existing?.attachments ?? []).map((attachment) => ({
+      ...attachment,
+      key: crypto.randomUUID(),
+    })),
+  );
   const [expected, setExpected] = useState(existing?.expected ?? "");
   const [metric, setMetric] = useState<EvalMetric | "">(existing?.metric ?? "");
   const meta = existing?.metadata ?? {};
@@ -121,12 +128,16 @@ export function CaseEditor({
       metadata.retrievalTarget = retrievalTarget;
     }
     onSave({
-      attachments: attachments.filter((a) => a.id.trim()),
+      attachments: attachments
+        .filter((a) => a.id.trim())
+        .map(({ id, content }) => ({ id, content })),
       caseKey,
       category,
       clarificationCount,
       expected,
-      history: history.filter((turn) => turn.content.trim()),
+      history: history
+        .filter((turn) => turn.content.trim())
+        .map(({ role, content }) => ({ role, content })),
       message,
       metadata,
       metric: metric || null,
@@ -255,8 +266,13 @@ export function CaseEditor({
                   Select one or more acceptable AI Agent actions.
                 </FieldDescription>
                 {decisions.map((decision) => (
-                  <label className="flex items-center gap-2 text-sm" key={decision}>
+                  <label
+                    htmlFor={`case-decision-${decision}`}
+                    className="flex items-center gap-2 text-sm"
+                    key={decision}
+                  >
                     <Checkbox
+                      id={`case-decision-${decision}`}
                       checked={decisionSet.includes(decision)}
                       onCheckedChange={(checked) =>
                         setDecisionSet(
@@ -286,8 +302,12 @@ export function CaseEditor({
                     Use the exact name of a Tool assigned to your AI Agent.
                   </FieldDescription>
                 </Field>
-                <label className="flex items-center gap-2 text-sm">
+                <label
+                  htmlFor="case-tool-must-not-be-called"
+                  className="flex items-center gap-2 text-sm"
+                >
                   <Checkbox
+                    id="case-tool-must-not-be-called"
                     checked={toolMustNotBeCalled}
                     onCheckedChange={(checked) => setToolMustNotBeCalled(checked === true)}
                   />
@@ -377,7 +397,7 @@ export function CaseEditor({
                     not simulated. Previous AI replies are context only, never expected answers.
                   </FieldDescription>
                   {history.map((turn, index) => (
-                    <div className="flex items-start gap-2" key={index}>
+                    <div className="flex items-start gap-2" key={turn.key}>
                       <NativeSelect
                         aria-label={`Turn ${index + 1} speaker`}
                         value={turn.role}
@@ -430,6 +450,7 @@ export function CaseEditor({
                         ...history,
                         {
                           content: "",
+                          key: crypto.randomUUID(),
                           role: history.at(-1)?.role === "user" ? "assistant" : "user",
                         },
                       ])
@@ -463,7 +484,7 @@ export function CaseEditor({
                     Text already extracted from an Attachment (OCR or transcript).
                   </FieldDescription>
                   {attachments.map((attachment, index) => (
-                    <div className="flex items-start gap-2" key={index}>
+                    <div className="flex items-start gap-2" key={attachment.key}>
                       <Input
                         aria-label={`Attachment ${index + 1} name`}
                         className="w-40"
@@ -509,7 +530,12 @@ export function CaseEditor({
                     type="button"
                     variant="outline"
                     disabled={attachments.length >= 10}
-                    onClick={() => setAttachments([...attachments, { content: "", id: "" }])}
+                    onClick={() =>
+                      setAttachments([
+                        ...attachments,
+                        { content: "", id: "", key: crypto.randomUUID() },
+                      ])
+                    }
                   >
                     <PlusIcon className="size-4" /> Add attachment content
                   </Button>

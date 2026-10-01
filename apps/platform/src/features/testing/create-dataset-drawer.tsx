@@ -265,320 +265,339 @@ export function CreateDatasetDrawer({
         </DialogHeader>
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
           <div className="min-h-0 flex-1 overflow-y-auto">
-          <fieldset disabled={busy} className="grid min-w-0 content-start gap-4 p-5">
-            {datasetId && (
-              <p className="rounded-lg border p-3 text-sm text-muted-foreground">
-                The dataset has been created. Retry to finish importing your cases; Cancel keeps the
-                dataset.
-              </p>
-            )}
-            {step === 0 && (
-              <>
-                <Field className="gap-1.5">
-                  <FieldLabel htmlFor="dataset-name">Dataset name</FieldLabel>
-                  <Input
-                    id="dataset-name"
-                    maxLength={120}
-                    placeholder="e.g. Refund policy checks"
-                    required
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                  <FieldDescription className="text-xs">
-                    A short name for a collection you will run again.
-                  </FieldDescription>
-                </Field>
-                <Tabs value={tab} onValueChange={(value) => edit(setTab)(value as Tab)}>
-                  <TabsList className="w-full flex-wrap group-data-[orientation=horizontal]/tabs:h-auto">
-                    <TabsTrigger
-                      className="h-auto flex-1 text-xs sm:text-sm"
-                      disabled={busy}
-                      value="paste"
-                    >
-                      Paste Messages
-                    </TabsTrigger>
-                    <TabsTrigger
-                      className="h-auto flex-1 text-xs sm:text-sm"
-                      disabled={busy}
-                      value="sessions"
-                    >
-                      Recent Sessions
-                    </TabsTrigger>
-                    <TabsTrigger
-                      className="h-auto flex-1 text-xs sm:text-sm"
-                      disabled={busy}
-                      value="csv"
-                    >
-                      Upload CSV
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent className="mt-4" value="paste">
-                    <Field className="gap-1.5">
-                      <FieldLabel htmlFor="dataset-paste">Customer Messages</FieldLabel>
-                      <Textarea
-                        id="dataset-paste"
-                        rows={7}
-                        maxLength={1_000_000}
-                        placeholder={
-                          "How do I request a refund?\n---\nWhere can I update my billing details?"
-                        }
-                        value={pasted}
-                        onChange={(event) => edit(setPasted)(event.target.value)}
-                      />
-                      <FieldDescription className="text-xs">
-                        One case per message. Separate messages with a line containing only{" "}
-                        <code>---</code>. Leave empty to create a dataset and add cases later.
-                      </FieldDescription>
-                    </Field>
-                  </TabsContent>
-                  <TabsContent className="mt-4 grid gap-3" value="sessions">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">
-                        {messageIds.length} messages selected
-                      </p>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          type="button"
-                          disabled={!sessions.data?.sessions.length}
-                          onClick={() =>
-                            edit(setSelected)(
-                              Object.fromEntries(
-                                (sessions.data?.sessions ?? []).flatMap((session) =>
-                                  session.messages.map((message) => [message.id, true]),
-                                ),
-                              ),
-                            )
-                          }
-                        >
-                          Select all
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          type="button"
-                          disabled={!messageIds.length}
-                          onClick={() => edit(setSelected)({})}
-                        >
-                          Clear selection
-                        </Button>
-                      </div>
-                    </div>
-                    {sessions.isPending ? (
-                      <p className="text-sm text-muted-foreground">Loading recent Sessions…</p>
-                    ) : sessions.isError ? (
-                      <div className="text-sm text-destructive">
-                        Unable to load recent Sessions.{" "}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          type="button"
-                          onClick={() => void sessions.refetch()}
-                        >
-                          Retry
-                        </Button>
-                      </div>
-                    ) : !sessions.data.sessions.length ? (
-                      <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                        No Sessions with Customer Messages yet. Paste messages or upload a CSV
-                        instead.
-                      </p>
-                    ) : (
-                      <ul className="grid gap-2">
-                        {sessions.data.sessions.map((session) => {
-                          const customer = session.conversation?.customerIdentity;
-                          const label =
-                            customer?.name ||
-                            customer?.email ||
-                            customer?.phoneE164 ||
-                            `Session ${session.id.slice(0, 8)}`;
-                          const allSelected = session.messages.every(
-                            (message) => selected[message.id] !== undefined,
-                          );
-                          return (
-                            <li className="overflow-hidden rounded-lg border" key={session.id}>
-                              <div className="flex items-center justify-between gap-2 bg-muted/30 px-3 py-2">
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium">{label}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {session.conversation?.channel.name ?? "Channel unavailable"} ·{" "}
-                                    {session.messages.length} Customer Messages ·{" "}
-                                    {formatTestingDate(session.createdAt)}
-                                  </p>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  type="button"
-                                  onClick={() => {
-                                    const next = { ...selected };
-                                    session.messages.forEach((message) => {
-                                      if (allSelected) delete next[message.id];
-                                      else next[message.id] = true;
-                                    });
-                                    edit(setSelected)(next);
-                                  }}
-                                >
-                                  {allSelected ? "Clear" : "Select all"}
-                                </Button>
-                              </div>
-                              <div className="grid divide-y">
-                                {session.messages.map((message) => (
-                                  <div className="grid gap-1.5 px-3 py-2" key={message.id}>
-                                    <label className="flex items-start gap-2 text-sm">
-                                      <Checkbox
-                                        checked={selected[message.id] !== undefined}
-                                        onCheckedChange={(checked) => {
-                                          const next = { ...selected };
-                                          if (checked === true) next[message.id] = true;
-                                          else delete next[message.id];
-                                          edit(setSelected)(next);
-                                        }}
-                                      />
-                                      <span className="line-clamp-2 whitespace-pre-wrap">
-                                        {message.content}
-                                      </span>
-                                    </label>
-                                    {selected[message.id] !== undefined && (
-                                      <label className="ml-6 flex items-center gap-2 text-xs text-muted-foreground">
-                                        <Checkbox
-                                          checked={selected[message.id]}
-                                          onCheckedChange={(checked) =>
-                                            edit(setSelected)({
-                                              ...selected,
-                                              [message.id]: checked === true,
-                                            })
-                                          }
-                                        />
-                                        Include preceding conversation history
-                                      </label>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                    <FieldDescription className="text-xs">
-                      Each selected Customer Message becomes one case. Up to 20 earlier Customer /
-                      AI Agent turns are context only; previous AI responses never become expected
-                      answers.
-                    </FieldDescription>
-                  </TabsContent>
-                  <TabsContent className="mt-4 grid gap-3" value="csv">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium">Import existing cases</p>
-                      <Button size="sm" type="button" variant="outline" onClick={downloadTemplate}>
-                        <DownloadIcon className="size-3.5" />
-                        Download CSV Template
-                      </Button>
-                    </div>
-                    <Field className="gap-1.5">
-                      <FieldLabel htmlFor="dataset-csv">CSV file</FieldLabel>
-                      <Input
-                        accept=".csv,text/csv"
-                        id="dataset-csv"
-                        type="file"
-                        disabled={busy}
-                        onChange={(event) => void readCsv(event.target.files?.[0])}
-                      />
-                      <FieldDescription className="text-xs">
-                        {csv ? `Selected: ${csv.name}. ` : ""}Up to 100 rows · 5 MB. Validation runs
-                        when you select a file.
-                      </FieldDescription>
-                    </Field>
-                    <div className="rounded-lg bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-                      <p>
-                        <strong className="text-foreground">Required:</strong> <code>message</code>.
-                      </p>
-                      <p>
-                        <strong className="text-foreground">Optional:</strong>{" "}
-                        <code>
-                          caseKey, category, expected, metric, clarificationCount, history,
-                          attachments, metadata
-                        </code>
-                        . History, attachments and metadata use JSON. Case IDs are generated when
-                        omitted; missing criteria can be completed later.
-                      </p>
-                    </div>
-                    {preview && <ImportPreviewPanel preview={preview} />}
-                  </TabsContent>
-                </Tabs>
-              </>
-            )}
-            {step === 1 && (
-              <>
-                <div>
-                  <h3 className="text-sm font-semibold">Review cases</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {name} ·{" "}
-                    {tab === "csv"
-                      ? csv?.name
-                      : tab === "sessions"
-                        ? "Recent Sessions"
-                        : "Pasted messages"}
-                  </p>
-                </div>
-                {preview ? (
-                  <ImportPreviewPanel preview={preview} />
-                ) : (
-                  <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                    An empty dataset will be created. Add cases from the dataset page.
-                  </p>
-                )}
-                {tab === "sessions" && source && (
-                  <p className="text-xs text-muted-foreground">
-                    History is copied from the Session when cases are imported. Earlier AI responses
-                    remain context only.
-                  </p>
-                )}
-                {skippedRows > 0 && (
-                  <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
-                    <Checkbox
-                      checked={acceptSkipped}
-                      onCheckedChange={(checked) => setAcceptSkipped(checked === true)}
+            <fieldset disabled={busy} className="grid min-w-0 content-start gap-4 p-5">
+              {datasetId && (
+                <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+                  The dataset has been created. Retry to finish importing your cases; Cancel keeps
+                  the dataset.
+                </p>
+              )}
+              {step === 0 && (
+                <>
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor="dataset-name">Dataset name</FieldLabel>
+                    <Input
+                      id="dataset-name"
+                      maxLength={120}
+                      placeholder="e.g. Refund policy checks"
+                      required
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
                     />
-                    <span>
-                      Import {validRows} valid rows and skip {skippedRows} rows that are invalid or
-                      exceed the 100-row limit.
-                    </span>
-                  </label>
-                )}
-              </>
-            )}
-            {step === 2 && (
-              <>
-                <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-                  <span className="font-medium">{name}</span>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {validRows} cases to import{skippedRows ? ` · ${skippedRows} rows skipped` : ""}
-                  </p>
-                </div>
-                <Field className="gap-1.5">
-                  <FieldLabel htmlFor="dataset-criteria">
-                    Default grading criteria{" "}
-                    <span className="font-normal text-muted-foreground">(optional)</span>
-                  </FieldLabel>
-                  <Textarea
-                    id="dataset-criteria"
-                    maxLength={4000}
-                    rows={4}
-                    placeholder="e.g. Answer using published policy, explain the next step clearly, and avoid unsupported promises."
-                    value={criteria}
-                    onChange={(event) => setCriteria(event.target.value)}
-                  />
-                  <FieldDescription className="text-xs">
-                    A default rubric for judged metrics. Choose the evaluation type and its required
-                    expectations for each case in the case editor. Previous AI responses are
-                    context, not reference answers.
-                  </FieldDescription>
-                </Field>
-              </>
-            )}
-          </fieldset>
+                    <FieldDescription className="text-xs">
+                      A short name for a collection you will run again.
+                    </FieldDescription>
+                  </Field>
+                  <Tabs value={tab} onValueChange={(value) => edit(setTab)(value as Tab)}>
+                    <TabsList className="w-full flex-wrap group-data-[orientation=horizontal]/tabs:h-auto">
+                      <TabsTrigger
+                        className="h-auto flex-1 text-xs sm:text-sm"
+                        disabled={busy}
+                        value="paste"
+                      >
+                        Paste Messages
+                      </TabsTrigger>
+                      <TabsTrigger
+                        className="h-auto flex-1 text-xs sm:text-sm"
+                        disabled={busy}
+                        value="sessions"
+                      >
+                        Recent Sessions
+                      </TabsTrigger>
+                      <TabsTrigger
+                        className="h-auto flex-1 text-xs sm:text-sm"
+                        disabled={busy}
+                        value="csv"
+                      >
+                        Upload CSV
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent className="mt-4" value="paste">
+                      <Field className="gap-1.5">
+                        <FieldLabel htmlFor="dataset-paste">Customer Messages</FieldLabel>
+                        <Textarea
+                          id="dataset-paste"
+                          rows={7}
+                          maxLength={1_000_000}
+                          placeholder={
+                            "How do I request a refund?\n---\nWhere can I update my billing details?"
+                          }
+                          value={pasted}
+                          onChange={(event) => edit(setPasted)(event.target.value)}
+                        />
+                        <FieldDescription className="text-xs">
+                          One case per message. Separate messages with a line containing only{" "}
+                          <code>---</code>. Leave empty to create a dataset and add cases later.
+                        </FieldDescription>
+                      </Field>
+                    </TabsContent>
+                    <TabsContent className="mt-4 grid gap-3" value="sessions">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {messageIds.length} messages selected
+                        </p>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            type="button"
+                            disabled={!sessions.data?.sessions.length}
+                            onClick={() =>
+                              edit(setSelected)(
+                                Object.fromEntries(
+                                  (sessions.data?.sessions ?? []).flatMap((session) =>
+                                    session.messages.map((message) => [message.id, true]),
+                                  ),
+                                ),
+                              )
+                            }
+                          >
+                            Select all
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            type="button"
+                            disabled={!messageIds.length}
+                            onClick={() => edit(setSelected)({})}
+                          >
+                            Clear selection
+                          </Button>
+                        </div>
+                      </div>
+                      {sessions.isPending ? (
+                        <p className="text-sm text-muted-foreground">Loading recent Sessions…</p>
+                      ) : sessions.isError ? (
+                        <div className="text-sm text-destructive">
+                          Unable to load recent Sessions.{" "}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            type="button"
+                            onClick={() => void sessions.refetch()}
+                          >
+                            Retry
+                          </Button>
+                        </div>
+                      ) : !sessions.data.sessions.length ? (
+                        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          No Sessions with Customer Messages yet. Paste messages or upload a CSV
+                          instead.
+                        </p>
+                      ) : (
+                        <ul className="grid gap-2">
+                          {sessions.data.sessions.map((session) => {
+                            const customer = session.conversation?.customerIdentity;
+                            const label =
+                              customer?.name ||
+                              customer?.email ||
+                              customer?.phoneE164 ||
+                              `Session ${session.id.slice(0, 8)}`;
+                            const allSelected = session.messages.every(
+                              (message) => selected[message.id] !== undefined,
+                            );
+                            return (
+                              <li className="overflow-hidden rounded-lg border" key={session.id}>
+                                <div className="flex items-center justify-between gap-2 bg-muted/30 px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{label}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {session.conversation?.channel.name ?? "Channel unavailable"}{" "}
+                                      · {session.messages.length} Customer Messages ·{" "}
+                                      {formatTestingDate(session.createdAt)}
+                                    </p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    type="button"
+                                    onClick={() => {
+                                      const next = { ...selected };
+                                      session.messages.forEach((message) => {
+                                        if (allSelected) delete next[message.id];
+                                        else next[message.id] = true;
+                                      });
+                                      edit(setSelected)(next);
+                                    }}
+                                  >
+                                    {allSelected ? "Clear" : "Select all"}
+                                  </Button>
+                                </div>
+                                <div className="grid divide-y">
+                                  {session.messages.map((message) => (
+                                    <div className="grid gap-1.5 px-3 py-2" key={message.id}>
+                                      <label
+                                        htmlFor={`dataset-message-${message.id}`}
+                                        className="flex items-start gap-2 text-sm"
+                                      >
+                                        <Checkbox
+                                          id={`dataset-message-${message.id}`}
+                                          checked={selected[message.id] !== undefined}
+                                          onCheckedChange={(checked) => {
+                                            const next = { ...selected };
+                                            if (checked === true) next[message.id] = true;
+                                            else delete next[message.id];
+                                            edit(setSelected)(next);
+                                          }}
+                                        />
+                                        <span className="line-clamp-2 whitespace-pre-wrap">
+                                          {message.content}
+                                        </span>
+                                      </label>
+                                      {selected[message.id] !== undefined && (
+                                        <label
+                                          htmlFor={`dataset-history-${message.id}`}
+                                          className="ml-6 flex items-center gap-2 text-xs text-muted-foreground"
+                                        >
+                                          <Checkbox
+                                            id={`dataset-history-${message.id}`}
+                                            checked={selected[message.id]}
+                                            onCheckedChange={(checked) =>
+                                              edit(setSelected)({
+                                                ...selected,
+                                                [message.id]: checked === true,
+                                              })
+                                            }
+                                          />
+                                          Include preceding conversation history
+                                        </label>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                      <FieldDescription className="text-xs">
+                        Each selected Customer Message becomes one case. Up to 20 earlier Customer /
+                        AI Agent turns are context only; previous AI responses never become expected
+                        answers.
+                      </FieldDescription>
+                    </TabsContent>
+                    <TabsContent className="mt-4 grid gap-3" value="csv">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium">Import existing cases</p>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={downloadTemplate}
+                        >
+                          <DownloadIcon className="size-3.5" />
+                          Download CSV Template
+                        </Button>
+                      </div>
+                      <Field className="gap-1.5">
+                        <FieldLabel htmlFor="dataset-csv">CSV file</FieldLabel>
+                        <Input
+                          accept=".csv,text/csv"
+                          id="dataset-csv"
+                          type="file"
+                          disabled={busy}
+                          onChange={(event) => void readCsv(event.target.files?.[0])}
+                        />
+                        <FieldDescription className="text-xs">
+                          {csv ? `Selected: ${csv.name}. ` : ""}Up to 100 rows · 5 MB. Validation
+                          runs when you select a file.
+                        </FieldDescription>
+                      </Field>
+                      <div className="rounded-lg bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+                        <p>
+                          <strong className="text-foreground">Required:</strong>{" "}
+                          <code>message</code>.
+                        </p>
+                        <p>
+                          <strong className="text-foreground">Optional:</strong>{" "}
+                          <code>
+                            caseKey, category, expected, metric, clarificationCount, history,
+                            attachments, metadata
+                          </code>
+                          . History, attachments and metadata use JSON. Case IDs are generated when
+                          omitted; missing criteria can be completed later.
+                        </p>
+                      </div>
+                      {preview && <ImportPreviewPanel preview={preview} />}
+                    </TabsContent>
+                  </Tabs>
+                </>
+              )}
+              {step === 1 && (
+                <>
+                  <div>
+                    <h3 className="text-sm font-semibold">Review cases</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {name} ·{" "}
+                      {tab === "csv"
+                        ? csv?.name
+                        : tab === "sessions"
+                          ? "Recent Sessions"
+                          : "Pasted messages"}
+                    </p>
+                  </div>
+                  {preview ? (
+                    <ImportPreviewPanel preview={preview} />
+                  ) : (
+                    <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+                      An empty dataset will be created. Add cases from the dataset page.
+                    </p>
+                  )}
+                  {tab === "sessions" && source && (
+                    <p className="text-xs text-muted-foreground">
+                      History is copied from the Session when cases are imported. Earlier AI
+                      responses remain context only.
+                    </p>
+                  )}
+                  {skippedRows > 0 && (
+                    <label
+                      htmlFor="dataset-accept-skipped"
+                      className="flex items-start gap-2 rounded-lg border p-3 text-sm"
+                    >
+                      <Checkbox
+                        id="dataset-accept-skipped"
+                        checked={acceptSkipped}
+                        onCheckedChange={(checked) => setAcceptSkipped(checked === true)}
+                      />
+                      <span>
+                        Import {validRows} valid rows and skip {skippedRows} rows that are invalid
+                        or exceed the 100-row limit.
+                      </span>
+                    </label>
+                  )}
+                </>
+              )}
+              {step === 2 && (
+                <>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                    <span className="font-medium">{name}</span>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {validRows} cases to import
+                      {skippedRows ? ` · ${skippedRows} rows skipped` : ""}
+                    </p>
+                  </div>
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor="dataset-criteria">
+                      Default grading criteria{" "}
+                      <span className="font-normal text-muted-foreground">(optional)</span>
+                    </FieldLabel>
+                    <Textarea
+                      id="dataset-criteria"
+                      maxLength={4000}
+                      rows={4}
+                      placeholder="e.g. Answer using published policy, explain the next step clearly, and avoid unsupported promises."
+                      value={criteria}
+                      onChange={(event) => setCriteria(event.target.value)}
+                    />
+                    <FieldDescription className="text-xs">
+                      A default rubric for judged metrics. Choose the evaluation type and its
+                      required expectations for each case in the case editor. Previous AI responses
+                      are context, not reference answers.
+                    </FieldDescription>
+                  </Field>
+                </>
+              )}
+            </fieldset>
           </div>
           <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-background px-5 py-3">
             <Button disabled={busy} type="button" variant="ghost" onClick={() => close(false)}>
