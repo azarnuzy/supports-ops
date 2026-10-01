@@ -559,7 +559,7 @@ export default function PaymentsView() {
                     <TableBody>
                       {activeRows.slice(0, 5).map((row) => (
                         <TableRow key={row.id}>
-                          <TableCell>{row.workspace.organization?.name ?? row.workspace.name}</TableCell>
+                          <TableCell>{row.organization.name}</TableCell>
                           <TableCell>
                             {row.endAt ? date.format(new Date(row.endAt)) : "No end date"}
                           </TableCell>

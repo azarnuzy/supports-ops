@@ -86,7 +86,7 @@ describe("Top-Up Payments", () => {
     expect(billing.payments[0]).toMatchObject({ checkoutUrl: null, status: "PAID" });
   });
 
-  it("lists payments across Workspaces with status and date filters and the paid ledger id", async () => {
+  it("lists payments across Organizations with status and date filters and the paid ledger id", async () => {
     const query = { page: 1, limit: 20, sortBy: "createdAt", sortDirection: "desc" } as const;
     await checkout();
     mayar.fetchMayarPayment.mockResolvedValue({ amount: 250_000, id: "mayar-1", status: "paid" });
@@ -124,7 +124,7 @@ describe("Top-Up Payments", () => {
     });
     const expired = await listPayments({ ...query, status: "EXPIRED" });
     expect(expired.payments[0]).toMatchObject({
-      workspace: { id: secondWorkspaceId },
+      organization: { id: secondWorkspaceId },
       status: "EXPIRED",
       ledgerEntryId: null,
     });
