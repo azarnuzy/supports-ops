@@ -125,7 +125,8 @@ export type EvalImportPreview = {
   truncated: { limit: number; total: number } | null;
 };
 export type EvalImportSource =
-  | { source: "csv" | "paste"; text: string }
+  | { source: "csv"; text: string }
+  | { source: "paste"; text: string }
   | {
       selections: { includeHistory: boolean; messageId: string }[];
       source: "sessions";
