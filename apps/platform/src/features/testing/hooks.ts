@@ -94,6 +94,30 @@ export const useRunsQuery = (datasetId: string, page = 1, pageSize = 1) =>
         : false,
   });
 
+/** Fetch every page so Results never silently omits older attempts. */
+export const useAllRunsQuery = (datasetId: string) =>
+  useQuery({
+    queryKey: [...runsKey(datasetId), "all"],
+    queryFn: async () => {
+      const first = await getRuns(datasetId, 1, 20);
+      const runs = [...first.runs];
+      // ponytail: load history in memory; use server-side result pagination if datasets grow large.
+      for (let page = 2; page <= Math.ceil(first.total / 20); page++) {
+        const next = await getRuns(datasetId, page, 20);
+        runs.push(...next.runs);
+      }
+      return runs;
+    },
+    refetchInterval: (query) =>
+      query.state.data?.some(
+        (run) =>
+          run.status === "QUEUED" || run.status === "RUNNING" ||
+          run.centralDelivery === "PENDING" || run.workspaceDelivery === "PENDING",
+      )
+        ? 3_000
+        : false,
+  });
+
 export const useEstimateRunQuery = (selection: { caseIds: string[]; datasetId: string } | null) =>
   useQuery({
     enabled: selection !== null,
