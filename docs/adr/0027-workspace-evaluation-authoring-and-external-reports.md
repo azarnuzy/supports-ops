@@ -15,3 +15,9 @@ At Run creation, freeze the selected case contents and rubric and record the mod
 Each Run accepts at most 100 cases, with one active Run per Workspace. A case execution error is recorded separately from a failed evaluation score and does not stop unrelated cases. Model calls are not automatically repeated. Credit Exhaustion stops subsequent work and leaves remaining cases marked as not executed. Telemetry delivery retries reuse retained evidence without invoking models or charging again.
 
 The user confirmed shared understanding of these design decisions. The three supplied Quickchat screenshots are execution references for the page and its creation source tabs. This ADR records the agreed design, not an implemented feature.
+
+## Testing UX revision (2026-10-01)
+
+The Admin confirmed inline response and grading review in SupportOps: the latest Eval Run appears above paginated Eval Cases, with errors and evaluator-health checks distinguished from pass/fail. This supersedes the external-only response-review boundary above; external backends still own detailed Telemetry and cross-run comparisons. New Eval Run Cases retain only the Customer-visible answer, decision, and metric scores/explanations locally; private reasoning is never stored. Older Runs do not gain answers retroactively.
+
+Dataset creation selects Customer Messages directly, with server-side search, channel/date filters, pagination, and selections retained across pages. Imports include all valid rows within the existing source-size budget, rather than truncating at 100; 100 remains the per-Run limit. Large writes are batched within one transaction, so a failed batch leaves no partial import. XLSX templates provide dropdowns, guidance and reference sheets while CSV remains supported. Long message and history text is preserved, with expandable previews instead of the former 4,000-character limit; copied Session context is explicitly limited to the latest 20 earlier turns.
