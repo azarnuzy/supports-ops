@@ -4,7 +4,13 @@ import { encryptToolSecret } from "../tools/secrets";
 const key = Buffer.alloc(32, 1).toString("base64");
 vi.mock("../../config", () => ({
   evalConfig: { destinationAllowedHosts: [] },
-  telemetryConfig: { enabled: false },
+  telemetryConfig: {
+    enabled: true,
+    exporter: "otlp",
+    otlpEndpoint: "https://us.cloud.langfuse.com/api/public/otel/v1/traces",
+    apiKeyHeader: "authorization",
+    apiKey: "Basic test-credential",
+  },
   toolEncryptionConfig: { masterKey: key },
 }));
 vi.mock("../../utils/prisma", () => ({ prisma: {} }));
@@ -13,7 +19,7 @@ vi.mock("../eval-destination/outbound", () => ({
   UnsafeDestinationError: class extends Error {},
 }));
 
-const { langfuseScores, workspaceSink } = await import("./sinks");
+const { centralSink, langfuseScores, workspaceSink } = await import("./sinks");
 const traceId = "a".repeat(32);
 const spanId = "b".repeat(16);
 const evidence = (traced = true) =>
@@ -105,4 +111,32 @@ it("keeps Lens on OTLP logs and propagates score failures for delivery retry", a
   await expect(
     workspaceSink({ ...destination, backend: "LANGFUSE" }).send("logs", evidence()),
   ).rejects.toThrow("503");
+});
+
+it("replays central logs through the score API after 404 without changing Lens delivery", async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response("", { status: 404 }))
+    .mockResolvedValueOnce(new Response("{}"))
+    .mockResolvedValueOnce(new Response("", { status: 404 }))
+    .mockResolvedValueOnce(new Response("{}"));
+  vi.stubGlobal("fetch", request);
+  const sink = centralSink();
+  if (!sink) throw new Error("Central sink not configured");
+  await sink.send("logs", evidence());
+  await sink.send("logs", evidence());
+  expect(request.mock.calls.map(([url]) => url)).toEqual([
+    "https://us.cloud.langfuse.com/api/public/otel/v1/logs",
+    "https://us.cloud.langfuse.com/api/public/scores",
+    "https://us.cloud.langfuse.com/api/public/otel/v1/logs",
+    "https://us.cloud.langfuse.com/api/public/scores",
+  ]);
+  expect(JSON.parse(request.mock.calls[1]?.[1]?.body as string).id).toBe("score1");
+  expect(JSON.parse(request.mock.calls[3]?.[1]?.body as string).id).toBe("score1");
+  request.mockResolvedValueOnce(new Response("{}"));
+  await sink.send("logs", evidence());
+  expect(request.mock.calls).toHaveLength(5);
+  expect(request.mock.calls[4]?.[1]?.body).toBe(evidence());
+  request.mockResolvedValueOnce(new Response("", { status: 503 }));
+  await expect(sink.send("logs", evidence())).rejects.toThrow("503");
 });

@@ -9,13 +9,30 @@ function otlpSink(options: {
   endpoint: string;
   headers: Record<string, string>;
   name: string;
+  /** Workspace declares its backend; central OTLP falls back only when logs return 404. */
+  scores?: boolean | "on-404";
   /** Rejects an address the server must not call. Run again on every send. */
   guard?: (url: string) => Promise<unknown>;
 }): TelemetrySink {
   const urls = otlpUrls(options.endpoint);
+  const sendScores = async (body: string) => {
+    const url = langfuseApiUrl(options.endpoint, "scores");
+    for (const score of langfuseScores(body)) {
+      await options.guard?.(url);
+      const response = await fetch(url, {
+        body: JSON.stringify(score),
+        headers: { ...options.headers, "content-type": "application/json" },
+        method: "POST",
+        redirect: "manual",
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) throw new Error(`${options.name} answered ${response.status} for scores.`);
+    }
+  };
   return {
     name: options.name,
     async send(signal, body) {
+      if (signal === "logs" && options.scores === true) return sendScores(body);
       const url = urls[signal];
       await options.guard?.(url);
       const response = await fetch(url, {
@@ -26,6 +43,13 @@ function otlpSink(options: {
         redirect: "manual",
         signal: AbortSignal.timeout(15_000),
       });
+      if (
+        signal === "logs" &&
+        response.status === 404 &&
+        options.scores === "on-404" &&
+        /\/api\/public\/otel(?:\/v1\/traces)?\/*$/.test(new URL(options.endpoint).pathname)
+      )
+        return sendScores(body);
       if (!response.ok)
         throw new Error(`${options.name} answered ${response.status} for ${signal}.`);
     },
@@ -41,6 +65,7 @@ export function centralSink(): TelemetrySink | null {
     endpoint: telemetryConfig.otlpEndpoint,
     headers: getTelemetryHeaders(telemetryConfig) ?? {},
     name: "central",
+    scores: "on-404",
   });
 }
 
@@ -54,7 +79,7 @@ export function workspaceSink(destination: {
   const { publicKey, secretKey } = JSON.parse(
     decryptToolSecret(destination.credentialsEncrypted, toolEncryptionConfig.masterKey),
   ) as { publicKey: string; secretKey: string };
-  const sink = otlpSink({
+  return otlpSink({
     endpoint: destination.endpoint,
     guard: (url) => assertSafeDestination(url),
     headers: {
@@ -62,29 +87,8 @@ export function workspaceSink(destination: {
       "x-langfuse-ingestion-version": "4",
     },
     name: "workspace",
+    scores: destination.backend === "LANGFUSE",
   });
-  if (destination.backend !== "LANGFUSE") return sink;
-  const scoresUrl = langfuseApiUrl(destination.endpoint, "scores");
-  return {
-    name: sink.name,
-    async send(signal, body) {
-      if (signal === "traces") return sink.send(signal, body);
-      for (const score of langfuseScores(body)) {
-        await assertSafeDestination(scoresUrl);
-        const response = await fetch(scoresUrl, {
-          body: JSON.stringify(score),
-          headers: {
-            authorization: `Basic ${Buffer.from(`${publicKey}:${secretKey}`).toString("base64")}`,
-            "content-type": "application/json",
-          },
-          method: "POST",
-          redirect: "manual",
-          signal: AbortSignal.timeout(15_000),
-        });
-        if (!response.ok) throw new Error(`workspace answered ${response.status} for scores.`);
-      }
-    },
-  };
 }
 
 type OtlpValue = {

@@ -112,5 +112,7 @@ can be Delivered while SupportOps tracing is PENDING and retrying. Inspect
 opening its payload. Restore the central endpoint and restart the worker;
 retries replay evidence without new model calls. After retries are exhausted,
 use the existing retry action. This reproduces the status, not necessarily
-the original error: an HTTP error for logs can instead indicate that the
-central destination does not accept Anvia's OTLP log records.
+the original error. Central destinations at an `/api/public/otel` endpoint
+that return HTTP 404 for logs now fall back to the Langfuse Scores API,
+including when replaying retained evidence. Destinations accepting OTLP logs
+continue receiving the original records; other HTTP failures still trigger retry.
