@@ -57,7 +57,7 @@ beforeEach(async () => {
     data: [
       { id: firstId, organizationId: firstId, name: "Alpha", slug: "alpha" },
       { id: secondId, organizationId: secondId, name: "Beta", slug: "beta" },
-      { id: randomUUID(), name: "Deleted", slug: "deleted", deletedAt: new Date() },
+      { id: randomUUID(), organizationId: firstId, name: "Deleted", slug: "deleted", deletedAt: new Date() },
     ],
   });
   await prisma.creditLedgerEntry.createMany({
@@ -158,19 +158,29 @@ it("surfaces an active Unlimited Period in the Workspace list", async () => {
 });
 
 it("returns the same analytics and AI Usage as the Workspace Admin", async () => {
+  await prisma.user.create({
+    data: {
+      id: "admin",
+      name: "Workspace Admin",
+      email: "admin@example.com",
+      organizationId: firstId,
+      role: "ADMIN",
+      memberships: { create: { workspaceId: firstId, role: "ADMIN" } },
+    },
+  });
   sessions.workspaceId = firstId;
-  const adminOverview = (
-    (await (await app.request("/analytics/overview")).json()) as { analytics: unknown }
-  ).analytics;
-  const adminTraffic = (
-    (await (await app.request("/analytics/traffic")).json()) as { analytics: unknown }
-  ).analytics;
-  const adminUsage = (
-    (await (await app.request("/ai-usage/summary")).json()) as { aiUsage: unknown }
-  ).aiUsage;
-  const adminTools = (
-    (await (await app.request("/ai-usage/tools")).json()) as { toolUsage: unknown }
-  ).toolUsage;
+  const adminOverviewResponse = await app.request("/analytics/overview");
+  expect(adminOverviewResponse.status).toBe(200);
+  const adminOverview = ((await adminOverviewResponse.json()) as { analytics: unknown }).analytics;
+  const adminTrafficResponse = await app.request("/analytics/traffic");
+  expect(adminTrafficResponse.status).toBe(200);
+  const adminTraffic = ((await adminTrafficResponse.json()) as { analytics: unknown }).analytics;
+  const adminUsageResponse = await app.request("/ai-usage/summary");
+  expect(adminUsageResponse.status).toBe(200);
+  const adminUsage = ((await adminUsageResponse.json()) as { aiUsage: unknown }).aiUsage;
+  const adminToolsResponse = await app.request("/ai-usage/tools");
+  expect(adminToolsResponse.status).toBe(200);
+  const adminTools = ((await adminToolsResponse.json()) as { toolUsage: unknown }).toolUsage;
   sessions.workspaceId = "";
   sessions.operator = true;
 

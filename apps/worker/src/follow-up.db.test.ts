@@ -88,7 +88,8 @@ async function seedTicket(status: "ESCALATED" | "HUMAN_HANDLING", channelType: "
         id: humanAgentId,
         name: "Human Agent",
         role: "HUMAN_AGENT",
-        workspaceId,
+        organizationId: workspaceId,
+        memberships: { create: { workspaceId, role: "HUMAN_AGENT" } },
       },
     });
   }
@@ -253,7 +254,8 @@ describe("Idle Closure worker", () => {
         id: ownerId,
         name: "Human Agent",
         role: "HUMAN_AGENT",
-        workspaceId: seeded.workspaceId,
+        organizationId: seeded.workspaceId,
+        memberships: { create: { workspaceId: seeded.workspaceId, role: "HUMAN_AGENT" } },
       },
     });
     await prisma.ticket.update({
@@ -307,7 +309,8 @@ describe("Idle Closure worker", () => {
         id: adminId,
         name: "Admin",
         role: "ADMIN",
-        workspaceId: seeded.workspaceId,
+        organizationId: seeded.workspaceId,
+        memberships: { create: { workspaceId: seeded.workspaceId, role: "ADMIN" } },
       },
     });
     await prisma.ticket.update({

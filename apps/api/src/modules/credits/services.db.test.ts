@@ -243,7 +243,7 @@ describe("spendForTurn during an Unlimited Period", () => {
     expect(spends).toHaveLength(3);
     expect(spends.every((entry) => entry.credits === 0 && entry.modelRate === 1)).toBe(true);
     expect(await services.creditBalance(workspaceId)).toBe(0);
-    await prisma.unlimitedPeriod.updateMany({ where: { workspaceId }, data: { endedEarlyAt: new Date() } });
+    await prisma.unlimitedPeriod.updateMany({ where: { organizationId: workspaceId }, data: { endedEarlyAt: new Date() } });
     await grantBalance(3);
     await spendOnce(secondId);
     expect(await services.creditBalance(workspaceId)).toBe(2);
@@ -287,7 +287,7 @@ describe("spendForTurn during an Unlimited Period", () => {
     await grantUnlimitedPeriod(new Date(Date.now() + 60_000));
     await grantBalance(10);
     await prisma.unlimitedPeriod.updateMany({
-      where: { workspaceId },
+      where: { organizationId: workspaceId },
       data: { endedEarlyAt: new Date() },
     });
 
