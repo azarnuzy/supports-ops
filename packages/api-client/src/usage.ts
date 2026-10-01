@@ -54,8 +54,11 @@ export async function fetchOrganizationAiUsageSummary(
   range?: AnalyticsRange,
   filters?: AiUsageFilters,
 ) {
-  const response = await client["ai-usage"]["organization-summary"].$get({ query: aiUsageQuery(range, filters) });
-  if (response.status === 403) throw new Error("Only an Organization Admin can view Organization AI Usage.");
+  const response = await client["ai-usage"]["organization-summary"].$get({
+    query: aiUsageQuery(range, filters),
+  });
+  if (response.status === 403)
+    throw new Error("Only an Organization Admin can view Organization AI Usage.");
   if (!response.ok) throw new Error("Failed to load Organization AI Usage.");
   return (await response.json()) as { aiUsage: AiUsageSummary };
 }
