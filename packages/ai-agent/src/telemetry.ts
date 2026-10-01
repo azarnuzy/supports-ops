@@ -34,7 +34,11 @@ export function withAgentObserver<T>(scoped: AgentObserver, fn: () => T): T {
  * Session and Customer Identity group every run in the telemetry backend
  * without exporting the Customer's email address or phone number. */
 export function agentObservability(sessionId?: string, userId?: string) {
-  const active = scopedObserver.getStore() ?? (observer ??= createOtelObserver({ captureMode }));
+  let active = scopedObserver.getStore();
+  if (!active) {
+    observer ??= createOtelObserver({ captureMode });
+    active = observer;
+  }
   return {
     observability: { observers: { otel: active }, primaryTrace: "otel" },
     ...(sessionId ? { trace: { sessionId, userId } } : {}),
