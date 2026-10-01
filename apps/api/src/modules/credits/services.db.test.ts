@@ -35,7 +35,9 @@ beforeEach(async () => {
   workspaceId = randomUUID();
   slug = `demo-${workspaceId.slice(0, 8)}`;
   await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
-  await prisma.workspace.create({ data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug } });
+  await prisma.workspace.create({
+    data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug },
+  });
 });
 
 /** The only catalog Model Rate is 1 Credit per Turn, so each call spends exactly 1. */
@@ -106,7 +108,14 @@ describe("credit balance", () => {
   it("survives the deletion of a Ticket a spend entry referenced", async () => {
     const ticketId = await seedTicket();
     await prisma.creditLedgerEntry.create({
-      data: { credits: -1, id: randomUUID(), ticketId, type: "SPEND", organizationId: workspaceId, workspaceId },
+      data: {
+        credits: -1,
+        id: randomUUID(),
+        ticketId,
+        type: "SPEND",
+        organizationId: workspaceId,
+        workspaceId,
+      },
     });
     const balanceBefore = await services.creditBalance(workspaceId);
 
@@ -119,21 +128,33 @@ describe("credit balance", () => {
   it("shares one Organization balance while keeping spend attributed to its Workspace", async () => {
     const secondWorkspaceId = randomUUID();
     await prisma.workspace.create({
-      data: { id: secondWorkspaceId, organizationId: workspaceId, name: "Second", slug: secondWorkspaceId },
+      data: {
+        id: secondWorkspaceId,
+        organizationId: workspaceId,
+        name: "Second",
+        slug: secondWorkspaceId,
+      },
     });
     await prisma.$transaction((tx) => services.grantTrialCredits(tx, workspaceId, workspaceId));
     await services.recordTopUp(prisma, secondWorkspaceId, 25, "payment");
-    await prisma.$transaction((tx) => services.spendForTurn(tx, {
-      aiAgentId: randomUUID(), agentModel: null, sessionId: randomUUID(),
-      ticketId: randomUUID(), workspaceId: secondWorkspaceId,
-    }));
+    await prisma.$transaction((tx) =>
+      services.spendForTurn(tx, {
+        aiAgentId: randomUUID(),
+        agentModel: null,
+        sessionId: randomUUID(),
+        ticketId: randomUUID(),
+        workspaceId: secondWorkspaceId,
+      }),
+    );
 
     expect(await services.creditBalance(workspaceId)).toBe(524);
     expect(await services.creditBalance(secondWorkspaceId)).toBe(524);
-    expect(await prisma.creditLedgerEntry.findMany({
-      where: { organizationId: workspaceId, type: "SPEND" },
-      select: { workspaceId: true },
-    })).toEqual([{ workspaceId: secondWorkspaceId }]);
+    expect(
+      await prisma.creditLedgerEntry.findMany({
+        where: { organizationId: workspaceId, type: "SPEND" },
+        select: { workspaceId: true },
+      }),
+    ).toEqual([{ workspaceId: secondWorkspaceId }]);
   });
 });
 
@@ -142,15 +163,31 @@ describe("spendForTurn balance-crossing emails", () => {
     const secondWorkspaceId = randomUUID();
     const otherOrganizationId = randomUUID();
     await prisma.workspace.create({
-      data: { id: secondWorkspaceId, organizationId: workspaceId, name: "Second", slug: secondWorkspaceId },
+      data: {
+        id: secondWorkspaceId,
+        organizationId: workspaceId,
+        name: "Second",
+        slug: secondWorkspaceId,
+      },
     });
     await prisma.organization.create({ data: { id: otherOrganizationId, name: "Other" } });
     await prisma.workspace.create({
-      data: { id: otherOrganizationId, organizationId: otherOrganizationId, name: "Other", slug: otherOrganizationId },
+      data: {
+        id: otherOrganizationId,
+        organizationId: otherOrganizationId,
+        name: "Other",
+        slug: otherOrganizationId,
+      },
     });
     await grantBalance(100);
     await prisma.creditLedgerEntry.create({
-      data: { credits: 100, id: randomUUID(), type: "TOP_UP", organizationId: otherOrganizationId, workspaceId: otherOrganizationId },
+      data: {
+        credits: 100,
+        id: randomUUID(),
+        type: "TOP_UP",
+        organizationId: otherOrganizationId,
+        workspaceId: otherOrganizationId,
+      },
     });
 
     await Promise.all([spendOnce(secondWorkspaceId), spendOnce()]);
@@ -159,7 +196,8 @@ describe("spendForTurn balance-crossing emails", () => {
     expect(await services.creditBalance(secondWorkspaceId)).toBe(98);
     expect(await services.creditBalance(otherOrganizationId)).toBe(100);
     expect(mocks.enqueueCreditAlertEmail).toHaveBeenCalledExactlyOnceWith({
-      kind: "LOW_BALANCE", organizationId: workspaceId,
+      kind: "LOW_BALANCE",
+      organizationId: workspaceId,
       workspaceId: expect.stringMatching(new RegExp(`^(${workspaceId}|${secondWorkspaceId})$`)),
     });
   });
@@ -232,18 +270,28 @@ describe("spendForTurn during an Unlimited Period", () => {
 
   it("waives spend in existing and newly created Workspaces of the Organization", async () => {
     const secondId = randomUUID();
-    await prisma.workspace.create({ data: { id: secondId, organizationId: workspaceId, name: "Second", slug: secondId } });
+    await prisma.workspace.create({
+      data: { id: secondId, organizationId: workspaceId, name: "Second", slug: secondId },
+    });
     await grantUnlimitedPeriod(new Date(Date.now() + 60_000));
     await spendOnce();
     await spendOnce(secondId);
     const thirdId = randomUUID();
-    await prisma.workspace.create({ data: { id: thirdId, organizationId: workspaceId, name: "Third", slug: thirdId } });
+    await prisma.workspace.create({
+      data: { id: thirdId, organizationId: workspaceId, name: "Third", slug: thirdId },
+    });
     await spendOnce(thirdId);
-    const spends = await prisma.creditLedgerEntry.findMany({ where: { type: "SPEND" }, select: { credits: true, modelRate: true } });
+    const spends = await prisma.creditLedgerEntry.findMany({
+      where: { type: "SPEND" },
+      select: { credits: true, modelRate: true },
+    });
     expect(spends).toHaveLength(3);
     expect(spends.every((entry) => entry.credits === 0 && entry.modelRate === 1)).toBe(true);
     expect(await services.creditBalance(workspaceId)).toBe(0);
-    await prisma.unlimitedPeriod.updateMany({ where: { organizationId: workspaceId }, data: { endedEarlyAt: new Date() } });
+    await prisma.unlimitedPeriod.updateMany({
+      where: { organizationId: workspaceId },
+      data: { endedEarlyAt: new Date() },
+    });
     await grantBalance(3);
     await spendOnce(secondId);
     expect(await services.creditBalance(workspaceId)).toBe(2);

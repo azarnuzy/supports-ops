@@ -256,7 +256,11 @@ async function executeCase(params: {
       runEvalSuite({
         cases: [evalCase],
         concurrency: 1,
-        metrics: metricsFor(item, { criteria: run.criteria, judge, workspaceId: run.workspaceId }) as never,
+        metrics: metricsFor(item, {
+          criteria: run.criteria,
+          judge,
+          workspaceId: run.workspaceId,
+        }) as never,
         name: run.datasetName,
         reporters: [params.reporter as never],
         run: {

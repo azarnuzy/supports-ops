@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => {
   process.env.EVAL_DESTINATION_ALLOWED_HOSTS = "lens.test,broken.test";
   return {
     current: { userId: "" },
-    deliveries: [] as Array<{ runId: string; target: "CENTRAL" | "WORKSPACE"; workspaceId: string }>,
+    deliveries: [] as Array<{
+      runId: string;
+      target: "CENTRAL" | "WORKSPACE";
+      workspaceId: string;
+    }>,
     jobs: [] as Array<{ runId: string; workspaceId: string }>,
     judge: { calls: 0, failOn: 0 },
     memories: [] as unknown[],
@@ -44,7 +48,9 @@ vi.mock("./queue", () => ({
     mocks.jobs.push(job);
   },
 }));
-vi.mock("../credits/alerts-queue", () => ({ enqueueCreditAlertEmail: vi.fn(async () => undefined) }));
+vi.mock("../credits/alerts-queue", () => ({
+  enqueueCreditAlertEmail: vi.fn(async () => undefined),
+}));
 vi.mock("@repo/knowledge", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@repo/knowledge")>()),
   createOpenAiEmbeddingClient: () => ({ embed: async () => [[0.1]] }),
@@ -183,7 +189,11 @@ async function seed() {
     role,
   });
   await prisma.user.createMany({
-    data: [user("admin-a1", "org-a"), user("agent-a1", "org-a", "HUMAN_AGENT"), user("admin-b", "org-b")],
+    data: [
+      user("admin-a1", "org-a"),
+      user("agent-a1", "org-a", "HUMAN_AGENT"),
+      user("admin-b", "org-b"),
+    ],
   });
   await prisma.workspaceMembership.createMany({
     data: [
@@ -194,8 +204,20 @@ async function seed() {
   });
   await prisma.creditLedgerEntry.createMany({
     data: [
-      { credits: 500, id: "grant-a", organizationId: "org-a", type: "TRIAL_GRANT", workspaceId: "wa1" },
-      { credits: 500, id: "grant-b", organizationId: "org-b", type: "TRIAL_GRANT", workspaceId: "wb" },
+      {
+        credits: 500,
+        id: "grant-a",
+        organizationId: "org-a",
+        type: "TRIAL_GRANT",
+        workspaceId: "wa1",
+      },
+      {
+        credits: 500,
+        id: "grant-b",
+        organizationId: "org-b",
+        type: "TRIAL_GRANT",
+        workspaceId: "wb",
+      },
     ],
   });
   for (const [workspaceId, agentId] of [
@@ -222,7 +244,12 @@ async function seed() {
     },
   });
   await prisma.httpToolConfig.create({
-    data: { method: "POST", toolId: "tool-cancel", url: "https://shop.test/cancel", workspaceId: "wa1" },
+    data: {
+      method: "POST",
+      toolId: "tool-cancel",
+      url: "https://shop.test/cancel",
+      workspaceId: "wa1",
+    },
   });
   await prisma.toolAssignment.create({
     data: { aiAgentId: "agent-1", id: "assign-1", toolId: "tool-cancel", workspaceId: "wa1" },
@@ -309,9 +336,7 @@ it("refuses to start incomplete, unsupported-metric or destination-less selectio
   expect(await incomplete.json()).toMatchObject({ caseKeys: ["draft"], error: "incomplete_cases" });
   expect((await (await start(["unknown"])).json()).error).toBe("metric_not_enabled");
   expect((await (await start(["ok"])).json()).error).toBe("destination_required");
-  expect(
-    (await call("/eval-runs", "POST", { caseIds: [], datasetId: "ds-wa1" })).status,
-  ).toBe(400);
+  expect((await call("/eval-runs", "POST", { caseIds: [], datasetId: "ds-wa1" })).status).toBe(400);
   expect(
     (
       await call("/eval-runs", "POST", {
@@ -328,7 +353,12 @@ it("runs only the selected Cases once, charges them, and reports to both destina
   await destination("wa1");
   await destination("wb", "other.test");
   const { make } = await dataset();
-  await make("a", { history: [{ content: "Hi", role: "user" }, { content: "Hello", role: "assistant" }] });
+  await make("a", {
+    history: [
+      { content: "Hi", role: "user" },
+      { content: "Hello", role: "assistant" },
+    ],
+  });
   await make("b");
   await make("unselected");
   await make("boom", { message: "boom", expected: "x" });
@@ -346,7 +376,10 @@ it("runs only the selected Cases once, charges them, and reports to both destina
   expect(mocks.jobs).toEqual([{ runId: run.id, workspaceId: "wa1" }]);
 
   // Edits after start do not change what the Run executes.
-  await prisma.evalCase.update({ data: { message: "edited after start" }, where: { id: "case-wa1-a" } });
+  await prisma.evalCase.update({
+    data: { message: "edited after start" },
+    where: { id: "case-wa1-a" },
+  });
 
   await drain();
   const finished = (await (await call(`/eval-runs/${run.id}`)).json()).run;
@@ -356,7 +389,9 @@ it("runs only the selected Cases once, charges them, and reports to both destina
     status: "FINISHED",
     workspaceDelivery: "DELIVERED",
   });
-  expect(finished.cases.map((c: { caseKey: string; status: string }) => [c.caseKey, c.status])).toEqual([
+  expect(
+    finished.cases.map((c: { caseKey: string; status: string }) => [c.caseKey, c.status]),
+  ).toEqual([
     ["a", "EVALUATED"],
     ["b", "EVALUATED"],
     ["boom", "EXECUTION_ERROR"],
@@ -439,7 +474,9 @@ it("denies a mutating Tool during evaluation and says so", async () => {
   await drain();
 
   expect(toolAnswer).toContain("Denied");
-  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("shop.test"))).toBe(false);
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("shop.test"))).toBe(
+    false,
+  );
   const detail = (await (await call(`/eval-runs/${run.id}`)).json()).run;
   expect(detail.cases[0].limitations).toEqual(['Tool "cancel_order" was denied (MUTATING).']);
 });
@@ -495,7 +532,10 @@ it("never replays a Case that had already started when its job is redelivered", 
   await drain();
 
   const detail = (await (await call(`/eval-runs/${run.id}`)).json()).run;
-  expect(detail.cases.map((c: { status: string }) => c.status)).toEqual(["EXECUTION_ERROR", "EVALUATED"]);
+  expect(detail.cases.map((c: { status: string }) => c.status)).toEqual([
+    "EXECUTION_ERROR",
+    "EVALUATED",
+  ]);
   expect(mocks.turn).toHaveBeenCalledTimes(1);
   expect(mocks.turn.mock.calls[0]?.[0].customerMessage).toBe("question b");
 });
@@ -522,7 +562,9 @@ it("keeps evidence a destination refused and reports delivery separately from ex
   expect(mocks.deliveries).toEqual([{ runId: run.id, target: "WORKSPACE", workspaceId: "wa1" }]);
   const evidence = await prisma.evalRunEvidence.findMany({ where: { runId: run.id } });
   expect(evidence.length).toBeGreaterThan(0);
-  expect(evidence.every((row) => row.target === "WORKSPACE" && row.body.includes("resource"))).toBe(true);
+  expect(evidence.every((row) => row.target === "WORKSPACE" && row.body.includes("resource"))).toBe(
+    true,
+  );
   // Retained without another model call or another charge.
   expect(mocks.turn).toHaveBeenCalledTimes(1);
   expect(await prisma.creditLedgerEntry.count({ where: { type: "SPEND" } })).toBe(1);
@@ -684,7 +726,12 @@ it("runs a retriever-only Case without an AI Turn and reports a stale label as i
   const finished = await detail(run.id);
   expect(statuses(finished)).toEqual(["INVALID", "INVALID"]);
   expect(finished.cases[0].error).toContain("no longer resolves");
-  expect(finished.progress).toMatchObject({ evaluated: 0, executionErrors: 0, invalid: 2, passed: 0 });
+  expect(finished.progress).toMatchObject({
+    evaluated: 0,
+    executionErrors: 0,
+    invalid: 2,
+    passed: 0,
+  });
   // The retriever path searched with no AI Agent call; only the full-turn Case ran an AI Turn.
   expect(mocks.retrieverSearches).toBe(1);
   expect(mocks.turn).toHaveBeenCalledTimes(1);
@@ -702,12 +749,18 @@ it("runs a negative control only as an evaluator-health check: free, and never a
   const first = await startRun("plain");
   await drain();
   // The selected subset is exactly what ran: no control was added to it.
-  expect((await detail(first.id)).cases.map((c: { caseKey: string }) => c.caseKey)).toEqual(["plain"]);
+  expect((await detail(first.id)).cases.map((c: { caseKey: string }) => c.caseKey)).toEqual([
+    "plain",
+  ]);
 
   const second = await startRun("control");
   await drain();
   const finished = await detail(second.id);
-  expect(finished.cases[0]).toMatchObject({ evaluatorHealth: true, passed: true, status: "EVALUATED" });
+  expect(finished.cases[0]).toMatchObject({
+    evaluatorHealth: true,
+    passed: true,
+    status: "EVALUATED",
+  });
   expect(finished.progress).toMatchObject({ evaluatorChecks: 1, evaluatorHealthy: 1, passed: 0 });
   expect(mocks.turn).toHaveBeenCalledTimes(1); // only "plain"
   expect(finished.chargedCredits).toBe(0);
@@ -743,7 +796,10 @@ it("retries one destination from stored evidence with no model call or Credits",
   });
 
   // Once retention lapses the evidence can no longer be retried.
-  await prisma.evalRunEvidence.updateMany({ data: { expiresAt: new Date(0) }, where: { runId: run.id } });
+  await prisma.evalRunEvidence.updateMany({
+    data: { expiresAt: new Date(0) },
+    where: { runId: run.id },
+  });
   expect((await call(`/eval-runs/${run.id}/delivery/WORKSPACE/retry`, "POST")).status).toBe(409);
   await prisma.evalRunEvidence.updateMany({
     data: { expiresAt: new Date(Date.now() + 60_000) },

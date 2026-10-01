@@ -17,7 +17,9 @@ export const judgeModelId = () => gatewayModelId(evalConfig.judgeModelId);
 
 export function createJudgeBaseModel(): CompletionModel {
   if (!aiAgentConfig.apiKey) {
-    throw new Error("COMPLETION_GATEWAY_API_KEY (or OPENROUTER_API_KEY) is required for the Judge.");
+    throw new Error(
+      "COMPLETION_GATEWAY_API_KEY (or OPENROUTER_API_KEY) is required for the Judge.",
+    );
   }
   return createReplyModel({
     apiKey: aiAgentConfig.apiKey,

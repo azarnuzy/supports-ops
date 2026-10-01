@@ -34,7 +34,12 @@ beforeEach(async () => {
   workspaceId = randomUUID();
   await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
   await prisma.workspace.create({
-    data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
+    data: {
+      id: workspaceId,
+      organizationId: workspaceId,
+      name: "Demo",
+      slug: `demo-${workspaceId.slice(0, 8)}`,
+    },
   });
 });
 

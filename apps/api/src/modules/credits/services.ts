@@ -65,14 +65,16 @@ export async function creditBalance(workspaceId: string) {
 }
 
 export async function hasActiveUnlimitedPeriod(workspaceId: string) {
-  return Boolean(await unscopedPrisma.unlimitedPeriod.findFirst({
-    where: {
-      organizationId: await organizationIdForWorkspace(unscopedPrisma, workspaceId),
-      endedEarlyAt: null,
-      OR: [{ endAt: null }, { endAt: { gt: new Date() } }],
-    },
-    select: { id: true },
-  }));
+  return Boolean(
+    await unscopedPrisma.unlimitedPeriod.findFirst({
+      where: {
+        organizationId: await organizationIdForWorkspace(unscopedPrisma, workspaceId),
+        endedEarlyAt: null,
+        OR: [{ endAt: null }, { endAt: { gt: new Date() } }],
+      },
+      select: { id: true },
+    }),
+  );
 }
 
 async function balanceWithin(

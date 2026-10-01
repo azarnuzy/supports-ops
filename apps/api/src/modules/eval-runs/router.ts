@@ -50,9 +50,7 @@ export const evalRunsRouter = new Hono<{ Variables: AuthVariables }>()
   .post("/", zValidator("json", selectionSchema), (c) =>
     respond(async () => c.json({ run: await startRun(c.req.valid("json")) }, 201), c),
   )
-  .get("/:id", (c) =>
-    respond(async () => c.json({ run: await getRun(c.req.param("id")) }, 200), c),
-  )
+  .get("/:id", (c) => respond(async () => c.json({ run: await getRun(c.req.param("id")) }, 200), c))
   .post("/:id/delivery/:target/retry", zValidator("param", retryParams), (c) => {
     const { id, target } = c.req.valid("param");
     return respond(async () => c.json({ run: await retryDelivery(id, target) }, 200), c);
