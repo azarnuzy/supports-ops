@@ -226,8 +226,18 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
         where: { workspaceId: id, user: { deletedAt: null } },
         select: {
           role: true,
-          user: { select: { id: true, name: true, email: true,
-            authSessions: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } } },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              authSessions: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { createdAt: true },
+              },
+            },
+          },
         },
         orderBy: { user: { email: "asc" } },
       }),
@@ -310,7 +320,10 @@ export async function getWorkspaceDetail(id: string, range: AnalyticsRangeQuery)
         ? { endAt: unlimitedPeriod.endAt, endedEarlyAt: unlimitedPeriod.endedEarlyAt }
         : null,
       users: users.map(({ role, user }) => ({
-        id: user.id, name: user.name, email: user.email, role,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role,
         lastSignInAt: user.authSessions[0]?.createdAt ?? null,
       })),
       channels: {
