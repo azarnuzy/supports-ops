@@ -3,7 +3,12 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
-import { createHumanAgentSchema, usersQuerySchema, updateMembershipSchema, organizationAdminSchema } from "./schema";
+import {
+  createHumanAgentSchema,
+  usersQuerySchema,
+  updateMembershipSchema,
+  organizationAdminSchema,
+} from "./schema";
 import {
   createHumanAgent,
   HumanAgentEmailAlreadyInUseError,
@@ -45,7 +50,10 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>()
 
       return c.json(result, 201);
     } catch (error) {
-      if (error instanceof HumanAgentEmailAlreadyInUseError || error instanceof MembershipConflictError) {
+      if (
+        error instanceof HumanAgentEmailAlreadyInUseError ||
+        error instanceof MembershipConflictError
+      ) {
         return c.json({ error: "email_in_use", message: error.message }, 409);
       }
 
@@ -77,9 +85,14 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>()
   })
   .patch("/:id/organization-admin", zValidator("json", organizationAdminSchema), async (c) => {
     const admin = requireAdmin(c);
-    if (!admin?.isOrganizationAdmin || !admin.organizationId) return c.json({ error: "forbidden" }, 403);
+    if (!admin?.isOrganizationAdmin || !admin.organizationId)
+      return c.json({ error: "forbidden" }, 403);
     try {
-      await setOrganizationAdmin(admin.organizationId, c.req.param("id"), c.req.valid("json").enabled);
+      await setOrganizationAdmin(
+        admin.organizationId,
+        c.req.param("id"),
+        c.req.valid("json").enabled,
+      );
       return c.json({ ok: true });
     } catch (error) {
       if (error instanceof LastOrganizationAdminError) return c.json({ error: error.message }, 409);

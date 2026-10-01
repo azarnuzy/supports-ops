@@ -88,9 +88,12 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
     return streamSSE(c, async (stream) => {
-      const unsubscribe = await subscribeToTicketQueueEvents(requireWorkspaceId(), async (event) => {
-        await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
-      });
+      const unsubscribe = await subscribeToTicketQueueEvents(
+        requireWorkspaceId(),
+        async (event) => {
+          await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
+        },
+      );
       stream.onAbort(unsubscribe);
       keepStreamAlive(stream);
       await new Promise<void>(() => undefined);

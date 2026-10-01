@@ -211,7 +211,9 @@ export async function getRun(id: string) {
     open.find((row) => row.target === target)?.expiresAt ?? null;
   const retryable = (target: "CENTRAL" | "WORKSPACE") => {
     const expiresAt = expiry(target);
-    return run.status !== "QUEUED" && run.status !== "RUNNING" && !!expiresAt && expiresAt > new Date();
+    return (
+      run.status !== "QUEUED" && run.status !== "RUNNING" && !!expiresAt && expiresAt > new Date()
+    );
   };
   const {
     destinationCredentialsEncrypted: _credentials,

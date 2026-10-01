@@ -12,4 +12,7 @@ export const selectionSchema = z.object({
 });
 export type Selection = z.infer<typeof selectionSchema>;
 
-export const retryParams = z.object({ id: z.string().min(1), target: z.enum(["CENTRAL", "WORKSPACE"]) });
+export const retryParams = z.object({
+  id: z.string().min(1),
+  target: z.enum(["CENTRAL", "WORKSPACE"]),
+});
