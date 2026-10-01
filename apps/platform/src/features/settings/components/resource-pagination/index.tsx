@@ -18,6 +18,7 @@ export default function ResourcePagination({
       <PaginationContent>
         <PaginationItem>
           <Button
+            type="button"
             variant="outline"
             size="sm"
             disabled={page <= 1}
@@ -28,6 +29,7 @@ export default function ResourcePagination({
         </PaginationItem>
         <PaginationItem>
           <Button
+            type="button"
             variant="outline"
             size="sm"
             disabled={page >= pageCount}
