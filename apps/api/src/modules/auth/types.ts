@@ -1,7 +1,7 @@
 import type { auth } from "./instance";
 
 export type AuthSession = typeof auth.$Infer.Session.session;
-export type AuthUser = typeof auth.$Infer.Session.user;
+export type AuthUser = typeof auth.$Infer.Session.user & { workspaceId?: string };
 
 /** A Customer's Session, resolved by a Channel Adapter from whatever that
  * Channel authenticates with. A Customer never signs in, so this is the only

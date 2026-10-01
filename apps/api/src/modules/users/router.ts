@@ -1,3 +1,4 @@
+import { requireWorkspaceId } from "../../utils/workspace-context";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
@@ -24,7 +25,7 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>()
     }
 
     try {
-      const result = await listRecentUsers(c.req.valid("query"), currentUser.workspaceId);
+      const result = await listRecentUsers(c.req.valid("query"), requireWorkspaceId());
 
       return c.json(result, 200);
     } catch (error) {
@@ -40,7 +41,7 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>()
     }
 
     try {
-      const result = await createHumanAgent(currentUser.workspaceId, c.req.valid("json"));
+      const result = await createHumanAgent(requireWorkspaceId(), c.req.valid("json"));
 
       return c.json(result, 201);
     } catch (error) {
@@ -55,7 +56,7 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>()
     const admin = requireAdmin(c);
     if (!admin) return c.json({ error: "forbidden" }, 403);
     try {
-      await updateMembership(admin.workspaceId, c.req.param("id"), c.req.valid("json").role);
+      await updateMembership(requireWorkspaceId(), c.req.param("id"), c.req.valid("json").role);
       return c.json({ ok: true });
     } catch (error) {
       if (error instanceof MembershipConflictError) return c.json({ error: error.message }, 404);
@@ -66,7 +67,7 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>()
     const admin = requireAdmin(c);
     if (!admin) return c.json({ error: "forbidden" }, 403);
     try {
-      await removeMembership(admin.workspaceId, c.req.param("id"));
+      await removeMembership(requireWorkspaceId(), c.req.param("id"));
       return c.json({ ok: true });
     } catch (error) {
       if (error instanceof LastOrganizationAdminError) return c.json({ error: error.message }, 409);

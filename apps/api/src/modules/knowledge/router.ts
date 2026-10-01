@@ -1,3 +1,4 @@
+import { requireWorkspaceId } from "../../utils/workspace-context";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -94,7 +95,7 @@ export const knowledgeRouter = new Hono<{ Variables: AuthVariables }>()
     if (!user) return c.json({ error: "unauthorized" }, 401);
     return streamSSE(c, async (stream) => {
       const unsubscribe = await subscribeToKnowledgeSourceEvents(
-        user.workspaceId,
+        requireWorkspaceId(),
         async (event) => {
           await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
         },

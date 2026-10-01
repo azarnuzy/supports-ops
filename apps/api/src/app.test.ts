@@ -58,7 +58,11 @@ vi.mock("./utils/prisma", () => ({
   unscopedPrisma: {
     user: { findUnique: vi.fn(async () => ({ deletedAt: null, isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "workspace-1" })) },
     workspace: { findUnique: vi.fn(async () => ({ deletedAt: null, organizationId: "org-1" })) },
-    workspaceMembership: { findUnique: mocks.membershipFindUnique, findMany: mocks.findMany },
+    workspaceMembership: {
+      findFirst: vi.fn(async () => ({ workspaceId: "workspace-1" })),
+      findUnique: mocks.membershipFindUnique,
+      findMany: mocks.findMany,
+    },
   },
 }));
 

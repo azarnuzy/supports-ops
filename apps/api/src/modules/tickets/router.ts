@@ -1,3 +1,4 @@
+import { requireWorkspaceId } from "../../utils/workspace-context";
 import { zValidator } from "@hono/zod-validator";
 import { SuggestedReplyGenerationFailedError } from "@repo/ai-agent";
 import { Hono } from "hono";
@@ -71,7 +72,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/live", async (c) => {
     const user = requireAdmin(c);
     if (!user) return c.json({ error: "forbidden" }, 403);
-    return c.json({ tickets: await listAiHandlingTickets(user.workspaceId) }, 200);
+    return c.json({ tickets: await listAiHandlingTickets(requireWorkspaceId()) }, 200);
   })
   .get("/conversations/:sessionId", async (c) => {
     const user = requireAdmin(c);
@@ -87,7 +88,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     const user = c.get("user");
     if (!user) return c.json({ error: "unauthorized" }, 401);
     return streamSSE(c, async (stream) => {
-      const unsubscribe = await subscribeToTicketQueueEvents(user.workspaceId, async (event) => {
+      const unsubscribe = await subscribeToTicketQueueEvents(requireWorkspaceId(), async (event) => {
         await stream.writeSSE({ data: JSON.stringify(event), event: event.type });
       });
       stream.onAbort(unsubscribe);
@@ -142,8 +143,8 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     if (user.role !== "HUMAN_AGENT" && user.role !== "ADMIN")
       return c.json({ error: "forbidden" }, 403);
     try {
-      const ticket = await claimTicket(c.req.param("id"), user.id, user.workspaceId);
-      void completeHandoff(ticket.id, user.id, user.workspaceId).catch(() => undefined);
+      const ticket = await claimTicket(c.req.param("id"), user.id, requireWorkspaceId());
+      void completeHandoff(ticket.id, user.id, requireWorkspaceId()).catch(() => undefined);
       return c.json({ ticket }, 200);
     } catch (error) {
       if (error instanceof TicketAlreadyClaimedError)
@@ -156,7 +157,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     if (!user) return c.json({ error: "forbidden" }, 403);
     try {
       return c.json(
-        { ticket: await takeOverTicket(c.req.param("id"), user.id, user.workspaceId) },
+        { ticket: await takeOverTicket(c.req.param("id"), user.id, requireWorkspaceId()) },
         200,
       );
     } catch (error) {
@@ -240,7 +241,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "forbidden" }, 403);
     try {
       return c.json(
-        { suggestedReply: await suggestReply(c.req.param("id"), user.id, user.workspaceId) },
+        { suggestedReply: await suggestReply(c.req.param("id"), user.id, requireWorkspaceId()) },
         200,
       );
     } catch (error) {
@@ -286,7 +287,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
           ticket: await reassignTicket(
             c.req.param("id"),
             c.req.valid("json").humanAgentId,
-            user.workspaceId,
+            requireWorkspaceId(),
           ),
         },
         200,
@@ -303,7 +304,7 @@ export const ticketsRouter = new Hono<{ Variables: AuthVariables }>()
     const user = requireAdmin(c);
     if (!user) return c.json({ error: "forbidden" }, 403);
     try {
-      await deleteTicket(c.req.param("id"), user.id, user.workspaceId);
+      await deleteTicket(c.req.param("id"), user.id, requireWorkspaceId());
       return c.body(null, 204);
     } catch (error) {
       if (error instanceof TicketNotFoundError) return c.json({ error: "ticket_not_found" }, 404);
