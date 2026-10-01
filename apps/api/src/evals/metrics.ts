@@ -186,9 +186,7 @@ export function languageMatches(): Metric<string> {
 async function loadRetrievalCase(
   testCase: { metadata?: unknown },
   workspaceId?: string,
-): Promise<
-  { relevant: Awaited<ReturnType<typeof resolveExpectedPassages>> } | EvalOutcome<never>
-> {
+): Promise<{ relevant: Awaited<ReturnType<typeof resolveExpectedPassages>> } | EvalOutcome<never>> {
   const expectedPassages = metadataOf(testCase).expectedPassages;
   if (!expectedPassages?.length) {
     return EvalOutcome.invalid("case metadata is missing `expectedPassages`", {
@@ -248,7 +246,13 @@ function retrievalMetric(options: {
 
 /** Context recall: every required passage was retrieved somewhere this turn. */
 export const retrievalRecall = (workspaceId?: string) =>
-  retrievalMetric({ name: "recall@k", required: true, score: recallAtK, threshold: 1, workspaceId });
+  retrievalMetric({
+    name: "recall@k",
+    required: true,
+    score: recallAtK,
+    threshold: 1,
+    workspaceId,
+  });
 
 /** Reciprocal rank; the suite mean is MRR. A Case passes with a relevant Chunk in the top 3. */
 export const retrievalReciprocalRank = (workspaceId?: string) =>

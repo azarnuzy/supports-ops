@@ -76,7 +76,9 @@ export function casePlan(item: CaseShape) {
   return {
     agentTurn: item.metric !== "negativeControl" && !retriever,
     evaluatorHealth: item.metric === "negativeControl",
-    judgeCalls: isJudgedMetric(item.metric) ? judgeCalls[item.metric] : ([0, 0] as [number, number]),
+    judgeCalls: isJudgedMetric(item.metric)
+      ? judgeCalls[item.metric]
+      : ([0, 0] as [number, number]),
     retriever,
   };
 }
