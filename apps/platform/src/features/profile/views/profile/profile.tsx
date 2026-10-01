@@ -129,21 +129,23 @@ const ProfileView = () => {
                 <p className="text-sm text-muted-foreground">{currentUser.email}</p>
               </div>
             </CardContent>
-            {workspaceId && <CardContent className="grid gap-2 border-t pt-5">
-              <p className="text-sm font-medium">Workspace ID</p>
-              <p className="text-xs text-muted-foreground">
-                Use this value as EVAL_WORKSPACE_ID when running evaluations.
-              </p>
-              <Button
-                className="h-auto w-full justify-between font-mono text-xs break-all"
-                type="button"
-                variant="outline"
-                onClick={() => void copyWorkspaceId()}
-              >
-                {workspaceId}
-                <CopyIcon className="size-3.5 shrink-0" />
-              </Button>
-            </CardContent>}
+            {workspaceId && (
+              <CardContent className="grid gap-2 border-t pt-5">
+                <p className="text-sm font-medium">Workspace ID</p>
+                <p className="text-xs text-muted-foreground">
+                  Use this value as EVAL_WORKSPACE_ID when running evaluations.
+                </p>
+                <Button
+                  className="h-auto w-full justify-between font-mono text-xs break-all"
+                  type="button"
+                  variant="outline"
+                  onClick={() => void copyWorkspaceId()}
+                >
+                  {workspaceId}
+                  <CopyIcon className="size-3.5 shrink-0" />
+                </Button>
+              </CardContent>
+            )}
           </Card>
         </div>
       </section>

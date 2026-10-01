@@ -92,11 +92,24 @@ function EmptyRange({ title, description }: { title: string; description: string
   );
 }
 
-function OverviewPanel({ range, filters, organization }: { range: DashboardRange; filters: AiUsageFilters; organization: boolean }) {
-  const options = organization ? organizationAiUsageSummaryQueryOptions(range, filters) : aiUsageSummaryQueryOptions(range, filters);
+function OverviewPanel({
+  range,
+  filters,
+  organization,
+}: {
+  range: DashboardRange;
+  filters: AiUsageFilters;
+  organization: boolean;
+}) {
+  const options = organization
+    ? organizationAiUsageSummaryQueryOptions(range, filters)
+    : aiUsageSummaryQueryOptions(range, filters);
   const summary = useQuery({
     queryKey: [...options.queryKey],
-    queryFn: () => organization ? getOrganizationAiUsageSummary(range, filters) : getAiUsageSummary(range, filters),
+    queryFn: () =>
+      organization
+        ? getOrganizationAiUsageSummary(range, filters)
+        : getAiUsageSummary(range, filters),
   });
   if (summary.isPending) return <PanelSkeleton />;
   if (summary.isError) return <LoadState error={summary.error} onRetry={() => summary.refetch()} />;
@@ -172,15 +185,17 @@ function OverviewPanel({ range, filters, organization }: { range: DashboardRange
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        {organization ? <UsageBreakdownCard
-          title="Workspace"
-          emptyLabel="No Workspace spend in this range."
-          rows={usage.byWorkspace.map((row) => ({
-            label: `${row.workspaceName} (${row.turnCount} AI Turns)`,
-            creditsSpent: row.creditsSpent,
-            tokens: tokensOf(row),
-          }))}
-        /> : null}
+        {organization ? (
+          <UsageBreakdownCard
+            title="Workspace"
+            emptyLabel="No Workspace spend in this range."
+            rows={usage.byWorkspace.map((row) => ({
+              label: `${row.workspaceName} (${row.turnCount} AI Turns)`,
+              creditsSpent: row.creditsSpent,
+              tokens: tokensOf(row),
+            }))}
+          />
+        ) : null}
         <UsageBreakdownCard
           title="AI Agent"
           emptyLabel="No AI Agent spend in this range."
@@ -320,14 +335,16 @@ const AiUsageView = () => {
           <SettingsHeader
             title="AI Usage"
             description="Credits spent, conversations handled, Tokens, and Tool calls for your AI Agents."
-            action={user.data?.isOrganizationAdmin ? (
-              <Button asChild size="sm" variant="outline">
-                <Link to="/workspace/billing">
-                  <CoinsIcon className="size-4" />
-                  Buy Credits
-                </Link>
-              </Button>
-            ) : undefined}
+            action={
+              user.data?.isOrganizationAdmin ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/workspace/billing">
+                    <CoinsIcon className="size-4" />
+                    Buy Credits
+                  </Link>
+                </Button>
+              ) : undefined
+            }
           />
 
           <Tabs value={tab} onValueChange={setTab} className="gap-4">
@@ -342,8 +359,13 @@ const AiUsageView = () => {
               {tab !== "ledger" ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {user.data?.isOrganizationAdmin && tab === "overview" ? (
-                    <Select value={organization ? "organization" : "workspace"} onValueChange={(value) => setOrganization(value === "organization")}>
-                      <SelectTrigger aria-label="Usage scope" className="w-44"><SelectValue /></SelectTrigger>
+                    <Select
+                      value={organization ? "organization" : "workspace"}
+                      onValueChange={(value) => setOrganization(value === "organization")}
+                    >
+                      <SelectTrigger aria-label="Usage scope" className="w-44">
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="workspace">This Workspace</SelectItem>
                         <SelectItem value="organization">Organization</SelectItem>
@@ -382,7 +404,11 @@ const AiUsageView = () => {
             </div>
 
             <TabsContent value="overview">
-              <OverviewPanel range={range} filters={filters} organization={organization && !!user.data?.isOrganizationAdmin} />
+              <OverviewPanel
+                range={range}
+                filters={filters}
+                organization={organization && !!user.data?.isOrganizationAdmin}
+              />
             </TabsContent>
             <TabsContent value="tools">
               <ToolsPanel range={range} filters={filters} />

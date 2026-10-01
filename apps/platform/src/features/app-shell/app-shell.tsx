@@ -137,7 +137,12 @@ export function PlatformAppShell({
             label: "Workspace",
           },
           ...(user.data.isOrganizationAdmin
-            ? [{ items: [{ icon: CoinsIcon, label: "Billing", to: "/workspace/billing" }], label: "Organization" }]
+            ? [
+                {
+                  items: [{ icon: CoinsIcon, label: "Billing", to: "/workspace/billing" }],
+                  label: "Organization",
+                },
+              ]
             : []),
         ]
       : [{ items: conversationItems, label: "Conversations" }];
@@ -157,7 +162,12 @@ export function PlatformAppShell({
     <SidebarMenu>
       <SidebarMenuItem>
         <div className="flex items-center">
-          <SidebarMenuButton asChild size="lg" tooltip="Edit profile" className="h-11 min-w-0 flex-1">
+          <SidebarMenuButton
+            asChild
+            size="lg"
+            tooltip="Edit profile"
+            className="h-11 min-w-0 flex-1"
+          >
             <Link to="/profile">
               <Avatar className="size-7 shrink-0 rounded-md">
                 {user.data.image ? (

@@ -19,7 +19,10 @@ export function aiUsageSummaryQueryOptions(range: DashboardRange, filters: AiUsa
   });
 }
 
-export function organizationAiUsageSummaryQueryOptions(range: DashboardRange, filters: AiUsageFilters = {}) {
+export function organizationAiUsageSummaryQueryOptions(
+  range: DashboardRange,
+  filters: AiUsageFilters = {},
+) {
   return queryOptions({
     queryFn: () => getOrganizationAiUsageSummary(range, filters),
     queryKey: ["organization", "ai-usage-summary", range, filters],

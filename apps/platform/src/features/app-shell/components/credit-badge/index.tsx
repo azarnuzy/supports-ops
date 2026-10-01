@@ -43,9 +43,14 @@ export function CreditBadge() {
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link className={`flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs hover:bg-accent ${stateStyles[state]}`} to={user.data.isOrganizationAdmin ? "/workspace/billing" : "/workspace/ai-usage"}>
+          <Link
+            className={`flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs hover:bg-accent ${stateStyles[state]}`}
+            to={user.data.isOrganizationAdmin ? "/workspace/billing" : "/workspace/ai-usage"}
+          >
             <CoinsIcon className="size-3.5 shrink-0" />
-            <span><strong className="text-foreground">{formatCredits(balance)}</strong> Credits</span>
+            <span>
+              <strong className="text-foreground">{formatCredits(balance)}</strong> Credits
+            </span>
           </Link>
         </TooltipTrigger>
         <TooltipContent>{stateMessage[state]}</TooltipContent>

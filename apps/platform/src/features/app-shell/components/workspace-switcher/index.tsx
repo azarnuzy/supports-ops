@@ -42,7 +42,9 @@ export function WorkspaceSwitcher() {
   const [name, setName] = useState("");
 
   if (!user.data || !workspaces.data) return null;
-  const activeWorkspaceName = workspaces.data.find((workspace) => workspace.id === activeWorkspaceId)?.name;
+  const activeWorkspaceName = workspaces.data.find(
+    (workspace) => workspace.id === activeWorkspaceId,
+  )?.name;
 
   function handleValueChange(value: string) {
     if (value === createWorkspaceValue) {
@@ -64,32 +66,39 @@ export function WorkspaceSwitcher() {
   return (
     <>
       {workspaces.data.length < 2 && !user.data.isOrganizationAdmin ? (
-        <div className="flex h-9 min-w-0 items-center rounded-md bg-muted px-2 text-sm font-medium group-data-[collapsible=icon]:hidden" title={workspaces.data[0]?.name}>
+        <div
+          className="flex h-9 min-w-0 items-center rounded-md bg-muted px-2 text-sm font-medium group-data-[collapsible=icon]:hidden"
+          title={workspaces.data[0]?.name}
+        >
           <span className="truncate">{workspaces.data[0]?.name}</span>
         </div>
-      ) : <Select value={activeWorkspaceId ?? undefined} onValueChange={handleValueChange}>
-        <SelectTrigger
-          aria-label="Workspace"
-          title={activeWorkspaceName}
-          className="h-9 w-full min-w-0 border-0 bg-muted px-2 text-sm font-medium shadow-none hover:bg-accent focus-visible:ring-2 group-data-[collapsible=icon]:hidden"
-          size="sm"
-        >
-          <SelectValue className="min-w-0 flex-1 overflow-hidden">
-            <span className="block truncate">{activeWorkspaceName}</span>
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent align="start">
-          {workspaces.data.map((workspace) => (
-            <SelectItem key={workspace.id} className="text-xs font-medium" value={workspace.id}>
-              {workspace.name}
-            </SelectItem>
-          ))}
-          {user.data.isOrganizationAdmin ? <SelectItem className="text-xs font-medium" value={createWorkspaceValue}>
-            <PlusIcon className="size-3.5" />
-            Create Workspace
-          </SelectItem> : null}
-        </SelectContent>
-      </Select>}
+      ) : (
+        <Select value={activeWorkspaceId ?? undefined} onValueChange={handleValueChange}>
+          <SelectTrigger
+            aria-label="Workspace"
+            title={activeWorkspaceName}
+            className="h-9 w-full min-w-0 border-0 bg-muted px-2 text-sm font-medium shadow-none hover:bg-accent focus-visible:ring-2 group-data-[collapsible=icon]:hidden"
+            size="sm"
+          >
+            <SelectValue className="min-w-0 flex-1 overflow-hidden">
+              <span className="block truncate">{activeWorkspaceName}</span>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent align="start">
+            {workspaces.data.map((workspace) => (
+              <SelectItem key={workspace.id} className="text-xs font-medium" value={workspace.id}>
+                {workspace.name}
+              </SelectItem>
+            ))}
+            {user.data.isOrganizationAdmin ? (
+              <SelectItem className="text-xs font-medium" value={createWorkspaceValue}>
+                <PlusIcon className="size-3.5" />
+                Create Workspace
+              </SelectItem>
+            ) : null}
+          </SelectContent>
+        </Select>
+      )}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <form className="grid gap-5" onSubmit={handleSubmit}>
