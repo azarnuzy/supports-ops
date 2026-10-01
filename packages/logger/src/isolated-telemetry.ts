@@ -40,12 +40,16 @@ export function redactEvalPayload(value: unknown): unknown {
   }
   if (Array.isArray(value)) return value.map(redactEvalPayload);
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
-      key,
-      /^(authorization|cookie|set-cookie|password|passwordHash|api[-_]?key|secret[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret)$/i.test(key)
-        ? "[redacted]"
-        : redactEvalPayload(entry),
-    ]));
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        /^(authorization|cookie|set-cookie|password|passwordHash|api[-_]?key|secret[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret)$/i.test(
+          key,
+        )
+          ? "[redacted]"
+          : redactEvalPayload(entry),
+      ]),
+    );
   }
   return value;
 }
@@ -65,13 +69,15 @@ class ModelTurnSpanProcessor extends BatchSpanProcessor {
     }
     if (span.status.message) span.status.message = String(redactEvalPayload(span.status.message));
     for (const event of span.events) {
-      for (const [key, value] of Object.entries(event.attributes ?? {})) {
-        if (typeof value === "string") event.attributes![key] = String(redactEvalPayload(value));
+      if (!event.attributes) continue;
+      for (const [key, value] of Object.entries(event.attributes)) {
+        if (typeof value === "string") event.attributes[key] = String(redactEvalPayload(value));
       }
     }
     const model = attributes["anvia.generation.model_id"];
     if (
-      typeof model === "string" && model &&
+      typeof model === "string" &&
+      model &&
       typeof attributes["anvia.generation.turn"] === "number"
     ) {
       attributes["langfuse.observation.model.name"] = model;
@@ -173,17 +179,25 @@ export function createIsolatedTelemetry(options: {
   const tracer = tracerProvider.getTracer("@anvia/otel") as Tracer;
   return {
     /** One local-data experiment item, including cases without an Agent model call. */
-    async runCase<T>(attributes: Attributes, input: unknown, expected: unknown, fn: (root: {
-      traceId: string;
-      observationId: string;
-      setOutput(output: unknown): void;
-      setError(error: unknown): void;
-      setAttributes(attributes: Attributes): void;
-    }) => Promise<T>): Promise<T> {
+    async runCase<T>(
+      attributes: Attributes,
+      input: unknown,
+      expected: unknown,
+      fn: (root: {
+        traceId: string;
+        observationId: string;
+        setOutput(output: unknown): void;
+        setError(error: unknown): void;
+        setAttributes(attributes: Attributes): void;
+      }) => Promise<T>,
+    ): Promise<T> {
       return caseAttributes.run(attributes, async () => {
         const span = tracer.startSpan("eval.case", {}, ROOT_CONTEXT);
         const { traceId, spanId } = span.spanContext();
-        const itemAttributes = { ...attributes, "langfuse.experiment.item.root_observation_id": spanId };
+        const itemAttributes = {
+          ...attributes,
+          "langfuse.experiment.item.root_observation_id": spanId,
+        };
         span.setAttributes({
           ...itemAttributes,
           "langfuse.observation.input": JSON.stringify(redactEvalPayload(input)),
@@ -191,16 +205,23 @@ export function createIsolatedTelemetry(options: {
         });
         try {
           return await caseAttributes.run(itemAttributes, () =>
-            context.with(trace.setSpan(ROOT_CONTEXT, span), () => fn({
-              traceId,
-              observationId: spanId,
-              setOutput: (output) => span.setAttribute("langfuse.observation.output", JSON.stringify(redactEvalPayload(output))),
-              setAttributes: (values) => span.setAttributes(values),
-              setError: (error) => span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(redactEvalPayload(String(error))),
+            context.with(trace.setSpan(ROOT_CONTEXT, span), () =>
+              fn({
+                traceId,
+                observationId: spanId,
+                setOutput: (output) =>
+                  span.setAttribute(
+                    "langfuse.observation.output",
+                    JSON.stringify(redactEvalPayload(output)),
+                  ),
+                setAttributes: (values) => span.setAttributes(values),
+                setError: (error) =>
+                  span.setStatus({
+                    code: SpanStatusCode.ERROR,
+                    message: String(redactEvalPayload(String(error))),
+                  }),
               }),
-            })),
+            ),
           );
         } catch (error) {
           const message = String(redactEvalPayload(String(error)));

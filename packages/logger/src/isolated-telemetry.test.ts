@@ -37,9 +37,9 @@ it("exports actual model names and turn numbers to every eval destination", asyn
     }
     await telemetry.flush();
     for (const destination of [central, workspace]) {
-      const body = JSON.parse(
-        destination.sent.find((request) => request.signal === "traces")!.body,
-      );
+      const request = destination.sent.find((request) => request.signal === "traces");
+      if (!request) throw new Error("No traces exported");
+      const body = JSON.parse(request.body);
       const names = body.resourceSpans.flatMap(
         (resource: { scopeSpans: Array<{ spans: Array<{ name: string }> }> }) =>
           resource.scopeSpans.flatMap((scope) => scope.spans.map((span) => span.name)),
@@ -85,7 +85,6 @@ it("sends a span and a log to every sink, keeps refused requests, and leaves the
   expect(JSON.stringify(good.sent)).not.toContain("production.span");
 });
 
-
 it("exports full evaluation items and maps child payloads, tokens and secrets for Langfuse", async () => {
   const destination = sink("workspace");
   const telemetry = createIsolatedTelemetry({
@@ -94,34 +93,58 @@ it("exports full evaluation items and maps child payloads, tokens and secrets fo
     sinks: [destination.value],
   });
   try {
-    await telemetry.runCase({
-      "langfuse.experiment.id": "run1",
-      "langfuse.experiment.item.id": "case1",
-    }, { message: "question" }, "expected", async (root) => {
-      const child = telemetry.tracer.startSpan("model.turn.1", {
-        attributes: {
-          "anvia.generation.turn": 1,
-          "anvia.generation.model_id": "openai/test",
-          "anvia.generation.input": JSON.stringify({ message: "question", apiKey: "private-key" }),
-          "anvia.generation.output_text": "answer",
-          "anvia.usage.input_tokens": 12,
-          "anvia.usage.output_tokens": 3,
-        },
-      });
-      child.end();
-      root.setOutput({ reply: "answer", authorization: "Bearer private-token" });
-    });
+    await telemetry.runCase(
+      {
+        "langfuse.experiment.id": "run1",
+        "langfuse.experiment.item.id": "case1",
+      },
+      { message: "question" },
+      "expected",
+      async (root) => {
+        const child = telemetry.tracer.startSpan("model.turn.1", {
+          attributes: {
+            "anvia.generation.turn": 1,
+            "anvia.generation.model_id": "openai/test",
+            "anvia.generation.input": JSON.stringify({
+              message: "question",
+              apiKey: "private-key",
+            }),
+            "anvia.generation.output_text": "answer",
+            "anvia.usage.input_tokens": 12,
+            "anvia.usage.output_tokens": 3,
+          },
+        });
+        child.end();
+        root.setOutput({ reply: "answer", authorization: "Bearer private-token" });
+      },
+    );
     await telemetry.flush();
-    const body = destination.sent.find((request) => request.signal === "traces")!.body;
+    const request = destination.sent.find((request) => request.signal === "traces");
+    if (!request) throw new Error("No traces exported");
+    const body = request.body;
     const spans = JSON.parse(body).resourceSpans.flatMap(
-      (resource: { scopeSpans: Array<{ spans: Array<{ name: string; spanId: string; attributes: Array<{ key: string; value: { stringValue?: string; intValue?: string } }> }> }> }) =>
-        resource.scopeSpans.flatMap((scope) => scope.spans),
+      (resource: {
+        scopeSpans: Array<{
+          spans: Array<{
+            name: string;
+            spanId: string;
+            attributes: Array<{ key: string; value: { stringValue?: string; intValue?: string } }>;
+          }>;
+        }>;
+      }) => resource.scopeSpans.flatMap((scope) => scope.spans),
     );
-    const attributes = (name: string) => Object.fromEntries(
-      spans.find((span: { name: string }) => span.name === name)!.attributes.map(
-        ({ key, value }: { key: string; value: { stringValue?: string; intValue?: string } }) => [key, value.stringValue ?? value.intValue],
-      ),
-    );
+    const attributes = (name: string) => {
+      const span = spans.find((span: { name: string }) => span.name === name);
+      if (!span) throw new Error(`Missing span: ${name}`);
+      return Object.fromEntries(
+        span.attributes.map(
+          ({ key, value }: { key: string; value: { stringValue?: string; intValue?: string } }) => [
+            key,
+            value.stringValue ?? value.intValue,
+          ],
+        ),
+      );
+    };
     expect(attributes("eval.case")).toMatchObject({
       "langfuse.experiment.item.expected_output": '"expected"',
       "langfuse.observation.input": '{"message":"question"}',
@@ -131,7 +154,6 @@ it("exports full evaluation items and maps child payloads, tokens and secrets fo
       "langfuse.experiment.item.id": "case1",
       "langfuse.observation.output": "answer",
       "langfuse.observation.model.name": "openai/test",
-
     });
     expect(String(attributes("openai/test.turn.1")["gen_ai.usage.input_tokens"])).toBe("12");
     expect(body).not.toContain("private-key");
