@@ -115,8 +115,12 @@ export async function markTicketRead(client: ApiClient, id: string, position: nu
  * answer into hundreds of refetches. The finished reply still arrives as
  * `message.created`. Token-by-token rendering belongs to the Web Widget,
  * which consumes the delta payload directly. */
-export function subscribeToTicketEvents(baseUrl: string, ticketId: string, onEvent: () => void) {
-  const workspaceId = activeWorkspaceId();
+export function subscribeToTicketEvents(
+  baseUrl: string,
+  ticketId: string,
+  onEvent: () => void,
+  workspaceId: string | null = activeWorkspaceId(),
+) {
   const url = new URL(`${baseUrl}/tickets/${ticketId}/events`);
   if (workspaceId) url.searchParams.set("workspaceId", workspaceId);
   const events = new EventSource(url, {

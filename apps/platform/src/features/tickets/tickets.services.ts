@@ -102,9 +102,11 @@ export function resolveHumanTicket(id: string) {
   return resolveHumanTicketRequest(apiClient, id);
 }
 
-export function subscribeToSharedHumanQueue(onChange: () => void) {
+export function subscribeToSharedHumanQueue(
+  onChange: () => void,
+  workspaceId: string | null = activeWorkspaceId(),
+) {
   const url = new URL(`${apiBaseUrl}/tickets/queue/events`);
-  const workspaceId = activeWorkspaceId();
   if (workspaceId) url.searchParams.set("workspaceId", workspaceId);
   const events = new EventSource(url, { withCredentials: true });
   events.addEventListener("ticket.queue.changed", onChange);
@@ -123,8 +125,9 @@ export function subscribeToTicketEvents(
   ticketId: string,
   onEvent: () => void,
   onReconnectStateChange: (reconnecting: boolean) => void,
+  workspaceId: string | null = activeWorkspaceId(),
 ) {
-  const events = subscribeToTicketEventsRequest(apiBaseUrl, ticketId, onEvent);
+  const events = subscribeToTicketEventsRequest(apiBaseUrl, ticketId, onEvent, workspaceId);
   events.addEventListener("open", () => onReconnectStateChange(false));
   events.addEventListener("error", () => onReconnectStateChange(true));
   return () => events.close();

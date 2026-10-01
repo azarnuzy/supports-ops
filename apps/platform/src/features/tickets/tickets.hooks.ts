@@ -122,7 +122,10 @@ export function useSharedHumanQueueEvents() {
 export function useTicketEvents() {
   const invalidate = useTicketInvalidation();
   const workspaceId = useActiveWorkspaceId();
-  useEffect(() => subscribeToSharedHumanQueue(() => void invalidate()), [invalidate, workspaceId]);
+  useEffect(
+    () => subscribeToSharedHumanQueue(() => void invalidate(), workspaceId),
+    [invalidate, workspaceId],
+  );
 }
 
 /** Realtime for the currently open Ticket: new Messages, delivery, and
@@ -142,7 +145,7 @@ export function useTicketDetailEvents(ticketId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.ticket(ticketId) });
       void invalidateLists();
     };
-    return subscribeToTicketEvents(ticketId, onEvent, setReconnecting);
+    return subscribeToTicketEvents(ticketId, onEvent, setReconnecting, workspaceId);
   }, [invalidateLists, queryClient, ticketId, workspaceId]);
 
   return { reconnecting };
