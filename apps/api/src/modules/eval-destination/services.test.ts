@@ -144,7 +144,7 @@ describe("checkEvalDestination", () => {
     const [url, init] = request.mock.calls[0] ?? [];
     expect(url).toBe("https://8.8.8.8/api/public/otel/v1/traces");
     expect(init?.redirect).toBe("manual");
-    expect((init?.headers as Record<string, string>).authorization).toBe(
+    expect(new Headers(init?.headers).get("authorization")).toBe(
       `Basic ${Buffer.from("pk:sk").toString("base64")}`,
     );
   });
