@@ -141,6 +141,8 @@ model EvalRunCase {
   error              String?
   /// Evidence limits Admins must see, e.g. a mutating Tool that was denied.
   limitations        Json              @default("[]")
+  /// Customer-visible answer and grading explanations for inline review. No private reasoning.
+  result             Json              @default("{}")
   startedAt          DateTime?
   finishedAt         DateTime?
   run                EvalRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
