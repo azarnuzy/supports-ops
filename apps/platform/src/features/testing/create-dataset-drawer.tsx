@@ -1,7 +1,10 @@
-import type { EvalImportPreview, EvalImportSource } from "@repo/api-client";
+import type {
+  EvalImportPreview,
+  EvalImportSource,
+  EvalImportMessage,
+  EvalMessageFilters,
+} from "@repo/api-client";
 import {
-  EVAL_CSV_TEMPLATE,
-  IMPORT_ROW_LIMIT,
   importSourceSchema,
   keyAllocator,
   previewCsv,
@@ -28,9 +31,13 @@ import { type FormEvent, useRef, useState } from "react";
 import {
   useCreateDatasetMutation,
   useImportCasesMutation,
-  useImportSessionsQuery,
+  useImportMessagesQuery,
+  useImportMessageContextQuery,
   useUpdateDatasetMutation,
 } from "./hooks";
+import ResourcePagination from "../settings/components/resource-pagination";
+import { NativeSelect, NativeSelectOption } from "@repo/ui/components/native-select";
+import { MessageText } from "./message-text";
 import { formatTestingDate } from "./format";
 import { ImportPreviewPanel } from "./import-preview";
 
@@ -59,7 +66,28 @@ export function CreateDatasetDrawer({
   const [acceptSkipped, setAcceptSkipped] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileRead = useRef(0);
-  const sessions = useImportSessionsQuery(open && tab === "sessions");
+  const [messageFilters, setMessageFilters] = useState<EvalMessageFilters>({
+    page: 1,
+    search: "",
+    channel: "all",
+    since: "all",
+  });
+  const [pickedMessages, setPickedMessages] = useState<Record<string, EvalImportMessage>>({});
+  const [showSelected, setShowSelected] = useState(false);
+  const sessions = useImportMessagesQuery(
+    open && tab === "sessions" && !showSelected,
+    messageFilters,
+  );
+  const selectedMessages = Object.keys(selected).flatMap((id) =>
+    pickedMessages[id] ? [pickedMessages[id]!] : [],
+  );
+  const selectedPage = Math.min(
+    messageFilters.page,
+    Math.max(1, Math.ceil(selectedMessages.length / 20)),
+  );
+  const visibleMessages = showSelected
+    ? selectedMessages.slice((selectedPage - 1) * 20, selectedPage * 20)
+    : (sessions.data?.messages ?? []);
   const messageIds = Object.keys(selected);
   const source: EvalImportSource | null =
     tab === "paste"
@@ -103,6 +131,9 @@ export function CreateDatasetDrawer({
     setPasted("");
     setCsv(null);
     setSelected({});
+    setPickedMessages({});
+    setMessageFilters({ page: 1, search: "", channel: "all", since: "all" });
+    setShowSelected(false);
     setCriteria("");
     setDatasetId(null);
     setPreview(null);
@@ -119,10 +150,7 @@ export function CreateDatasetDrawer({
     const parsed = importSourceSchema.safeParse(input);
     if (!parsed.success)
       return {
-        error:
-          input.source === "sessions" && input.selections.length > 500
-            ? "Select at most 500 Customer Messages. Only the first 100 can be imported into a dataset at once."
-            : parsed.error.issues.map((issue) => issue.message).join(" "),
+        error: parsed.error.issues.map((issue) => issue.message).join(" "),
         rows: [],
         truncated: null,
       };
@@ -134,14 +162,10 @@ export function CreateDatasetDrawer({
         : result;
     }
     if (input.source === "paste") return previewPaste(input.text, alloc);
-    const messages = new Map(
-      (sessions.data?.sessions ?? []).flatMap((session) =>
-        session.messages.map((message) => [message.id, message] as const),
-      ),
-    );
+    const messages = new Map(Object.values(pickedMessages).map((message) => [message.id, message]));
     return {
       error: null,
-      rows: input.selections.slice(0, IMPORT_ROW_LIMIT).map((selection, index) => {
+      rows: input.selections.map((selection, index) => {
         const message = messages.get(selection.messageId);
         return message
           ? validate(index + 1, { caseKey: alloc.fresh(), message: message.content }, alloc)
@@ -151,10 +175,7 @@ export function CreateDatasetDrawer({
               row: index + 1,
             };
       }),
-      truncated:
-        input.selections.length > IMPORT_ROW_LIMIT
-          ? { limit: IMPORT_ROW_LIMIT, total: input.selections.length }
-          : null,
+      truncated: null,
     };
   }
 
@@ -211,31 +232,74 @@ export function CreateDatasetDrawer({
     setAcceptSkipped(false);
     if (!file) return;
     if (file.size > 5_000_000) {
-      toast.error("Choose a CSV file no larger than 5 MB.");
+      toast.error("Choose a CSV or XLSX file no larger than 5 MB.");
       return;
     }
     setBusy(true);
     try {
-      const text = await file.text();
+      const text = file.name.toLowerCase().endsWith(".xlsx")
+        ? await new Promise<string>((resolve, reject) => {
+            const worker = new Worker(new URL("./workbook-worker.ts", import.meta.url), {
+              type: "module",
+            });
+            const timer = window.setTimeout(() => {
+              worker.terminate();
+              reject(new Error("Reading this workbook took too long. Try a smaller file."));
+            }, 30_000);
+            const finish = () => {
+              window.clearTimeout(timer);
+              worker.terminate();
+            };
+            worker.onmessage = (event: MessageEvent<{ text?: string; error?: string }>) => {
+              finish();
+              if (event.data.error) reject(new Error(event.data.error));
+              else resolve(event.data.text ?? "");
+            };
+            worker.onerror = () => {
+              finish();
+              reject(new Error("Unable to read the workbook. Check the file and try again."));
+            };
+            void file
+              .arrayBuffer()
+              .then((buffer) => worker.postMessage(buffer, [buffer]))
+              .catch((error) => {
+                finish();
+                reject(error);
+              });
+          })
+        : await file.text();
       if (request !== fileRead.current) return;
       setCsv({ name: file.name, text });
       setPreview(makePreview({ source: "csv", text }));
-    } catch {
-      toast.error("Unable to read the CSV file. Choose the file again.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to read the file. Choose it again.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  function downloadTemplate() {
-    const url = URL.createObjectURL(
-      new Blob([EVAL_CSV_TEMPLATE], { type: "text/csv;charset=utf-8" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "supportops-eval-dataset-template.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+  async function downloadTemplate() {
+    setBusy(true);
+    try {
+      const { createTemplate } = await import("./workbook");
+      const bytes = await createTemplate();
+      const url = URL.createObjectURL(
+        new Blob([bytes.buffer as ArrayBuffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "supportops-eval-dataset-template.xlsx";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast.error("Unable to download the template. Try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -302,14 +366,14 @@ export function CreateDatasetDrawer({
                         disabled={busy}
                         value="sessions"
                       >
-                        Recent Sessions
+                        Customer Messages
                       </TabsTrigger>
                       <TabsTrigger
                         className="h-auto flex-1 text-xs sm:text-sm"
                         disabled={busy}
                         value="csv"
                       >
-                        Upload CSV
+                        Upload file
                       </TabsTrigger>
                     </TabsList>
                     <TabsContent className="mt-4" value="paste">
@@ -333,26 +397,21 @@ export function CreateDatasetDrawer({
                     </TabsContent>
                     <TabsContent className="mt-4 grid gap-3" value="sessions">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          {messageIds.length} messages selected
+                        <p className="text-sm font-medium">
+                          {messageIds.length} messages selected across pages
                         </p>
                         <div className="flex gap-1">
                           <Button
                             size="sm"
-                            variant="ghost"
+                            variant="outline"
                             type="button"
-                            disabled={!sessions.data?.sessions.length}
-                            onClick={() =>
-                              edit(setSelected)(
-                                Object.fromEntries(
-                                  (sessions.data?.sessions ?? []).flatMap((session) =>
-                                    session.messages.map((message) => [message.id, true]),
-                                  ),
-                                ),
-                              )
-                            }
+                            disabled={!messageIds.length && !showSelected}
+                            onClick={() => {
+                              setShowSelected(!showSelected);
+                              setMessageFilters({ ...messageFilters, page: 1 });
+                            }}
                           >
-                            Select all
+                            {showSelected ? "Browse messages" : "Review selection"}
                           </Button>
                           <Button
                             size="sm"
@@ -361,15 +420,90 @@ export function CreateDatasetDrawer({
                             disabled={!messageIds.length}
                             onClick={() => edit(setSelected)({})}
                           >
-                            Clear selection
+                            Clear all
                           </Button>
                         </div>
                       </div>
-                      {sessions.isPending ? (
-                        <p className="text-sm text-muted-foreground">Loading recent Sessions…</p>
-                      ) : sessions.isError ? (
+                      {!showSelected && (
+                        <>
+                          <Input
+                            aria-label="Search Customer Messages"
+                            placeholder="Search message text, customer name, email or phone…"
+                            maxLength={200}
+                            value={messageFilters.search}
+                            onChange={(e) =>
+                              setMessageFilters({
+                                ...messageFilters,
+                                search: e.target.value,
+                                page: 1,
+                              })
+                            }
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <NativeSelect
+                              aria-label="Message channel"
+                              value={messageFilters.channel}
+                              onChange={(e) =>
+                                setMessageFilters({
+                                  ...messageFilters,
+                                  channel: e.target.value as EvalMessageFilters["channel"],
+                                  page: 1,
+                                })
+                              }
+                            >
+                              <NativeSelectOption value="all">All channels</NativeSelectOption>
+                              <NativeSelectOption value="WEB">Web Widget</NativeSelectOption>
+                              <NativeSelectOption value="WHATSAPP">WhatsApp</NativeSelectOption>
+                            </NativeSelect>
+                            <NativeSelect
+                              aria-label="Message date range"
+                              value={messageFilters.since}
+                              onChange={(e) =>
+                                setMessageFilters({
+                                  ...messageFilters,
+                                  since: e.target.value as EvalMessageFilters["since"],
+                                  page: 1,
+                                })
+                              }
+                            >
+                              <NativeSelectOption value="all">All dates</NativeSelectOption>
+                              <NativeSelectOption value="7">Last 7 days</NativeSelectOption>
+                              <NativeSelectOption value="30">Last 30 days</NativeSelectOption>
+                              <NativeSelectOption value="90">Last 90 days</NativeSelectOption>
+                            </NativeSelect>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              type="button"
+                              disabled={!visibleMessages.length}
+                              onClick={() => {
+                                setPickedMessages((now) => ({
+                                  ...now,
+                                  ...Object.fromEntries(
+                                    visibleMessages.map((message) => [message.id, message]),
+                                  ),
+                                }));
+                                edit(setSelected)({
+                                  ...selected,
+                                  ...Object.fromEntries(
+                                    visibleMessages.map((message) => [
+                                      message.id,
+                                      selected[message.id] ?? false,
+                                    ]),
+                                  ),
+                                });
+                              }}
+                            >
+                              Select this page
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                      {!showSelected && sessions.isPending ? (
+                        <p className="text-sm text-muted-foreground">Loading Customer Messages…</p>
+                      ) : !showSelected && sessions.isError ? (
                         <div className="text-sm text-destructive">
-                          Unable to load recent Sessions.{" "}
+                          Unable to load Customer Messages.{" "}
                           <Button
                             size="sm"
                             variant="outline"
@@ -379,101 +513,80 @@ export function CreateDatasetDrawer({
                             Retry
                           </Button>
                         </div>
-                      ) : !sessions.data.sessions.length ? (
+                      ) : !visibleMessages.length ? (
                         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                          No Sessions with Customer Messages yet. Paste messages or upload a CSV
-                          instead.
+                          {showSelected
+                            ? "No messages selected."
+                            : "No Customer Messages match these filters. Try another search, paste messages or upload a file."}
                         </p>
                       ) : (
                         <ul className="grid gap-2">
-                          {sessions.data.sessions.map((session) => {
-                            const customer = session.conversation?.customerIdentity;
-                            const label =
-                              customer?.name ||
-                              customer?.email ||
-                              customer?.phoneE164 ||
-                              `Session ${session.id.slice(0, 8)}`;
-                            const allSelected = session.messages.every(
-                              (message) => selected[message.id] !== undefined,
-                            );
+                          {visibleMessages.map((message) => {
+                            const customer = message.session.customerIdentity;
                             return (
-                              <li className="overflow-hidden rounded-lg border" key={session.id}>
-                                <div className="flex items-center justify-between gap-2 bg-muted/30 px-3 py-2">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium">{label}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {session.conversation?.channel.name ?? "Channel unavailable"}{" "}
-                                      · {session.messages.length} Customer Messages ·{" "}
-                                      {formatTestingDate(session.createdAt)}
-                                    </p>
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    type="button"
-                                    onClick={() => {
+                              <li className="min-w-0 rounded-lg border p-3" key={message.id}>
+                                <div className="flex items-start gap-3">
+                                  <Checkbox
+                                    aria-label={`Select message from ${customer.name || "Customer"} at ${formatTestingDate(message.createdAt)}`}
+                                    checked={selected[message.id] !== undefined}
+                                    onCheckedChange={(checked) => {
+                                      setPickedMessages((now) => ({
+                                        ...now,
+                                        [message.id]: message,
+                                      }));
                                       const next = { ...selected };
-                                      session.messages.forEach((message) => {
-                                        if (allSelected) delete next[message.id];
-                                        else next[message.id] = true;
-                                      });
+                                      if (checked === true) next[message.id] = false;
+                                      else delete next[message.id];
                                       edit(setSelected)(next);
                                     }}
-                                  >
-                                    {allSelected ? "Clear" : "Select all"}
-                                  </Button>
-                                </div>
-                                <div className="grid divide-y">
-                                  {session.messages.map((message) => (
-                                    <div className="grid gap-1.5 px-3 py-2" key={message.id}>
-                                      <label
-                                        htmlFor={`dataset-message-${message.id}`}
-                                        className="flex items-start gap-2 text-sm"
-                                      >
+                                  />
+                                  <div className="grid min-w-0 flex-1 gap-2">
+                                    <MessageText text={message.content} />
+                                    <MessageContext messageId={message.id} />
+                                    <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                                      {customer.name ||
+                                        customer.email ||
+                                        customer.phoneE164 ||
+                                        "Customer"}{" "}
+                                      · {message.session.channel.name} ·{" "}
+                                      {formatTestingDate(message.createdAt)}
+                                    </p>
+                                    {selected[message.id] !== undefined && (
+                                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
                                         <Checkbox
-                                          id={`dataset-message-${message.id}`}
-                                          checked={selected[message.id] !== undefined}
-                                          onCheckedChange={(checked) => {
-                                            const next = { ...selected };
-                                            if (checked === true) next[message.id] = true;
-                                            else delete next[message.id];
-                                            edit(setSelected)(next);
-                                          }}
+                                          checked={selected[message.id]}
+                                          onCheckedChange={(checked) =>
+                                            edit(setSelected)({
+                                              ...selected,
+                                              [message.id]: checked === true,
+                                            })
+                                          }
                                         />
-                                        <span className="line-clamp-2 whitespace-pre-wrap">
-                                          {message.content}
-                                        </span>
+                                        Include preceding conversation context (up to 20 Customer /
+                                        AI Agent turns)
                                       </label>
-                                      {selected[message.id] !== undefined && (
-                                        <label
-                                          htmlFor={`dataset-history-${message.id}`}
-                                          className="ml-6 flex items-center gap-2 text-xs text-muted-foreground"
-                                        >
-                                          <Checkbox
-                                            id={`dataset-history-${message.id}`}
-                                            checked={selected[message.id]}
-                                            onCheckedChange={(checked) =>
-                                              edit(setSelected)({
-                                                ...selected,
-                                                [message.id]: checked === true,
-                                              })
-                                            }
-                                          />
-                                          Include preceding conversation history
-                                        </label>
-                                      )}
-                                    </div>
-                                  ))}
+                                    )}
+                                  </div>
                                 </div>
                               </li>
                             );
                           })}
                         </ul>
                       )}
+                      <ResourcePagination
+                        page={
+                          showSelected ? selectedPage : (sessions.data?.page ?? messageFilters.page)
+                        }
+                        pageCount={Math.ceil(
+                          (showSelected ? selectedMessages.length : (sessions.data?.total ?? 0)) /
+                            20,
+                        )}
+                        onPageChange={(page) => setMessageFilters({ ...messageFilters, page })}
+                      />
                       <FieldDescription className="text-xs">
-                        Each selected Customer Message becomes one case. Up to 20 earlier Customer /
-                        AI Agent turns are context only; previous AI responses never become expected
-                        answers.
+                        Each selected Customer Message becomes a draft case. Earlier AI Agent
+                        responses are context only, never expected answers. When included, context
+                        uses the latest 20 earlier turns without shortening their text.
                       </FieldDescription>
                     </TabsContent>
                     <TabsContent className="mt-4 grid gap-3" value="csv">
@@ -483,24 +596,24 @@ export function CreateDatasetDrawer({
                           size="sm"
                           type="button"
                           variant="outline"
-                          onClick={downloadTemplate}
+                          onClick={() => void downloadTemplate()}
                         >
                           <DownloadIcon className="size-3.5" />
-                          Download CSV Template
+                          Download Excel Template
                         </Button>
                       </div>
                       <Field className="gap-1.5">
-                        <FieldLabel htmlFor="dataset-csv">CSV file</FieldLabel>
+                        <FieldLabel htmlFor="dataset-csv">CSV or Excel file</FieldLabel>
                         <Input
-                          accept=".csv,text/csv"
+                          accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                           id="dataset-csv"
                           type="file"
                           disabled={busy}
                           onChange={(event) => void readCsv(event.target.files?.[0])}
                         />
                         <FieldDescription className="text-xs">
-                          {csv ? `Selected: ${csv.name}. ` : ""}Up to 100 rows · 5 MB. Validation
-                          runs when you select a file.
+                          {csv ? `Selected: ${csv.name}. ` : ""}All valid rows · up to 5 MB per
+                          file. Validation runs when you select a file.
                         </FieldDescription>
                       </Field>
                       <div className="rounded-lg bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
@@ -511,7 +624,8 @@ export function CreateDatasetDrawer({
                         <p>
                           <strong className="text-foreground">Optional:</strong>{" "}
                           <code>
-                            caseKey, category, expected, metric, clarificationCount, history,
+                            caseKey, category, expected, metric, decision, language,
+                            retrievalTarget, tool, toolMustNotBeCalled, clarificationCount, history,
                             attachments, metadata
                           </code>
                           . History, attachments and metadata use JSON. Case IDs are generated when
@@ -532,7 +646,7 @@ export function CreateDatasetDrawer({
                       {tab === "csv"
                         ? csv?.name
                         : tab === "sessions"
-                          ? "Recent Sessions"
+                          ? "Customer Messages"
                           : "Pasted messages"}
                     </p>
                   </div>
@@ -560,8 +674,8 @@ export function CreateDatasetDrawer({
                         onCheckedChange={(checked) => setAcceptSkipped(checked === true)}
                       />
                       <span>
-                        Import {validRows} valid rows and skip {skippedRows} rows that are invalid
-                        or exceed the 100-row limit.
+                        Import {validRows} valid rows and skip {skippedRows} rows that are invalid ;
+                        invalid rows are not imported.
                       </span>
                     </label>
                   )}
@@ -637,5 +751,46 @@ export function CreateDatasetDrawer({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function MessageContext({ messageId }: { messageId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const query = useImportMessageContextQuery(messageId, expanded);
+  return (
+    <details
+      className="text-xs text-muted-foreground"
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer">View preceding conversation context</summary>
+      {expanded && (
+        <div className="mt-2 grid max-h-80 gap-3 overflow-auto rounded-lg border p-3">
+          {query.isPending && <p role="status">Loading context…</p>}
+          {query.isError && (
+            <p role="alert">
+              {query.error.message}{" "}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void query.refetch()}
+              >
+                Retry
+              </Button>
+            </p>
+          )}
+          {query.data?.history.length === 0 && <p>No earlier Customer / AI Agent Messages.</p>}
+          {query.data?.history.map((turn) => (
+            <div key={turn.id}>
+              <p className="mb-1 font-medium">{turn.role === "user" ? "Customer" : "AI Agent"}</p>
+              <MessageText text={turn.content} />
+            </div>
+          ))}
+          {!!query.data?.history.length && (
+            <p>Showing up to 20 earlier turns. They provide context, not expected answers.</p>
+          )}
+        </div>
+      )}
+    </details>
   );
 }

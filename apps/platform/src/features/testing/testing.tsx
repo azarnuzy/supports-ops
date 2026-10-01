@@ -1,3 +1,5 @@
+import { nextSort, sortRows, type TableSort } from "@repo/shared/table-sort";
+import { SortableHead } from "./sortable-head";
 import type { EvalDatasetSummary } from "@repo/api-client";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
@@ -11,6 +13,8 @@ import {
 } from "@repo/ui/components/table";
 import { FlaskConicalIcon, PlusIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { Input } from "@repo/ui/components/input";
+import ResourcePagination from "../settings/components/resource-pagination";
 import { useState } from "react";
 import { PlatformAppShell } from "../app-shell";
 import ResourceListState from "../settings/components/resource-list-state";
@@ -28,7 +32,7 @@ function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
     <TableRow>
       <TableCell className="max-w-72 py-3">
         <Link
-          className="block truncate font-medium hover:underline"
+          className="block break-words font-medium hover:underline"
           params={{ datasetId: dataset.id }}
           to="/testing/$datasetId"
         >
@@ -36,7 +40,7 @@ function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
         </Link>
         {dataset.incompleteCount > 0 && (
           <Badge className="mt-1" variant="outline">
-            {dataset.incompleteCount} need criteria
+            {dataset.incompleteCount} need setup
           </Badge>
         )}
       </TableCell>
@@ -55,7 +59,13 @@ function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
                       : "Error"}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {results?.passed} passed · {results?.failed} failed
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  {results?.passed} passed
+                </span>{" "}
+                ·{" "}
+                <span className={results?.failed ? "text-red-700 dark:text-red-400" : ""}>
+                  {results?.failed} failed
+                </span>
               </span>
             </div>
             <span className="text-xs text-muted-foreground">
@@ -85,7 +95,24 @@ function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
 const TestingView = () => {
   const datasets = useDatasetsQuery();
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<TableSort<"name" | "caseCount" | "lastRunAt" | "updatedAt">>(null);
+  function sortBy(column: NonNullable<typeof sort>["column"]) {
+    setSort(nextSort(sort, column));
+    setPage(1);
+  }
   const items = datasets.data?.datasets ?? [];
+  const filtered = sortRows(
+    items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase())),
+    sort,
+    (item) => {
+      if (sort?.column === "lastRunAt") return item.lastRunAt ? new Date(item.lastRunAt).getTime() : null;
+      if (sort?.column === "updatedAt") return new Date(item.updatedAt).getTime();
+      return sort?.column === "caseCount" ? item.caseCount : item.name;
+    },
+  );
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 10)));
   return (
     <PlatformAppShell fullWidth>
       <section className="grid min-w-0 gap-5">
@@ -111,6 +138,19 @@ const TestingView = () => {
               </span>
             )}
           </div>
+          {!!items.length && (
+            <div className="border-b p-3">
+              <Input
+                aria-label="Search datasets"
+                placeholder="Search datasets…"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </div>
+          )}
           <ResourceListState
             isPending={datasets.isPending}
             isError={datasets.isError}
@@ -119,7 +159,7 @@ const TestingView = () => {
             isEmpty={items.length === 0}
             emptyIcon={<FlaskConicalIcon className="size-5 text-muted-foreground" />}
             emptyTitle="Create your first Eval Dataset"
-            emptyDescription="Paste Customer Messages, select recent Sessions, or import a CSV to start evaluating."
+            emptyDescription="Paste Customer Messages, select Customer Messages, or import CSV / Excel to start evaluating."
             emptyAction={
               <Button size="sm" onClick={() => setCreating(true)}>
                 Create Dataset
@@ -130,22 +170,56 @@ const TestingView = () => {
             <Table aria-label="Eval Datasets">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Dataset</TableHead>
-                  <TableHead>Cases</TableHead>
-                  <TableHead>Last Evaluation</TableHead>
-                  <TableHead>Updated</TableHead>
+                  <SortableHead
+                    column="name"
+                    sort={sort}
+                    onSort={() => sortBy("name")}
+                  >
+                    Dataset
+                  </SortableHead>
+                  <SortableHead
+                    column="caseCount"
+                    sort={sort}
+                    onSort={() => sortBy("caseCount")}
+                  >
+                    Cases
+                  </SortableHead>
+                  <SortableHead
+                    column="lastRunAt"
+                    sort={sort}
+                    onSort={() => sortBy("lastRunAt")}
+                  >
+                    Last Evaluation
+                  </SortableHead>
+                  <SortableHead
+                    column="updatedAt"
+                    sort={sort}
+                    onSort={() => sortBy("updatedAt")}
+                  >
+                    Updated
+                  </SortableHead>
                   <TableHead className="text-right">
                     <span className="sr-only">Actions</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((dataset) => (
+                {filtered.slice((currentPage - 1) * 10, currentPage * 10).map((dataset) => (
                   <DatasetRow key={dataset.id} dataset={dataset} />
                 ))}
               </TableBody>
             </Table>
           )}
+          {!!items.length && !filtered.length && (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              No datasets match your search.
+            </p>
+          )}
+          <ResourcePagination
+            page={currentPage}
+            pageCount={Math.ceil(filtered.length / 10)}
+            onPageChange={setPage}
+          />
         </div>
         <DestinationForm />
       </section>

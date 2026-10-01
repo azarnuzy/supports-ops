@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { EvalCaseFilters } from "@repo/api-client";
+import type { EvalMessageFilters } from "@repo/api-client";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   checkDestination,
   createCase,
@@ -10,12 +12,14 @@ import {
   startRun,
   getDataset,
   getDatasets,
-  getImportSessions,
+  getImportMessages,
+  getImportMessageContext,
   importCases,
   previewImport,
   getDestination,
   saveDestination,
   updateCase,
+  updateExpectations,
   updateDataset,
 } from "./services";
 
@@ -23,8 +27,15 @@ const datasetsKey = ["workspace", "eval-datasets"] as const;
 
 export const useDatasetsQuery = () => useQuery({ queryFn: getDatasets, queryKey: datasetsKey });
 
-export const useDatasetQuery = (id: string) =>
-  useQuery({ queryFn: () => getDataset(id), queryKey: [...datasetsKey, id] });
+export const useDatasetQuery = (
+  id: string,
+  filters: EvalCaseFilters,
+) =>
+  useQuery({
+    queryFn: () => getDataset(id, filters),
+    placeholderData: keepPreviousData,
+    queryKey: [...datasetsKey, id, filters],
+  });
 
 /** One prefix invalidation refreshes the list counts and any open detail view together. */
 function useMutate<TVariables, TResult>(mutationFn: (variables: TVariables) => Promise<TResult>) {
@@ -38,6 +49,7 @@ function useMutate<TVariables, TResult>(mutationFn: (variables: TVariables) => P
 export const useCreateDatasetMutation = () => useMutate(createDataset);
 export const useUpdateDatasetMutation = () => useMutate(updateDataset);
 export const useCreateCaseMutation = () => useMutate(createCase);
+export const useUpdateExpectationsMutation = () => useMutate(updateExpectations);
 export const useUpdateCaseMutation = () => useMutate(updateCase);
 export const useDeleteCaseMutation = () => useMutate(deleteCase);
 
@@ -56,11 +68,11 @@ export const useSaveDestinationMutation = () => {
 
 export const useCheckDestinationMutation = () => useMutation({ mutationFn: checkDestination });
 
-export const useImportSessionsQuery = (enabled: boolean) =>
+export const useImportMessagesQuery = (enabled: boolean, filters: EvalMessageFilters) =>
   useQuery({
     enabled,
-    queryFn: getImportSessions,
-    queryKey: ["workspace", "eval-import-sessions"],
+    queryFn: () => getImportMessages(filters),
+    queryKey: ["workspace", "eval-import-messages", filters],
   });
 
 export const usePreviewImportMutation = () => useMutation({ mutationFn: previewImport });
@@ -69,10 +81,10 @@ export const useImportCasesMutation = () => useMutate(importCases);
 const runsKey = (datasetId: string) => ["workspace", "eval-runs", datasetId] as const;
 
 /** Polls every 3s while a Run is queued or running, so progress and delivery follow the worker. */
-export const useRunsQuery = (datasetId: string) =>
+export const useRunsQuery = (datasetId: string, page = 1, pageSize = 1) =>
   useQuery({
-    queryFn: () => getRuns(datasetId),
-    queryKey: runsKey(datasetId),
+    queryFn: () => getRuns(datasetId, page, pageSize),
+    queryKey: [...runsKey(datasetId), page, pageSize],
     refetchInterval: (query) =>
       query.state.data?.runs.some((r) => r.status === "QUEUED" || r.status === "RUNNING") ||
       query.state.data?.runs.some(
@@ -105,3 +117,10 @@ export const useRetryDeliveryMutation = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace", "eval-runs"] }),
   });
 };
+
+export const useImportMessageContextQuery = (messageId: string, enabled: boolean) =>
+  useQuery({
+    enabled,
+    queryFn: () => getImportMessageContext(messageId),
+    queryKey: ["workspace", "eval-message-context", messageId],
+  });

@@ -11,9 +11,14 @@ import {
   TableRow,
 } from "@repo/ui/components/table";
 import { AlertTriangleIcon } from "lucide-react";
+import { useState } from "react";
+import ResourcePagination from "../settings/components/resource-pagination";
+import { MessageText } from "./message-text";
 import { metricLabels } from "./case-editor";
 
 export function ImportPreviewPanel({ preview }: { preview: EvalImportPreview }) {
+  const [page, setPage] = useState(1);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(preview.rows.length / 20)));
   const valid = preview.rows.filter((row) => row.case).length;
   const invalid = preview.rows.length - valid;
   return (
@@ -28,7 +33,7 @@ export function ImportPreviewPanel({ preview }: { preview: EvalImportPreview }) 
       {preview.truncated && (
         <Alert>
           <AlertTriangleIcon />
-          <AlertTitle>100-row import limit</AlertTitle>
+          <AlertTitle>Some rows are excluded</AlertTitle>
           <AlertDescription>
             This source has {preview.truncated.total} rows. Only the first {preview.truncated.limit}{" "}
             are included in this preview; {preview.truncated.total - preview.truncated.limit} rows
@@ -57,7 +62,7 @@ export function ImportPreviewPanel({ preview }: { preview: EvalImportPreview }) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.rows.map((row) => {
+                {preview.rows.slice((currentPage - 1) * 20, currentPage * 20).map((row) => {
                   const issues = row.case ? caseIssues(row.case) : [];
                   return (
                     <TableRow key={row.row}>
@@ -65,9 +70,7 @@ export function ImportPreviewPanel({ preview }: { preview: EvalImportPreview }) 
                         {row.row}
                       </TableCell>
                       <TableCell className="min-w-48 max-w-80 whitespace-normal align-top">
-                        <p className="line-clamp-2 whitespace-pre-wrap text-sm">
-                          {row.case?.message ?? "Invalid row"}
-                        </p>
+                        <MessageText text={row.case?.message ?? "Invalid row"} />
                         {row.errors.map((error) => (
                           <p className="mt-1 text-xs text-destructive" key={error}>
                             {error}
@@ -78,12 +81,21 @@ export function ImportPreviewPanel({ preview }: { preview: EvalImportPreview }) 
                         {row.case?.metric ? metricLabels[row.case.metric] : "Not selected"}
                       </TableCell>
                       <TableCell className="align-top">
-                        <Badge variant={!row.case ? "destructive" : "outline"}>
+                        <Badge
+                          variant={!row.case ? "destructive" : "outline"}
+                          className={
+                            !row.case
+                              ? ""
+                              : issues.length
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          }
+                        >
                           {!row.case
                             ? "Needs attention"
                             : issues.length
-                              ? "Needs criteria"
-                              : "Ready"}
+                              ? "Needs setup"
+                              : "Ready to run"}
                         </Badge>
                         {issues.length > 0 && (
                           <p className="mt-1 max-w-48 whitespace-normal text-xs text-muted-foreground">
@@ -97,6 +109,11 @@ export function ImportPreviewPanel({ preview }: { preview: EvalImportPreview }) 
               </TableBody>
             </Table>
           </div>
+          <ResourcePagination
+            page={currentPage}
+            pageCount={Math.ceil(preview.rows.length / 20)}
+            onPageChange={setPage}
+          />
         </>
       )}
     </div>

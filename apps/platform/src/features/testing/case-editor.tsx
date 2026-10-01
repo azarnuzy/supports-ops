@@ -1,3 +1,4 @@
+import { evalMetricLabels as metricLabels } from "@repo/shared/eval-schema";
 import { type EvalCase, type EvalCaseInput, type EvalMetric, evalMetrics } from "@repo/api-client";
 import { Checkbox } from "@repo/ui/components/checkbox";
 import {
@@ -22,19 +23,7 @@ import { type FormEvent, useState } from "react";
 
 const decisions = ["REPLY", "CLARIFY", "ESCALATE", "RESOLVE"] as const;
 
-export const metricLabels: Record<EvalMetric, string> = {
-  contains: "Contains",
-  decision: "Decision",
-  exactMatch: "Exact match",
-  faithfulness: "Faithfulness",
-  gEval: "gEval",
-  language: "Language",
-  negativeControl: "Negative control",
-  relevancy: "Relevance",
-  retrieval: "Retrieval",
-  tool: "Tool",
-  visibility: "Visibility",
-};
+export { evalMetricLabels as metricLabels } from "@repo/shared/eval-schema";
 
 const metricDescriptions: Record<EvalMetric, string> = {
   contains: "Check that the reply contains the expected text.",
@@ -77,12 +66,14 @@ const needsExpected = (metric: EvalMetric | "") =>
   ["contains", "exactMatch", "gEval"].includes(metric);
 
 export function CaseEditor({
+  bulkCount,
   existing,
   isSaving,
   nextKey,
   onClose,
   onSave,
 }: {
+  bulkCount?: number;
   existing: EvalCase | null;
   isSaving: boolean;
   nextKey: string;
@@ -150,7 +141,13 @@ export function CaseEditor({
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
           <SheetHeader className="flex-row items-center justify-between gap-2 border-b">
             <div>
-              <SheetTitle>{existing ? "Edit case" : "Add case"}</SheetTitle>
+              <SheetTitle>
+                {bulkCount
+                  ? `Set expectations for ${bulkCount} cases`
+                  : existing
+                    ? "Edit case"
+                    : "Add case"}
+              </SheetTitle>
               <SheetDescription className="sr-only">
                 One fixed input and what a correct AI Agent response looks like.
               </SheetDescription>
@@ -159,58 +156,69 @@ export function CaseEditor({
               <Button disabled={isSaving} type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button disabled={isSaving || !message.trim() || !caseKey.trim()} type="submit">
+              <Button
+                disabled={isSaving || (!bulkCount && (!message.trim() || !caseKey.trim()))}
+                type="submit"
+              >
                 {isSaving ? "Saving…" : "Save"}
               </Button>
             </div>
           </SheetHeader>
           <div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto p-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field className="gap-1.5">
-                <FieldLabel htmlFor="case-key">Case ID</FieldLabel>
-                <Input
-                  id="case-key"
-                  placeholder="e.g. refund-policy-1"
-                  maxLength={100}
-                  required
-                  value={caseKey}
-                  onChange={(e) => setCaseKey(e.target.value)}
-                />
-                <FieldDescription className="text-xs">
-                  Unique in this Workspace. Use letters, digits, dots, underscores, colons or
-                  hyphens.
-                </FieldDescription>
-              </Field>
-              <Field className="gap-1.5">
-                <FieldLabel htmlFor="case-category">Category</FieldLabel>
-                <Input
-                  id="case-category"
-                  maxLength={60}
-                  placeholder="e.g. grounding"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                />
-                <FieldDescription className="text-xs">
-                  Optional requirement group, such as grounding or escalation.
-                </FieldDescription>
-              </Field>
-            </div>
-            <Field className="gap-1.5">
-              <FieldLabel htmlFor="case-message">Customer Message</FieldLabel>
-              <Textarea
-                id="case-message"
-                placeholder="e.g. Can I get a refund for my annual subscription?"
-                maxLength={4000}
-                required
-                rows={4}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-              />
-              <FieldDescription className="text-xs">
-                The new Customer Message evaluated in one AI Turn.
-              </FieldDescription>
-            </Field>
-
+            {!bulkCount && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor="case-key">Case ID</FieldLabel>
+                    <Input
+                      id="case-key"
+                      placeholder="e.g. refund-policy-1"
+                      maxLength={100}
+                      required
+                      value={caseKey}
+                      onChange={(e) => setCaseKey(e.target.value)}
+                    />
+                    <FieldDescription className="text-xs">
+                      Unique in this dataset. Use letters, digits, dots, underscores, colons or
+                      hyphens.
+                    </FieldDescription>
+                  </Field>
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor="case-category">Category</FieldLabel>
+                    <Input
+                      id="case-category"
+                      maxLength={60}
+                      placeholder="e.g. grounding"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                    />
+                    <FieldDescription className="text-xs">
+                      Optional requirement group, such as grounding or escalation.
+                    </FieldDescription>
+                  </Field>
+                </div>
+                <Field className="gap-1.5">
+                  <FieldLabel htmlFor="case-message">Customer Message</FieldLabel>
+                  <Textarea
+                    id="case-message"
+                    placeholder="e.g. Can I get a refund for my annual subscription?"
+                    required
+                    rows={4}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                  />
+                  <FieldDescription className="text-xs">
+                    The new Customer Message evaluated in one AI Turn.
+                  </FieldDescription>
+                </Field>
+              </>
+            )}
+            {bulkCount ? (
+              <p className="text-sm text-muted-foreground">
+                These expectations replace the evaluation settings of every selected case. Customer
+                Messages and conversation context stay unchanged.
+              </p>
+            ) : null}
             <Field className="gap-1.5">
               <FieldLabel htmlFor="case-metric">Evaluation type</FieldLabel>
               <NativeSelect
@@ -243,7 +251,6 @@ export function CaseEditor({
                 <Textarea
                   id="case-expected"
                   placeholder="e.g. Explain how to reset a password using the published help article."
-                  maxLength={4000}
                   rows={3}
                   value={expected}
                   onChange={(e) => setExpected(e.target.value)}
@@ -379,169 +386,172 @@ export function CaseEditor({
                 </FieldDescription>
               </Field>
             ) : null}
-            <Collapsible className="rounded-lg border">
-              <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-3 text-sm font-medium">
-                <span>
-                  Conversation context{" "}
-                  <span className="font-normal text-muted-foreground">
-                    · {history.length} turns · {attachments.length} attachments
+            {!bulkCount && (
+              <Collapsible className="rounded-lg border">
+                <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-3 text-sm font-medium">
+                  <span>
+                    Conversation context{" "}
+                    <span className="font-normal text-muted-foreground">
+                      · {history.length} turns · {attachments.length} attachments
+                    </span>
                   </span>
-                </span>
-                <ChevronDownIcon className="size-4 shrink-0" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="grid gap-4 border-t p-3">
-                <fieldset className="grid gap-2">
-                  <legend className="text-sm font-medium">Fixed history</legend>
-                  <FieldDescription className="text-xs">
-                    Earlier turns the AI Agent sees as already said. They are replayed as written,
-                    not simulated. Previous AI replies are context only, never expected answers.
-                  </FieldDescription>
-                  {history.map((turn, index) => (
-                    <div className="flex items-start gap-2" key={turn.key}>
-                      <NativeSelect
-                        aria-label={`Turn ${index + 1} speaker`}
-                        value={turn.role}
-                        onChange={(e) =>
-                          setHistory(
-                            history.map((t, i) =>
-                              i === index
-                                ? { ...t, role: e.target.value as "user" | "assistant" }
-                                : t,
-                            ),
-                          )
-                        }
-                      >
-                        <NativeSelectOption value="user">Customer</NativeSelectOption>
-                        <NativeSelectOption value="assistant">AI Agent</NativeSelectOption>
-                      </NativeSelect>
-                      <Textarea
-                        aria-label={`Turn ${index + 1} text`}
-                        placeholder="An earlier Customer or AI Agent message"
-                        maxLength={4000}
-                        rows={2}
-                        value={turn.content}
-                        onChange={(e) =>
-                          setHistory(
-                            history.map((t, i) =>
-                              i === index ? { ...t, content: e.target.value } : t,
-                            ),
-                          )
-                        }
-                      />
-                      <Button
-                        aria-label={`Remove turn ${index + 1}`}
-                        size="icon"
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setHistory(history.filter((_, i) => i !== index))}
-                      >
-                        <Trash2Icon className="size-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    className="justify-self-start"
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    disabled={history.length >= 50}
-                    onClick={() =>
-                      setHistory([
-                        ...history,
-                        {
-                          content: "",
-                          key: crypto.randomUUID(),
-                          role: history.at(-1)?.role === "user" ? "assistant" : "user",
-                        },
-                      ])
-                    }
-                  >
-                    <PlusIcon className="size-4" /> Add turn
-                  </Button>
-                </fieldset>
+                  <ChevronDownIcon className="size-4 shrink-0" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="grid gap-4 border-t p-3">
+                  <fieldset className="grid gap-2">
+                    <legend className="text-sm font-medium">Fixed history</legend>
+                    <FieldDescription className="text-xs">
+                      Earlier turns the AI Agent sees as already said. They are replayed as written,
+                      not simulated. Previous AI replies are context only, never expected answers.
+                    </FieldDescription>
+                    {history.map((turn, index) => (
+                      <div className="flex items-start gap-2" key={turn.key}>
+                        <NativeSelect
+                          aria-label={`Turn ${index + 1} speaker`}
+                          value={turn.role}
+                          onChange={(e) =>
+                            setHistory(
+                              history.map((t, i) =>
+                                i === index
+                                  ? { ...t, role: e.target.value as "user" | "assistant" }
+                                  : t,
+                              ),
+                            )
+                          }
+                        >
+                          <NativeSelectOption value="user">Customer</NativeSelectOption>
+                          <NativeSelectOption value="assistant">AI Agent</NativeSelectOption>
+                        </NativeSelect>
+                        <Textarea
+                          aria-label={`Turn ${index + 1} text`}
+                          placeholder="An earlier Customer or AI Agent message"
+                          rows={2}
+                          value={turn.content}
+                          onChange={(e) =>
+                            setHistory(
+                              history.map((t, i) =>
+                                i === index ? { ...t, content: e.target.value } : t,
+                              ),
+                            )
+                          }
+                        />
+                        <Button
+                          aria-label={`Remove turn ${index + 1}`}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setHistory(history.filter((_, i) => i !== index))}
+                        >
+                          <Trash2Icon className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      className="justify-self-start"
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      disabled={history.length >= 50}
+                      onClick={() =>
+                        setHistory([
+                          ...history,
+                          {
+                            content: "",
+                            key: crypto.randomUUID(),
+                            role: history.at(-1)?.role === "user" ? "assistant" : "user",
+                          },
+                        ])
+                      }
+                    >
+                      <PlusIcon className="size-4" /> Add turn
+                    </Button>
+                  </fieldset>
 
-                <Field className="gap-1.5">
-                  <FieldLabel htmlFor="case-clarifications">Prior clarification count</FieldLabel>
-                  <Input
-                    id="case-clarifications"
-                    placeholder="0"
-                    max={10}
-                    min={0}
-                    type="number"
-                    value={clarificationCount}
-                    onChange={(e) =>
-                      setClarificationCount(Math.min(10, Math.max(0, Number(e.target.value) || 0)))
-                    }
-                  />
-                  <FieldDescription className="text-xs">
-                    Number of clarifications already asked before this message (0–10).
-                  </FieldDescription>
-                </Field>
+                  <Field className="gap-1.5">
+                    <FieldLabel htmlFor="case-clarifications">Prior clarification count</FieldLabel>
+                    <Input
+                      id="case-clarifications"
+                      placeholder="0"
+                      max={10}
+                      min={0}
+                      type="number"
+                      value={clarificationCount}
+                      onChange={(e) =>
+                        setClarificationCount(
+                          Math.min(10, Math.max(0, Number(e.target.value) || 0)),
+                        )
+                      }
+                    />
+                    <FieldDescription className="text-xs">
+                      Number of clarifications already asked before this message (0–10).
+                    </FieldDescription>
+                  </Field>
 
-                <fieldset className="grid gap-2">
-                  <legend className="text-sm font-medium">Attachment content</legend>
-                  <FieldDescription className="text-xs">
-                    Text already extracted from an Attachment (OCR or transcript).
-                  </FieldDescription>
-                  {attachments.map((attachment, index) => (
-                    <div className="flex items-start gap-2" key={attachment.key}>
-                      <Input
-                        aria-label={`Attachment ${index + 1} name`}
-                        className="w-40"
-                        placeholder="e.g. receipt.pdf"
-                        maxLength={200}
-                        value={attachment.id}
-                        onChange={(e) =>
-                          setAttachments(
-                            attachments.map((a, i) =>
-                              i === index ? { ...a, id: e.target.value } : a,
-                            ),
-                          )
-                        }
-                      />
-                      <Textarea
-                        aria-label={`Attachment ${index + 1} content`}
-                        placeholder="Extracted document text or transcript"
-                        maxLength={50_000}
-                        rows={2}
-                        value={attachment.content}
-                        onChange={(e) =>
-                          setAttachments(
-                            attachments.map((a, i) =>
-                              i === index ? { ...a, content: e.target.value } : a,
-                            ),
-                          )
-                        }
-                      />
-                      <Button
-                        aria-label={`Remove attachment ${index + 1}`}
-                        size="icon"
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setAttachments(attachments.filter((_, i) => i !== index))}
-                      >
-                        <Trash2Icon className="size-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    className="justify-self-start"
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    disabled={attachments.length >= 10}
-                    onClick={() =>
-                      setAttachments([
-                        ...attachments,
-                        { content: "", id: "", key: crypto.randomUUID() },
-                      ])
-                    }
-                  >
-                    <PlusIcon className="size-4" /> Add attachment content
-                  </Button>
-                </fieldset>
-              </CollapsibleContent>
-            </Collapsible>
+                  <fieldset className="grid gap-2">
+                    <legend className="text-sm font-medium">Attachment content</legend>
+                    <FieldDescription className="text-xs">
+                      Text already extracted from an Attachment (OCR or transcript).
+                    </FieldDescription>
+                    {attachments.map((attachment, index) => (
+                      <div className="flex items-start gap-2" key={attachment.key}>
+                        <Input
+                          aria-label={`Attachment ${index + 1} name`}
+                          className="w-40"
+                          placeholder="e.g. receipt.pdf"
+                          maxLength={200}
+                          value={attachment.id}
+                          onChange={(e) =>
+                            setAttachments(
+                              attachments.map((a, i) =>
+                                i === index ? { ...a, id: e.target.value } : a,
+                              ),
+                            )
+                          }
+                        />
+                        <Textarea
+                          aria-label={`Attachment ${index + 1} content`}
+                          placeholder="Extracted document text or transcript"
+                          maxLength={50_000}
+                          rows={2}
+                          value={attachment.content}
+                          onChange={(e) =>
+                            setAttachments(
+                              attachments.map((a, i) =>
+                                i === index ? { ...a, content: e.target.value } : a,
+                              ),
+                            )
+                          }
+                        />
+                        <Button
+                          aria-label={`Remove attachment ${index + 1}`}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setAttachments(attachments.filter((_, i) => i !== index))}
+                        >
+                          <Trash2Icon className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      className="justify-self-start"
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      disabled={attachments.length >= 10}
+                      onClick={() =>
+                        setAttachments([
+                          ...attachments,
+                          { content: "", id: "", key: crypto.randomUUID() },
+                        ])
+                      }
+                    >
+                      <PlusIcon className="size-4" /> Add attachment content
+                    </Button>
+                  </fieldset>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
           </div>
         </form>
       </SheetContent>

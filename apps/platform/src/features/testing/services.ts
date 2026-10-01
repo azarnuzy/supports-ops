@@ -1,3 +1,4 @@
+import type { EvalCaseFilters } from "@repo/api-client";
 import {
   checkEvalDestination,
   createApiClient,
@@ -15,20 +16,25 @@ import {
   getEvalDataset,
   getEvalDestination,
   importEvalCases,
-  listEvalImportSessions,
   previewEvalImport,
   type EvalImportSource,
   listEvalDatasets,
-  listConversations,
+  listEvalImportMessages,
+  getEvalImportMessageContext,
+  type EvalMessageFilters,
   saveEvalDestination,
   updateEvalCase,
+  updateEvalCaseExpectations,
   updateEvalDataset,
 } from "@repo/api-client";
 
 const apiClient = createApiClient(import.meta.env.VITE_API_URL ?? "http://localhost:8000");
 
 export const getDatasets = () => listEvalDatasets(apiClient);
-export const getDataset = (id: string) => getEvalDataset(apiClient, id);
+export const getDataset = (
+  id: string,
+  filters: EvalCaseFilters,
+) => getEvalDataset(apiClient, id, filters);
 export const createDataset = (input: EvalDatasetInput) => createEvalDataset(apiClient, input);
 export const updateDataset = ({ id, input }: { id: string; input: EvalDatasetInput }) =>
   updateEvalDataset(apiClient, id, input);
@@ -51,19 +57,8 @@ export const saveDestination = (input: EvalDestinationInput) =>
   saveEvalDestination(apiClient, input);
 export const checkDestination = () => checkEvalDestination(apiClient);
 
-export async function getImportSessions() {
-  const [imports, conversations] = await Promise.all([
-    listEvalImportSessions(apiClient),
-    listConversations(apiClient, { limit: 100 }),
-  ]);
-  const byId = new Map(conversations.conversations.map((item) => [item.id, item]));
-  return {
-    sessions: imports.sessions.map((session) => ({
-      ...session,
-      conversation: byId.get(session.id),
-    })),
-  };
-}
+export const getImportMessages = (filters: EvalMessageFilters) =>
+  listEvalImportMessages(apiClient, filters);
 export const previewImport = ({
   datasetId,
   source,
@@ -83,4 +78,16 @@ export const estimateRun = (selection: EvalRunSelection) => estimateEvalRun(apiC
 export const startRun = (selection: EvalRunSelection) => startEvalRun(apiClient, selection);
 export const retryDelivery = (id: string, target: "CENTRAL" | "WORKSPACE") =>
   retryEvalRunDelivery(apiClient, id, target);
-export const getRuns = (datasetId: string) => listEvalRuns(apiClient, datasetId);
+export const getRuns = (datasetId: string, page = 1, pageSize = 1) =>
+  listEvalRuns(apiClient, datasetId, page, pageSize);
+
+export const updateExpectations = ({
+  datasetId,
+  input,
+}: {
+  datasetId: string;
+  input: Pick<EvalCaseInput, "expected" | "metric" | "metadata"> & { caseIds: string[] };
+}) => updateEvalCaseExpectations(apiClient, datasetId, input);
+
+export const getImportMessageContext = (messageId: string) =>
+  getEvalImportMessageContext(apiClient, messageId);

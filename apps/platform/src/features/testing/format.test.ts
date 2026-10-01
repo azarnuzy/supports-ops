@@ -13,6 +13,11 @@ it("formats local dates and excludes evaluator controls and ungraded cases from 
     evaluatorHealth = false,
   ): EvalRun["cases"][number] => ({
     caseKey: "case-1",
+    sourceCaseId: "source",
+    message: "Hello",
+    expected: "Hi",
+    metadata: {},
+    result: {},
     category: "",
     error: null,
     evaluatorHealth,
