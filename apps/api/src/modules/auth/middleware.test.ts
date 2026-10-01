@@ -2,11 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { requireWorkspaceId } from "../../utils/workspace-context";
 import { executeWorkspaceQuery } from "../../utils/workspace-isolation";
 
-const mocks = vi.hoisted(() => ({ findUnique: vi.fn(), membership: vi.fn(), firstMembership: vi.fn(), firstWorkspace: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  findUnique: vi.fn(),
+  membership: vi.fn(),
+  firstMembership: vi.fn(),
+  firstWorkspace: vi.fn(),
+}));
 
 vi.mock("../../utils/prisma", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../utils/prisma")>()),
-  unscopedPrisma: { workspace: { findUnique: mocks.findUnique, findFirst: mocks.firstWorkspace }, workspaceMembership: { findUnique: mocks.membership, findFirst: mocks.firstMembership } },
+  unscopedPrisma: {
+    workspace: { findUnique: mocks.findUnique, findFirst: mocks.firstWorkspace },
+    workspaceMembership: { findUnique: mocks.membership, findFirst: mocks.firstMembership },
+  },
 }));
 
 const { loadWorkspaceContext } = await import("./middleware");
@@ -35,24 +43,29 @@ describe("loadWorkspaceContext", () => {
     mocks.firstMembership.mockResolvedValue({ workspaceId: "workspace-user" });
     mocks.findUnique.mockResolvedValue({ deletedAt: null, organizationId: "org-1" });
     mocks.membership.mockResolvedValue({ role: "ADMIN" });
-    const get = vi.fn((key: string) => (key === "user" ? { id: "user-1", organizationId: "org-1" } : null));
+    const get = vi.fn((key: string) =>
+      key === "user" ? { id: "user-1", organizationId: "org-1" } : null,
+    );
 
-    await loadWorkspaceContext({ get, set: vi.fn(), req: { header: vi.fn() } } as never, async () => {
-      expect(requireWorkspaceId()).toBe("workspace-user");
+    await loadWorkspaceContext(
+      { get, set: vi.fn(), req: { header: vi.fn() } } as never,
+      async () => {
+        expect(requireWorkspaceId()).toBe("workspace-user");
 
-      for (const model of ["Ticket", "Message", "KnowledgeSource", "CustomerIdentity"]) {
-        const records = [{ id: "workspace-other-record", workspaceId: "workspace-other" }];
-        const visibleRecords = executeWorkspaceQuery({
-          args: { where: { workspaceId: "workspace-other" } },
-          model,
-          operation: "findMany",
-          query: ({ where }) =>
-            records.filter((record) => record.workspaceId === where?.workspaceId),
-        });
+        for (const model of ["Ticket", "Message", "KnowledgeSource", "CustomerIdentity"]) {
+          const records = [{ id: "workspace-other-record", workspaceId: "workspace-other" }];
+          const visibleRecords = executeWorkspaceQuery({
+            args: { where: { workspaceId: "workspace-other" } },
+            model,
+            operation: "findMany",
+            query: ({ where }) =>
+              records.filter((record) => record.workspaceId === where?.workspaceId),
+          });
 
-        expect(visibleRecords).toEqual([]);
-      }
-    });
+          expect(visibleRecords).toEqual([]);
+        }
+      },
+    );
   });
 
   it("uses the Workspace of a resolved Session", async () => {

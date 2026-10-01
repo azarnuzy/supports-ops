@@ -11,12 +11,21 @@ export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, 
 
   c.set("authSession", session?.session ?? null);
   const storedUser = session?.user
-    ? await unscopedPrisma.user.findUnique({ where: { id: session.user.id }, select: { deletedAt: true, isOrganizationAdmin: true, organizationId: true } })
+    ? await unscopedPrisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { deletedAt: true, isOrganizationAdmin: true, organizationId: true },
+      })
     : null;
-  c.set("user", storedUser && !storedUser.deletedAt && session?.user
-    ? { ...session.user, isOrganizationAdmin: storedUser.isOrganizationAdmin,
-        organizationId: storedUser.organizationId }
-    : null);
+  c.set(
+    "user",
+    storedUser && !storedUser.deletedAt && session?.user
+      ? {
+          ...session.user,
+          isOrganizationAdmin: storedUser.isOrganizationAdmin,
+          organizationId: storedUser.organizationId,
+        }
+      : null,
+  );
   c.set("session", null);
 
   await next();
@@ -34,15 +43,22 @@ export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, 
 export async function loadWorkspaceContext(c: Context<{ Variables: AuthVariables }>, next: Next) {
   const user = c.get("user");
   const homeWorkspaceId = user
-    ? (await unscopedPrisma.workspaceMembership.findFirst({
-        where: { userId: user.id, workspace: { deletedAt: null } },
-        orderBy: { createdAt: "asc" }, select: { workspaceId: true },
-      }))?.workspaceId ?? (user.isOrganizationAdmin
-        ? (await unscopedPrisma.workspace.findFirst({
-            where: { organizationId: user.organizationId, deletedAt: null },
-            orderBy: { createdAt: "asc" }, select: { id: true },
-          }))?.id
-        : undefined)
+    ? ((
+        await unscopedPrisma.workspaceMembership.findFirst({
+          where: { userId: user.id, workspace: { deletedAt: null } },
+          orderBy: { createdAt: "asc" },
+          select: { workspaceId: true },
+        })
+      )?.workspaceId ??
+      (user.isOrganizationAdmin
+        ? (
+            await unscopedPrisma.workspace.findFirst({
+              where: { organizationId: user.organizationId, deletedAt: null },
+              orderBy: { createdAt: "asc" },
+              select: { id: true },
+            })
+          )?.id
+        : undefined))
     : c.get("session")?.workspaceId;
   const requestedWorkspaceId =
     c.req?.header?.("x-workspace-id") ??

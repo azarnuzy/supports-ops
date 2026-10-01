@@ -65,10 +65,21 @@ async function seed() {
   const workspaceId = randomUUID();
   await prisma.organization.create({ data: { id: workspaceId, name: "Demo" } });
   await prisma.workspace.create({
-    data: { id: workspaceId, organizationId: workspaceId, name: "Demo", slug: `demo-${workspaceId.slice(0, 8)}` },
+    data: {
+      id: workspaceId,
+      organizationId: workspaceId,
+      name: "Demo",
+      slug: `demo-${workspaceId.slice(0, 8)}`,
+    },
   });
   await prisma.creditLedgerEntry.create({
-    data: { credits: 500, id: randomUUID(), type: "TRIAL_GRANT", organizationId: workspaceId, workspaceId },
+    data: {
+      credits: 500,
+      id: randomUUID(),
+      type: "TRIAL_GRANT",
+      organizationId: workspaceId,
+      workspaceId,
+    },
   });
   const aiAgentId = randomUUID();
   await prisma.aiAgent.create({ data: { id: aiAgentId, name: "Agent", workspaceId } });
@@ -206,10 +217,21 @@ describe("generateAiReply spend", () => {
   it("escalates with CREDIT_EXHAUSTION and never calls the model when the balance is zero or below", async () => {
     const otherWorkspaceId = randomUUID();
     await prisma.workspace.create({
-      data: { id: otherWorkspaceId, organizationId: ids.workspaceId, name: "Second", slug: otherWorkspaceId },
+      data: {
+        id: otherWorkspaceId,
+        organizationId: ids.workspaceId,
+        name: "Second",
+        slug: otherWorkspaceId,
+      },
     });
     await prisma.creditLedgerEntry.create({
-      data: { credits: -500, id: randomUUID(), type: "SPEND", organizationId: ids.workspaceId, workspaceId: otherWorkspaceId },
+      data: {
+        credits: -500,
+        id: randomUUID(),
+        type: "SPEND",
+        organizationId: ids.workspaceId,
+        workspaceId: otherWorkspaceId,
+      },
     });
 
     await turn.generateAiReply(ids.ticketId, ids.workspaceId, "Help me");

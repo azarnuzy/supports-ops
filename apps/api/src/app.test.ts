@@ -56,7 +56,14 @@ vi.mock("./utils/prisma", () => ({
     },
   },
   unscopedPrisma: {
-    user: { findUnique: vi.fn(async () => ({ deletedAt: null, isOrganizationAdmin: false, organizationId: "org-1", workspaceId: "workspace-1" })) },
+    user: {
+      findUnique: vi.fn(async () => ({
+        deletedAt: null,
+        isOrganizationAdmin: false,
+        organizationId: "org-1",
+        workspaceId: "workspace-1",
+      })),
+    },
     workspace: { findUnique: vi.fn(async () => ({ deletedAt: null, organizationId: "org-1" })) },
     workspaceMembership: {
       findFirst: vi.fn(async () => ({ workspaceId: "workspace-1" })),
@@ -86,7 +93,10 @@ describe("api app", () => {
     mocks.operatorAuthHandler.mockResolvedValue(new Response(null, { status: 404 }));
     mocks.findMany.mockResolvedValue([]);
     mocks.membershipFindUnique.mockImplementation(async ({ where }) =>
-      where.userId_workspaceId.userId === "missing" ? null : { role: (await mocks.getSession())?.user?.role ?? "ADMIN" });
+      where.userId_workspaceId.userId === "missing"
+        ? null
+        : { role: (await mocks.getSession())?.user?.role ?? "ADMIN" },
+    );
     mocks.findUnique.mockResolvedValue(null);
     mocks.getSession.mockResolvedValue(null);
     mocks.signInEmail.mockResolvedValue(
@@ -191,8 +201,18 @@ describe("api app", () => {
   it("returns paginated users for admins", async () => {
     mocks.getSession.mockResolvedValue(createAuthSession("ADMIN"));
     mocks.findMany.mockResolvedValue([
-      { userId: "user-2", role: "HUMAN_AGENT", createdAt: baseDate, user: createUser({ id: "user-2", role: "HUMAN_AGENT" }) },
-      { userId: "user-1", role: "ADMIN", createdAt: baseDate, user: createUser({ id: "user-1", role: "ADMIN" }) },
+      {
+        userId: "user-2",
+        role: "HUMAN_AGENT",
+        createdAt: baseDate,
+        user: createUser({ id: "user-2", role: "HUMAN_AGENT" }),
+      },
+      {
+        userId: "user-1",
+        role: "ADMIN",
+        createdAt: baseDate,
+        user: createUser({ id: "user-1", role: "ADMIN" }),
+      },
     ]);
 
     const response = await app.request("/users?limit=1");

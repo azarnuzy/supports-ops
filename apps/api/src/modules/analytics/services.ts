@@ -268,10 +268,16 @@ export async function getAnalyticsOverview(
     ]),
   ];
   const agents = statIds.length
-    ? (await prisma.workspaceMembership.findMany({
-        where: { userId: { in: statIds }, workspaceId: requireWorkspaceId(), role: "HUMAN_AGENT" },
-        select: { user: { select: { id: true, name: true } } },
-      })).map(({ user }) => user)
+    ? (
+        await prisma.workspaceMembership.findMany({
+          where: {
+            userId: { in: statIds },
+            workspaceId: requireWorkspaceId(),
+            role: "HUMAN_AGENT",
+          },
+          select: { user: { select: { id: true, name: true } } },
+        })
+      ).map(({ user }) => user)
     : [];
 
   const firstReplies = assignedInRange.length
