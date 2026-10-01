@@ -4,6 +4,8 @@ import {
   externalErrorCode,
   externalHttpStatus,
   recordExternalError,
+  externalResponseCode,
+  tagExternalError,
 } from "@repo/api/external-errors";
 import { Queue, type ConnectionOptions } from "bullmq";
 import Redis from "ioredis";
