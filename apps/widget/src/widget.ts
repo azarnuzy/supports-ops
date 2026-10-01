@@ -121,7 +121,9 @@ export async function mountWidget({
   let eventSource: EventSource | undefined;
   let waitingForAttachmentReply = false;
   let attachmentMessagePosition: number | undefined;
-  let sendingAttachment: { bubble: HTMLElement; content: string; afterPosition: number } | undefined;
+  let sendingAttachment:
+    | { bubble: HTMLElement; content: string; afterPosition: number }
+    | undefined;
   let reconnectAttempt = 0;
   let reconnectTimer: number | undefined;
   let previousSessionToken: string | undefined;
@@ -712,14 +714,20 @@ export async function mountWidget({
       sendingAttachment = undefined;
       hideTyping();
       optimistic.classList.add("message-failed");
-      optimistic.querySelectorAll<HTMLElement>(".attachment-file-meta, .attachment-image .attachment-status").forEach((status) => {
-        status.textContent = "Upload failed";
-      });
+      optimistic
+        .querySelectorAll<HTMLElement>(
+          ".attachment-file-meta, .attachment-image .attachment-status",
+        )
+        .forEach((status) => {
+          status.textContent = "Upload failed";
+        });
       optimistic.title = "Failed to send — check your connection and try again.";
       input.value = content;
       if (files.length && attachmentInput) {
         const restored = new DataTransfer();
-        files.forEach((file) => restored.items.add(file));
+        files.forEach((file) => {
+          restored.items.add(file);
+        });
         attachmentInput.files = restored.files;
         updateAttachmentTray();
       }
