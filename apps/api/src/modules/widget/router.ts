@@ -133,6 +133,11 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
     }
     try {
       const input = c.req.valid("json");
+      const owner = await unscopedPrisma.session.findUnique({
+        where: { accessToken },
+        select: { id: true, workspaceId: true },
+      });
+      if (!owner) return c.json({ error: "unauthorized" }, 401);
       let respond!: (response: Response) => void;
       let rejectResponse!: (error: unknown) => void;
       const response = new Promise<Response>((resolve, reject) => {
@@ -144,6 +149,9 @@ export const widgetRouter = new Hono<{ Variables: WidgetVariables }>()
       void withSpan(
         "support.customer_turn",
         {
+          "supportops.workspace_id": owner.workspaceId,
+          "anvia.trace.session_id": owner.id,
+          "langfuse.session.id": owner.id,
           "anvia.trace.name": "support.customer_turn",
           "langfuse.trace.name": "support.customer_turn",
           ...(captureMode === "full" ? { "langfuse.observation.input": input.content } : {}),

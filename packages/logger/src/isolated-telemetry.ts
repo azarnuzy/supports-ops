@@ -25,7 +25,7 @@ import {
   type SpanExporter,
 } from "@opentelemetry/sdk-trace-base";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { addLangfuseIoAttributes, nameModelTurn } from "./telemetry";
+import { addLangfuseIoAttributes, nameModelTurn, workspaceTelemetrySuppressed } from "./telemetry";
 
 const caseAttributes = new AsyncLocalStorage<Attributes>();
 const caseContext = new AsyncLocalStorage<Context>();
@@ -235,9 +235,13 @@ export function createIsolatedTelemetry(options: {
           "langfuse.experiment.item.expected_output": JSON.stringify(redactEvalPayload(expected)),
         });
         try {
-          return await caseContext.run(trace.setSpan(ROOT_CONTEXT, span), () =>
+          // Evaluations already own their frozen destinations, independently of production routing.
+          const itemContext = trace
+            .setSpan(ROOT_CONTEXT, span)
+            .setValue(workspaceTelemetrySuppressed, true);
+          return await caseContext.run(itemContext, () =>
             caseAttributes.run(itemAttributes, () =>
-              context.with(trace.setSpan(ROOT_CONTEXT, span), () =>
+              context.with(itemContext, () =>
                 fn({
                   traceId,
                   observationId: spanId,

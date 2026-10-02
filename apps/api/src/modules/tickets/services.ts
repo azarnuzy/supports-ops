@@ -661,8 +661,20 @@ export async function reassignTicket(ticketId: string, humanAgentId: string, wor
  * makes the handover from AI Agent to Human Agent visible as one conversation.
  * The session id is the Session's, not the Ticket's, and is only known once the
  * Ticket has been loaded. */
-function humanReplyAttributes(ticketId: string) {
-  return { "supportops.ticket_id": ticketId };
+async function humanReplyAttributes(ticketId: string, humanAgentId: string) {
+  const ticket = await unscopedPrisma.ticket.findFirst({
+    select: { workspaceId: true, sessionId: true },
+    where: { id: ticketId, assignedHumanAgentId: humanAgentId, status: "HUMAN_HANDLING" },
+  });
+  return {
+    "supportops.ticket_id": ticketId,
+    ...(ticket
+      ? {
+          "supportops.workspace_id": ticket.workspaceId,
+          ...sessionAttributes(ticket.sessionId),
+        }
+      : {}),
+  };
 }
 
 export async function sendHumanReply(
@@ -671,49 +683,53 @@ export async function sendHumanReply(
   content: string,
   idempotencyKey: string,
 ) {
-  return withSpan("support.human_reply", humanReplyAttributes(ticketId), async (span) => {
-    const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
-    const create = () =>
-      unscopedPrisma.$transaction(async (tx) => {
-        const ticket = await tx.ticket.findFirst({
-          where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+  return withSpan(
+    "support.human_reply",
+    await humanReplyAttributes(ticketId, humanAgentId),
+    async (span) => {
+      const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
+      const create = () =>
+        unscopedPrisma.$transaction(async (tx) => {
+          const ticket = await tx.ticket.findFirst({
+            where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+          });
+          if (!ticket) throw new TicketNotOwnedError();
+          const existing = await tx.message.findFirst({ where: { externalMessageId, ticketId } });
+          if (existing) return { deliver: existing.deliveryStatus === "FAILED", message: existing };
+          const message = await tx.message.create({
+            data: {
+              ...(await claimMessageSlot(tx, ticket.sessionId)),
+              content,
+              deliveryStatus: "PENDING",
+              externalMessageId,
+              message: { content },
+              role: "assistant",
+              senderType: "HUMAN_AGENT",
+              senderUserId: humanAgentId,
+              ticketId,
+              workspaceId: ticket.workspaceId,
+            },
+          });
+          return { deliver: true, message };
         });
-        if (!ticket) throw new TicketNotOwnedError();
-        const existing = await tx.message.findFirst({ where: { externalMessageId, ticketId } });
-        if (existing) return { deliver: existing.deliveryStatus === "FAILED", message: existing };
-        const message = await tx.message.create({
-          data: {
-            ...(await claimMessageSlot(tx, ticket.sessionId)),
-            content,
-            deliveryStatus: "PENDING",
-            externalMessageId,
-            message: { content },
-            role: "assistant",
-            senderType: "HUMAN_AGENT",
-            senderUserId: humanAgentId,
-            ticketId,
-            workspaceId: ticket.workspaceId,
-          },
+      let result: Awaited<ReturnType<typeof create>>;
+      try {
+        result = await create();
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002")
+          throw error;
+        const message = await unscopedPrisma.message.findFirst({
+          where: { externalMessageId, ticketId },
         });
-        return { deliver: true, message };
-      });
-    let result: Awaited<ReturnType<typeof create>>;
-    try {
-      result = await create();
-    } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002")
-        throw error;
-      const message = await unscopedPrisma.message.findFirst({
-        where: { externalMessageId, ticketId },
-      });
-      if (!message) throw error;
-      result = { deliver: message.deliveryStatus === "FAILED", message };
-    }
-    span.setAttributes(sessionAttributes(result.message.sessionId));
-    const message = result.deliver ? await deliverMessage(result.message) : result.message;
-    await publishTicketQueueEvent(message.workspaceId);
-    return message;
-  });
+        if (!message) throw error;
+        result = { deliver: message.deliveryStatus === "FAILED", message };
+      }
+      span.setAttributes(sessionAttributes(result.message.sessionId));
+      const message = result.deliver ? await deliverMessage(result.message) : result.message;
+      await publishTicketQueueEvent(message.workspaceId);
+      return message;
+    },
+  );
 }
 
 export async function sendHumanAttachmentReply(
@@ -723,82 +739,87 @@ export async function sendHumanAttachmentReply(
   files: File[],
   idempotencyKey: string,
 ) {
-  return withSpan("support.human_reply", humanReplyAttributes(ticketId), async (span) => {
-    const owner = await unscopedPrisma.ticket.findFirst({
-      select: { channel: { select: { type: true } } },
-      where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
-    });
-    if (!owner) throw new TicketNotOwnedError();
-    const capability: AttachmentCapability =
-      owner.channel.type === "WHATSAPP" ? whatsAppAttachmentCapability : webAttachmentCapability;
-    if (!files.length || files.length > capability.maxFilesPerMessage)
-      throw new InvalidHumanAttachmentError();
-    if (
-      files.some(
-        (file) =>
-          !capability.mimeTypes.includes(file.type) ||
-          !file.size ||
-          file.size >
-            (capability.maxFileSizeBytesByMimeType?.[file.type] ?? capability.maxFileSizeBytes),
-      )
-    )
-      throw new InvalidHumanAttachmentError();
-    const text = content?.trim() ?? "";
-    const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
-    const existing = await unscopedPrisma.message.findFirst({
-      where: { externalMessageId, ticketId },
-    });
-    if (existing) return existing.deliveryStatus === "FAILED" ? deliverMessage(existing) : existing;
-    const uploads = await Promise.all(
-      files.map(async (file) => {
-        const id = randomUUID();
-        const key = `attachments/outbound/${ticketId}/${id}`;
-        await createStorage(storageConfig).putObject({
-          body: Buffer.from(await file.arrayBuffer()),
-          contentType: file.type,
-          key,
-        });
-        return { file, id, key };
-      }),
-    );
-    const message = await unscopedPrisma.$transaction(async (tx) => {
-      const ticket = await tx.ticket.findFirst({
+  return withSpan(
+    "support.human_reply",
+    await humanReplyAttributes(ticketId, humanAgentId),
+    async (span) => {
+      const owner = await unscopedPrisma.ticket.findFirst({
+        select: { channel: { select: { type: true } } },
         where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
       });
-      if (!ticket) throw new TicketNotOwnedError();
-      return tx.message.create({
-        data: {
-          ...(await claimMessageSlot(tx, ticket.sessionId)),
-          attachments: {
-            create: uploads.map(({ file, id, key }) => ({
-              fileName: file.name,
-              id,
-              mimeType: file.type,
-              processingStatus: "READY",
-              sizeBytes: file.size,
-              storageKey: key,
-              ticketId,
-              workspaceId: ticket.workspaceId,
-            })),
-          },
-          content: text,
-          deliveryStatus: "PENDING",
-          externalMessageId,
-          message: { content: text },
-          role: "assistant",
-          senderType: "HUMAN_AGENT",
-          senderUserId: humanAgentId,
-          ticketId,
-          workspaceId: ticket.workspaceId,
-        },
-        include: { attachments: true },
+      if (!owner) throw new TicketNotOwnedError();
+      const capability: AttachmentCapability =
+        owner.channel.type === "WHATSAPP" ? whatsAppAttachmentCapability : webAttachmentCapability;
+      if (!files.length || files.length > capability.maxFilesPerMessage)
+        throw new InvalidHumanAttachmentError();
+      if (
+        files.some(
+          (file) =>
+            !capability.mimeTypes.includes(file.type) ||
+            !file.size ||
+            file.size >
+              (capability.maxFileSizeBytesByMimeType?.[file.type] ?? capability.maxFileSizeBytes),
+        )
+      )
+        throw new InvalidHumanAttachmentError();
+      const text = content?.trim() ?? "";
+      const externalMessageId = `human:${ticketId}:${idempotencyKey}`;
+      const existing = await unscopedPrisma.message.findFirst({
+        where: { externalMessageId, ticketId },
       });
-    });
-    span.setAttributes(sessionAttributes(message.sessionId));
-    const delivered = await deliverMessage(message);
-    await publishTicketQueueEvent(delivered.workspaceId);
-    return delivered;
-  });
+      if (existing)
+        return existing.deliveryStatus === "FAILED" ? deliverMessage(existing) : existing;
+      const uploads = await Promise.all(
+        files.map(async (file) => {
+          const id = randomUUID();
+          const key = `attachments/outbound/${ticketId}/${id}`;
+          await createStorage(storageConfig).putObject({
+            body: Buffer.from(await file.arrayBuffer()),
+            contentType: file.type,
+            key,
+          });
+          return { file, id, key };
+        }),
+      );
+      const message = await unscopedPrisma.$transaction(async (tx) => {
+        const ticket = await tx.ticket.findFirst({
+          where: { assignedHumanAgentId: humanAgentId, id: ticketId, status: "HUMAN_HANDLING" },
+        });
+        if (!ticket) throw new TicketNotOwnedError();
+        return tx.message.create({
+          data: {
+            ...(await claimMessageSlot(tx, ticket.sessionId)),
+            attachments: {
+              create: uploads.map(({ file, id, key }) => ({
+                fileName: file.name,
+                id,
+                mimeType: file.type,
+                processingStatus: "READY",
+                sizeBytes: file.size,
+                storageKey: key,
+                ticketId,
+                workspaceId: ticket.workspaceId,
+              })),
+            },
+            content: text,
+            deliveryStatus: "PENDING",
+            externalMessageId,
+            message: { content: text },
+            role: "assistant",
+            senderType: "HUMAN_AGENT",
+            senderUserId: humanAgentId,
+            ticketId,
+            workspaceId: ticket.workspaceId,
+          },
+          include: { attachments: true },
+        });
+      });
+      span.setAttributes(sessionAttributes(message.sessionId));
+      const delivered = await deliverMessage(message);
+      await publishTicketQueueEvent(delivered.workspaceId);
+      return delivered;
+    },
+  );
 }
 
 export async function retryHumanReply(ticketId: string, humanAgentId: string, messageId: string) {

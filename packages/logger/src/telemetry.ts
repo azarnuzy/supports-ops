@@ -1,5 +1,6 @@
 import {
   context,
+  createContextKey,
   propagation,
   SpanStatusCode,
   trace,
@@ -10,6 +11,9 @@ import {
 } from "@opentelemetry/api";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { ExportResultCode } from "@opentelemetry/core";
+import { JsonTraceSerializer } from "@opentelemetry/otlp-transformer";
+import type { TelemetrySink } from "./isolated-telemetry";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import {
@@ -57,6 +61,102 @@ export type StartTelemetryOptions = {
  * for traces nobody reads.
  */
 const exportedTracerScopes = new Set(["@anvia/otel", "@repo/logger"]);
+
+export type WorkspaceTelemetryOptions = {
+  workspaceId(): string | undefined;
+  resolveSink(workspaceId: string): Promise<TelemetrySink | null>;
+};
+
+let workspaceTelemetry: WorkspaceTelemetryOptions | undefined;
+export const workspaceTelemetrySuppressed = createContextKey("workspace-telemetry-suppressed");
+
+/** Register server-side routing without exposing Workspace credentials to the tracer. */
+export function configureWorkspaceTelemetry(options: WorkspaceTelemetryOptions) {
+  workspaceTelemetry = options;
+}
+
+/** Copies the same completed spans as central Telemetry; never changes the global destination. */
+export class WorkspaceTelemetrySpanProcessor implements SpanProcessor {
+  private readonly routes = new WeakMap<
+    object,
+    { workspaceId: string; processor: BatchSpanProcessor; root: object }
+  >();
+  private readonly processors = new Set<BatchSpanProcessor>();
+
+  constructor(private readonly getOptions: () => WorkspaceTelemetryOptions | undefined) {}
+
+  onStart(span: SdkSpan, parentContext: Context) {
+    const options = this.getOptions();
+    if (
+      !options ||
+      parentContext.getValue(workspaceTelemetrySuppressed) ||
+      !exportedTracerScopes.has(span.instrumentationScope.name)
+    ) {
+      return;
+    }
+    const parent = trace.getSpan(parentContext);
+    const inherited = parent ? this.routes.get(parent) : undefined;
+    let workspaceId = span.attributes["supportops.workspace_id"];
+    if (typeof workspaceId !== "string") {
+      try {
+        workspaceId = inherited?.workspaceId ?? options.workspaceId();
+      } catch {
+        return;
+      }
+    }
+    if (typeof workspaceId !== "string" || !workspaceId) return;
+    if (inherited?.workspaceId === workspaceId) {
+      this.routes.set(span, inherited);
+      return;
+    }
+    // Snapshot once at operation start, including disabled destinations. Resolution and export
+    // run outside the chat path. Children share the snapshot even after settings change.
+    const destinationWorkspaceId = workspaceId;
+    const destination = (async () => options.resolveSink(destinationWorkspaceId))().catch(
+      () => null,
+    );
+    const processor = new BatchSpanProcessor({
+      export: (spans, done) => {
+        void destination
+          .then(async (sink) => {
+            if (sink) {
+              const body = new TextDecoder().decode(JsonTraceSerializer.serializeRequest(spans));
+              await sink.send("traces", body);
+            }
+          })
+          .then(
+            () => done({ code: ExportResultCode.SUCCESS }),
+            () => done({ code: ExportResultCode.FAILED }),
+          );
+      },
+      shutdown: async () => {},
+    });
+    this.processors.add(processor);
+    this.routes.set(span, { workspaceId, processor, root: span });
+  }
+
+  onEnd(span: ReadableSpan) {
+    const route = this.routes.get(span);
+    if (!route) return;
+    route.processor.onEnd(span);
+    if (route.root === span) {
+      // ponytail: best-effort in-memory batches; add durable delivery only if trace loss matters.
+      void route.processor
+        .shutdown()
+        .catch(() => {})
+        .finally(() => this.processors.delete(route.processor));
+    }
+  }
+
+  async forceFlush() {
+    await Promise.allSettled([...this.processors].map((processor) => processor.forceFlush()));
+  }
+
+  async shutdown() {
+    await Promise.allSettled([...this.processors].map((processor) => processor.shutdown()));
+    this.processors.clear();
+  }
+}
 
 /** `@anvia/otel` names its input/output attributes per span kind (e.g.
  * `anvia.generation.input`, `anvia.run.output`), which Anvia Lens reads
@@ -184,7 +284,9 @@ export function nameModelTurn(span: SdkSpan) {
 
 /** Passes a span to `inner` only when an allowed tracer created it. */
 class AgentScopeSpanProcessor implements SpanProcessor {
-  constructor(private readonly inner: SpanProcessor) {}
+  private readonly workspace = new WorkspaceTelemetrySpanProcessor(() => workspaceTelemetry);
+
+  constructor(private readonly inner?: SpanProcessor) {}
 
   onStart(span: SdkSpan, parentContext: Context) {
     nameModelTurn(span);
@@ -193,22 +295,24 @@ class AgentScopeSpanProcessor implements SpanProcessor {
         span.setAttribute(key, entry.value);
       }
     }
-    this.inner.onStart(span, parentContext);
+    this.inner?.onStart(span, parentContext);
+    this.workspace.onStart(span, parentContext);
   }
 
   onEnd(span: ReadableSpan) {
     if (exportedTracerScopes.has(span.instrumentationScope.name)) {
       addLangfuseIoAttributes(span);
-      this.inner.onEnd(span);
+      this.inner?.onEnd(span);
+      this.workspace.onEnd(span);
     }
   }
 
-  forceFlush() {
-    return this.inner.forceFlush();
+  async forceFlush() {
+    await Promise.all([this.inner?.forceFlush(), this.workspace.forceFlush()]);
   }
 
-  shutdown() {
-    return this.inner.shutdown();
+  async shutdown() {
+    await Promise.all([this.inner?.shutdown(), this.workspace.shutdown()]);
   }
 }
 
@@ -253,7 +357,7 @@ export function recordExternalFailure(attributes: Attributes) {
 let sdk: NodeSDK | null = null;
 
 export function startTelemetry({ config, serviceName }: StartTelemetryOptions) {
-  if (!config.enabled || sdk) {
+  if (sdk) {
     return sdk;
   }
 
@@ -265,30 +369,34 @@ export function startTelemetry({ config, serviceName }: StartTelemetryOptions) {
     }),
     spanProcessors: [
       new AgentScopeSpanProcessor(
-        config.exporter === "console"
-          ? new SimpleSpanProcessor(new ConsoleSpanExporter())
-          : new BatchSpanProcessor(
-              new OTLPTraceExporter({
-                headers: getTelemetryHeaders(config),
-                url: config.otlpEndpoint,
-              }),
-            ),
+        !config.enabled
+          ? undefined
+          : config.exporter === "console"
+            ? new SimpleSpanProcessor(new ConsoleSpanExporter())
+            : new BatchSpanProcessor(
+                new OTLPTraceExporter({
+                  headers: getTelemetryHeaders(config),
+                  url: config.otlpEndpoint,
+                }),
+              ),
       ),
     ],
     // Eval results are published as OTel log records, not spans (see
     // `createOtelEvalReporter` in `@anvia/otel`). Without a log pipeline the
     // eval reporter is silently a no-op and nothing reaches the backend's
     // Evaluations view, so the logs exporter is wired here alongside traces.
-    logRecordProcessors: [
-      config.exporter === "console"
-        ? new SimpleLogRecordProcessor({ exporter: new ConsoleLogRecordExporter() })
-        : new BatchLogRecordProcessor({
-            exporter: new OTLPLogExporter({
-              headers: getTelemetryHeaders(config),
-              url: otlpLogsEndpoint(config.otlpEndpoint),
-            }),
-          }),
-    ],
+    logRecordProcessors: !config.enabled
+      ? []
+      : [
+          config.exporter === "console"
+            ? new SimpleLogRecordProcessor({ exporter: new ConsoleLogRecordExporter() })
+            : new BatchLogRecordProcessor({
+                exporter: new OTLPLogExporter({
+                  headers: getTelemetryHeaders(config),
+                  url: otlpLogsEndpoint(config.otlpEndpoint),
+                }),
+              }),
+        ],
   });
 
   sdk.start();

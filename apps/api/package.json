@@ -14,7 +14,8 @@
     "./secrets": "./src/modules/tools/secrets.ts",
     "./ticket-queue": "./src/modules/tickets/queue.ts",
     "./whatsapp-queue": "./src/modules/whatsapp-config/queue.ts",
-    "./external-errors": "./src/utils/external-errors.ts"
+    "./external-errors": "./src/utils/external-errors.ts",
+    "./workspace-telemetry": "./src/modules/eval-destination/telemetry.ts"
   },
   "scripts": {
     "with-env": "dotenv -e ../../.env.local --",
