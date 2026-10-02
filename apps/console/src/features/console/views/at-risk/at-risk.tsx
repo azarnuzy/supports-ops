@@ -574,65 +574,71 @@ export default function AtRiskView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...externalGroups.entries()].map(([key, group]) => (
-                    <TableRow key={key}>
-                      <TableCell>
-                        {group[0]!.provider}
-                        <p className="text-xs text-muted-foreground">
-                          {group[0]!.operation}
-                          {group[0]!.modelId ? ` · ${group[0]!.modelId}` : ""}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium">{externalStatus(group[0]!.httpStatus)}</span>
-                        <br />
-                        {group[0]!.httpStatus
-                          ? `HTTP ${group[0]!.httpStatus}`
-                          : (group[0]!.code ?? "Unknown")}
-                        {group[0]!.httpStatus && group[0]!.code && group[0]!.code !== "Error"
-                          ? ` · ${group[0]!.code}`
-                          : ""}
-                      </TableCell>
-                      <TableCell>
-                        {numberFormat.format(group.reduce((sum, item) => sum + item.count, 0))}
-                      </TableCell>
-                      <TableCell>
-                        {new Set(group.map((item) => item.workspaceId).filter(Boolean)).size ||
-                          "Platform"}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(
-                          Math.max(...group.map((item) => new Date(String(item.lastAt)).getTime())),
-                        ).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <details>
-                          <summary className="cursor-pointer">Details</summary>
-                          <div className="mt-2 space-y-1 text-xs">
-                            {group.map((item) => (
-                              <p key={`${item.workspaceId}-${item.resourceId}`}>
-                                {item.workspaceId ? (
-                                  <Link
-                                    to="/workspaces/$workspaceId"
-                                    params={{ workspaceId: item.workspaceId }}
-                                    className="underline"
-                                  >
-                                    Workspace {item.workspaceId}
-                                  </Link>
-                                ) : (
-                                  "Platform"
-                                )}
-                                {` · ${item.count} times · first ${new Date(String(item.firstAt)).toLocaleString()} · last ${new Date(String(item.lastAt)).toLocaleString()}`}
-                                {item.resourceType && item.resourceId
-                                  ? ` · ${item.resourceType} ${item.resourceId}`
-                                  : ""}
-                              </p>
-                            ))}
-                          </div>
-                        </details>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {[...externalGroups.entries()].map(([key, group]) => {
+                    const first = group[0];
+                    if (!first) return null;
+                    return (
+                      <TableRow key={key}>
+                        <TableCell>
+                          {first.provider}
+                          <p className="text-xs text-muted-foreground">
+                            {first.operation}
+                            {first.modelId ? ` · ${first.modelId}` : ""}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{externalStatus(first.httpStatus)}</span>
+                          <br />
+                          {first.httpStatus
+                            ? `HTTP ${first.httpStatus}`
+                            : (first.code ?? "Unknown")}
+                          {first.httpStatus && first.code && first.code !== "Error"
+                            ? ` · ${first.code}`
+                            : ""}
+                        </TableCell>
+                        <TableCell>
+                          {numberFormat.format(group.reduce((sum, item) => sum + item.count, 0))}
+                        </TableCell>
+                        <TableCell>
+                          {new Set(group.map((item) => item.workspaceId).filter(Boolean)).size ||
+                            "Platform"}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(
+                            Math.max(
+                              ...group.map((item) => new Date(String(item.lastAt)).getTime()),
+                            ),
+                          ).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <details>
+                            <summary className="cursor-pointer">Details</summary>
+                            <div className="mt-2 space-y-1 text-xs">
+                              {group.map((item) => (
+                                <p key={`${item.workspaceId}-${item.resourceId}`}>
+                                  {item.workspaceId ? (
+                                    <Link
+                                      to="/workspaces/$workspaceId"
+                                      params={{ workspaceId: item.workspaceId }}
+                                      className="underline"
+                                    >
+                                      Workspace {item.workspaceId}
+                                    </Link>
+                                  ) : (
+                                    "Platform"
+                                  )}
+                                  {` · ${item.count} times · first ${new Date(String(item.firstAt)).toLocaleString()} · last ${new Date(String(item.lastAt)).toLocaleString()}`}
+                                  {item.resourceType && item.resourceId
+                                    ? ` · ${item.resourceType} ${item.resourceId}`
+                                    : ""}
+                                </p>
+                              ))}
+                            </div>
+                          </details>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

@@ -102,15 +102,15 @@ export async function getDataset(
     complete:
       caseIssues({ ...item, metadata: evalCaseMetadataSchema.parse(item.metadata) }).length === 0,
   }));
+  const readiness = new Map(caseIndex.map((item) => [item.id, item.complete]));
   const matching = index.filter(
-    (item, position) =>
-      (status === "all" || caseIndex[position]!.complete === (status === "ready")) &&
+    (item) =>
+      (status === "all" || readiness.get(item.id) === (status === "ready")) &&
       (!search ||
         [item.message, item.caseKey, item.category].some((value) =>
           value.toLowerCase().includes(search.toLowerCase()),
         )),
   );
-  const readiness = new Map(caseIndex.map((item) => [item.id, item.complete]));
   const sorted = sortRows(
     matching,
     input.sortBy
@@ -299,7 +299,14 @@ export async function importCases(datasetId: string, source: ImportSource) {
       { timeout: 30_000 },
     );
     const byId = new Map(created.map((item) => [item.id, item]));
-    return { ...preview, cases: data.map((item) => presentCase(byId.get(item.id)!)) };
+    return {
+      ...preview,
+      cases: data.map((item) => {
+        const saved = byId.get(item.id);
+        if (!saved) throw new Error("Imported Eval Case was not returned by the database.");
+        return presentCase(saved);
+      }),
+    };
   } catch (error) {
     if (isUniqueConstraintError(error, "caseKey")) throw new DuplicateCaseKeyError();
     throw error;

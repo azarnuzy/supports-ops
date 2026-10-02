@@ -78,9 +78,10 @@ export function CreateDatasetDrawer({
     open && tab === "sessions" && !showSelected,
     messageFilters,
   );
-  const selectedMessages = Object.keys(selected).flatMap((id) =>
-    pickedMessages[id] ? [pickedMessages[id]!] : [],
-  );
+  const selectedMessages = Object.keys(selected).flatMap((id) => {
+    const message = pickedMessages[id];
+    return message ? [message] : [];
+  });
   const selectedPage = Math.min(
     messageFilters.page,
     Math.max(1, Math.ceil(selectedMessages.length / 20)),

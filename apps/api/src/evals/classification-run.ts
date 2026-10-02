@@ -312,7 +312,8 @@ async function main() {
           },
         },
         target: async (input, testCase) => {
-          const original = caseById.get(String(testCase.metadata?.caseId))!;
+          const original = caseById.get(String(testCase.metadata?.caseId));
+          if (!original) throw new Error("Unknown classification Eval Case.");
           const repeat = Number(testCase.metadata?.repeat);
           const output = await withSpan(
             "eval.classification_case",

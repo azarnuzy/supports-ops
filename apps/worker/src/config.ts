@@ -99,7 +99,7 @@ export const classificationConfig = {
   baseUrl: env.COMPLETION_GATEWAY_BASE_URL,
   modelId:
     new URL(env.COMPLETION_GATEWAY_BASE_URL).hostname === "gateway.devscale.id"
-      ? env.LLM_MODEL_FAST.split("/").at(-1)!
+      ? (env.LLM_MODEL_FAST.split("/").at(-1) ?? env.LLM_MODEL_FAST)
       : env.LLM_MODEL_FAST,
 } as const;
 

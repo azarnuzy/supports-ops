@@ -13,7 +13,8 @@ it("round-trips the dropdown workbook and imports only Cases with flat expectati
     "Options",
     "Examples",
   ]);
-  const sheet = workbook.getWorksheet("Cases")!;
+  const sheet = workbook.getWorksheet("Cases");
+  if (!sheet) throw new Error("Cases worksheet is missing.");
   expect(sheet.getCell("D2").dataValidation.formulae).toEqual(["EvaluationTypes"]);
   expect(sheet.getCell("F2").dataValidation.formulae).toEqual(["Decisions"]);
   sheet.getCell("A2").value = 'A long question, with "quotes"\nand another line';

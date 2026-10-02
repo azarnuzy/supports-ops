@@ -242,8 +242,7 @@ export function historyBefore(
 }
 
 /** A complete example using only fields supported by the import schema. */
-export const EVAL_CSV_TEMPLATE =
-  [
-    "message,caseKey,category,metric,expected,clarificationCount,history,attachments,metadata",
-    "How can I reset my password?,password-reset,grounding,contains,reset,0,[],[],{}",
-  ].join("\r\n") + "\r\n";
+export const EVAL_CSV_TEMPLATE = `${[
+  "message,caseKey,category,metric,expected,clarificationCount,history,attachments,metadata",
+  "How can I reset my password?,password-reset,grounding,contains,reset,0,[],[],{}",
+].join("\r\n")}\r\n`;

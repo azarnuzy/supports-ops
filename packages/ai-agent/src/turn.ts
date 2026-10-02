@@ -266,7 +266,7 @@ export async function runAiAgentTurn(params: {
           await params.runtime.reply(decision.decision, decision.content, provisionalId);
         }
         return decision;
-      } catch (error) {
+      } catch {
         run.setAttributes({
           "ai_agent.decision": "ESCALATE",
           "ai_agent.escalation_reason": "AI_GENERATION_FAILED",

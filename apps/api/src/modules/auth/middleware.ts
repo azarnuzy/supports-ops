@@ -78,11 +78,12 @@ export async function loadWorkspaceContext(c: Context<{ Variables: AuthVariables
       where: { userId_workspaceId: { userId: user.id, workspaceId } },
       select: { role: true },
     });
-    if (!membership && !user.isOrganizationAdmin) return c.json({ error: "forbidden" }, 403);
+    const role = user.isOrganizationAdmin ? "ADMIN" : membership?.role;
+    if (!role) return c.json({ error: "forbidden" }, 403);
     c.set("user", {
       ...user,
       workspaceId,
-      role: user.isOrganizationAdmin ? "ADMIN" : membership!.role,
+      role,
     });
   }
 
