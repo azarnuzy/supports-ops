@@ -671,7 +671,6 @@ function RunHistory({ runs }: { runs: EvalRun[] }) {
                 </TooltipProvider>
               </span>
             </TableHead>
-            <TableHead>SupportOps tracing</TableHead>
             <TableHead className="w-12 text-right">
               <span className="sr-only">Report</span>
             </TableHead>
@@ -747,15 +746,6 @@ function RunHistory({ runs }: { runs: EvalRun[] }) {
                     runId={run.id}
                     status={run.workspaceDelivery}
                     target="WORKSPACE"
-                  />
-                </TableCell>
-                <TableCell className="max-w-64 whitespace-normal">
-                  <DeliveryLine
-                    expiresAt={run.centralExpiresAt}
-                    retryable={run.centralRetryable}
-                    runId={run.id}
-                    status={run.centralDelivery}
-                    target="CENTRAL"
                   />
                 </TableCell>
                 <TableCell className="text-right">

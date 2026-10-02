@@ -133,6 +133,7 @@ export function PlatformAppShell({
             items: [
               { icon: UsersRoundIcon, label: "Users", to: "/workspace/users" },
               { icon: TagsIcon, label: "Ticket categories", to: "/workspace/categories" },
+              { icon: ChartColumnIcon, label: "Observability", to: "/workspace/observability" },
             ],
             label: "Workspace",
           },

@@ -76,6 +76,8 @@ test("keeps every attempt across run pages and separates History from Results", 
       ],
     };
   });
+  const latestRun = runs[0];
+  if (!latestRun) throw new Error("Evaluation history fixture is empty.");
   await page.route("**/eval-datasets/history-dataset?*", (route) =>
     route.fulfill({
       json: {
@@ -83,8 +85,8 @@ test("keeps every attempt across run pages and separates History from Results", 
           id: "history-dataset",
           name: "History dataset",
           criteria: "",
-          createdAt: runs[0]!.createdAt,
-          updatedAt: runs[0]!.createdAt,
+          createdAt: latestRun.createdAt,
+          updatedAt: latestRun.createdAt,
           cases: [evalCase],
           caseIndex: [evalCase],
           page: 1,
@@ -129,11 +131,14 @@ test("keeps every attempt across run pages and separates History from Results", 
     }),
   );
   await page.route("**/eval-runs", (route) => {
+    const latest = runs[0];
+    const latestCase = latest?.cases[0];
+    if (!latest || !latestCase) throw new Error("Latest evaluation fixture is missing.");
     const run = {
-      ...runs[0]!,
+      ...latest,
       id: "new-run",
       createdAt: "2026-01-23T00:00:00.000Z",
-      cases: [{ ...runs[0]!.cases[0]!, id: "new-attempt" }],
+      cases: [{ ...latestCase, id: "new-attempt" }],
     };
     runs.unshift(run);
     return route.fulfill({ status: 201, json: { run } });
@@ -168,7 +173,7 @@ test("keeps every attempt across run pages and separates History from Results", 
   await expect(history.getByRole("columnheader", { name: /Destination delivery/ })).toBeVisible();
   await expect(
     history.getByRole("columnheader", { name: "SupportOps tracing", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(historyRow.getByText("Not configured", { exact: true })).toBeVisible();
   await expect(historyRow.getByText("65.0s", { exact: true })).toBeVisible();
   await expect(historyRow.getByRole("cell").first()).toContainText(/\d{1,2}:\d{2}:\d{2} [AP]M/);

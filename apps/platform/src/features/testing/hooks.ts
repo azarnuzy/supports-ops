@@ -86,9 +86,7 @@ export const useRunsQuery = (datasetId: string, page = 1, pageSize = 1) =>
     queryKey: [...runsKey(datasetId), page, pageSize],
     refetchInterval: (query) =>
       query.state.data?.runs.some((r) => r.status === "QUEUED" || r.status === "RUNNING") ||
-      query.state.data?.runs.some(
-        (r) => r.centralDelivery === "PENDING" || r.workspaceDelivery === "PENDING",
-      )
+      query.state.data?.runs.some((r) => r.workspaceDelivery === "PENDING")
         ? 3_000
         : false,
   });
@@ -112,7 +110,6 @@ export const useAllRunsQuery = (datasetId: string) =>
         (run) =>
           run.status === "QUEUED" ||
           run.status === "RUNNING" ||
-          run.centralDelivery === "PENDING" ||
           run.workspaceDelivery === "PENDING",
       )
         ? 3_000

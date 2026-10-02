@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@repo/ui/components/dialog";
 import { Settings2Icon } from "lucide-react";
-import { formatTestingDate } from "./format";
+import { formatTestingDate } from "../testing/format";
 import { Button } from "@repo/ui/components/button";
 import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
@@ -19,7 +19,7 @@ import {
   useCheckDestinationMutation,
   useDestinationQuery,
   useSaveDestinationMutation,
-} from "./hooks";
+} from "../testing/hooks";
 
 const keyLabels: Record<EvalBackend, [string, string]> = {
   LANGFUSE: ["Public key", "Secret key"],
@@ -56,12 +56,14 @@ export function DestinationForm() {
   const [dashboardUrl, setDashboardUrl] = useState("");
   const [publicKey, setPublicKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
+  const [productionTracingEnabled, setProductionTracingEnabled] = useState(false);
 
   useEffect(() => {
     if (!saved) return;
     setBackend(saved.backend);
     setEndpoint(saved.endpoint);
     setDashboardUrl(saved.dashboardUrl);
+    setProductionTracingEnabled(saved.productionTracingEnabled);
   }, [saved]);
 
   const [publicLabel, secretLabel] = keyLabels[backend];
@@ -89,6 +91,7 @@ export function DestinationForm() {
         endpoint,
         publicKey: publicKey || undefined,
         secretKey: secretKey || undefined,
+        productionTracingEnabled,
       },
       {
         onError,
@@ -98,7 +101,7 @@ export function DestinationForm() {
           check.reset();
           setCheckedAt(null);
           setOpen(false);
-          toast.success("Evaluation destination saved.");
+          toast.success("Observability destination saved.");
         },
       },
     );
@@ -112,6 +115,7 @@ export function DestinationForm() {
     setBackend(saved?.backend ?? "LENS");
     setEndpoint(saved?.endpoint ?? "");
     setDashboardUrl(saved?.dashboardUrl ?? "");
+    setProductionTracingEnabled(saved?.productionTracingEnabled ?? false);
   }
 
   return (
@@ -119,7 +123,7 @@ export function DestinationForm() {
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
         <div className="grid min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-medium">Evaluation destination</h2>
+            <h2 className="text-sm font-medium">Observability destination</h2>
             {saved && (
               <span className="text-xs text-muted-foreground">
                 {saved.backend === "LENS" ? "Anvia Lens" : "Langfuse"}
@@ -140,9 +144,14 @@ export function DestinationForm() {
           <p className="truncate text-xs text-muted-foreground" title={saved?.endpoint}>
             {saved
               ? saved.endpoint.replace(/^https?:\/\//, "")
-              : "Connect a destination to receive Evaluation reports."}
+              : "Connect a destination for Workspace evaluations and chat Telemetry."}
             {checkedAt ? ` · Last checked ${formatTestingDate(checkedAt)}` : ""}
           </p>
+          {saved && (
+            <p className="text-xs text-muted-foreground">
+              Production chat Telemetry: {saved.productionTracingEnabled ? "On" : "Off"}
+            </p>
+          )}
           {check.isError && (
             <p className="text-xs text-destructive" role="alert">
               Unable to check this destination. Try again.
@@ -202,9 +211,10 @@ export function DestinationForm() {
           showCloseButton={!save.isPending}
         >
           <DialogHeader>
-            <DialogTitle>Evaluation destination</DialogTitle>
+            <DialogTitle>Observability destination</DialogTitle>
             <DialogDescription>
-              Where Eval Run reports are sent. Credentials are encrypted and masked after saving.
+              Shared by Testing and this Workspace's production chat Telemetry. Credentials are
+              encrypted and masked after saving.
             </DialogDescription>
           </DialogHeader>
           <form className="grid gap-4" onSubmit={submit}>
@@ -220,7 +230,7 @@ export function DestinationForm() {
                   <NativeSelectOption value="LANGFUSE">Langfuse</NativeSelectOption>
                 </NativeSelect>
                 <FieldDescription className="text-xs">
-                  Select the backend that receives your Evaluation reports.
+                  Select the backend that receives this Workspace's evaluations and Telemetry.
                 </FieldDescription>
               </Field>
               <Field className="gap-1.5">
@@ -296,6 +306,21 @@ export function DestinationForm() {
                   Leave both keys empty to keep the saved credentials.
                 </FieldDescription>
               ) : null}
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor="production-tracing">
+                  <input
+                    id="production-tracing"
+                    type="checkbox"
+                    checked={productionTracingEnabled}
+                    onChange={(event) => setProductionTracingEnabled(event.target.checked)}
+                  />
+                  Send production chat Telemetry
+                </FieldLabel>
+                <FieldDescription className="text-xs">
+                  Send live chat traces for this Workspace only. Testing uses this destination even
+                  when this is off. Changes apply to new operations.
+                </FieldDescription>
+              </Field>
               <div className="flex justify-end gap-2">
                 <Button
                   type="button"

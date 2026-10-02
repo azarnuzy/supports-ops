@@ -19,7 +19,7 @@ import { useState } from "react";
 import { PlatformAppShell } from "../app-shell";
 import ResourceListState from "../settings/components/resource-list-state";
 import { CreateDatasetDrawer } from "./create-dataset-drawer";
-import { DestinationForm } from "./destination-form";
+import { ObservabilityDestinationSummary } from "./destination-summary";
 import { formatTestingDate, runResults } from "./format";
 import { useDatasetsQuery, useRunsQuery } from "./hooks";
 
@@ -217,7 +217,7 @@ const TestingView = () => {
             onPageChange={setPage}
           />
         </div>
-        <DestinationForm />
+        <ObservabilityDestinationSummary />
       </section>
       <CreateDatasetDrawer open={creating} onOpenChange={setCreating} />
       {deleting && <DeleteDatasetDialog dataset={deleting} onClose={() => setDeleting(null)} />}
