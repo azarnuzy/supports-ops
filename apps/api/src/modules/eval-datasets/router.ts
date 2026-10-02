@@ -16,6 +16,7 @@ import {
   createDataset,
   DatasetNotFoundError,
   deleteCase,
+  deleteDataset,
   DuplicateCaseKeyError,
   getDataset,
   importCases,
@@ -77,6 +78,12 @@ export const evalDatasetsRouter = new Hono<{ Variables: AuthVariables }>()
         c.json({ dataset: await updateDataset(c.req.param("id"), c.req.valid("json")) }, 200),
       c,
     ),
+  )
+  .delete("/:id", (c) =>
+    respond(async () => {
+      await deleteDataset(c.req.param("id"));
+      return c.body(null, 204);
+    }, c),
   )
   .post("/:id/import/preview", zValidator("json", importSourceSchema), (c) =>
     respond(

@@ -87,6 +87,46 @@ const call = (path: string, method = "GET", body?: unknown, workspace?: string) 
 
 const draftCase = { caseKey: "refund-window", message: "How long do refunds take?" };
 
+it("deletes datasets and their cases only for an Admin in the owning Workspace", async () => {
+  current.userId = "admin-a1";
+  const { dataset } = await (await call("", "POST", { name: "Delete me" })).json();
+  await call(`/${dataset.id}/cases`, "POST", draftCase);
+  await prisma.evalRun.create({
+    data: {
+      id: "retained-run",
+      workspaceId: "wa1",
+      datasetId: dataset.id,
+      datasetName: dataset.name,
+      aiAgentId: "snapshot-agent",
+      agentModel: "snapshot-model",
+      instructionsSha256: "snapshot",
+      embeddingModel: "snapshot-embedding",
+      estimatedCredits: 1,
+      destinationBackend: "LANGFUSE",
+      destinationEndpoint: "https://example.com",
+      destinationDashboardUrl: "https://example.com",
+      destinationCredentialsEncrypted: "snapshot",
+    },
+  });
+
+  current.userId = "";
+  expect((await call(`/${dataset.id}`, "DELETE")).status).toBe(403);
+  current.userId = "agent-a1";
+  expect((await call(`/${dataset.id}`, "DELETE")).status).toBe(403);
+  current.userId = "admin-b";
+  expect((await call(`/${dataset.id}`, "DELETE")).status).toBe(404);
+  current.userId = "org-admin-a";
+  expect((await call(`/${dataset.id}`, "DELETE", undefined, "wa2")).status).toBe(404);
+  expect(await prisma.evalCase.count()).toBe(1);
+
+  current.userId = "admin-a1";
+  expect((await call(`/${dataset.id}`, "DELETE")).status).toBe(204);
+  expect(await prisma.evalDataset.count()).toBe(0);
+  expect(await prisma.evalCase.count()).toBe(0);
+  expect(await prisma.evalRun.count()).toBe(1);
+  expect((await call(`/${dataset.id}`, "DELETE")).status).toBe(404);
+});
+
 it("denies unauthenticated callers and Human Agents", async () => {
   expect((await call("")).status).toBe(403);
   current.userId = "agent-a1";

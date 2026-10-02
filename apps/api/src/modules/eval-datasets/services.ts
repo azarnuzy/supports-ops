@@ -159,6 +159,11 @@ export async function updateDataset(id: string, input: { criteria: string; name:
   return prisma.evalDataset.update({ data: input, where: { id } });
 }
 
+export async function deleteDataset(id: string) {
+  const result = await prisma.evalDataset.deleteMany({ where: { id } });
+  if (!result.count) throw new DatasetNotFoundError();
+}
+
 const rowData = (input: CaseInput) => ({
   ...input,
   history: input.history,

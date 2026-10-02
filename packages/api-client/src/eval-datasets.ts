@@ -109,6 +109,11 @@ export async function updateEvalDataset(client: ApiClient, id: string, input: Ev
   if (!response.ok) return fail(response, "Failed to save the Eval Dataset.");
 }
 
+export async function deleteEvalDataset(client: ApiClient, id: string) {
+  const response = await routes(client)[":id"].$delete({ param: { id } });
+  if (!response.ok) return fail(response, "Failed to delete the Eval Dataset.");
+}
+
 export async function createEvalCase(client: ApiClient, datasetId: string, input: EvalCaseInput) {
   const response = await routes(client)[":id"].cases.$post({
     json: input as never,
