@@ -6,6 +6,7 @@ import {
   createCase,
   createDataset,
   deleteCase,
+  deleteDataset,
   estimateRun,
   getRuns,
   retryDelivery,
@@ -43,6 +44,7 @@ function useMutate<TVariables, TResult>(mutationFn: (variables: TVariables) => P
   });
 }
 
+export const useDeleteDatasetMutation = () => useMutate(deleteDataset);
 export const useCreateDatasetMutation = () => useMutate(createDataset);
 export const useUpdateDatasetMutation = () => useMutate(updateDataset);
 export const useCreateCaseMutation = () => useMutate(createCase);

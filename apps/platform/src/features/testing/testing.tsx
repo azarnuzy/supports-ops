@@ -23,7 +23,9 @@ import { DestinationForm } from "./destination-form";
 import { formatTestingDate, runResults } from "./format";
 import { useDatasetsQuery, useRunsQuery } from "./hooks";
 
-function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
+import { DeleteDatasetDialog } from "./delete-dataset-dialog";
+
+function DatasetRow({ dataset, onDelete }: { dataset: EvalDatasetSummary; onDelete: () => void }) {
   // ponytail: one existing Run request per dataset; batch summaries if dataset volume grows.
   const query = useRunsQuery(dataset.id);
   const lastRun = query.data?.runs[0];
@@ -87,6 +89,9 @@ function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
             Open
           </Link>
         </Button>
+        <Button size="sm" variant="ghost" className="text-destructive" onClick={onDelete}>
+          Delete
+        </Button>
       </TableCell>
     </TableRow>
   );
@@ -95,6 +100,7 @@ function DatasetRow({ dataset }: { dataset: EvalDatasetSummary }) {
 const TestingView = () => {
   const datasets = useDatasetsQuery();
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<EvalDatasetSummary | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] =
@@ -191,7 +197,11 @@ const TestingView = () => {
               </TableHeader>
               <TableBody>
                 {filtered.slice((currentPage - 1) * 10, currentPage * 10).map((dataset) => (
-                  <DatasetRow key={dataset.id} dataset={dataset} />
+                  <DatasetRow
+                    key={dataset.id}
+                    dataset={dataset}
+                    onDelete={() => setDeleting(dataset)}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -210,6 +220,7 @@ const TestingView = () => {
         <DestinationForm />
       </section>
       <CreateDatasetDrawer open={creating} onOpenChange={setCreating} />
+      {deleting && <DeleteDatasetDialog dataset={deleting} onClose={() => setDeleting(null)} />}
     </PlatformAppShell>
   );
 };

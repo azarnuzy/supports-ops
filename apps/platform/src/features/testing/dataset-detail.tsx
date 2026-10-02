@@ -34,7 +34,7 @@ import { Field, FieldDescription, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
 import { toast } from "@repo/ui/components/sonner";
 import { Textarea } from "@repo/ui/components/textarea";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   PlayIcon,
@@ -61,12 +61,16 @@ import {
 import { nextCaseKeys } from "./paste";
 import { RunConfirmDialog, RunsPanel } from "./run-panel";
 
+import { DeleteDatasetDialog } from "./delete-dataset-dialog";
+
 const maxCasesPerRun = 100;
 
 const onError = (error: unknown) =>
   toast.error(error instanceof Error ? error.message : "Something went wrong.");
 
 export default function DatasetDetailView({ datasetId }: { datasetId: string }) {
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
   const [filters, setFilters] = useState<EvalCaseFilters>({ page: 1, search: "", status: "all" });
   const sort: TableSort<NonNullable<EvalCaseFilters["sortBy"]>> = filters.sortBy
     ? { column: filters.sortBy, direction: filters.sortDirection ?? "asc" }
@@ -149,6 +153,13 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
 
         {dataset ? (
           <>
+            {deleting && (
+              <DeleteDatasetDialog
+                dataset={dataset}
+                onClose={() => setDeleting(false)}
+                onDeleted={() => void navigate({ to: "/testing" })}
+              />
+            )}
             <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
               <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
                 <SheetHeader>
@@ -252,6 +263,9 @@ export default function DatasetDetailView({ datasetId }: { datasetId: string }) 
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
                       <PencilIcon className="size-3.5" /> Edit dataset
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
+                      <Trash2Icon className="size-3.5" /> Delete dataset
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

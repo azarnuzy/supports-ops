@@ -5,6 +5,7 @@ import {
   createEvalCase,
   createEvalDataset,
   deleteEvalCase,
+  deleteEvalDataset,
   estimateEvalRun,
   type EvalRunSelection,
   listEvalRuns,
@@ -30,6 +31,7 @@ import {
 
 const apiClient = createApiClient(import.meta.env.VITE_API_URL ?? "http://localhost:8000");
 
+export const deleteDataset = (id: string) => deleteEvalDataset(apiClient, id);
 export const getDatasets = () => listEvalDatasets(apiClient);
 export const getDataset = (id: string, filters: EvalCaseFilters) =>
   getEvalDataset(apiClient, id, filters);
