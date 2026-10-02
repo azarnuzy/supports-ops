@@ -8,6 +8,7 @@ export type EvalDestination = {
   endpoint: string;
   publicKeyLastFour: string;
   secretKeyLastFour: string;
+  productionTracingEnabled: boolean;
 };
 
 /** Keys are optional on update: omitted keeps the stored credentials. */
@@ -17,6 +18,7 @@ export type EvalDestinationInput = {
   endpoint: string;
   publicKey?: string;
   secretKey?: string;
+  productionTracingEnabled?: boolean;
 };
 
 export type EvalDestinationReadiness = {
@@ -29,7 +31,7 @@ const routes = (client: ApiClient) => client["eval-destination"];
 
 export async function getEvalDestination(client: ApiClient) {
   const response = await routes(client).$get();
-  if (!response.ok) throw new Error("Failed to load the evaluation destination.");
+  if (!response.ok) throw new Error("Failed to load the observability destination.");
   return (await response.json()) as unknown as { evalDestination: EvalDestination | null };
 }
 
@@ -39,12 +41,12 @@ export async function saveEvalDestination(client: ApiClient, input: EvalDestinat
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
     throw new Error(body?.message ?? "This destination is not allowed.");
   }
-  if (!response.ok) throw new Error("Failed to save the evaluation destination.");
+  if (!response.ok) throw new Error("Failed to save the observability destination.");
   return (await response.json()) as unknown as { evalDestination: EvalDestination };
 }
 
 export async function checkEvalDestination(client: ApiClient) {
   const response = await routes(client).check.$post();
-  if (!response.ok) throw new Error("Failed to check the evaluation destination.");
+  if (!response.ok) throw new Error("Failed to check the observability destination.");
   return (await response.json()) as unknown as { readiness: EvalDestinationReadiness };
 }

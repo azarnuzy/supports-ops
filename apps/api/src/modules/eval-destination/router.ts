@@ -33,7 +33,7 @@ export const evalDestinationRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ readiness: await checkEvalDestination() }, 200);
     } catch (error) {
       if (error instanceof DestinationNotFoundError) {
-        return c.json({ error: "not_found", message: "No evaluation destination is set." }, 404);
+        return c.json({ error: "not_found", message: "No observability destination is set." }, 404);
       }
       throw error;
     }

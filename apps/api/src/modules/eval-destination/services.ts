@@ -28,6 +28,7 @@ export async function saveEvalDestination(input: EvalDestinationInput) {
     backend: input.backend,
     dashboardUrl: input.dashboardUrl,
     endpoint: input.endpoint,
+    productionTracingEnabled: input.productionTracingEnabled,
   };
   const keys =
     publicKey && secretKey
@@ -40,11 +41,17 @@ export async function saveEvalDestination(input: EvalDestinationInput) {
           secretKeyLastFour: secretKey.slice(-4),
         }
       : undefined;
-  const destination = current
-    ? await prisma.evalDestination.update({ data: { ...base, ...keys }, where: { id: current.id } })
-    : await prisma.evalDestination.create({
-        data: { ...base, ...keys!, id: randomUUID(), workspaceId: requireWorkspaceId() },
-      });
+  if (current) {
+    const destination = await prisma.evalDestination.update({
+      data: { ...base, ...keys },
+      where: { id: current.id },
+    });
+    return { evalDestination: toDto(destination) };
+  }
+  if (!keys) throw new CredentialsRequiredError("Enter both the public key and the secret key.");
+  const destination = await prisma.evalDestination.create({
+    data: { ...base, ...keys, id: randomUUID(), workspaceId: requireWorkspaceId() },
+  });
   return { evalDestination: toDto(destination) };
 }
 
@@ -139,6 +146,7 @@ function toDto(destination: {
   endpoint: string;
   publicKeyLastFour: string;
   secretKeyLastFour: string;
+  productionTracingEnabled: boolean;
 }) {
   return {
     backend: destination.backend,
@@ -146,5 +154,6 @@ function toDto(destination: {
     endpoint: destination.endpoint,
     publicKeyLastFour: destination.publicKeyLastFour,
     secretKeyLastFour: destination.secretKeyLastFour,
+    productionTracingEnabled: destination.productionTracingEnabled,
   };
 }

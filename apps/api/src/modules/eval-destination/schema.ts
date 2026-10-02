@@ -6,6 +6,7 @@ export const evalDestinationSchema = z.object({
   backend: z.enum(["LENS", "LANGFUSE"]),
   endpoint: z.string().trim().url().max(500),
   dashboardUrl: z.string().trim().url().max(500),
+  productionTracingEnabled: z.boolean().optional(),
   /** Both or neither: omitted keeps the stored credentials. */
   publicKey: credential.optional(),
   secretKey: credential.optional(),

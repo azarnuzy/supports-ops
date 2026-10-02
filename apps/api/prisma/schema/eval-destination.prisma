@@ -1,16 +1,17 @@
-/// The one place a Workspace's evaluation evidence is reported (spec #287). Credentials are a
+/// The shared destination for a Workspace's evaluations and optional production Telemetry. Credentials are a
 /// JSON `{ publicKey, secretKey }` encrypted with the Tool master key; only last-four hints
 /// are ever returned.
 model EvalDestination {
-  id                   String      @id
-  workspaceId          String      @unique
-  backend              EvalBackend
-  endpoint             String
-  dashboardUrl         String
-  credentialsEncrypted String
-  publicKeyLastFour    String
-  secretKeyLastFour    String
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-  workspace            Workspace   @relation(fields: [workspaceId], references: [id])
+  id                       String      @id
+  workspaceId              String      @unique
+  backend                  EvalBackend
+  endpoint                 String
+  dashboardUrl             String
+  credentialsEncrypted     String
+  publicKeyLastFour        String
+  secretKeyLastFour        String
+  productionTracingEnabled Boolean @default(false)
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+  workspace                Workspace   @relation(fields: [workspaceId], references: [id])
 }
