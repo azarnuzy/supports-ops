@@ -7,6 +7,7 @@ import {
   getCurrentUser,
   getWorkspaceUsers,
   login,
+  changePassword,
   logout,
   register,
   requestPasswordReset,
@@ -95,4 +96,8 @@ export function useResetPasswordMutation() {
       await navigate({ to: "/" });
     },
   });
+}
+
+export function useChangePasswordMutation() {
+  return useMutation({ mutationFn: changePassword });
 }

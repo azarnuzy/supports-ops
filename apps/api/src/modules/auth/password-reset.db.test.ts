@@ -14,6 +14,8 @@ let app: typeof import("../../app").app;
 
 const credentials = { email: "ada@example.com", name: "Ada", password: "correct-horse-battery" };
 const newPassword = "a-brand-new-password";
+const signIn = (password: string, ip: string) =>
+  post("/api/auth/sign-in/email", { ...credentials, password }, { "x-forwarded-for": ip });
 const post = (path: string, json: unknown, headers: Record<string, string> = {}) =>
   app.request(path, {
     method: "POST",
@@ -40,6 +42,7 @@ const resetToken = async () => {
 beforeAll(async () => {
   database = await createTestDatabase();
   process.env.DATABASE_URL = database.url;
+  vi.stubEnv("AUTH_RATE_LIMIT", "on");
   ({ unscopedPrisma: prisma } = await import("../../utils/prisma"));
   ({ app } = await import("../../app"));
 }, 60_000);
@@ -59,7 +62,7 @@ beforeEach(async () => {
 
 describe("password reset", () => {
   it("resets by emailed link, signs in, and rejects the old session", async () => {
-    const oldSession = cookieOf(await post("/api/auth/sign-in/email", credentials));
+    const oldSession = cookieOf(await signIn(credentials.password, "10.9.0.1"));
     expect((await app.request("/session", { headers: { cookie: oldSession } })).status).toBe(200);
 
     const requested = await requestReset(credentials.email);
@@ -70,11 +73,8 @@ describe("password reset", () => {
     const reset = await post("/api/auth/reset-password", { token, newPassword });
     expect(reset.status).toBe(200);
 
-    expect(
-      (await post("/api/auth/sign-in/email", { ...credentials, password: credentials.password }))
-        .status,
-    ).toBe(401);
-    const signedIn = await post("/api/auth/sign-in/email", { ...credentials, password: newPassword });
+    expect((await signIn(credentials.password, "10.9.0.2")).status).toBe(401);
+    const signedIn = await signIn(newPassword, "10.9.0.3");
     expect(signedIn.status).toBe(200);
     const freshSession = cookieOf(signedIn);
     expect((await app.request("/session", { headers: { cookie: freshSession } })).status).toBe(200);

@@ -27,8 +27,10 @@ export const auth = betterAuth({
       await unscopedPrisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
     },
   },
+  // Better Auth limits in production only (sign-in is 3 per 10s per IP by default);
+  // AUTH_RATE_LIMIT=on forces it for tests.
   rateLimit: {
-    enabled: true,
+    enabled: process.env.AUTH_RATE_LIMIT === "on" || undefined,
     customRules: { "/request-password-reset": { window: 60, max: 3 } },
   },
   // Registration and resend send the email explicitly, so it is never sent on
@@ -51,10 +53,10 @@ export const auth = betterAuth({
   },
   // The domain's Session is a Customer's conversation on a Channel, so Better
   // Auth's own sign-in session lives on the AuthSession model instead.
-  // The signed cookie cache keeps the session out of the database on every
-  // request; 60s is short enough that a revoked session stops working almost
-  // immediately, and every session write refreshes the cookie anyway.
-  session: { cookieCache: { enabled: true, maxAge: 60 }, modelName: "authSession" },
+  // No cookie cache: loadAuthSession already reads the database on every
+  // request, and a cache would keep a revoked session (e.g. after a password
+  // change) valid until it expires.
+  session: { modelName: "authSession" },
   secret: betterAuthConfig.secret,
   trustedOrigins: betterAuthConfig.trustedOrigins,
 });
