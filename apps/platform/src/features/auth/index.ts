@@ -1,6 +1,7 @@
 export { requireAdmin, requireAuth, requireOrganizationAdmin } from "./auth.guards";
 export {
   meQueryOptions,
+  useChangePasswordMutation,
   useCreateHumanAgentMutation,
   useLoginMutation,
   useLogoutMutation,

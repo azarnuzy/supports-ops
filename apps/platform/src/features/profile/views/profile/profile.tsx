@@ -15,6 +15,7 @@ import { CopyIcon } from "lucide-react";
 import { PlatformAppShell } from "../../../app-shell";
 import { getInitials } from "../../../../lib/utils";
 import { useProfileForm } from "./profile.hooks";
+import { SecurityCard } from "./security-card";
 
 const ProfileView = () => {
   const {
@@ -147,6 +148,9 @@ const ProfileView = () => {
               </CardContent>
             )}
           </Card>
+        </div>
+        <div className="max-w-2xl">
+          <SecurityCard />
         </div>
       </section>
     </PlatformAppShell>

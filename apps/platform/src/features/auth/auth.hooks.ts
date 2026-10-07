@@ -7,6 +7,7 @@ import {
   getCurrentUser,
   getWorkspaceUsers,
   login,
+  changePassword,
   logout,
   register,
   resendVerificationEmail,
@@ -76,4 +77,8 @@ export function useCreateHumanAgentMutation() {
 
 export function useResendVerificationMutation() {
   return useMutation({ mutationFn: resendVerificationEmail });
+}
+
+export function useChangePasswordMutation() {
+  return useMutation({ mutationFn: changePassword });
 }

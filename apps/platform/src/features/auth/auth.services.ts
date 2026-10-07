@@ -84,6 +84,11 @@ export async function resendVerificationEmail(email: string) {
   });
   if (error) throw new Error(error.message ?? "Could not send the verification email.");
 }
+export async function changePassword(input: { currentPassword: string; newPassword: string }) {
+  const { error } = await authClient.changePassword({ ...input, revokeOtherSessions: true });
+  if (error?.code === "INVALID_PASSWORD") throw new Error("Current password is incorrect.");
+  if (error) throw new Error(error.message ?? "Failed to change password.");
+}
 export async function logout() {
   const { error } = await authClient.signOut();
   if (error) throw new Error(error.message ?? "Failed to log out.");
