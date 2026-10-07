@@ -22,6 +22,10 @@ _Avoid_: Operator, Superadmin, Account Owner
 The Workspace role that configures the platform — invites its staff, configures the Web Widget, manages Knowledge Sources, tunes AI settings — and can see and act on every Ticket in the Workspace. It grants no Organization Billing access.
 _Avoid_: Owner, Manager, Supervisor
 
+**Invitation**:
+An Admin's offer for one email address to join one Workspace in a given role. It becomes a membership only when the invitee accepts, which also proves they own the address; until then it can be resent or revoked, and it lapses after a fixed time. Staff never receive a password chosen by someone else. An address already in another Organization cannot be invited; a user already in the same Organization is added to the Workspace directly.
+_Avoid_: Invite link, Add user, Seat
+
 **Human Agent**:
 The Workspace role that handles Tickets escalated away from the AI Agent. Sees the Shared Human Queue, its own assigned Tickets, and the Tickets it previously resolved — never the whole Workspace.
 _Avoid_: Operator, Support Rep, Staff. Never plain "Agent" — that word is ambiguous in this product
