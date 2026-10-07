@@ -11,6 +11,7 @@ Follow these guides in order to take a new environment from nothing to a demoabl
 7. **[WhatsApp](07-whatsapp.md)** — optional second Channel: the Meta Cloud API credentials an Admin connects from Settings, and the public callback URL Meta delivers to.
 8. **[Credits](08-credits.md)** — how a Workspace's Trial Grant works and how to record a Top-Up.
 9. **[Operator Console](09-operator-console.md)** — create, disable, and reset the separate Operator identity.
+10. **[Google sign-in](10-google-sign-in.md)** — optional "Continue with Google" on the sign-in and register pages: the OAuth client, redirect URIs, and env vars.
 
 Steps 1-6 are what a Workspace needs; step 7 is only for Workspaces that take WhatsApp traffic.
 

@@ -29,6 +29,8 @@ services:
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}"
       OPERATOR_AUTH_SECRET: "${OPERATOR_AUTH_SECRET:?Set OPERATOR_AUTH_SECRET in .env}"
       BETTER_AUTH_URL: "${BETTER_AUTH_URL:-http://localhost:8000}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
       CLIENT_ORIGINS: "${CLIENT_ORIGINS:-http://localhost:3000,http://localhost:4000}"
       DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/supportops?schema=public}"
       BUSINESS_SYSTEM_URL: "http://business-system:8001"
