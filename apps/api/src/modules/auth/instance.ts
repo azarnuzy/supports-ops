@@ -2,6 +2,7 @@ import { betterAuthConfig, operatorAuthConfig } from "../../config";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { unscopedPrisma } from "../../utils/prisma";
+import { sendResetPasswordEmail } from "./reset-password-email";
 import { sendVerificationEmail } from "./verification-email";
 
 export const auth = betterAuth({
@@ -17,6 +18,18 @@ export const auth = betterAuth({
     // route would create a User with no Workspace.
     disableSignUp: true,
     requireEmailVerification: true,
+    maxPasswordLength: 128,
+    resetPasswordTokenExpiresIn: 60 * 60,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: sendResetPasswordEmail,
+    // The link proved ownership of the inbox, so an unverified user can sign in right after.
+    onPasswordReset: async ({ user }) => {
+      await unscopedPrisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+    },
+  },
+  rateLimit: {
+    enabled: true,
+    customRules: { "/request-password-reset": { window: 60, max: 3 } },
   },
   // Registration and resend send the email explicitly, so it is never sent on
   // sign-in or sign-up; the link signs the user straight in.
