@@ -86,3 +86,22 @@ export async function registerWorkspaceAdmin(
     throw new Error("Registration failed.");
   }
 }
+
+export async function fetchAuthProviders(client: ApiClient) {
+  const response = await client["auth-providers"].$get();
+
+  if (!response.ok) {
+    throw new Error("Failed to load sign-in options.");
+  }
+
+  return response.json();
+}
+
+/** For a Google-only user; rejects once a password already exists. */
+export async function setCurrentUserPassword(client: ApiClient, newPassword: string) {
+  const response = await client.profile.password.$post({ json: { newPassword } });
+
+  if (!response.ok) {
+    throw new Error("Could not set the password.");
+  }
+}

@@ -57,6 +57,8 @@ const apiEnvSchema = z
     BUSINESS_SYSTEM_URL: z.string().trim().url().default("http://localhost:8001"),
     CLIENT_ORIGINS: z.string().trim().min(1).default(defaultClientOrigins),
     DATABASE_URL: z.string().trim().min(1).default(defaultDatabaseUrl),
+    GOOGLE_CLIENT_ID: optionalStringSchema,
+    GOOGLE_CLIENT_SECRET: optionalStringSchema,
     EMBEDDING_MODEL: z.string().trim().min(1).default(defaultEmbeddingModel),
     ENABLE_TELEMETRY: booleanSchema.default(false),
     LLM_MODEL_FAST: z.string().trim().min(1).default(defaultFastModel),
@@ -161,6 +163,12 @@ export const betterAuthConfig = {
   trustedOrigins: parseCsv(env.CLIENT_ORIGINS),
   url: env.BETTER_AUTH_URL,
 } as const;
+
+/** Google sign-in is on only when both credentials are set. */
+export const googleAuthConfig =
+  env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+    ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+    : null;
 
 export const operatorAuthConfig = {
   secret: env.OPERATOR_AUTH_SECRET ?? defaultBetterAuthSecret,

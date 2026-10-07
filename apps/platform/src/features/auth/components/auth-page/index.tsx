@@ -5,8 +5,14 @@ import { toast } from "@repo/ui/components/sonner";
 import { AuthLayout } from "@repo/layouts/auth-layout";
 import { Link } from "@tanstack/react-router";
 import { EyeIcon, EyeOffIcon, GlobeIcon } from "lucide-react";
-import { type FormEvent, useState } from "react";
-import { useLoginMutation, useRegisterMutation } from "../../auth.hooks";
+import { useQuery } from "@tanstack/react-query";
+import { type FormEvent, useEffect, useState } from "react";
+import {
+  authProvidersQueryOptions,
+  useGoogleMutation,
+  useLoginMutation,
+  useRegisterMutation,
+} from "../../auth.hooks";
 import { EmailNotVerifiedError, EmailUnverifiedApiError } from "../../auth.services";
 import { ResendVerification } from "../resend-verification";
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
@@ -17,7 +23,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const login = useLoginMutation();
   const register = useRegisterMutation();
+  const google = useGoogleMutation();
+  const providers = useQuery(authProvidersQueryOptions);
   const isLogin = mode === "login";
+
+  // Better Auth sends a failed Google attempt back to /login with ?error=<code>.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("error"))
+      toast.error(
+        "Google sign-in failed. Verify your email first if you registered with a password.",
+      );
+  }, []);
   const mutation = isLogin ? login : register;
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,6 +143,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           {mutation.isPending ? "Please wait..." : isLogin ? "Login" : "Create account"}
         </Button>
       </form>
+      {providers.data?.google && (
+        <Button
+          className="mt-4 w-full"
+          type="button"
+          variant="outline"
+          disabled={google.isPending}
+          onClick={() => google.mutate(undefined, { onError: (e) => toast.error(e.message) })}
+        >
+          Continue with Google
+        </Button>
+      )}
     </AuthLayout>
   );
 }

@@ -4,6 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { queryKeys } from "../../lib/query-keys";
 import {
   acceptInvitation,
+  continueWithGoogle,
+  getAuthProviders,
   getCurrentUser,
   getInvitation,
   getPendingInvitations,
@@ -18,12 +20,18 @@ import {
   resetPassword,
   revokePendingInvitation,
   sendInvitation,
+  setPassword,
   updateProfile,
 } from "./auth.services";
 export const meQueryOptions = queryOptions({
   queryKey: queryKeys.auth.me,
   queryFn: getCurrentUser,
   retry: false,
+});
+export const authProvidersQueryOptions = queryOptions({
+  queryKey: ["auth-providers"] as const,
+  queryFn: getAuthProviders,
+  staleTime: Infinity,
 });
 export const workspaceUsersQueryOptions = queryOptions({
   queryKey: queryKeys.workspace.users,
@@ -135,4 +143,15 @@ export function useResetPasswordMutation() {
 
 export function useChangePasswordMutation() {
   return useMutation({ mutationFn: changePassword });
+}
+
+export function useGoogleMutation() {
+  return useMutation({ mutationFn: continueWithGoogle });
+}
+export function useSetPasswordMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setPassword,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.auth.all }),
+  });
 }

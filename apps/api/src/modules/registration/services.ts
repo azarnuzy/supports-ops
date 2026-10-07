@@ -31,22 +31,8 @@ export async function registerAdminWorkspace(
 
   try {
     return await unscopedPrisma.$transaction(async (tx) => {
-      const organization = await tx.organization.create({
-        data: { id: randomUUID(), name: `${input.name}'s Organization` },
-      });
-      const workspace = await tx.workspace.create({
-        data: {
-          id: randomUUID(),
-          organizationId: organization.id,
-          name: workspaceNameFor(input.name),
-          slug: workspaceSlugFor(input.name),
-        },
-      });
-
+      const { organization, workspace } = await provisionOrganization(tx, input.name);
       const userId = randomUUID();
-
-      await provisionWorkspaceDefaults(tx, workspace.id);
-      await grantTrialCredits(tx, organization.id, workspace.id);
 
       const user = await tx.user.create({
         data: {
@@ -85,6 +71,28 @@ export async function registerAdminWorkspace(
 
     throw error;
   }
+}
+
+type Tx = Parameters<Parameters<typeof unscopedPrisma.$transaction>[0]>[0];
+
+/** The Organization, first Workspace and Trial Grant every new Admin starts with. Shared by form and Google registration. */
+export async function provisionOrganization(tx: Tx, adminName: string) {
+  const organization = await tx.organization.create({
+    data: { id: randomUUID(), name: `${adminName}'s Organization` },
+  });
+  const workspace = await tx.workspace.create({
+    data: {
+      id: randomUUID(),
+      organizationId: organization.id,
+      name: workspaceNameFor(adminName),
+      slug: workspaceSlugFor(adminName),
+    },
+  });
+
+  await provisionWorkspaceDefaults(tx, workspace.id);
+  await grantTrialCredits(tx, organization.id, workspace.id);
+
+  return { organization, workspace };
 }
 
 function workspaceNameFor(adminName: string) {

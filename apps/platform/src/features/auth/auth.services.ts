@@ -8,12 +8,14 @@ import {
   resendInvitation,
   revokeInvitation,
   EmailUnverifiedApiError,
+  fetchAuthProviders,
   fetchSessionUser,
   listWorkspaceUsers,
   updateWorkspaceUser,
   removeWorkspaceUser,
   updateOrganizationAdmin,
   registerWorkspaceAdmin,
+  setCurrentUserPassword,
   UnauthorizedApiError,
   updateCurrentUserProfile,
 } from "@repo/api-client";
@@ -110,6 +112,21 @@ export async function changePassword(input: { currentPassword: string; newPasswo
   const { error } = await authClient.changePassword({ ...input, revokeOtherSessions: true });
   if (error?.code === "INVALID_PASSWORD") throw new Error("Current password is incorrect.");
   if (error) throw new Error(error.message ?? "Failed to change password.");
+}
+export async function getAuthProviders() {
+  return fetchAuthProviders(apiClient);
+}
+export async function setPassword(newPassword: string) {
+  await setCurrentUserPassword(apiClient, newPassword);
+}
+/** Redirects to Google; the same call signs in a known email and registers an unknown one. */
+export async function continueWithGoogle() {
+  const { error } = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: `${window.location.origin}/`,
+    errorCallbackURL: `${window.location.origin}/login`,
+  });
+  if (error) throw new Error(error.message ?? "Could not continue with Google.");
 }
 export async function logout() {
   const { error } = await authClient.signOut();

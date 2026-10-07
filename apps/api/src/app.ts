@@ -1,4 +1,5 @@
-import { apiConfig, loggerConfig } from "./config";
+import { apiConfig, googleAuthConfig, loggerConfig } from "./config";
+import { unscopedPrisma } from "./utils/prisma";
 import type { HttpBindings } from "@hono/node-server";
 import { Hono } from "hono";
 import { withTraceContext } from "@repo/logger/telemetry";
@@ -102,12 +103,13 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   )
   .on(["POST", "GET"], "/operator/auth/*", (c) => operatorAuth.handler(c.req.raw))
   .route("/operator", operatorRouter)
+  .get("/auth-providers", (c) => c.json({ google: googleAuthConfig !== null }))
   .use("*", loadAuthSession)
   .use("*", loadWorkspaceContext)
   .get("/health", (c) => {
     return c.json({ ok: true, service: "api" }, 200);
   })
-  .get("/session", (c) => {
+  .get("/session", async (c) => {
     const user = c.get("user");
     const session = c.get("authSession");
 
@@ -115,7 +117,12 @@ export const app = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "unauthorized" }, 401);
     }
 
-    return c.json({ session, user }, 200);
+    const credential = await unscopedPrisma.account.findFirst({
+      where: { userId: user.id, providerId: "credential" },
+      select: { id: true },
+    });
+
+    return c.json({ session, user: { ...user, hasPassword: credential !== null } }, 200);
   })
   .on(["POST", "GET"], "/api/auth/*", (c) => {
     return auth.handler(c.req.raw);
