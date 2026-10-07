@@ -6,20 +6,24 @@ import { provisionWorkspaceDefaults } from "../workspaces/services";
 import type { RegisterInput } from "./schema";
 
 export class EmailAlreadyInUseError extends Error {
-  constructor() {
+  constructor(readonly unverified = false) {
     super("An account with this email already exists.");
     this.name = "EmailAlreadyInUseError";
   }
 }
 
-export async function registerAdminWorkspace(input: RegisterInput) {
+/** `emailVerified: true` is for scripts that create users with no inbox round-trip. */
+export async function registerAdminWorkspace(
+  input: RegisterInput,
+  { emailVerified = false }: { emailVerified?: boolean } = {},
+) {
   const existingUser = await unscopedPrisma.user.findUnique({
     where: { email: input.email },
-    select: { id: true },
+    select: { id: true, emailVerified: true },
   });
 
   if (existingUser) {
-    throw new EmailAlreadyInUseError();
+    throw new EmailAlreadyInUseError(!existingUser.emailVerified);
   }
 
   const passwordHash = await hashPassword(input.password);
@@ -49,6 +53,7 @@ export async function registerAdminWorkspace(input: RegisterInput) {
           id: userId,
           name: input.name,
           email: input.email,
+          emailVerified,
           role: "ADMIN",
           organizationId: organization.id,
           isOrganizationAdmin: true,

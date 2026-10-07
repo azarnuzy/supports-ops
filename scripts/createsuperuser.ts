@@ -32,16 +32,20 @@ try {
       data: {
         ...(name ? { name } : {}),
         role: "ADMIN",
+        emailVerified: true,
       },
     });
 
     output.write(`Admin user ready: ${user.email}. Existing password was not changed.\n`);
   } else {
-    const { user } = await registerAdminWorkspace({
-      email,
-      name: name ?? email,
-      password,
-    });
+    const { user } = await registerAdminWorkspace(
+      {
+        email,
+        name: name ?? email,
+        password,
+      },
+      { emailVerified: true },
+    );
 
     output.write(`Admin user ready: ${user.email}\n`);
   }

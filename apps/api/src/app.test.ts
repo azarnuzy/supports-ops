@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   getSession: vi.fn(),
   registerAdminWorkspace: vi.fn(),
-  signInEmail: vi.fn(),
+  sendVerificationEmail: vi.fn(),
   update: vi.fn(),
   operatorAuthHandler: vi.fn(),
   listPayments: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock("./modules/auth/instance", () => ({
   auth: {
     api: {
       getSession: mocks.getSession,
-      signInEmail: mocks.signInEmail,
+      sendVerificationEmail: mocks.sendVerificationEmail,
     },
     handler: mocks.authHandler,
   },
@@ -85,7 +85,7 @@ describe("api app", () => {
     mocks.findUnique.mockReset();
     mocks.getSession.mockReset();
     mocks.registerAdminWorkspace.mockReset();
-    mocks.signInEmail.mockReset();
+    mocks.sendVerificationEmail.mockReset();
     mocks.update.mockReset();
 
     mocks.authHandler.mockResolvedValue(new Response(null, { status: 404 }));
@@ -99,12 +99,6 @@ describe("api app", () => {
     );
     mocks.findUnique.mockResolvedValue(null);
     mocks.getSession.mockResolvedValue(null);
-    mocks.signInEmail.mockResolvedValue(
-      new Response(JSON.stringify({ token: "session-token", user: { id: "new-admin" } }), {
-        headers: { "Content-Type": "application/json" },
-        status: 200,
-      }),
-    );
     mocks.update.mockImplementation(({ data, where }) =>
       Promise.resolve({
         createdAt: baseDate,
@@ -361,7 +355,7 @@ describe("api app", () => {
     });
   });
 
-  it("registers a Workspace Admin and signs them in", async () => {
+  it("registers a Workspace Admin and sends the verification email", async () => {
     mocks.registerAdminWorkspace.mockResolvedValue({
       user: { id: "new-admin", role: "ADMIN", workspaceId: "workspace-1" },
       workspace: { id: "workspace-1", name: "Ada's Workspace", slug: "ada-abc123" },
@@ -382,17 +376,11 @@ describe("api app", () => {
       name: "Ada",
       password: "password123",
     });
-    expect(mocks.signInEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        asResponse: true,
-        body: { email: "ada@example.com", password: "password123" },
-      }),
-    );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      token: "session-token",
-      user: { id: "new-admin" },
+    expect(mocks.sendVerificationEmail).toHaveBeenCalledWith({
+      body: { email: "ada@example.com", callbackURL: expect.stringContaining("/verify-email") },
     });
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({ status: "verification_sent" });
   });
 
   it("rejects registration with an email already in use", async () => {
@@ -414,7 +402,7 @@ describe("api app", () => {
       error: "email_in_use",
       message: "An account with this email already exists.",
     });
-    expect(mocks.signInEmail).not.toHaveBeenCalled();
+    expect(mocks.sendVerificationEmail).not.toHaveBeenCalled();
   });
 
   it("rejects registration with invalid input", async () => {

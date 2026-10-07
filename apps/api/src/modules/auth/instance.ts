@@ -2,6 +2,7 @@ import { betterAuthConfig, operatorAuthConfig } from "../../config";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { unscopedPrisma } from "../../utils/prisma";
+import { sendVerificationEmail } from "./verification-email";
 
 export const auth = betterAuth({
   appName: "SupportOps",
@@ -15,6 +16,14 @@ export const auth = betterAuth({
     // Admin are created together in one transaction; the built-in sign-up
     // route would create a User with no Workspace.
     disableSignUp: true,
+    requireEmailVerification: true,
+  },
+  // Registration and resend send the email explicitly, so it is never sent on
+  // sign-in or sign-up; the link signs the user straight in.
+  emailVerification: {
+    autoSignInAfterVerification: true,
+    expiresIn: 24 * 60 * 60,
+    sendVerificationEmail,
   },
   user: {
     additionalFields: {

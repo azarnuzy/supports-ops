@@ -87,6 +87,8 @@ export async function createHumanAgent(
           name: input.name,
           role,
           organizationId: workspace.organizationId,
+          // An Admin vouches for the Human Agent; no inbox round-trip.
+          emailVerified: true,
         },
       });
       await tx.workspaceMembership.create({ data: { userId, workspaceId, role } });

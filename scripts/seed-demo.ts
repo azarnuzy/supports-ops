@@ -241,11 +241,14 @@ async function ensureAdminWorkspace() {
   }
 
   try {
-    const { user, workspace } = await registerAdminWorkspace({
-      email: demoAdminEmail,
-      name: demoAdminName,
-      password: demoAdminPassword,
-    });
+    const { user, workspace } = await registerAdminWorkspace(
+      {
+        email: demoAdminEmail,
+        name: demoAdminName,
+        password: demoAdminPassword,
+      },
+      { emailVerified: true },
+    );
     console.log(`Created Admin ${user.email} and Workspace ${workspace.slug}.`);
     return { workspace, admin: user };
   } catch (error) {
