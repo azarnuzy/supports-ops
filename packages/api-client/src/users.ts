@@ -1,4 +1,3 @@
-import { EmailAlreadyInUseApiError } from "./auth";
 import type { ApiClient } from "./client";
 
 export type WorkspaceUser = {
@@ -9,13 +8,6 @@ export type WorkspaceUser = {
   role: "ADMIN" | "HUMAN_AGENT";
   isOrganizationAdmin: boolean;
   updatedAt: string;
-};
-
-export type CreateHumanAgentInput = {
-  email: string;
-  name: string;
-  password: string;
-  role: "ADMIN" | "HUMAN_AGENT";
 };
 
 export async function listWorkspaceUsers(client: ApiClient) {
@@ -52,23 +44,4 @@ export async function updateOrganizationAdmin(client: ApiClient, userId: string,
     json: { enabled },
   });
   if (!response.ok) throw new Error("Failed to update Organization Admin.");
-}
-
-export async function createWorkspaceHumanAgent(client: ApiClient, input: CreateHumanAgentInput) {
-  const response = await client.users.$post({ json: input });
-
-  if (response.status === 403) {
-    throw new Error("You do not have permission to create Human Agents.");
-  }
-
-  if (response.status === 409) {
-    const data = (await response.json()) as { message: string };
-    throw new EmailAlreadyInUseApiError(data.message);
-  }
-
-  if (!response.ok) {
-    throw new Error("Failed to create Human Agent.");
-  }
-
-  return (await response.json()) as { user: WorkspaceUser };
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { hashPassword } from "../apps/api/src/utils/password";
 import {
   createOpenAiEmbeddingClient,
   chunkText,
@@ -23,10 +24,6 @@ import {
   setToolAssignment,
   setToolUsageInstruction,
 } from "../apps/api/src/modules/tools/services";
-import {
-  HumanAgentEmailAlreadyInUseError,
-  createHumanAgent,
-} from "../apps/api/src/modules/users/services";
 import { updateWebWidgetConfig } from "../apps/api/src/modules/widget-config/services";
 import { unscopedPrisma as prisma } from "../apps/api/src/utils/prisma";
 import { withWorkspaceContext } from "../apps/api/src/utils/workspace-context";
@@ -271,20 +268,38 @@ async function ensureHumanAgent(workspaceId: string) {
     return existing;
   }
 
-  try {
-    const { user } = await createHumanAgent(workspaceId, {
-      email: demoHumanAgentEmail,
-      name: demoHumanAgentName,
-      password: demoHumanAgentPassword,
+  // Staff normally join by accepting an Invitation; the seed has no inbox, so it
+  // creates the verified user directly.
+  const { organizationId } = await prisma.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { organizationId: true },
+  });
+  const userId = randomUUID();
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        id: userId,
+        email: demoHumanAgentEmail,
+        name: demoHumanAgentName,
+        role: "HUMAN_AGENT",
+        organizationId,
+        emailVerified: true,
+      },
     });
-    console.log(`Created Human Agent ${user.email}.`);
-    return user;
-  } catch (error) {
-    if (error instanceof HumanAgentEmailAlreadyInUseError) {
-      return await prisma.user.findUniqueOrThrow({ where: { email: demoHumanAgentEmail } });
-    }
-    throw error;
-  }
+    await tx.workspaceMembership.create({ data: { userId, workspaceId, role: "HUMAN_AGENT" } });
+    await tx.account.create({
+      data: {
+        id: randomUUID(),
+        accountId: userId,
+        providerId: "credential",
+        userId,
+        password: await hashPassword(demoHumanAgentPassword),
+      },
+    });
+    return created;
+  });
+  console.log(`Created Human Agent ${user.email}.`);
+  return user;
 }
 
 async function ensureWidgetConfig() {
