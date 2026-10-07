@@ -3,14 +3,19 @@ import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query
 import { useNavigate } from "@tanstack/react-router";
 import { queryKeys } from "../../lib/query-keys";
 import {
-  createHumanAgent,
+  acceptInvitation,
   getCurrentUser,
+  getInvitation,
+  getPendingInvitations,
   getWorkspaceUsers,
   login,
   changePassword,
   logout,
   register,
+  resendPendingInvitation,
   resendVerificationEmail,
+  revokePendingInvitation,
+  sendInvitation,
   updateProfile,
 } from "./auth.services";
 export const meQueryOptions = queryOptions({
@@ -66,12 +71,42 @@ export function useUpdateProfileMutation() {
   });
 }
 
-export function useCreateHumanAgentMutation() {
-  const queryClient = useQueryClient();
+export const pendingInvitationsQueryOptions = queryOptions({
+  queryKey: queryKeys.workspace.invitations,
+  queryFn: getPendingInvitations,
+});
 
+export const invitationQueryOptions = (token: string) =>
+  queryOptions({
+    queryKey: ["invitation", token],
+    queryFn: () => getInvitation(token),
+    retry: false,
+  });
+
+export function useInvitationMutations() {
+  const queryClient = useQueryClient();
+  const onSuccess = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.invitations }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.users }),
+    ]);
+  return {
+    invite: useMutation({ mutationFn: sendInvitation, onSuccess }),
+    resend: useMutation({ mutationFn: resendPendingInvitation, onSuccess }),
+    revoke: useMutation({ mutationFn: revokePendingInvitation, onSuccess }),
+  };
+}
+
+export function useAcceptInvitationMutation() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: createHumanAgent,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workspace.users }),
+    mutationFn: acceptInvitation,
+    onSuccess: async () => {
+      sessionStorage.removeItem(activeWorkspaceStorageKey);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.all });
+      await navigate({ to: "/" });
+    },
   });
 }
 

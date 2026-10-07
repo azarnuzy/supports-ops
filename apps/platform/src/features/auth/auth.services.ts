@@ -1,7 +1,12 @@
 import {
   createApiClient,
-  createWorkspaceHumanAgent,
+  acceptInvitation as acceptInvitationRequest,
   EmailAlreadyInUseApiError,
+  fetchInvitation,
+  inviteUser,
+  listPendingInvitations,
+  resendInvitation,
+  revokeInvitation,
   EmailUnverifiedApiError,
   fetchSessionUser,
   listWorkspaceUsers,
@@ -13,13 +18,7 @@ import {
   updateCurrentUserProfile,
 } from "@repo/api-client";
 import { createAuthClient } from "better-auth/react";
-import type {
-  AuthUser,
-  CreateHumanAgentInput,
-  LoginInput,
-  RegisterInput,
-  UpdateProfileInput,
-} from "./auth.types";
+import type { AuthUser, LoginInput, RegisterInput, Role, UpdateProfileInput } from "./auth.types";
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const apiClient = createApiClient(apiBaseUrl);
 const authClient = createAuthClient({ baseURL: apiBaseUrl });
@@ -42,14 +41,14 @@ export async function deleteWorkspaceUser(userId: string) {
 export async function setOrganizationAdminRole(userId: string, enabled: boolean) {
   return updateOrganizationAdmin(apiClient, userId, enabled);
 }
-export async function createHumanAgent(input: CreateHumanAgentInput) {
-  try {
-    return await createWorkspaceHumanAgent(apiClient, input);
-  } catch (error) {
-    if (error instanceof EmailAlreadyInUseApiError) throw new Error(error.message);
-    throw error;
-  }
-}
+export const getPendingInvitations = () => listPendingInvitations(apiClient);
+export const sendInvitation = (input: { email: string; role: Role }) =>
+  inviteUser(apiClient, input);
+export const resendPendingInvitation = (id: string) => resendInvitation(apiClient, id);
+export const revokePendingInvitation = (id: string) => revokeInvitation(apiClient, id);
+export const getInvitation = (token: string) => fetchInvitation(apiClient, token);
+export const acceptInvitation = (input: { token: string; name: string; password: string }) =>
+  acceptInvitationRequest(apiClient, input.token, { name: input.name, password: input.password });
 export async function login(input: LoginInput) {
   const { error } = await authClient.signIn.email(input);
   if (error?.code === "EMAIL_NOT_VERIFIED") throw new EmailNotVerifiedError();
