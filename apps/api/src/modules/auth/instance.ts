@@ -1,7 +1,8 @@
-import { betterAuthConfig, operatorAuthConfig } from "../../config";
+import { betterAuthConfig, googleAuthConfig, operatorAuthConfig } from "../../config";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { unscopedPrisma } from "../../utils/prisma";
+import { googleUserHooks } from "./google";
 import { sendVerificationEmail } from "./verification-email";
 
 export const auth = betterAuth({
@@ -25,15 +26,29 @@ export const auth = betterAuth({
     expiresIn: 24 * 60 * 60,
     sendVerificationEmail,
   },
+  socialProviders: googleAuthConfig ? { google: googleAuthConfig } : {},
+  // A Google email matching an existing User signs into that account; Better
+  // Auth only links when the local email is verified, so an unverified form
+  // registration cannot be taken over by whoever controls the Google email.
+  account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
+  databaseHooks: { user: { create: googleUserHooks } },
   user: {
+    // Placeholder defaults only satisfy Better Auth's required-field check
+    // before the Google user hook (./google) assigns the real Organization.
     additionalFields: {
       role: {
         type: ["ADMIN", "HUMAN_AGENT"],
         input: false,
         required: true,
+        defaultValue: "ADMIN",
       },
-      organizationId: { type: "string", input: false, required: true },
-      isOrganizationAdmin: { type: "boolean", input: false, required: true },
+      organizationId: { type: "string", input: false, required: true, defaultValue: "" },
+      isOrganizationAdmin: {
+        type: "boolean",
+        input: false,
+        required: true,
+        defaultValue: true,
+      },
     },
   },
   // The domain's Session is a Customer's conversation on a Channel, so Better

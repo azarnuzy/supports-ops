@@ -25,7 +25,10 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncateAll(prisma);
   const { registerAdminWorkspace } = await import("../registration/services");
-  await registerAdminWorkspace({ email, name: "Ada", password: oldPassword }, { emailVerified: true });
+  await registerAdminWorkspace(
+    { email, name: "Ada", password: oldPassword },
+    { emailVerified: true },
+  );
 });
 
 const post = (path: string, body: object, cookie = "") =>
