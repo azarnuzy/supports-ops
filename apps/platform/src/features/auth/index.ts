@@ -5,10 +5,13 @@ export {
   useLoginMutation,
   useLogoutMutation,
   useRegisterMutation,
+  useResendVerificationMutation,
   useUpdateProfileMutation,
   workspaceUsersQueryOptions,
 } from "./auth.hooks";
-export { UnauthorizedError } from "./auth.services";
+export { default as CheckInboxView } from "./views/check-inbox/check-inbox";
+export { default as VerifyEmailView } from "./views/verify-email/verify-email";
+export { EmailNotVerifiedError, EmailUnverifiedApiError, UnauthorizedError } from "./auth.services";
 export type {
   AuthUser,
   CreateHumanAgentInput,

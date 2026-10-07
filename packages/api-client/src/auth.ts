@@ -59,6 +59,14 @@ export class EmailAlreadyInUseApiError extends Error {
   }
 }
 
+/** The email is registered but never verified; the user can ask for a new link. */
+export class EmailUnverifiedApiError extends EmailAlreadyInUseApiError {
+  constructor(message: string) {
+    super(message);
+    this.name = "EmailUnverifiedApiError";
+  }
+}
+
 export async function registerWorkspaceAdmin(
   client: ApiClient,
   input: RegisterWorkspaceAdminInput,
@@ -69,7 +77,9 @@ export async function registerWorkspaceAdmin(
 
   if (response.status === 409) {
     const data = (await response.json()) as { error: string; message: string };
-    throw new EmailAlreadyInUseApiError(data.message);
+    throw data.error === "email_unverified"
+      ? new EmailUnverifiedApiError(data.message)
+      : new EmailAlreadyInUseApiError(data.message);
   }
 
   if (!response.ok) {

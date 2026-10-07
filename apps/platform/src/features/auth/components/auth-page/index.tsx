@@ -7,18 +7,26 @@ import { Link } from "@tanstack/react-router";
 import { EyeIcon, EyeOffIcon, GlobeIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useLoginMutation, useRegisterMutation } from "../../auth.hooks";
+import { EmailNotVerifiedError, EmailUnverifiedApiError } from "../../auth.services";
+import { ResendVerification } from "../resend-verification";
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const login = useLoginMutation();
   const register = useRegisterMutation();
   const isLogin = mode === "login";
   const mutation = isLogin ? login : register;
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const onError = (error: Error) => toast.error(error.message);
+    setUnverifiedEmail(null);
+    const onError = (error: Error) => {
+      if (error instanceof EmailNotVerifiedError || error instanceof EmailUnverifiedApiError)
+        setUnverifiedEmail(email);
+      else toast.error(error.message);
+    };
     if (isLogin) login.mutate({ email, password }, { onError });
     else register.mutate({ name, email, password }, { onError });
   }
@@ -46,6 +54,16 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       }
     >
       <form className="grid gap-4" onSubmit={handleSubmit}>
+        {unverifiedEmail && (
+          <div className="grid gap-2 rounded-md border p-3 text-sm" role="alert">
+            <p>
+              {isLogin
+                ? "Email not verified. Check your inbox for the verification link."
+                : "This email is registered but not verified yet."}
+            </p>
+            <ResendVerification email={unverifiedEmail} />
+          </div>
+        )}
         {!isLogin && (
           <div className="grid gap-2">
             <Label htmlFor="name">Name</Label>

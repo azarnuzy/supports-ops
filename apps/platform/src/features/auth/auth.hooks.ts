@@ -9,6 +9,7 @@ import {
   login,
   logout,
   register,
+  resendVerificationEmail,
   updateProfile,
 } from "./auth.services";
 export const meQueryOptions = queryOptions({
@@ -36,13 +37,9 @@ export function useLoginMutation() {
 }
 export function useRegisterMutation() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: register,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.all });
-      await navigate({ to: "/" });
-    },
+    onSuccess: (_data, { email }) => navigate({ to: "/check-inbox", search: { email } }),
   });
 }
 export function useLogoutMutation() {
@@ -75,4 +72,8 @@ export function useCreateHumanAgentMutation() {
     mutationFn: createHumanAgent,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workspace.users }),
   });
+}
+
+export function useResendVerificationMutation() {
+  return useMutation({ mutationFn: resendVerificationEmail });
 }

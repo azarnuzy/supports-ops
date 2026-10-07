@@ -2,6 +2,7 @@ import {
   createApiClient,
   createWorkspaceHumanAgent,
   EmailAlreadyInUseApiError,
+  EmailUnverifiedApiError,
   fetchSessionUser,
   listWorkspaceUsers,
   updateWorkspaceUser,
@@ -51,6 +52,7 @@ export async function createHumanAgent(input: CreateHumanAgentInput) {
 }
 export async function login(input: LoginInput) {
   const { error } = await authClient.signIn.email(input);
+  if (error?.code === "EMAIL_NOT_VERIFIED") throw new EmailNotVerifiedError();
   if (error) throw new Error(error.message ?? "Authentication failed.");
   return getCurrentUser();
 }
@@ -62,10 +64,25 @@ export async function register(input: RegisterInput) {
       password: input.password,
     });
   } catch (error) {
+    if (error instanceof EmailUnverifiedApiError) throw error;
     if (error instanceof EmailAlreadyInUseApiError) throw new Error(error.message);
     throw error;
   }
-  return getCurrentUser();
+}
+export class EmailNotVerifiedError extends Error {
+  constructor() {
+    super("Email not verified");
+    this.name = "EmailNotVerifiedError";
+  }
+}
+export { EmailUnverifiedApiError };
+/** Emails a fresh verification link. The API refuses a second one within 60 s. */
+export async function resendVerificationEmail(email: string) {
+  const { error } = await authClient.sendVerificationEmail({
+    email,
+    callbackURL: `${window.location.origin}/verify-email`,
+  });
+  if (error) throw new Error(error.message ?? "Could not send the verification email.");
 }
 export async function logout() {
   const { error } = await authClient.signOut();
