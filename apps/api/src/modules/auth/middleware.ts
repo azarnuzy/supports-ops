@@ -9,16 +9,23 @@ export async function loadAuthSession(c: Context<{ Variables: AuthVariables }>, 
     headers: c.req.raw.headers,
   });
 
-  c.set("authSession", session?.session ?? null);
   const storedUser = session?.user
     ? await unscopedPrisma.user.findUnique({
         where: { id: session.user.id },
-        select: { deletedAt: true, isOrganizationAdmin: true, organizationId: true },
+        select: {
+          deletedAt: true,
+          isOrganizationAdmin: true,
+          organizationId: true,
+          // The signed cookie cache can outlive a revoked session (e.g. after a
+          // password change), so confirm the session row still exists.
+          authSessions: { where: { id: session.session.id }, select: { id: true } },
+        },
       })
     : null;
+  c.set("authSession", storedUser?.authSessions.length ? (session?.session ?? null) : null);
   c.set(
     "user",
-    storedUser && !storedUser.deletedAt && session?.user
+    storedUser?.authSessions.length && !storedUser.deletedAt && session?.user
       ? {
           ...session.user,
           isOrganizationAdmin: storedUser.isOrganizationAdmin,
