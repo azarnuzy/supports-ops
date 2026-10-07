@@ -11,7 +11,8 @@ import { Queue, QueueEvents, Worker, type ConnectionOptions, type Job } from "bu
 import { processKnowledgeIngestJob, type KnowledgeIngestJob } from "./knowledge-ingest";
 import { processAttachmentJob, type AttachmentProcessJob } from "./attachment-process";
 import type { ExampleJob } from "./types";
-import { sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
+import type { AccountEmailJob } from "./session-email";
+import { sendEmail, sendSessionLinkEmail, type SessionEmailJob } from "./session-email";
 import { sendCreditAlertEmail, type CreditAlertEmailJob } from "./credit-alert-email";
 import {
   processAutoResolveJob,
@@ -90,6 +91,12 @@ export function startSessionEmailWorker() {
     },
     { connection },
   );
+}
+
+export function startAccountEmailWorker() {
+  return new Worker<AccountEmailJob>("account-email", async (job) => sendEmail(job.data), {
+    connection,
+  });
 }
 
 export function startCreditAlertEmailWorker() {
@@ -175,6 +182,7 @@ export function runWorker() {
   );
   const worker = startExampleWorker();
   const sessionEmailWorker = startSessionEmailWorker();
+  const accountEmailWorker = startAccountEmailWorker();
   const creditAlertEmailWorker = startCreditAlertEmailWorker();
   const knowledgeIngestWorker = startKnowledgeIngestWorker();
   const attachmentProcessWorker = startAttachmentProcessWorker();
@@ -192,6 +200,9 @@ export function runWorker() {
   });
   sessionEmailWorker.on("failed", (job, error) => {
     logger.error({ err: error, jobId: job?.id }, "Session Link email failed");
+  });
+  accountEmailWorker.on("failed", (job, error) => {
+    logger.error({ err: error, jobId: job?.id }, "Account email failed");
   });
   creditAlertEmailWorker.on("failed", (job, error) => {
     logger.error({ err: error, jobId: job?.id }, "Credit alert email failed");
@@ -218,6 +229,7 @@ export function runWorker() {
   });
 
   return {
+    accountEmailWorker,
     attachmentProcessWorker,
     creditAlertEmailWorker,
     evalRunWorker,

@@ -14,6 +14,8 @@ export type SessionEmailJob = {
   workspaceId?: string;
 };
 
+export type AccountEmailJob = Parameters<typeof sendEmail>[0];
+
 export async function sendSessionLinkEmail({
   customerName,
   email,
