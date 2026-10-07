@@ -38,10 +38,10 @@ export const auth = betterAuth({
   },
   // The domain's Session is a Customer's conversation on a Channel, so Better
   // Auth's own sign-in session lives on the AuthSession model instead.
-  // The signed cookie cache keeps the session out of the database on every
-  // request; 60s is short enough that a revoked session stops working almost
-  // immediately, and every session write refreshes the cookie anyway.
-  session: { cookieCache: { enabled: true, maxAge: 60 }, modelName: "authSession" },
+  // No cookie cache: loadAuthSession already reads the database on every
+  // request, and a cache would keep a revoked session (e.g. after a password
+  // change) valid until it expires.
+  session: { modelName: "authSession" },
   secret: betterAuthConfig.secret,
   trustedOrigins: betterAuthConfig.trustedOrigins,
 });
