@@ -209,8 +209,8 @@ Jika email tidak muncul:
 
 ### Workspace staff dan peran (#271)
 
-1. Daftar sebagai Organization Admin, buka `/workspace/users`, tambah satu Human Agent, lalu tunjuk ia sebagai Organization Admin. Ia tetap memakai login yang sama.
-2. Buat Workspace kedua dari switcher. Di `/workspace/users` Workspace kedua, tambah email yang sama dengan peran Admin; daftar harus menampilkan peran Workspace kedua. Pindah balik dan pastikan peran Workspace pertama tetap Human Agent.
+1. Daftar sebagai Organization Admin, buka `/workspace/users`, klik **Invite** untuk satu Human Agent, buka email undangan yang tertangkap (Mailpit), isi nama dan password di halaman `/accept-invitation` — ia langsung masuk ke Workspace sebagai Human Agent — lalu tunjuk ia sebagai Organization Admin. Ia tetap memakai login yang sama. Coba juga **Resend** (tautan lama harus ditolak dengan "Ask your Admin to resend") dan **Revoke** pada undangan tertunda.
+2. Buat Workspace kedua dari switcher. Di `/workspace/users` Workspace kedua, undang email yang sama dengan peran Admin (pengguna aktif di Organization yang sama langsung ditambahkan dan menerima email pemberitahuan, tanpa undangan); daftar harus menampilkan peran Workspace kedua. Pindah balik dan pastikan peran Workspace pertama tetap Human Agent.
 3. Sebagai Workspace Admin biasa, pastikan hanya Workspace miliknya yang bisa dibuka dan ia tidak dapat menunjuk Organization Admin atau membuka Billing. Coba header `X-Workspace-Id` milik Organization lain: server harus menjawab `403`.
 4. Cabut Organization Admin lain, lalu coba cabut Organization Admin terakhir: server harus menjawab `409`. Pengguna dengan Ticket `HUMAN_HANDLING` harus ditugaskan ulang sebelum membership-nya dicabut.
 
