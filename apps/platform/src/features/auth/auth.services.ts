@@ -120,11 +120,14 @@ export async function setPassword(newPassword: string) {
   await setCurrentUserPassword(apiClient, newPassword);
 }
 /** Redirects to Google; the same call signs in a known email and registers an unknown one. */
-export async function continueWithGoogle() {
+export async function continueWithGoogle(invitationToken?: string) {
   const { error } = await authClient.signIn.social({
     provider: "google",
     callbackURL: `${window.location.origin}/`,
-    errorCallbackURL: `${window.location.origin}/login`,
+    errorCallbackURL: invitationToken
+      ? `${window.location.origin}/accept-invitation?token=${encodeURIComponent(invitationToken)}`
+      : `${window.location.origin}/login`,
+    ...(invitationToken ? { additionalData: { invitationToken } } : {}),
   });
   if (error) throw new Error(error.message ?? "Could not continue with Google.");
 }

@@ -146,7 +146,7 @@ export function useChangePasswordMutation() {
 }
 
 export function useGoogleMutation() {
-  return useMutation({ mutationFn: continueWithGoogle });
+  return useMutation({ mutationFn: (invitationToken?: string) => continueWithGoogle(invitationToken) });
 }
 export function useSetPasswordMutation() {
   const queryClient = useQueryClient();

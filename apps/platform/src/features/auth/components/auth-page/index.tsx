@@ -29,7 +29,14 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
   // Better Auth sends a failed Google attempt back to /login with ?error=<code>.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("error"))
+    const error = new URLSearchParams(window.location.search).get("error");
+    // Registering with an invited email goes to the accept flow instead of creating an Organization.
+    const [code, token] = error?.split(":") ?? [];
+    if (code === "invitation_pending" && token) {
+      window.location.replace(`/accept-invitation?token=${encodeURIComponent(token)}&invited=1`);
+      return;
+    }
+    if (error)
       toast.error(
         "Google sign-in failed. Verify your email first if you registered with a password.",
       );

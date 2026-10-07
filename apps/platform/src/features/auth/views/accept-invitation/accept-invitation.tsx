@@ -6,7 +6,12 @@ import { AuthLayout } from "@repo/layouts/auth-layout";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
-import { invitationQueryOptions, useAcceptInvitationMutation } from "../../auth.hooks";
+import {
+  authProvidersQueryOptions,
+  invitationQueryOptions,
+  useAcceptInvitationMutation,
+  useGoogleMutation,
+} from "../../auth.hooks";
 import { InvitationUnavailableApiError } from "@repo/api-client";
 
 const route = getRouteApi("/accept-invitation");
@@ -15,6 +20,10 @@ const AcceptInvitationView = () => {
   const { token } = route.useSearch();
   const invitation = useQuery(invitationQueryOptions(token));
   const accept = useAcceptInvitationMutation();
+  const google = useGoogleMutation();
+  const providers = useQuery(authProvidersQueryOptions);
+  const params = new URLSearchParams(window.location.search);
+  const [errorCode, invitedEmail] = params.get("error")?.split(":") ?? [];
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
 
@@ -44,9 +53,29 @@ const AcceptInvitationView = () => {
 
   return (
     <AuthLayout
-      title={`Join ${workspaceName}`}
+      title={
+        params.has("invited")
+          ? `You've been invited to ${workspaceName}`
+          : `Join ${workspaceName}`
+      }
       subtitle={`${invitedByName} invited you as ${role === "ADMIN" ? "an Admin" : "a Human Agent"}.`}
     >
+      {errorCode === "invitation_email_mismatch" && (
+        <p className="mb-4 text-destructive text-sm" role="alert">
+          This Invitation is for {invitedEmail}. Continue with that Google account.
+        </p>
+      )}
+      {providers.data?.google && (
+        <Button
+          className="mb-4 w-full"
+          type="button"
+          variant="outline"
+          disabled={google.isPending}
+          onClick={() => google.mutate(token, { onError: (e) => toast.error(e.message) })}
+        >
+          Continue with Google
+        </Button>
+      )}
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <div className="grid gap-2">
           <Label htmlFor="email">Email address</Label>
