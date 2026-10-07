@@ -23,6 +23,7 @@ vi.mock("../../utils/prisma", async (importOriginal) => ({
   unscopedPrisma: {
     $transaction: mocks.transaction,
     user: { findUnique: mocks.findUnique },
+    invitation: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }));
 

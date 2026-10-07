@@ -27,11 +27,8 @@ const roleLabel = (role: Role) => (role === "ADMIN" ? "Admin" : "Human Agent");
 
 type Inviter = { id: string; name: string; organizationId: string; isOrganizationAdmin: boolean };
 
-/** Rotates the token and expiry, then emails the link. Resend and re-invite both land here. */
-async function issueLink(
-  invitation: { id: string; email: string; role: Role; workspaceId: string },
-  inviterName: string,
-) {
+/** Rotates the token and expiry. The old link stops working. */
+async function rotateToken(invitation: { id: string; workspaceId: string }) {
   const token = randomBytes(32).toString("base64url");
   const [updated, workspace] = await Promise.all([
     unscopedPrisma.invitation.update({
@@ -43,6 +40,15 @@ async function issueLink(
       select: { name: true },
     }),
   ]);
+  return { token, updated, workspace };
+}
+
+/** Rotates the token and expiry, then emails the link. Resend and re-invite both land here. */
+async function issueLink(
+  invitation: { id: string; email: string; role: Role; workspaceId: string },
+  inviterName: string,
+) {
+  const { token, updated, workspace } = await rotateToken(invitation);
   const link = platformUrl(`/accept-invitation?token=${token}`);
   await enqueueAccountEmail({
     to: invitation.email,
@@ -164,7 +170,27 @@ export async function revokeInvitation(workspaceId: string, id: string) {
   });
 }
 
-async function loadUsable(token: string) {
+/** The pending Invitation for an email, if any. A user cannot move Organizations, so it must be accepted before registering. */
+export async function findPendingForEmail(email: string) {
+  return unscopedPrisma.invitation.findFirst({
+    where: { email, acceptedAt: null, revokedAt: null, workspace: { deletedAt: null } },
+    include: { workspace: { select: { name: true } }, invitedBy: { select: { name: true } } },
+  });
+}
+
+/** Fresh token for an invitee whose email Google just verified; nothing is emailed. */
+export async function issueTokenForVerifiedEmail(invitation: { id: string; workspaceId: string }) {
+  return (await rotateToken(invitation)).token;
+}
+
+/** Re-sends the link to the invited inbox only; the registrant's email is unverified, so no token is returned. */
+export async function resendPendingLink(
+  invitation: NonNullable<Awaited<ReturnType<typeof findPendingForEmail>>>,
+) {
+  await issueLink(invitation, invitation.invitedBy.name);
+}
+
+export async function loadUsable(token: string) {
   const invitation = await unscopedPrisma.invitation.findUnique({
     where: { tokenHash: hashToken(token) },
     include: {
@@ -261,4 +287,19 @@ export async function acceptInvitation(token: string, input: { name: string; pas
   });
 
   return { email: invitation.email };
+}
+
+/** Joins the Google-created user to the Workspace; the User row already exists with the Organization. */
+export async function acceptInvitationForUser(token: string, userId: string) {
+  const invitation = await loadUsable(token);
+  await unscopedPrisma.$transaction(async (tx) => {
+    const claimed = await tx.invitation.updateMany({
+      where: { id: invitation.id, tokenHash: invitation.tokenHash, acceptedAt: null, revokedAt: null },
+      data: { acceptedAt: new Date() },
+    });
+    if (claimed.count === 0) throw new InvitationUnavailableError();
+    await tx.workspaceMembership.create({
+      data: { userId, workspaceId: invitation.workspaceId, role: invitation.role },
+    });
+  });
 }

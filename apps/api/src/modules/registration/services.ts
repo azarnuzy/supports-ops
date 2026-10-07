@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { grantTrialCredits } from "../credits/services";
 import { isUniqueConstraintError, unscopedPrisma } from "../../utils/prisma";
+import { findPendingForEmail, resendPendingLink } from "../invitations/services";
 import { provisionWorkspaceDefaults } from "../workspaces/services";
 import type { RegisterInput } from "./schema";
 
@@ -9,6 +10,13 @@ export class EmailAlreadyInUseError extends Error {
   constructor(readonly unverified = false) {
     super("An account with this email already exists.");
     this.name = "EmailAlreadyInUseError";
+  }
+}
+
+/** The email has a pending Invitation: no Organization is created; the invitee accepts instead. */
+export class InvitationPendingError extends Error {
+  constructor(readonly workspaceName: string) {
+    super(`You've been invited to ${workspaceName}. We re-sent the invitation link to your email; accept it to join.`);
   }
 }
 
@@ -24,6 +32,12 @@ export async function registerAdminWorkspace(
 
   if (existingUser) {
     throw new EmailAlreadyInUseError(!existingUser.emailVerified);
+  }
+
+  const pending = await findPendingForEmail(input.email);
+  if (pending) {
+    await resendPendingLink(pending);
+    throw new InvitationPendingError(pending.workspace.name);
   }
 
   const passwordHash = await hashPassword(input.password);

@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { auth } from "../auth/instance";
 import type { AuthVariables } from "../auth/types";
 import { betterAuthConfig } from "../../config";
-import { EmailAlreadyInUseError, registerAdminWorkspace } from "./services";
+import { EmailAlreadyInUseError, InvitationPendingError, registerAdminWorkspace } from "./services";
 import { registerSchema } from "./schema";
 
 // The Platform is the first client origin; Better Auth redirects here after the link is followed.
@@ -21,6 +21,17 @@ export const registrationRouter = new Hono<{ Variables: AuthVariables }>().post(
     try {
       await registerAdminWorkspace(input);
     } catch (error) {
+      if (error instanceof InvitationPendingError) {
+        return c.json(
+          {
+            error: "invitation_pending",
+            message: error.message,
+            workspaceName: error.workspaceName,
+          },
+          409,
+        );
+      }
+
       if (error instanceof EmailAlreadyInUseError) {
         return c.json(
           {

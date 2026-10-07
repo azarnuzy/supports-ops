@@ -47,12 +47,19 @@ function stubGoogle(profile: { email: string; name: string }) {
   });
 }
 
-async function continueWithGoogle(profile: { email: string; name: string }) {
+async function continueWithGoogle(
+  profile: { email: string; name: string },
+  invitationToken?: string,
+) {
   stubGoogle(profile);
   const start = await app.request("/api/auth/sign-in/social", {
     method: "POST",
     headers: { "content-type": "application/json", origin },
-    body: JSON.stringify({ provider: "google", callbackURL: "http://localhost:3000/" }),
+    body: JSON.stringify({
+      provider: "google",
+      callbackURL: "http://localhost:3000/",
+      additionalData: invitationToken ? { invitationToken } : undefined,
+    }),
   });
   const { url } = (await start.json()) as { url: string };
   const cookie = start.headers
@@ -149,4 +156,89 @@ it("lets a Google-only user set a password and then sign in with it", async () =
 it("reports Google as enabled only because its credentials are configured", async () => {
   const res = await app.request("/auth-providers", { headers: { origin } });
   expect(await res.json()).toEqual({ google: true });
+});
+
+async function invite(email: string, token = "invite-token") {
+  const { createHash } = await import("node:crypto");
+  const { registerAdminWorkspace } = await import("../registration/services");
+  const { user, workspace } = await registerAdminWorkspace(
+    { email: "boss@example.com", name: "Boss", password: "correct-horse-battery" },
+    { emailVerified: true },
+  );
+  await prisma.invitation.create({
+    data: {
+      id: crypto.randomUUID(),
+      email,
+      workspaceId: workspace.id,
+      role: "HUMAN_AGENT",
+      invitedById: user.id,
+      tokenHash: createHash("sha256").update(token).digest("hex"),
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  return { workspace, organizationId: user.organizationId };
+}
+
+it("joins the inviting Workspace when Google's email matches the Invitation", async () => {
+  const { workspace, organizationId } = await invite("invitee@example.com");
+
+  const { callback } = await continueWithGoogle(
+    { email: "invitee@example.com", name: "Ivy" },
+    "invite-token",
+  );
+
+  expect(callback.headers.get("location")).toBe("http://localhost:3000/");
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { email: "invitee@example.com" },
+    include: { memberships: true },
+  });
+  expect(user).toMatchObject({ role: "HUMAN_AGENT", organizationId, isOrganizationAdmin: false });
+  expect(user.memberships).toMatchObject([{ workspaceId: workspace.id, role: "HUMAN_AGENT" }]);
+  expect(await prisma.organization.count()).toBe(1);
+  expect((await prisma.invitation.findFirstOrThrow()).acceptedAt).not.toBeNull();
+});
+
+it("refuses a different Google email, naming the invited address, and creates no User", async () => {
+  await invite("invitee@example.com");
+
+  const { callback } = await continueWithGoogle(
+    { email: "other@example.com", name: "Oz" },
+    "invite-token",
+  );
+
+  const location = new URL(callback.headers.get("location") ?? "");
+  expect(location.searchParams.get("error")).toBe("invitation_email_mismatch:invitee@example.com");
+  expect(await prisma.user.findUnique({ where: { email: "other@example.com" } })).toBeNull();
+  expect((await prisma.invitation.findFirstOrThrow()).acceptedAt).toBeNull();
+});
+
+it("creates no Organization for Google registration with a pending Invitation and hands over a token", async () => {
+  await invite("invitee@example.com");
+
+  const { callback } = await continueWithGoogle({ email: "invitee@example.com", name: "Ivy" });
+
+  const location = new URL(callback.headers.get("location") ?? "");
+  const [code, token = ""] = (location.searchParams.get("error") ?? "").split(":");
+  expect(code).toBe("invitation_pending");
+  expect(token).not.toBe("");
+  expect(await prisma.user.findUnique({ where: { email: "invitee@example.com" } })).toBeNull();
+  expect(await prisma.organization.count()).toBe(1);
+
+  const preview = await app.request(`/invitations/by-token/${token}`, { headers: { origin } });
+  expect(preview.status).toBe(200);
+});
+
+it("creates no Organization for form registration with a pending Invitation", async () => {
+  await invite("invitee@example.com");
+
+  const res = await app.request("/register", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin },
+    body: JSON.stringify({ email: "invitee@example.com", name: "Ivy", password: "correct-horse-battery" }),
+  });
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ error: "invitation_pending" });
+  expect(await prisma.user.findUnique({ where: { email: "invitee@example.com" } })).toBeNull();
+  expect(await prisma.organization.count()).toBe(1);
 });
