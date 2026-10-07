@@ -26,6 +26,10 @@ _Avoid_: Owner, Manager, Supervisor
 The Workspace role that handles Tickets escalated away from the AI Agent. Sees the Shared Human Queue, its own assigned Tickets, and the Tickets it previously resolved — never the whole Workspace.
 _Avoid_: Operator, Support Rep, Staff. Never plain "Agent" — that word is ambiguous in this product
 
+**Invitation**:
+The emailed, expiring (7 days) offer to join one Workspace as an Admin or Human Agent. It is the only way staff join: accepting proves the invitee owns the address and lets them choose their own password. An email already active in the same Organization is added to the Workspace directly instead, with a notification and no Invitation; an email in another Organization is refused. An Admin invites only into the current Workspace, an Organization Admin into any Workspace of the Organization. Organization Admin is never granted through an Invitation.
+_Avoid_: Invite link, Sign-up link, Admin-created account
+
 **AI Agent**:
 The automated support handler: the reasoning layer that reads a conversation, retrieves Knowledge, calls Business Tools, and returns a decision. It is a distinct entity from the Human Agent and from the Channel, and knows nothing about how messages are transported.
 _Avoid_: Bot, Assistant, Copilot (Copilot is a distinct mode — see below)

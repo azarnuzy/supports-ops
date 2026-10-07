@@ -6,11 +6,19 @@ import {
   CardAction,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@repo/ui/components/card";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@repo/ui/components/field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@repo/ui/components/dialog";
+import { Field, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -41,18 +49,20 @@ async function copyEmail(email: string) {
 
 const UsersView = () => {
   const {
-    createHumanAgent,
     email,
     handleSubmit,
     humanAgents,
-    name,
-    password,
+    invite,
+    open,
+    pendingInvitations,
+    resend,
+    revoke,
     role,
     setEmail,
-    setName,
-    setPassword,
+    setOpen,
     setRole,
     users,
+    working,
   } = useHumanAgentsForm();
   const currentUser = useQuery(meQueryOptions).data;
   const queryClient = useQueryClient();
@@ -73,7 +83,6 @@ const UsersView = () => {
       toast.error(error instanceof Error ? error.message : "Could not update user."),
   });
 
-  const passwordTooShort = password.length > 0 && password.length < 8;
   const isEmpty = !users.isPending && !users.isError && humanAgents.length === 0;
 
   return (
@@ -82,98 +91,10 @@ const UsersView = () => {
         <SettingsHeader
           eyebrow="Workspace"
           title="Users"
-          description="Manage Workspace roles and add people from your Organization with one login."
+          description="Manage Workspace roles and invite people by email."
         />
 
-        <div className="grid items-start gap-5 lg:grid-cols-[24rem_1fr]">
-          <Card className="gap-5">
-            <CardHeader>
-              <CardTitle className="text-base">Invite a user</CardTitle>
-              <CardDescription>
-                New users sign in with the temporary password. Existing Organization users keep
-                theirs.
-              </CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-              <CardContent className="grid gap-5">
-                <Field>
-                  <FieldLabel className="text-sm font-medium" htmlFor="human-agent-name">
-                    Full name
-                  </FieldLabel>
-                  <Input
-                    id="human-agent-name"
-                    autoComplete="name"
-                    placeholder="Amara Okafor"
-                    required
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel className="text-sm font-medium" htmlFor="human-agent-email">
-                    Work email
-                  </FieldLabel>
-                  <Input
-                    id="human-agent-email"
-                    autoComplete="email"
-                    placeholder="amara@yourcompany.com"
-                    required
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                  />
-                  <FieldDescription>Doubles as their sign-in username.</FieldDescription>
-                </Field>
-                <Field data-invalid={passwordTooShort || undefined}>
-                  <FieldLabel className="text-sm font-medium" htmlFor="human-agent-password">
-                    Temporary password
-                  </FieldLabel>
-                  <Input
-                    id="human-agent-password"
-                    aria-invalid={passwordTooShort}
-                    autoComplete="new-password"
-                    minLength={8}
-                    placeholder="At least 8 characters"
-                    required
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                  {passwordTooShort ? (
-                    <FieldError>Use at least 8 characters.</FieldError>
-                  ) : (
-                    <FieldDescription>
-                      For a new user, share it securely and ask them to change it. Existing users
-                      keep their password.
-                    </FieldDescription>
-                  )}
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="workspace-role">Workspace role</FieldLabel>
-                  <select
-                    id="workspace-role"
-                    className="h-9 rounded-md border bg-background px-3"
-                    value={role}
-                    onChange={(event) => setRole(event.target.value as "ADMIN" | "HUMAN_AGENT")}
-                  >
-                    <option value="HUMAN_AGENT">Human Agent</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                </Field>
-              </CardContent>
-              <CardFooter className="mt-5 border-t pt-5">
-                <Button
-                  className="w-full"
-                  type="submit"
-                  disabled={createHumanAgent.isPending || password.length < 8}
-                >
-                  <UserPlusIcon className="size-4" />
-                  {createHumanAgent.isPending ? "Creating…" : "Add to Workspace"}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
-
+        <div className="grid items-start gap-5">
           <Card className="gap-5">
             <CardHeader>
               <CardTitle className="text-base">Team</CardTitle>
@@ -182,7 +103,59 @@ const UsersView = () => {
                   ? "People with access to this Workspace."
                   : `${humanAgents.length} Workspace member${humanAgents.length === 1 ? "" : "s"}.`}
               </CardDescription>
-              <CardAction>
+              <CardAction className="flex gap-2">
+                <Dialog open={open} onOpenChange={setOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" type="button">
+                      <UserPlusIcon className="size-4" />
+                      Invite
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <form className="grid gap-5" onSubmit={handleSubmit}>
+                      <DialogHeader>
+                        <DialogTitle>Invite a user</DialogTitle>
+                        <DialogDescription>
+                          They get an email link, choose their own password, and join this
+                          Workspace. Valid for 7 days.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <Field>
+                        <FieldLabel className="text-sm font-medium" htmlFor="invite-email">
+                          Work email
+                        </FieldLabel>
+                        <Input
+                          id="invite-email"
+                          autoComplete="off"
+                          placeholder="amara@yourcompany.com"
+                          required
+                          type="email"
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="invite-role">Workspace role</FieldLabel>
+                        <select
+                          id="invite-role"
+                          className="h-9 rounded-md border bg-background px-3"
+                          value={role}
+                          onChange={(event) =>
+                            setRole(event.target.value as "ADMIN" | "HUMAN_AGENT")
+                          }
+                        >
+                          <option value="HUMAN_AGENT">Human Agent</option>
+                          <option value="ADMIN">Admin</option>
+                        </select>
+                      </Field>
+                      <DialogFooter>
+                        <Button type="submit" disabled={invite.isPending}>
+                          {invite.isPending ? "Sending…" : "Send Invitation"}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
                 <Button
                   size="sm"
                   type="button"
@@ -205,7 +178,7 @@ const UsersView = () => {
                 isEmpty={isEmpty}
                 emptyIcon={<UsersRoundIcon className="size-5 text-muted-foreground" />}
                 emptyTitle="No members yet"
-                emptyDescription="Add a member with the form on the left."
+                emptyDescription="Invite a member with the Invite button."
               />
 
               {humanAgents.length > 0 ? (
@@ -291,6 +264,59 @@ const UsersView = () => {
               ) : null}
             </CardContent>
           </Card>
+
+          {pendingInvitations.length > 0 ? (
+            <Card className="gap-5">
+              <CardHeader>
+                <CardTitle className="text-base">Pending Invitations</CardTitle>
+                <CardDescription>
+                  Resending renews the 7-day expiry and replaces the old link.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="grid gap-2">
+                  {pendingInvitations.map((invitation) => {
+                    const expired = new Date(invitation.expiresAt) <= new Date();
+                    return (
+                      <li
+                        key={invitation.id}
+                        className="flex items-center gap-3 rounded-lg border p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{invitation.email}</p>
+                          <p className="truncate text-[13px] text-muted-foreground">
+                            Invited by {invitation.invitedByName} ·{" "}
+                            {expired
+                              ? "expired"
+                              : `expires ${dateFormatter.format(new Date(invitation.expiresAt))}`}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">
+                          {invitation.role === "ADMIN" ? "Admin" : "Human Agent"}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={working}
+                          onClick={() => resend(invitation.id)}
+                        >
+                          Resend
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={working}
+                          onClick={() => revoke(invitation.id)}
+                        >
+                          Revoke
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </section>
     </PlatformAppShell>

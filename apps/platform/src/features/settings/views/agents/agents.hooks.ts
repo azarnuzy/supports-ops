@@ -1,48 +1,56 @@
 import { toast } from "@repo/ui/components/sonner";
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
-import { useCreateHumanAgentMutation, workspaceUsersQueryOptions } from "../../../auth";
+import {
+  pendingInvitationsQueryOptions,
+  useInvitationMutations,
+  workspaceUsersQueryOptions,
+} from "../../../auth";
 
 export function useHumanAgentsForm() {
   const users = useQuery(workspaceUsersQueryOptions);
-  const createHumanAgent = useCreateHumanAgentMutation();
-  const [name, setName] = useState("");
+  const pending = useQuery(pendingInvitationsQueryOptions);
+  const { invite, resend, revoke } = useInvitationMutations();
+  const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState<"ADMIN" | "HUMAN_AGENT">("HUMAN_AGENT");
-  const humanAgents = users.data?.users ?? [];
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    createHumanAgent.mutate(
-      { email: email.trim(), name: name.trim(), password, role },
+    invite.mutate(
+      { email: email.trim(), role },
       {
-        onError: (error) => {
-          toast.error(error instanceof Error ? error.message : "Failed to create Human Agent.");
-        },
-        onSuccess: () => {
-          setName("");
+        onError: (error) => toast.error(error.message),
+        onSuccess: ({ status }) => {
           setEmail("");
-          setPassword("");
-          toast.success("Workspace member added.");
+          setOpen(false);
+          toast.success(
+            status === "added" ? "Added to the Workspace and notified." : "Invitation sent.",
+          );
         },
       },
     );
   }
 
+  const onError = (error: Error) => toast.error(error.message);
+
   return {
-    createHumanAgent,
     email,
     handleSubmit,
-    humanAgents,
-    name,
-    password,
+    humanAgents: users.data?.users ?? [],
+    invite,
+    open,
+    pending,
+    pendingInvitations: pending.data?.invitations ?? [],
+    resend: (id: string) =>
+      resend.mutate(id, { onError, onSuccess: () => toast.success("Invitation resent.") }),
+    revoke: (id: string) =>
+      revoke.mutate(id, { onError, onSuccess: () => toast.success("Invitation revoked.") }),
     role,
     setEmail,
-    setName,
-    setPassword,
+    setOpen,
     setRole,
     users,
+    working: resend.isPending || revoke.isPending,
   };
 }

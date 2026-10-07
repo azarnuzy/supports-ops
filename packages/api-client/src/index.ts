@@ -1,6 +1,7 @@
 export * from "./client";
 export * from "./auth";
 export * from "./users";
+export * from "./invitations";
 export * from "./ai-settings";
 export * from "./analytics";
 export * from "./usage";

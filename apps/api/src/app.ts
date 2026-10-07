@@ -10,6 +10,7 @@ import type { AuthVariables } from "./modules/auth/types";
 import { knowledgeRouter } from "./modules/knowledge/router";
 import { profileRouter } from "./modules/profile/router";
 import { registrationRouter } from "./modules/registration/router";
+import { invitationsRouter } from "./modules/invitations/router";
 import { usersRouter } from "./modules/users/router";
 import { widgetRouter } from "./modules/widget/router";
 import { widgetConfigRouter } from "./modules/widget-config/router";
@@ -127,6 +128,7 @@ export const app = new Hono<{ Variables: AuthVariables }>()
   .route("/profile", profileRouter)
   .route("/register", registrationRouter)
   .route("/users", usersRouter)
+  .route("/invitations", invitationsRouter)
   .route("/widget-config", widgetConfigRouter)
   .route("/whatsapp-config", whatsAppConfigRouter)
   .route("/eval-destination", evalDestinationRouter)

@@ -21,6 +21,7 @@ model Workspace {
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
   memberships        WorkspaceMembership[]
+  invitations        Invitation[]
   aiAgents           AiAgent[]
   channels           Channel[]
   whatsAppConfigs    WhatsAppConfig[]

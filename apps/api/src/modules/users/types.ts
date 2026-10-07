@@ -13,7 +13,3 @@ export type UsersResponse = {
   nextCursor: string | null;
   users: UserListItem[];
 };
-
-export type HumanAgentResponse = {
-  user: UserListItem;
-};

@@ -14,6 +14,7 @@ export const queryKeys = {
   workspace: {
     knowledgeSources: ["workspace", "knowledge-sources"] as const,
     users: ["workspace", "users"] as const,
+    invitations: ["workspace", "invitations"] as const,
     widgetConfig: ["workspace", "widget-config"] as const,
     whatsAppConfig: ["workspace", "whatsapp-config"] as const,
     myTickets: ["workspace", "my-tickets"] as const,

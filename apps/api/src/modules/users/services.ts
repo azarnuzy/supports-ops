@@ -1,13 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { hashPassword } from "better-auth/crypto";
-import { isUniqueConstraintError, unscopedPrisma, type Role } from "../../utils/prisma";
-import type { CreateHumanAgentInput } from "./schema";
+import { unscopedPrisma, type Role } from "../../utils/prisma";
 
-export class HumanAgentEmailAlreadyInUseError extends Error {
-  constructor() {
-    super("This email belongs to another Organization.");
-  }
-}
 export class MembershipConflictError extends Error {
   constructor(message = "Workspace membership already exists.") {
     super(message);
@@ -51,63 +43,6 @@ export async function listRecentUsers(
       updatedAt: user.updatedAt,
     })),
   };
-}
-
-export async function createHumanAgent(
-  workspaceId: string,
-  input: Omit<CreateHumanAgentInput, "role"> & { role?: Role },
-) {
-  const role = input.role ?? "HUMAN_AGENT";
-  const workspace = await unscopedPrisma.workspace.findUniqueOrThrow({
-    where: { id: workspaceId },
-    select: { organizationId: true },
-  });
-  const existing = await unscopedPrisma.user.findUnique({ where: { email: input.email } });
-  if (existing && existing.organizationId !== workspace.organizationId)
-    throw new HumanAgentEmailAlreadyInUseError();
-  if (existing) {
-    try {
-      await unscopedPrisma.workspaceMembership.create({
-        data: { userId: existing.id, workspaceId, role },
-      });
-    } catch (error) {
-      if (isUniqueConstraintError(error, "userId")) throw new MembershipConflictError();
-      throw error;
-    }
-    return { user: { ...existing, role } };
-  }
-  const passwordHash = await hashPassword(input.password);
-  const userId = randomUUID();
-  try {
-    const user = await unscopedPrisma.$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          id: userId,
-          email: input.email,
-          name: input.name,
-          role,
-          organizationId: workspace.organizationId,
-          // An Admin vouches for the Human Agent; no inbox round-trip.
-          emailVerified: true,
-        },
-      });
-      await tx.workspaceMembership.create({ data: { userId, workspaceId, role } });
-      await tx.account.create({
-        data: {
-          id: randomUUID(),
-          accountId: userId,
-          providerId: "credential",
-          password: passwordHash,
-          userId,
-        },
-      });
-      return created;
-    });
-    return { user };
-  } catch (error) {
-    if (isUniqueConstraintError(error, "email")) throw new HumanAgentEmailAlreadyInUseError();
-    throw error;
-  }
 }
 
 export async function updateMembership(workspaceId: string, userId: string, role: Role) {
