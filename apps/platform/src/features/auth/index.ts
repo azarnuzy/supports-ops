@@ -1,5 +1,6 @@
 export { requireAdmin, requireAuth, requireOrganizationAdmin } from "./auth.guards";
 export {
+  authProvidersQueryOptions,
   meQueryOptions,
   useChangePasswordMutation,
   invitationQueryOptions,
@@ -9,6 +10,7 @@ export {
   useLoginMutation,
   useLogoutMutation,
   useRegisterMutation,
+  useSetPasswordMutation,
   useResendVerificationMutation,
   useUpdateProfileMutation,
   workspaceUsersQueryOptions,

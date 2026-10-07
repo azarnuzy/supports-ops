@@ -3,6 +3,7 @@ export type AuthUser = {
   createdAt: string;
   email: string;
   emailVerified?: boolean;
+  hasPassword?: boolean;
   id: string;
   isOrganizationAdmin: boolean;
   image?: string | null;
