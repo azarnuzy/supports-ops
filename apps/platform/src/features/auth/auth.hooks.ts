@@ -9,7 +9,9 @@ import {
   login,
   logout,
   register,
+  requestPasswordReset,
   resendVerificationEmail,
+  resetPassword,
   updateProfile,
 } from "./auth.services";
 export const meQueryOptions = queryOptions({
@@ -76,4 +78,21 @@ export function useCreateHumanAgentMutation() {
 
 export function useResendVerificationMutation() {
   return useMutation({ mutationFn: resendVerificationEmail });
+}
+
+export function useRequestPasswordResetMutation() {
+  return useMutation({ mutationFn: requestPasswordReset });
+}
+
+export function useResetPasswordMutation() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: resetPassword,
+    onSuccess: async () => {
+      sessionStorage.removeItem(activeWorkspaceStorageKey);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.all });
+      await navigate({ to: "/" });
+    },
+  });
 }

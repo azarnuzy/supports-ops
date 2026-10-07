@@ -5,11 +5,15 @@ export {
   useLoginMutation,
   useLogoutMutation,
   useRegisterMutation,
+  useRequestPasswordResetMutation,
+  useResetPasswordMutation,
   useResendVerificationMutation,
   useUpdateProfileMutation,
   workspaceUsersQueryOptions,
 } from "./auth.hooks";
 export { default as CheckInboxView } from "./views/check-inbox/check-inbox";
+export { default as ForgotPasswordView } from "./views/forgot-password/forgot-password";
+export { default as ResetPasswordView } from "./views/reset-password/reset-password";
 export { default as VerifyEmailView } from "./views/verify-email/verify-email";
 export { EmailNotVerifiedError, EmailUnverifiedApiError, UnauthorizedError } from "./auth.services";
 export type {

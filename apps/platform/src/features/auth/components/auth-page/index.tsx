@@ -90,7 +90,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="password">Password</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            {isLogin && (
+              <Link
+                className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                to="/forgot-password"
+              >
+                Forgot password?
+              </Link>
+            )}
+          </div>
           <div className="relative">
             <Input
               id="password"

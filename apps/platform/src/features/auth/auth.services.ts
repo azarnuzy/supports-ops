@@ -84,6 +84,29 @@ export async function resendVerificationEmail(email: string) {
   });
   if (error) throw new Error(error.message ?? "Could not send the verification email.");
 }
+/** Always succeeds for the user: the API answers the same for unknown emails. The email rides in the link so the reset page can sign in afterwards. */
+export async function requestPasswordReset(email: string) {
+  const { error } = await authClient.requestPasswordReset({
+    email,
+    redirectTo: `${window.location.origin}/reset-password?email=${encodeURIComponent(email)}`,
+  });
+  if (error) throw new Error(error.message ?? "Could not send the reset email.");
+}
+
+/** Resetting revokes every existing session; signing in afterwards starts a fresh one. */
+export async function resetPassword(input: {
+  email: string;
+  newPassword: string;
+  token: string;
+}) {
+  const { error } = await authClient.resetPassword({
+    newPassword: input.newPassword,
+    token: input.token,
+  });
+  if (error) throw new Error(error.message ?? "Could not reset the password.");
+  return login({ email: input.email, password: input.newPassword });
+}
+
 export async function logout() {
   const { error } = await authClient.signOut();
   if (error) throw new Error(error.message ?? "Failed to log out.");
