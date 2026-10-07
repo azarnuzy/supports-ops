@@ -17,6 +17,7 @@ model User {
   accounts      Account[]
   ticketReadStates TicketReadState[]
   memberships WorkspaceMembership[]
+  invitationsSent Invitation[]
 
   @@index([organizationId])
 }
@@ -118,4 +119,25 @@ model OperatorAccount {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   user                  Operator @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/** An emailed offer to join one Workspace with a role. The token is stored only
+ * as a hash; at most one pending (neither accepted nor revoked) Invitation
+ * exists per email and Workspace — a partial unique index in the migration. */
+model Invitation {
+  id          String    @id
+  email       String
+  workspaceId String
+  role        Role
+  invitedById String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }

@@ -8,7 +8,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 let database: TestDatabase;
 let prisma: typeof import("../../utils/prisma").unscopedPrisma;
 let services: typeof import("./services");
-let createHumanAgent: typeof import("../users/services").createHumanAgent;
 
 const input = {
   email: "admin@example.com",
@@ -21,7 +20,6 @@ beforeAll(async () => {
   process.env.DATABASE_URL = database.url;
   ({ unscopedPrisma: prisma } = await import("../../utils/prisma"));
   services = await import("./services");
-  ({ createHumanAgent } = await import("../users/services"));
 }, 60_000);
 
 afterAll(async () => {
@@ -75,19 +73,5 @@ describe("registerAdminWorkspace", () => {
 
     expect(await prisma.workspace.count()).toBe(1);
     expect(await prisma.organization.count()).toBe(1);
-  });
-
-  it("adds a Human Agent to the Organization without granting Organization Admin", async () => {
-    const { organization, workspace } = await services.registerAdminWorkspace(input);
-    const { user } = await createHumanAgent(workspace.id, {
-      email: "human@example.com",
-      name: "Human Agent",
-      password: "correct-horse-battery-staple",
-    });
-
-    const stored = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(stored.organizationId).toBe(organization.id);
-    expect(stored.isOrganizationAdmin).toBe(false);
-    expect(stored.role).toBe("HUMAN_AGENT");
   });
 });

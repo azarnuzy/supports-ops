@@ -3,15 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAdmin } from "../auth/guards";
 import type { AuthVariables } from "../auth/types";
+import { usersQuerySchema, updateMembershipSchema, organizationAdminSchema } from "./schema";
 import {
-  createHumanAgentSchema,
-  usersQuerySchema,
-  updateMembershipSchema,
-  organizationAdminSchema,
-} from "./schema";
-import {
-  createHumanAgent,
-  HumanAgentEmailAlreadyInUseError,
   InvalidUsersCursorError,
   listRecentUsers,
   updateMembership,
@@ -35,28 +28,6 @@ export const usersRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json(result, 200);
     } catch (error) {
       if (error instanceof InvalidUsersCursorError) return c.json({ error: "invalid_cursor" }, 400);
-      throw error;
-    }
-  })
-  .post("/", zValidator("json", createHumanAgentSchema), async (c) => {
-    const currentUser = requireAdmin(c);
-
-    if (!currentUser) {
-      return c.json({ error: "forbidden" }, 403);
-    }
-
-    try {
-      const result = await createHumanAgent(requireWorkspaceId(), c.req.valid("json"));
-
-      return c.json(result, 201);
-    } catch (error) {
-      if (
-        error instanceof HumanAgentEmailAlreadyInUseError ||
-        error instanceof MembershipConflictError
-      ) {
-        return c.json({ error: "email_in_use", message: error.message }, 409);
-      }
-
       throw error;
     }
   })
